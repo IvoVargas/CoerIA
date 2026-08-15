@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from .auth import normalize_user_id
 from .providers import AI_PROVIDER_OPENAI, validate_ai_provider
 
 
@@ -225,6 +226,7 @@ class SQLiteSessionStore:
                     """
                     CREATE TABLE IF NOT EXISTS sessions (
                         session_id TEXT PRIMARY KEY,
+                        owner_id TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
                         state_json TEXT NOT NULL
                     );
@@ -241,12 +243,33 @@ class SQLiteSessionStore:
                     );
                     """
                 )
+                columns = {
+                    row["name"]
+                    for row in connection.execute("PRAGMA table_info(sessions)")
+                }
+                if "owner_id" not in columns:
+                    connection.execute(
+                        "ALTER TABLE sessions ADD COLUMN "
+                        "owner_id TEXT NOT NULL DEFAULT 'LEGACY'"
+                    )
+                connection.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_sessions_owner_updated "
+                    "ON sessions(owner_id, updated_at DESC)"
+                )
         finally:
             connection.close()
 
-    def save(self, state: dict[str, Any], session_id: str | None = None) -> str:
+    def save(
+        self,
+        state: dict[str, Any],
+        session_id: str | None = None,
+        owner_id: str = "LOCAL",
+    ) -> str:
         """Cria ou atualiza uma sessão e substitui o respetivo rasto de auditoria."""
 
+        owner = normalize_user_id(owner_id)
+        if not owner:
+            raise ValueError("A sessão necessita de um proprietário válido.")
         identifier = session_id or str(uuid4())
         updated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
         audit = state.get("audit", [])
@@ -256,15 +279,26 @@ class SQLiteSessionStore:
         connection = self._connect()
         try:
             with connection:
+                existing = connection.execute(
+                    "SELECT owner_id FROM sessions WHERE session_id = ?",
+                    (identifier,),
+                ).fetchone()
+                if existing and existing["owner_id"] != owner:
+                    raise PermissionError("A sessão pertence a outro utilizador.")
                 connection.execute(
                     """
-                    INSERT INTO sessions(session_id, updated_at, state_json)
-                    VALUES (?, ?, ?)
+                    INSERT INTO sessions(session_id, owner_id, updated_at, state_json)
+                    VALUES (?, ?, ?, ?)
                     ON CONFLICT(session_id) DO UPDATE SET
                         updated_at=excluded.updated_at,
                         state_json=excluded.state_json
                     """,
-                    (identifier, updated_at, json.dumps(stored_state, ensure_ascii=False)),
+                    (
+                        identifier,
+                        owner,
+                        updated_at,
+                        json.dumps(stored_state, ensure_ascii=False),
+                    ),
                 )
                 connection.execute(
                     "DELETE FROM audit_events WHERE session_id = ?",
@@ -292,13 +326,27 @@ class SQLiteSessionStore:
             connection.close()
         return identifier
 
-    def load(self, session_id: str) -> dict[str, Any] | None:
+    def load(
+        self,
+        session_id: str,
+        owner_id: str | None = None,
+    ) -> dict[str, Any] | None:
         connection = self._connect()
         try:
-            row = connection.execute(
-                "SELECT state_json FROM sessions WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
+            if owner_id is None:
+                row = connection.execute(
+                    "SELECT state_json FROM sessions WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()
+            else:
+                owner = normalize_user_id(owner_id)
+                row = connection.execute(
+                    """
+                    SELECT state_json FROM sessions
+                    WHERE session_id = ? AND owner_id = ?
+                    """,
+                    (session_id, owner),
+                ).fetchone()
         finally:
             connection.close()
         if not row:
@@ -307,22 +355,39 @@ class SQLiteSessionStore:
         state["session_id"] = session_id
         return migrate_legacy_state(state)
 
-    def list_sessions(self, limit: int = 100) -> list[dict[str, str]]:
+    def list_sessions(
+        self,
+        limit: int = 100,
+        owner_id: str | None = None,
+    ) -> list[dict[str, str]]:
         """Lista sessões recentes sem expor o conteúdo integral na interface."""
 
         if limit <= 0:
             return []
         connection = self._connect()
         try:
-            rows = connection.execute(
-                """
-                SELECT session_id, updated_at, state_json
-                FROM sessions
-                ORDER BY updated_at DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
+            if owner_id is None:
+                rows = connection.execute(
+                    """
+                    SELECT session_id, updated_at, state_json
+                    FROM sessions
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+            else:
+                owner = normalize_user_id(owner_id)
+                rows = connection.execute(
+                    """
+                    SELECT session_id, updated_at, state_json
+                    FROM sessions
+                    WHERE owner_id = ?
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (owner, limit),
+                ).fetchall()
         finally:
             connection.close()
 

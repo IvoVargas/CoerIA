@@ -5,6 +5,7 @@ title CoerIA
 set "PROJECT_DIR=%~dp0"
 set "PYTHON_EXE=%PROJECT_DIR%.venv\Scripts\python.exe"
 set "APP_URL=http://127.0.0.1:7860"
+set "COERIA_AUTH_MODE=disabled"
 
 if not exist "%PROJECT_DIR%app.py" (
     echo ERRO: Nao foi encontrado o ficheiro "%PROJECT_DIR%app.py".
@@ -42,8 +43,8 @@ echo A iniciar a aplicacao CoerIA...
 echo O navegador sera aberto em %APP_URL% quando a aplicacao estiver disponivel.
 echo.
 echo IMPORTANTE: fechar o navegador nao termina a aplicacao.
-echo Para terminar, use o botao Encerrar aplicacao no cabecalho,
-echo volte a esta consola e prima Ctrl+C, ou feche esta janela.
+echo Para terminar, volte a esta consola e prima Ctrl+C,
+echo ou feche esta janela.
 echo.
 
 if not defined COERIA_SKIP_BROWSER (

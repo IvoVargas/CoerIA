@@ -11,7 +11,11 @@ from prism.workflow import create_session, create_test_agent
 
 
 @pytest.mark.asyncio
-async def test_nicegui_initial_page_exposes_the_guided_workflow(user: User) -> None:
+async def test_nicegui_initial_page_exposes_the_guided_workflow(
+    user: User,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("COERIA_AUTH_MODE", "disabled")
     await user.open("/")
 
     await user.should_see("CoerIA")
@@ -73,6 +77,27 @@ def test_loading_a_session_restores_all_initial_fields() -> None:
     assert fields["program_name"] == course.program_name
     assert fields["general_aims"] == course.general_aims
     assert fields["bibliography"] == course.bibliography
+
+
+def test_application_service_cannot_load_another_owner_session(tmp_path: Path) -> None:
+    store = SQLiteSessionStore(tmp_path / "coeria.db")
+    session_id = store.save(
+        {
+            "course": {"unit_name": "UC reservada"},
+            "current_stage": "contents",
+            "status": "in_progress",
+            "audit": [],
+        },
+        owner_id="D01",
+    )
+
+    owner_service = ApplicationService(store, owner_id="D01")
+    other_service = ApplicationService(store, owner_id="D02")
+
+    assert owner_service.load_session(session_id)["course"]["unit_name"] == "UC reservada"
+    assert other_service.list_sessions() == []
+    with pytest.raises(ValueError, match="já não está disponível"):
+        other_service.load_session(session_id)
 
 
 def test_manual_assistance_validates_without_starting_a_session() -> None:

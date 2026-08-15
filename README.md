@@ -47,11 +47,14 @@ finalidade pedagógica. Depois da aprovação final, a aplicação exporta um ZI
 o programa da UC, os ficheiros selecionados, matriz de alinhamento, auditoria,
 manifesto e estado completo da sessão.
 
-As versões, decisões e métricas de geração são guardadas localmente em
-`data/prism.db`. O nome técnico do ficheiro e o pacote Python `prism` são
+As versões, decisões e métricas de geração são guardadas em SQLite, por
+predefinição em `data/prism.db`. Na instalação pública, cada sessão fica
+associada ao identificador pseudónimo do docente autenticado e não é listada
+nem carregada por outro participante. O nome técnico do ficheiro e o pacote Python `prism` são
 mantidos temporariamente por compatibilidade com sessões e instalações
-anteriores à adoção da identidade CoerIA. A interface permite retomar sessões e consultar todas as
-versões, incluindo propostas substituídas por reformulações.
+anteriores à adoção da identidade CoerIA. A interface permite a cada docente
+retomar as respetivas sessões e consultar todas as versões, incluindo propostas
+substituídas por reformulações.
 
 A especificação completa e os critérios de aceitação encontram-se em
 [`REQUISITOS.md`](REQUISITOS.md).
@@ -135,10 +138,31 @@ python -m venv .venv
 
 A interface é iniciada localmente e não ativa partilha pública. Os testes usam
 um agente determinístico, não necessitam de chave e não consomem a API.
+O BAT define explicitamente `COERIA_AUTH_MODE=disabled`, pelo que os códigos de
+acesso não são pedidos nesta execução exclusivamente local.
 
 A interface utiliza NiceGUI e organiza o trabalho em ecrãs orientados: dados
 iniciais, autoria por etapa, validação final, histórico e rastreabilidade. O
-comando **Encerrar aplicação**, no cabeçalho, termina também o servidor local.
+botão do cabeçalho termina apenas a sessão autenticada. No arranque local, o
+servidor é terminado na consola com `Ctrl+C` ou fechando a respetiva janela.
+
+### Acesso na instalação pública
+
+Em produção, a autenticação é obrigatória por omissão. O servidor necessita de
+`COERIA_ACCESS_FILE`, `COERIA_STORAGE_SECRET` e de um diretório persistente em
+`NICEGUI_STORAGE_PATH`. O ficheiro de acessos contém apenas hashes `scrypt`; os
+códigos em claro devem permanecer fora do repositório e ser distribuídos
+individualmente aos participantes. Para criar um administrador e 12 docentes:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\generate_access_credentials.py `
+  --participants 12 `
+  --hashes-out C:\tmp\coeria-access.json `
+  --codes-out C:\tmp\Credenciais_CoerIA.csv
+```
+
+Os dois caminhos de saída têm de ser novos, para impedir a substituição
+acidental de credenciais já distribuídas.
 
 ## Estrutura
 
@@ -153,6 +177,7 @@ comando **Encerrar aplicação**, no cabeçalho, termina também o servidor loca
 - `prism/quality.py`: validações determinísticas independentes do modelo;
 - `prism/ingestion.py`: extração e limites das fontes documentais;
 - `prism/persistence.py`: sessões, versões e auditoria em SQLite;
+- `prism/auth.py`: autenticação por código, sessão assinada e limitação de tentativas;
 - `prism/exporter.py`: PowerPoint, documentos Word e pacote ZIP;
 - `tests/`: testes do fluxo, histórico, ingestão, persistência e recursos.
 

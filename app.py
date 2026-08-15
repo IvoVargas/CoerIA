@@ -2,14 +2,28 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+from fastapi import Request
+from fastapi.responses import RedirectResponse
 from nicegui import app, events, run, ui
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from prism.agents import AgentGenerationError, DEFAULT_MODEL
 from prism.application_service import ApplicationService
+from prism.auth import (
+    CredentialConfigurationError,
+    CredentialStore,
+    Identity,
+    LoginThrottle,
+    authentication_disabled,
+    configured_storage_secret,
+    identity_from_session,
+    safe_redirect_path,
+)
 from prism.branding import APP_FULL_NAME, APP_NAME, APP_TAGLINE
 from prism.curriculum import TAXONOMY_CHOICES
 from prism.ingestion import (
@@ -32,10 +46,29 @@ from prism.workflow import REVISION_TARGETS, STAGE_LABELS, STAGE_ORDER
 
 SESSION_STORE = SQLiteSessionStore()
 SERVICE = ApplicationService(SESSION_STORE)
+LOGIN_THROTTLE = LoginThrottle()
 RESOURCE_TYPES = list(SUPPORTED_RESOURCE_TYPES)
 _history_choices = history_choices  # compatibilidade para consulta programática
 
 USER_ERRORS = (ValueError, SourceIngestionError, AgentGenerationError)
+LOGGER = logging.getLogger(__name__)
+UNRESTRICTED_PAGE_ROUTES = {"/favicon.ico", "/login"}
+
+
+@app.add_middleware
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Restringe páginas privadas, permitindo apenas o login e recursos internos."""
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if (
+            authentication_disabled()
+            or app.storage.user.get("authenticated")
+            or path in UNRESTRICTED_PAGE_ROUTES
+            or path.startswith("/_nicegui")
+        ):
+            return await call_next(request)
+        return RedirectResponse(f"/login?redirect_to={path}")
 
 
 APP_CSS = """
@@ -141,8 +174,13 @@ def _session_label(item: dict[str, str]) -> str:
 class AGIRSoloInterface:
     """Interface de uma única ligação de utilizador."""
 
-    def __init__(self, service: ApplicationService | None = None) -> None:
+    def __init__(
+        self,
+        service: ApplicationService | None = None,
+        identity: Identity | None = None,
+    ) -> None:
         self.service = service or SERVICE
+        self.identity = identity or Identity("LOCAL", "Utilizador local", "admin")
         self.state: dict[str, Any] | None = None
         self.uploaded_files: dict[str, bytes] = {}
         self.fields: dict[str, Any] = {}
@@ -155,7 +193,7 @@ class AGIRSoloInterface:
         ui.add_css(APP_CSS)
         self.dark_mode = ui.dark_mode()
 
-        self._build_shutdown_dialog()
+        self._build_logout_dialog()
         self._build_busy_dialog()
 
         with ui.header(elevated=False).classes("agir-header h-16 items-center px-3 md:px-6"):
@@ -170,14 +208,17 @@ class AGIRSoloInterface:
             self.header_context = ui.label("Nova sessão").classes(
                 "hidden md:block text-sm font-semibold muted"
             )
+            ui.label(self.identity.display_name).classes(
+                "hidden lg:block text-sm font-semibold muted"
+            )
             ui.button(
                 icon="dark_mode",
                 on_click=self.dark_mode.toggle,
             ).props("flat round aria-label='Alternar tema'")
             ui.button(
-                icon="power_settings_new",
-                on_click=self.shutdown_dialog.open,
-            ).props("flat round color=negative aria-label='Encerrar aplicação'")
+                icon="logout",
+                on_click=self.logout_dialog.open,
+            ).props("flat round aria-label='Terminar sessão'")
 
         with ui.left_drawer(value=True, bordered=False).classes("agir-drawer p-4") as self.drawer:
             with ui.column().classes("w-full gap-5"):
@@ -215,18 +256,25 @@ class AGIRSoloInterface:
             self._build_initial_view()
         self.workspace_view.set_visibility(False)
 
-    def _build_shutdown_dialog(self) -> None:
-        with ui.dialog() as self.shutdown_dialog, ui.card().classes("p-5 w-96 max-w-full surface"):
-            ui.icon("power_settings_new", size="2.2rem", color="negative")
-            ui.label(f"Encerrar o {APP_NAME}?").classes("section-title")
+    def _build_logout_dialog(self) -> None:
+        with ui.dialog() as self.logout_dialog, ui.card().classes("p-5 w-96 max-w-full surface"):
+            ui.icon("logout", size="2.2rem", color="primary")
+            ui.label("Terminar sessão?").classes("section-title")
             ui.label(
-                "As sessões já guardadas não serão perdidas. A página deixará de responder."
+                "As sessões já guardadas não serão perdidas. O CoerIA continuará disponível."
             ).classes("muted")
             with ui.row().classes("w-full justify-end mt-3"):
-                ui.button("Cancelar", on_click=self.shutdown_dialog.close).props("flat no-caps")
-                ui.button("Encerrar aplicação", on_click=app.shutdown).props(
-                    "unelevated color=negative no-caps"
+                ui.button("Cancelar", on_click=self.logout_dialog.close).props("flat no-caps")
+                ui.button("Terminar sessão", on_click=self._logout).props(
+                    "unelevated no-caps"
                 )
+
+    def _logout(self) -> None:
+        if authentication_disabled():
+            ui.navigate.to("/")
+            return
+        app.storage.user.clear()
+        ui.navigate.to("/login")
 
     def _build_busy_dialog(self) -> None:
         with ui.dialog().props("persistent") as self.busy_dialog:
@@ -887,15 +935,104 @@ class AGIRSoloInterface:
             self.busy_dialog.close()
 
 
-def build_interface(service: ApplicationService | None = None) -> AGIRSoloInterface:
+def build_interface(
+    service: ApplicationService | None = None,
+    identity: Identity | None = None,
+) -> AGIRSoloInterface:
     """Constrói a interface no contexto NiceGUI atual."""
 
-    return AGIRSoloInterface(service)
+    return AGIRSoloInterface(service, identity)
+
+
+@ui.page("/login")
+def login_page(redirect_to: str = "/") -> RedirectResponse | None:
+    """Autentica um participante sem revelar se o identificador existe."""
+
+    if authentication_disabled() or identity_from_session(app.storage.user):
+        return RedirectResponse("/")
+
+    destination = safe_redirect_path(redirect_to)
+    ui.page_title(f"Acesso — {APP_NAME}")
+    ui.colors(primary="#0d766e", secondary="#1f5966", accent="#e8a23a")
+    ui.add_css(APP_CSS)
+
+    async def try_login() -> None:
+        user_id = str(identifier.value or "")
+        retry_after = LOGIN_THROTTLE.retry_after(user_id)
+        if retry_after:
+            ui.notify(
+                f"Acesso temporariamente bloqueado. Aguarde {retry_after} segundos.",
+                type="warning",
+            )
+            return
+        try:
+            credential_store = CredentialStore.from_environment()
+            identity = await run.io_bound(
+                credential_store.authenticate,
+                user_id,
+                str(access_code.value or ""),
+            )
+        except CredentialConfigurationError:
+            LOGGER.exception("Configuração de autenticação inválida")
+            ui.notify(
+                "A autenticação está temporariamente indisponível. Contacte o responsável.",
+                type="negative",
+                timeout=0,
+            )
+            return
+
+        if identity is None:
+            lock_seconds = LOGIN_THROTTLE.record_failure(user_id)
+            access_code.set_value("")
+            message = "Identificador ou código de acesso inválido."
+            if lock_seconds:
+                message += f" Aguarde {lock_seconds} segundos antes de tentar novamente."
+            ui.notify(message, type="negative")
+            return
+
+        LOGIN_THROTTLE.clear(user_id)
+        app.storage.user.clear()
+        app.storage.user.update(identity.as_session())
+        ui.navigate.to(destination)
+
+    with ui.column().classes("absolute-center w-full max-w-md px-5"):
+        with ui.card().classes("surface w-full p-7 gap-5"):
+            ui.html('<div class="brand-mark">CI</div>')
+            with ui.column().classes("gap-1"):
+                ui.label(APP_NAME).classes("text-3xl font-bold")
+                ui.label("Acesso ao espaço de autoria pedagógica").classes("muted")
+            identifier = ui.input("Identificador").props(
+                "autofocus autocomplete=username maxlength=80"
+            ).classes("full-control")
+            access_code = ui.input(
+                "Código de acesso",
+                password=True,
+                password_toggle_button=True,
+            ).props("autocomplete=current-password").classes("full-control")
+            identifier.on("keydown.enter", lambda: access_code.run_method("focus"))
+            access_code.on("keydown.enter", try_login)
+            ui.button("Entrar", icon="login", on_click=try_login).props(
+                "unelevated no-caps"
+            ).classes("w-full primary-action")
+            ui.label(
+                "Utilize apenas o identificador e o código fornecidos para o estudo."
+            ).classes("text-xs muted text-center")
+    return None
 
 
 @ui.page("/")
-def main_page() -> None:
-    build_interface()
+def main_page() -> RedirectResponse | None:
+    if authentication_disabled():
+        identity = Identity("LOCAL", "Utilizador local", "admin")
+    else:
+        identity = identity_from_session(app.storage.user)
+        if identity is None:
+            return RedirectResponse("/login")
+    build_interface(
+        ApplicationService(SESSION_STORE, owner_id=identity.user_id),
+        identity,
+    )
+    return None
 
 
 if __name__ == "__main__":
@@ -908,5 +1045,11 @@ if __name__ == "__main__":
         show=False,
         reload=False,
         dark=False,
+        storage_secret=configured_storage_secret(),
+        session_middleware_kwargs={
+            "https_only": not authentication_disabled(),
+            "same_site": "lax",
+            "max_age": 8 * 60 * 60,
+        },
         show_welcome_message=False,
     )

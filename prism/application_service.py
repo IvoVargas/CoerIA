@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .assistance import build_initial_form_assistant, validate_initial_fields
+from .auth import normalize_user_id
 from .exporter import export_resource_package
 from .ingestion import build_source_text, recover_direct_source_text
 from .models import CourseInput, validate_resource_types
@@ -18,18 +19,31 @@ from .workflow import STAGE_LABELS, create_session, review_current_stage
 class ApplicationService:
     """Coordena sessões sem devolver componentes específicos da interface."""
 
-    def __init__(self, store: SQLiteSessionStore | None = None) -> None:
+    def __init__(
+        self,
+        store: SQLiteSessionStore | None = None,
+        owner_id: str = "LOCAL",
+    ) -> None:
         self.store = store or SQLiteSessionStore()
+        self.owner_id = normalize_user_id(owner_id)
+        if not self.owner_id:
+            raise ValueError("A aplicação necessita de um utilizador válido.")
 
     def _persist(self, state: dict[str, Any]) -> dict[str, Any]:
-        state["session_id"] = self.store.save(
-            state,
-            session_id=state.get("session_id"),
-        )
+        try:
+            state["session_id"] = self.store.save(
+                state,
+                session_id=state.get("session_id"),
+                owner_id=self.owner_id,
+            )
+        except PermissionError as error:
+            raise ValueError(
+                "A sessão selecionada já não está disponível."
+            ) from error
         return state
 
     def list_sessions(self) -> list[dict[str, str]]:
-        return self.store.list_sessions()
+        return self.store.list_sessions(owner_id=self.owner_id)
 
     def start_session(
         self,
@@ -70,7 +84,7 @@ class ApplicationService:
     def load_session(self, session_id: str | None) -> dict[str, Any]:
         if not session_id:
             raise ValueError("Selecione uma sessão para retomar.")
-        state = self.store.load(session_id)
+        state = self.store.load(session_id, owner_id=self.owner_id)
         if not state:
             raise ValueError("A sessão selecionada já não está disponível.")
         return state
