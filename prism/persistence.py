@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -202,8 +203,10 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
 class SQLiteSessionStore:
     """Armazena sessões CoerIA e respetivo rasto de auditoria em SQLite."""
 
-    def __init__(self, database_path: Path | str = DEFAULT_DATABASE_PATH) -> None:
-        self.database_path = Path(database_path)
+    def __init__(self, database_path: Path | str | None = None) -> None:
+        configured_path = os.getenv("COERIA_DATABASE_PATH", "").strip()
+        selected_path = database_path or configured_path or DEFAULT_DATABASE_PATH
+        self.database_path = Path(selected_path).expanduser()
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialise()
 
