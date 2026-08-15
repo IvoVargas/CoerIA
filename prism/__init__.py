@@ -1,0 +1,1 @@
+"""Componentes do protótipo CoerIA."""
