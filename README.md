@@ -122,10 +122,11 @@ completos e o conteúdo dos ficheiros não são escritos nos registos locais.
 
 ## Ambiente oficial e reprodução
 
-A utilização oficial do CoerIA é feita exclusivamente na instalação HTTPS em
-[coeria.ivovargas.pt](https://coeria.ivovargas.pt). Os docentes necessitam
-apenas de um navegador e das credenciais pseudónimas fornecidas para o estudo;
-não instalam a aplicação nem disponibilizam chaves de API próprias.
+Durante o estudo com docentes, a utilização oficial do CoerIA é feita na
+instalação HTTPS em [coeria.ivovargas.pt](https://coeria.ivovargas.pt). Os
+docentes necessitam apenas de um navegador e das credenciais pseudónimas
+fornecidas para o estudo; não instalam a aplicação nem disponibilizam chaves de
+API próprias.
 
 A versão 0.1.0 foi validada em Ubuntu 26.04 LTS, com Python 3.14.4. As versões
 diretas das bibliotecas estão fixadas em `requirements.txt` e a reprodução
@@ -196,3 +197,8 @@ cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado
   não estão concluídas. Quando não existe uma imagem de origem controlada, a
   apresentação recorre a diagramas e elementos gráficos nativos, sem inventar
   proveniência.
+
+## Licença
+
+O código do CoerIA é disponibilizado sob a licença MIT. Consulte o ficheiro
+[`LICENSE`](LICENSE).
