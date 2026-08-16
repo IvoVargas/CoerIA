@@ -1,0 +1,34 @@
+[Unit]
+Description=CoerIA NiceGUI application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=coeria
+Group=coeria
+WorkingDirectory=/opt/coeria/app
+EnvironmentFile=-/etc/coeria/coeria.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/coeria/venv/bin/python /opt/coeria/app/app.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGINT
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/coeria
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

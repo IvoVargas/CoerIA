@@ -6,6 +6,7 @@ import os
 
 
 APP_NAME = "CoerIA"
+APP_VERSION = "0.1.0"
 APP_FULL_NAME = (
     "Sistema de IA com agentes para elaboração de programas de unidades "
     "curriculares e recursos educativos pedagogicamente alinhados"

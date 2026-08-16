@@ -25,6 +25,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
+    await user.should_see("CoerIA v0.1.0 · SQLite")
 
 
 def test_loading_a_session_restores_all_initial_fields() -> None:

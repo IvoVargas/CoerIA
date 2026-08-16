@@ -24,7 +24,7 @@ from prism.auth import (
     identity_from_session,
     safe_redirect_path,
 )
-from prism.branding import APP_FULL_NAME, APP_NAME, APP_TAGLINE
+from prism.branding import APP_FULL_NAME, APP_NAME, APP_TAGLINE, APP_VERSION
 from prism.curriculum import TAXONOMY_CHOICES
 from prism.ingestion import (
     DEFAULT_MAX_FILE_BYTES,
@@ -245,8 +245,8 @@ class AGIRSoloInterface:
                 self.refresh_sessions()
                 ui.space()
                 with ui.column().classes("gap-1 opacity-70 text-xs px-1"):
-                    ui.label("Dados guardados localmente")
-                    ui.label("SQLite · OpenAI ou IAedu")
+                    ui.label("Dados guardados de forma persistente")
+                    ui.label(f"CoerIA v{APP_VERSION} · SQLite")
 
         with ui.column().classes("agir-main"):
             self.initial_view = ui.column().classes("w-full gap-6")

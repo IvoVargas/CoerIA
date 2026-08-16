@@ -120,33 +120,19 @@ Os conteúdos introduzidos e os artefactos anteriores necessários a cada etapa
 são enviados exclusivamente ao fornecedor selecionado. A chave, os prompts
 completos e o conteúdo dos ficheiros não são escritos nos registos locais.
 
-## Instalação e execução
+## Ambiente oficial e reprodução
 
-Depois de concluída a instalação, no Windows pode iniciar a aplicação com um
-duplo clique em `Arrancar_CoerIA.bat`, localizado na pasta principal do
-projeto. O ficheiro valida o ambiente virtual e a chave da API, inicia o
-servidor e abre automaticamente a interface no navegador.
+A utilização oficial do CoerIA é feita exclusivamente na instalação HTTPS em
+[coeria.ivovargas.pt](https://coeria.ivovargas.pt). Os docentes necessitam
+apenas de um navegador e das credenciais pseudónimas fornecidas para o estudo;
+não instalam a aplicação nem disponibilizam chaves de API próprias.
 
-A partir da pasta `Aplicacao`:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe app.py
-```
-
-A interface é iniciada localmente e não ativa partilha pública. Os testes usam
-um agente determinístico, não necessitam de chave e não consomem a API.
-O BAT define explicitamente `COERIA_AUTH_MODE=disabled`, pelo que os códigos de
-acesso não são pedidos nesta execução exclusivamente local.
-
-A interface utiliza NiceGUI e organiza o trabalho em ecrãs orientados: dados
-iniciais, autoria por etapa, validação final, histórico e rastreabilidade. O
-botão do cabeçalho termina apenas a sessão autenticada. No arranque local, o
-servidor é terminado na consola com `Ctrl+C` ou fechando a respetiva janela.
-
-### Acesso na instalação pública
+A versão 0.1.0 foi validada em Ubuntu 26.04 LTS, com Python 3.14.4. As versões
+diretas das bibliotecas estão fixadas em `requirements.txt` e a reprodução
+exata do ambiente Linux validado usa `requirements-vps.lock`. A instalação,
+configuração, atualização, diagnóstico, backup e recuperação estão descritos
+em [`deploy/README.md`](deploy/README.md). Os modelos aí incluídos não contêm
+segredos.
 
 Em produção, a autenticação é obrigatória por omissão. O servidor necessita de
 `COERIA_ACCESS_FILE`, `COERIA_STORAGE_SECRET` e de um diretório persistente em
@@ -163,6 +149,23 @@ individualmente aos participantes. Para criar um administrador e 12 docentes:
 
 Os dois caminhos de saída têm de ser novos, para impedir a substituição
 acidental de credenciais já distribuídas.
+
+### Desenvolvimento e testes técnicos
+
+A execução local não é uma modalidade suportada para os participantes. Pode ser
+usada pelo investigador exclusivamente para desenvolvimento e testes. O
+ambiente local validado usa Python 3.13.11:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Os testes usam um agente determinístico, não necessitam de chaves e não
+consomem APIs. A interface NiceGUI organiza o trabalho em dados iniciais,
+autoria por etapa, validação final, histórico e rastreabilidade. O botão do
+cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado.
 
 ## Estrutura
 

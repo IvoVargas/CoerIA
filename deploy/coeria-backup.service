@@ -1,0 +1,9 @@
+[Unit]
+Description=Backup diário da base de dados do CoerIA
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/coeria-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
