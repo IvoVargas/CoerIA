@@ -256,6 +256,67 @@ class WorkflowTests(unittest.TestCase):
             retry_context["automatic_validation_feedback"]["validation_error"],
         )
 
+    def test_openai_agent_completes_visual_metadata_without_retry(self) -> None:
+        state = create_session(
+            self.course,
+            resource_types=list(SUPPORTED_RESOURCE_TYPES),
+            agent=self.agent,
+        )
+        for _ in range(6):
+            state = review_current_stage(state, "approve", agent=self.agent)
+
+        valid_state = review_current_stage(deepcopy(state), "approve", agent=self.agent)
+        incomplete_artifact = deepcopy(valid_state["resources"])
+        incomplete_artifact.pop("quality", None)
+        for slide_index in (1, 3):
+            slide = incomplete_artifact["presentation_outline"][slide_index]
+            slide["visual_kind"] = "comparação"
+            slide["visual_title"] = ""
+            slide["visual_items"] = [""]
+            slide["visual_source"] = ""
+            slide["alt_text"] = ""
+
+        class FakeResponses:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(
+                    output_text=json.dumps({"artifact": incomplete_artifact}),
+                    id="response-1",
+                    usage=SimpleNamespace(
+                        input_tokens=10,
+                        output_tokens=20,
+                        total_tokens=30,
+                    ),
+                )
+
+        fake_responses = FakeResponses()
+        fake_module = SimpleNamespace(
+            OpenAI=lambda **_kwargs: SimpleNamespace(responses=fake_responses)
+        )
+        environment = {
+            "OPENAI_API_KEY": "test-key",
+            "PRISM_OPENAI_VALIDATION_RETRIES": "2",
+        }
+        with patch.dict(environ, environment), patch.dict(
+            sys.modules, {"openai": fake_module}
+        ):
+            result = OpenAIPedagogicalAgent().generate("resources", state)
+
+        self.assertEqual(len(fake_responses.calls), 1)
+        self.assertEqual(result.metadata["validation_attempts"], 1)
+        self.assertEqual(len(result.metadata["guardrail_corrections"]), 2)
+        for slide_index in (1, 3):
+            slide = result.artifact["presentation_outline"][slide_index]
+            self.assertEqual(slide["visual_kind"], "comparacao")
+            self.assertTrue(slide["visual_title"])
+            self.assertTrue(2 <= len(slide["visual_items"]) <= 4)
+            self.assertTrue(slide["visual_source"])
+            self.assertTrue(slide["alt_text"])
+        _validate_artifact("resources", result.artifact, state)
+
     def test_taxonomy_guardrail_canonicalizes_level_from_approved_verb(self) -> None:
         state = create_session(self.course, agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)

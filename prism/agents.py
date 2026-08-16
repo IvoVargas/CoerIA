@@ -128,8 +128,9 @@ STAGE_REQUIREMENTS = {
         "practical_activity. Preenche apenas os recursos pedidos e mantém vazios os "
         "restantes. Cada elemento deve indicar os resultados de aprendizagem associados. "
         "Cada slide da apresentação inclui visual_kind, visual_title, visual_items, "
-        "visual_source e alt_text; os elementos visuais devem apoiar o conteúdo e não "
-        "servir apenas de decoração. "
+        "visual_source e alt_text. visual_items contém entre 2 e 4 textos não vazios; "
+        "visual_title, visual_source e alt_text também nunca podem estar vazios. Os "
+        "elementos visuais devem apoiar o conteúdo e não servir apenas de decoração. "
         "Cada recurso pedido deve cobrir exatamente todos os IDs dos resultados de "
         "aprendizagem, sem usar IDs desconhecidos. No teste, a soma dos pontos das "
         "questões deve ser igual a total_points. Na atividade prática, a união dos "
@@ -712,6 +713,151 @@ def _canonicalize_alignment_matrix(
     return normalized, corrections
 
 
+def _canonicalize_resource_visuals(
+    artifact: Any, state: dict[str, Any]
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Completa metadados visuais derivados sem repetir toda a geração.
+
+    A apresentação exportada usa diagramas nativos. Quando o fornecedor deixa
+    vazios campos estruturais desses diagramas, os valores em falta podem ser
+    derivados dos artefactos já aprovados sem alterar o conteúdo pedagógico.
+    """
+
+    if not isinstance(artifact, dict):
+        return artifact, []
+    requested = set(state.get("resource_types", []))
+    slides = artifact.get("presentation_outline")
+    if "Apresentação PowerPoint" not in requested or not isinstance(slides, list):
+        return artifact, []
+
+    allowed_kinds = {"capa", "conceito", "processo", "comparacao", "sintese"}
+    kind_aliases = {"comparação": "comparacao", "síntese": "sintese"}
+    outcomes = {
+        str(item.get("id", "")): item
+        for item in state.get("learning_outcomes", [])
+        if item.get("id")
+    }
+
+    def clean_text(value: Any) -> str:
+        if value is None:
+            return ""
+        return re.sub(r"\s+", " ", str(value)).strip()
+
+    def compact_item(value: Any) -> str:
+        text = clean_text(value)
+        return text if len(text) <= 80 else text[:79].rstrip() + "…"
+
+    def linked_value(items: list[dict[str, Any]], outcome_id: str, key: str) -> str:
+        for item in items:
+            if outcome_id in item.get("outcome_ids", [item.get("outcome_id")]):
+                return compact_item(item.get(key))
+        return ""
+
+    normalized_slides: list[Any] = []
+    corrections: list[dict[str, Any]] = []
+    slide_count = len(slides)
+    for offset, slide in enumerate(slides):
+        if not isinstance(slide, dict):
+            normalized_slides.append(slide)
+            continue
+
+        outcome_id = str(slide.get("outcome_id", ""))
+        raw_kind = clean_text(slide.get("visual_kind")).casefold()
+        canonical_kind = kind_aliases.get(raw_kind, raw_kind)
+        if canonical_kind not in allowed_kinds:
+            if offset == 0:
+                canonical_kind = "capa"
+            elif offset == slide_count - 1 and not outcome_id:
+                canonical_kind = "sintese"
+            else:
+                canonical_kind = ("processo", "conceito", "comparacao")[
+                    max(offset - 1, 0) % 3
+                ]
+
+        visual_title = clean_text(slide.get("visual_title")) or clean_text(
+            slide.get("title")
+        )
+        if not visual_title:
+            visual_title = f"Representação visual do slide {offset + 1}"
+
+        raw_items = slide.get("visual_items", [])
+        if not isinstance(raw_items, list):
+            raw_items = [raw_items]
+        clean_raw_items = [clean_text(item) for item in raw_items]
+        if (
+            2 <= len(clean_raw_items) <= 4
+            and all(clean_raw_items)
+            and len({item.casefold() for item in clean_raw_items})
+            == len(clean_raw_items)
+        ):
+            visual_items = clean_raw_items
+        else:
+            candidates: list[Any] = list(raw_items)
+            outcome = outcomes.get(outcome_id, {})
+            if outcome:
+                candidates.extend(
+                    [
+                        outcome.get("theme"),
+                        linked_value(
+                            state.get("teaching_activities", []), outcome_id, "method"
+                        ),
+                        linked_value(
+                            state.get("assessment_activities", []),
+                            outcome_id,
+                            "assessment_purpose",
+                        ),
+                    ]
+                )
+            bullets = slide.get("bullets", [])
+            if isinstance(bullets, list):
+                candidates.extend(bullets)
+            candidates.extend(
+                [
+                    "Conteúdo principal",
+                    "Aplicação pedagógica",
+                    "Evidência de aprendizagem",
+                ]
+            )
+
+            visual_items = []
+            seen_items: set[str] = set()
+            for candidate in candidates:
+                item = compact_item(candidate)
+                key = item.casefold()
+                if not item or key in seen_items:
+                    continue
+                visual_items.append(item)
+                seen_items.add(key)
+                if len(visual_items) == 4:
+                    break
+
+        visual_source = clean_text(slide.get("visual_source")) or (
+            "Diagrama nativo gerado pelo CoerIA a partir dos artefactos aprovados."
+        )
+        alt_text = clean_text(slide.get("alt_text")) or (
+            f"Diagrama «{visual_title}» com os elementos "
+            + ", ".join(visual_items)
+            + "."
+        )
+        canonical = {
+            "visual_kind": canonical_kind,
+            "visual_title": visual_title,
+            "visual_items": visual_items,
+            "visual_source": visual_source,
+            "alt_text": alt_text,
+        }
+        changes = {
+            field: {"received": slide.get(field), "used": value}
+            for field, value in canonical.items()
+            if slide.get(field) != value
+        }
+        normalized_slides.append({**slide, **canonical})
+        if changes:
+            corrections.append({"slide": offset + 1, "changes": changes})
+
+    return {**artifact, "presentation_outline": normalized_slides}, corrections
+
+
 def _require_exact_coverage(
     artifact: list[dict[str, Any]], expected: set[str], key: str, message: str
 ) -> None:
@@ -1213,6 +1359,10 @@ class OpenAIPedagogicalAgent:
                 elif stage == "alignment_matrix":
                     artifact, guardrail_corrections = (
                         _canonicalize_alignment_matrix(artifact, state)
+                    )
+                elif stage == "resources":
+                    artifact, guardrail_corrections = (
+                        _canonicalize_resource_visuals(artifact, state)
                     )
                 _validate_artifact(stage, artifact, state)
             except (AgentGenerationError, json.JSONDecodeError, KeyError, TypeError) as error:
