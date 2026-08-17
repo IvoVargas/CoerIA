@@ -67,9 +67,14 @@ em qualquer etapa de autoria: a própria área da tabela passa para modo de
 edição, sem abrir uma interface separada, conservando os campos visíveis e a
 respetiva ordem; as linhas podem ser adicionadas ou removidas. As relações
 técnicas não apresentadas ao docente são preservadas internamente. Guardar cria
-uma nova versão sem
-chamada à IA, depois de validação estrutural, e invalida apenas os artefactos
+uma nova versão sem chamada à IA, depois de validação estrutural, e invalida
+apenas os artefactos
 posteriores dependentes.
+
+As tabelas editáveis não acrescentam uma coluna de numeração. Os campos que
+referenciam conteúdos, objetivos, resultados, avaliações ou atividades de
+etapas anteriores usam seletores de escolha única ou múltipla, evitando a
+introdução manual de identificadores inexistentes.
 
 A especificação completa e os critérios de aceitação encontram-se em
 [`REQUISITOS.md`](REQUISITOS.md).

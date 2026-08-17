@@ -2,6 +2,8 @@ from prism.manual_editing import (
     FieldSpec,
     apply_editor_field_value,
     editor_field_value,
+    editor_reference_options,
+    editor_reference_value,
     editor_layout,
     format_editor_value,
     new_table_row,
@@ -101,3 +103,36 @@ def test_compact_relationship_fields_preserve_the_internal_model() -> None:
     apply_editor_field_value(row, outcomes, "RA3, RA4")
     assert row["outcome_ids"] == ["RA3", "RA4"]
     assert row["outcome_id"] == "RA3"
+
+
+def test_reference_fields_offer_ids_from_previous_stages() -> None:
+    state = _completed_state()
+    outcome_field = FieldSpec("outcome_id", "Resultado")
+    contents_field = FieldSpec("content_links", "Conteúdos", "content_ids")
+    row = state["learning_outcomes"][0]
+
+    outcome_options = editor_reference_options(state, outcome_field)
+    content_options = editor_reference_options(state, contents_field)
+
+    assert outcome_options is not None
+    assert list(outcome_options) == ["RA1", "RA2", "RA3", "RA4"]
+    assert outcome_options["RA1"].startswith("RA1 — ")
+    assert content_options is not None
+    assert set(editor_reference_value(row, contents_field)) <= set(content_options)
+
+
+def test_reference_select_values_are_applied_without_free_text_parsing() -> None:
+    row = {
+        "outcome_id": "RA1",
+        "outcome_ids": ["RA1"],
+        "objective_ids": ["OG1"],
+    }
+    outcomes = FieldSpec("outcome_ids", "Resultados", "linked_outcomes")
+    objectives = FieldSpec("objective_ids", "Objetivos", "csv")
+
+    apply_editor_field_value(row, outcomes, ["RA2", "RA3"])
+    apply_editor_field_value(row, objectives, ["OG2", "OG3"])
+
+    assert row["outcome_ids"] == ["RA2", "RA3"]
+    assert row["outcome_id"] == "RA2"
+    assert row["objective_ids"] == ["OG2", "OG3"]

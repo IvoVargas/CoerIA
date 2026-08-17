@@ -348,6 +348,8 @@ def format_editor_value(value: Any, kind: str) -> Any:
 def parse_editor_value(value: Any, kind: str) -> Any:
     if kind == "integer":
         return int(float(value or 0))
+    if kind in {"lines", "csv"} and isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
     text = str(value or "")
     if kind == "lines":
         return [line.strip() for line in text.splitlines() if line.strip()]
@@ -383,6 +385,65 @@ def editor_field_value(target: dict[str, Any], field: FieldSpec) -> Any:
         identifiers = target.get(field.key) or [target.get("outcome_id", "")]
         return ", ".join(str(item) for item in identifiers if item)
     return format_editor_value(target.get(field.key), field.kind)
+
+
+REFERENCE_FIELDS = {
+    "content_links": ("curriculum_analysis", "contents", "title"),
+    "content_ids": ("curriculum_analysis", "contents", "title"),
+    "objective_ids": ("curriculum_analysis", "objectives", "statement"),
+    "outcome_id": ("learning_outcomes", None, "statement"),
+    "outcome_ids": ("learning_outcomes", None, "statement"),
+    "assessment_ids": ("assessment_activities", None, "activity"),
+    "teaching_activity_ids": ("teaching_activities", None, "activity"),
+}
+
+
+def editor_reference_options(
+    state: dict[str, Any],
+    field: FieldSpec,
+) -> dict[str, str] | None:
+    """Devolve opções de etapas anteriores para os campos que guardam IDs."""
+
+    source = REFERENCE_FIELDS.get(field.key)
+    if source is None:
+        return None
+    stage, nested_key, description_key = source
+    artifact = state.get(stage, {})
+    rows = artifact.get(nested_key, []) if nested_key else artifact
+    if not isinstance(rows, list):
+        rows = []
+    options: dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        identifier = str(row.get("id", "")).strip()
+        if not identifier:
+            continue
+        description = " ".join(
+            str(row.get(description_key, "")).strip().split()
+        )
+        if len(description) > 88:
+            description = description[:85].rstrip() + "…"
+        options[identifier] = (
+            f"{identifier} — {description}" if description else identifier
+        )
+    return options
+
+
+def editor_reference_value(target: dict[str, Any], field: FieldSpec) -> Any:
+    """Converte a relação interna no valor esperado por um seletor NiceGUI."""
+
+    if field.kind == "content_ids":
+        return [
+            str(item.get("content_id", ""))
+            for item in target.get(field.key, [])
+            if item.get("content_id")
+        ]
+    if field.kind == "linked_outcomes":
+        return list(target.get(field.key) or [target.get("outcome_id", "")])
+    if field.kind == "csv":
+        return list(target.get(field.key) or [])
+    return str(target.get(field.key, "") or "")
 
 
 def apply_editor_field_value(

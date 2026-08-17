@@ -36,6 +36,8 @@ from prism.manual_editing import (
     TableSpec,
     apply_editor_field_value,
     editor_field_value,
+    editor_reference_options,
+    editor_reference_value,
     editor_layout,
     new_table_row,
     value_at_path,
@@ -154,7 +156,6 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table { min-width: 720px; width: 100%; border-collapse: collapse; }
 .manual-table th { background: #eaf3f1; color: #244a50; font-size: .78rem; text-align: left; padding: 9px; border: 1px solid #d9e6e3; }
 .manual-table td { min-width: 110px; padding: 4px; vertical-align: top; border: 1px solid #d9e6e3; background: white; }
-.manual-table td.manual-row-number { min-width: 54px; width: 54px; font-weight: 800; color: var(--agir-muted); }
 .manual-table td.manual-row-action { min-width: 54px; width: 54px; text-align: center; }
 .manual-table .q-field { min-width: 100px; }
 .manual-table .manual-cell-long { min-width: 210px; }
@@ -991,7 +992,19 @@ class AGIRSoloInterface:
                 )
 
         label = None if compact else field.label
-        if field.kind == "integer":
+        reference_options = editor_reference_options(self.state or {}, field)
+        if reference_options is not None:
+            multiple = field.kind in {"csv", "content_ids", "linked_outcomes"}
+            control = ui.select(
+                options=(list(reference_options) if multiple else reference_options),
+                label=label,
+                value=editor_reference_value(target, field),
+                multiple=multiple,
+                on_change=update_value,
+            ).props("options-dense" + (" use-chips" if multiple else ""))
+            if not reference_options:
+                control.props("disable")
+        elif field.kind == "integer":
             control = ui.number(label, value=value, precision=0)
         elif field.kind in {"long", "lines"}:
             control = ui.textarea(label, value=value).props("outlined autogrow")
@@ -1009,7 +1022,8 @@ class AGIRSoloInterface:
             )
         else:
             control.classes("w-full")
-        control.on_value_change(update_value)
+        if reference_options is None:
+            control.on_value_change(update_value)
 
     def _render_manual_table(
         self,
@@ -1031,8 +1045,6 @@ class AGIRSoloInterface:
                 with ui.element("table").classes("manual-table"):
                     with ui.element("thead"):
                         with ui.element("tr"):
-                            with ui.element("th"):
-                                ui.label("#")
                             for field in table.fields:
                                 with ui.element("th"):
                                     ui.label(field.label)
@@ -1041,8 +1053,6 @@ class AGIRSoloInterface:
                     with ui.element("tbody"):
                         for index, row in enumerate(rows):
                             with ui.element("tr"):
-                                with ui.element("td").classes("manual-row-number"):
-                                    ui.label(str(index + 1))
                                 for field in table.fields:
                                     with ui.element("td"):
                                         self._render_manual_field(

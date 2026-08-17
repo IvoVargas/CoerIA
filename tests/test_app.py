@@ -57,6 +57,9 @@ async def test_manual_table_editor_renders_for_the_current_stage(
     await user.open("/_test_manual_editor")
 
     await user.should_see("Editar a tabela manualmente")
+    user.find("Editar a tabela manualmente").click()
+    await user.should_see("EDIÇÃO NA TABELA ATUAL")
+    user.find("Cancelar edição").click()
     with user:
         interfaces[-1]._view_stage("curriculum_analysis")
     await user.should_see("MODO DE CONSULTA")
