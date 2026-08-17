@@ -95,6 +95,11 @@ enquanto o workflow LangGraph permanece como fonte de verdade das transições.
 Esta separação permite testar o domínio sem navegador e substituir futuramente
 a interface sem alterar agentes, persistência ou validações.
 
+Na etapa de classificação, a interface deriva a taxonomia do estado da sessão,
+não a repete em cada linha e apresenta o nível através de opções numeradas. O
+seletor mostra `SOLO 2`–`SOLO 5` ou `Bloom 1`–`Bloom 6`, mantendo no artefacto o
+nome canónico do nível e a taxonomia escolhida.
+
 ## Porque não foi acrescentado outro runtime
 
 A aplicação já controla estado, versões, retoma e transições com LangGraph. As

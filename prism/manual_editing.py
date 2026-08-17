@@ -7,6 +7,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from .curriculum import taxonomy_level_options, validate_taxonomy_choice
+
 
 @dataclass(frozen=True)
 class FieldSpec:
@@ -97,8 +99,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (),
                 (
                     _field("outcome_id", "Resultado"),
-                    _field("taxonomy", "Taxonomia"),
-                    _field("level", "Nível"),
+                    _field("level", "Nível", "taxonomy_level"),
                     _field("action_verb", "Verbo de ação"),
                 ),
                 {"outcome_id": "", "taxonomy": "", "level": "", "action_verb": ""},
@@ -430,6 +431,20 @@ def editor_reference_options(
     return options
 
 
+def editor_taxonomy_level_options(
+    state: dict[str, Any],
+    field: FieldSpec,
+) -> dict[str, str] | None:
+    """Limita a escolha aos níveis da taxonomia selecionada para a sessão."""
+
+    if field.kind != "taxonomy_level":
+        return None
+    taxonomy = validate_taxonomy_choice(
+        str(state.get("course", {}).get("taxonomy_type", "SOLO"))
+    )
+    return taxonomy_level_options(taxonomy)
+
+
 def editor_reference_value(target: dict[str, Any], field: FieldSpec) -> Any:
     """Converte a relação interna no valor esperado por um seletor NiceGUI."""
 
@@ -487,5 +502,13 @@ def apply_editor_field_value(
     target[field.key] = parse_editor_value(value, field.kind)
 
 
-def new_table_row(table: TableSpec) -> dict[str, Any]:
-    return deepcopy(table.template)
+def new_table_row(
+    table: TableSpec,
+    state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    row = deepcopy(table.template)
+    if state is not None and "taxonomy" in row:
+        row["taxonomy"] = validate_taxonomy_choice(
+            str(state.get("course", {}).get("taxonomy_type", "SOLO"))
+        )
+    return row

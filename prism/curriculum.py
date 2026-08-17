@@ -118,6 +118,17 @@ TAXONOMY_LEVELS = {
     TAXONOMY_BLOOM: BLOOM_LEVELS,
 }
 
+# A numeração SOLO conserva o nível pré-estrutural como SOLO 1, embora esse
+# nível não seja utilizado para formular resultados de aprendizagem no CoerIA.
+TAXONOMY_LEVEL_NUMBERS = {
+    TAXONOMY_SOLO: {
+        level: number for number, level in enumerate(SOLO_LEVELS, start=2)
+    },
+    TAXONOMY_BLOOM: {
+        level: number for number, level in enumerate(BLOOM_LEVELS, start=1)
+    },
+}
+
 TAXONOMY_VERBS = {
     TAXONOMY_SOLO: SOLO_VERBS,
     TAXONOMY_BLOOM: BLOOM_VERBS,
@@ -170,6 +181,24 @@ def validate_taxonomy_choice(value: str) -> str:
         if candidate == normalise_text(choice):
             return choice
     raise ValueError("A taxonomia deve ser SOLO ou Bloom.")
+
+
+def taxonomy_level_label(taxonomy: str, level: str) -> str:
+    """Acrescenta a posição numérica ao nome canónico de um nível."""
+
+    selected = validate_taxonomy_choice(taxonomy)
+    number = TAXONOMY_LEVEL_NUMBERS[selected].get(level)
+    return f"{level} — {selected} {number}" if number is not None else str(level)
+
+
+def taxonomy_level_options(taxonomy: str) -> dict[str, str]:
+    """Devolve níveis canónicos como valores e rótulos numerados para a UI."""
+
+    selected = validate_taxonomy_choice(taxonomy)
+    return {
+        level: taxonomy_level_label(selected, level)
+        for level in TAXONOMY_LEVELS[selected]
+    }
 
 
 def taxonomy_verb_allowed(taxonomy: str, level: str, verb: str) -> bool:

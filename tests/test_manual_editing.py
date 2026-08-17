@@ -4,6 +4,7 @@ from prism.manual_editing import (
     editor_field_value,
     editor_reference_options,
     editor_reference_value,
+    editor_taxonomy_level_options,
     editor_layout,
     format_editor_value,
     new_table_row,
@@ -11,7 +12,8 @@ from prism.manual_editing import (
     value_at_path,
 )
 from prism.models import CourseInput
-from prism.presentation import active_stage_artifact
+from prism.curriculum import taxonomy_level_label
+from prism.presentation import active_stage_artifact, render_stage_artifact
 from prism.workflow import (
     STAGE_ORDER,
     create_session,
@@ -136,3 +138,39 @@ def test_reference_select_values_are_applied_without_free_text_parsing() -> None
     assert row["outcome_ids"] == ["RA2", "RA3"]
     assert row["outcome_id"] == "RA2"
     assert row["objective_ids"] == ["OG2", "OG3"]
+
+
+def test_taxonomy_editor_omits_redundant_taxonomy_and_numbers_levels() -> None:
+    state = _completed_state()
+    table = editor_layout("outcome_taxonomy").tables[0]
+    level_field = next(field for field in table.fields if field.key == "level")
+
+    assert [field.label for field in table.fields] == [
+        "Resultado",
+        "Nível",
+        "Verbo de ação",
+    ]
+    options = editor_taxonomy_level_options(state, level_field)
+    assert options is not None
+    assert options["Uni-estrutural"] == "Uni-estrutural — SOLO 2"
+    assert options["Abstrato expandido"] == "Abstrato expandido — SOLO 5"
+
+    rendered = render_stage_artifact(state, "outcome_taxonomy")
+    assert "| Resultado | Nível | Verbo de ação |" in rendered
+    assert "| Taxonomia |" not in rendered
+    assert "Uni-estrutural — SOLO 2" in rendered
+
+
+def test_taxonomy_level_labels_follow_the_selected_taxonomy() -> None:
+    assert taxonomy_level_label("SOLO", "Relacional") == "Relacional — SOLO 4"
+    assert taxonomy_level_label("Bloom", "Recordar") == "Recordar — Bloom 1"
+    assert taxonomy_level_label("Bloom", "Criar") == "Criar — Bloom 6"
+
+
+def test_new_taxonomy_row_inherits_the_session_taxonomy() -> None:
+    state = _completed_state()
+    table = editor_layout("outcome_taxonomy").tables[0]
+
+    row = new_table_row(table, state)
+
+    assert row["taxonomy"] == "SOLO"

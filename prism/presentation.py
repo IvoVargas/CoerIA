@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from .curriculum import taxonomy_level_label
 from .workflow import STAGE_LABELS, STAGE_ORDER
 
 
@@ -180,14 +181,13 @@ def render_artifact(
         rows = [
             [
                 item.get("outcome_id", "—"),
-                item["taxonomy"],
-                item["level"],
+                taxonomy_level_label(item["taxonomy"], item["level"]),
                 item["action_verb"],
             ]
             for item in artifact
         ]
         return header + _table(
-            ["Resultado", "Taxonomia", "Nível", "Verbo de ação"], rows
+            ["Resultado", "Nível", "Verbo de ação"], rows
         )
 
     if stage == "assessment_activities":

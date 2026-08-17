@@ -37,6 +37,12 @@ são combinadas. Cada avaliação é exclusivamente formativa ou sumativa, poden
 uma UC conter apenas avaliações sumativas. O preenchimento inicial pode ser
 validado localmente e, a pedido, ter todos os campos vazios preenchidos por uma
 proposta editável da IA, sem substituir os dados já introduzidos pelo docente.
+
+Na classificação taxonómica, a taxonomia escolhida não é repetida como coluna.
+O nível é apresentado e editado através de um seletor numerado: `SOLO 2` a
+`SOLO 5` ou `Bloom 1` a `Bloom 6`. O valor canónico continua guardado no modelo
+para validação e exportação.
+
 A seleção inicial dos recursos é provisória: fica bloqueada durante a construção
 da estrutura e pode ser confirmada ou alterada na matriz de alinhamento.
 

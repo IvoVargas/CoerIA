@@ -38,6 +38,7 @@ from prism.manual_editing import (
     editor_field_value,
     editor_reference_options,
     editor_reference_value,
+    editor_taxonomy_level_options,
     editor_layout,
     new_table_row,
     value_at_path,
@@ -992,17 +993,21 @@ class AGIRSoloInterface:
                 )
 
         label = None if compact else field.label
-        reference_options = editor_reference_options(self.state or {}, field)
-        if reference_options is not None:
+        selection_options = editor_reference_options(self.state or {}, field)
+        if selection_options is None:
+            selection_options = editor_taxonomy_level_options(
+                self.state or {}, field
+            )
+        if selection_options is not None:
             multiple = field.kind in {"csv", "content_ids", "linked_outcomes"}
             control = ui.select(
-                options=(list(reference_options) if multiple else reference_options),
+                options=(list(selection_options) if multiple else selection_options),
                 label=label,
                 value=editor_reference_value(target, field),
                 multiple=multiple,
                 on_change=update_value,
             ).props("options-dense" + (" use-chips" if multiple else ""))
-            if not reference_options:
+            if not selection_options:
                 control.props("disable")
         elif field.kind == "integer":
             control = ui.number(label, value=value, precision=0)
@@ -1022,7 +1027,7 @@ class AGIRSoloInterface:
             )
         else:
             control.classes("w-full")
-        if reference_options is None:
+        if selection_options is None:
             control.on_value_change(update_value)
 
     def _render_manual_table(
@@ -1070,7 +1075,7 @@ class AGIRSoloInterface:
                                     )
 
         def add_row() -> None:
-            row = new_table_row(table)
+            row = new_table_row(table, self.state)
             if "order" in row:
                 row["order"] = len(rows) + 1
             rows.append(row)
