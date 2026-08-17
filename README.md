@@ -54,11 +54,12 @@ nem carregada por outro participante. O nome técnico do ficheiro e o pacote Pyt
 mantidos temporariamente por compatibilidade com sessões e instalações
 anteriores à adoção da identidade CoerIA. A interface permite a cada docente
 retomar as respetivas sessões e consultar todas as versões, incluindo propostas
-substituídas por reformulações. A barra de etapas permite reabrir qualquer ponto
-de autoria já alcançado, incluindo numa sessão concluída. Antes de confirmar, o
-docente vê quais as etapas dependentes que ficarão desatualizadas; o estado
-coerente anterior é preservado e a nova revisão tem de voltar a ser validada até
-ao fim do fluxo.
+substituídas por reformulações. A barra de etapas permite abrir para consulta
+qualquer ponto de autoria já alcançado, incluindo numa sessão concluída, sem
+alterar o estado. Dentro dessa página, o docente pode escolher **Reformular**;
+só então descreve a alteração e vê quais as etapas dependentes que ficarão
+desatualizadas. Depois da confirmação, o estado coerente anterior é preservado e
+a nova revisão tem de voltar a ser validada até ao fim do fluxo.
 
 A especificação completa e os critérios de aceitação encontram-se em
 [`REQUISITOS.md`](REQUISITOS.md).

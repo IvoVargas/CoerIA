@@ -114,10 +114,13 @@ def render_artifact(
 
     progress = STAGE_ORDER.index(stage) + 1
     if is_current:
+        stage_status = state.get("stage_statuses", {}).get(stage)
         review_status = (
-            "recursos aprovados e prontos para exportação"
-            if state.get("status") == "completed"
+            "versão ativa aprovada"
+            if stage_status == "approved" or state.get("status") == "completed"
             else "a aguardar validação do docente"
+            if stage_status == "awaiting_review" or stage == state.get("current_stage")
+            else "versão ativa"
         )
     else:
         review_status = "versão guardada para consulta"
@@ -285,6 +288,35 @@ def render_current_artifact(state: dict[str, Any]) -> str:
         state[stage],
         version_number=len(versions) or 1,
         metadata=metadata[-1] if metadata else None,
+        is_current=True,
+    )
+
+
+def render_stage_artifact(state: dict[str, Any], stage: str) -> str:
+    """Apresenta a versão ativa de uma etapa sem alterar o fluxo da sessão."""
+
+    if stage not in STAGE_ORDER:
+        return "A etapa selecionada já não está disponível."
+    versions = state.get("versions", {}).get(stage, [])
+    active_version = state.get("active_versions", {}).get(stage)
+    version_number = int(active_version or len(versions) or 1)
+    if 0 < version_number <= len(versions):
+        artifact = versions[version_number - 1]
+    elif stage in state:
+        artifact = state[stage]
+    else:
+        return "A etapa selecionada ainda não possui uma versão ativa."
+    metadata_versions = state.get("generation_metadata", {}).get(stage, [])
+    return render_artifact(
+        state,
+        stage,
+        artifact,
+        version_number=version_number,
+        metadata=(
+            metadata_versions[version_number - 1]
+            if version_number <= len(metadata_versions)
+            else None
+        ),
         is_current=True,
     )
 

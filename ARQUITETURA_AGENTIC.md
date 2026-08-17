@@ -65,7 +65,9 @@ número de reformulações. O rasto de auditoria regista também as decisões e 
 feedback humano.
 
 Cada versão regista ainda as versões ativas dos artefactos anteriores que lhe
-serviram de entrada. Quando o docente reabre uma etapa, o sistema apresenta o
+serviram de entrada. Selecionar uma etapa anterior altera apenas o estado
+temporário de navegação da interface; não modifica nem persiste a sessão. Já na
+página da etapa, o docente pode escolher **Reformular**. O sistema apresenta o
 impacto antes de executar a alteração, guarda uma fotografia coerente do estado
 anterior e marca como desatualizadas as etapas dependentes. Estas propostas não
 são apagadas: permanecem consultáveis no histórico, mas deixam de estar ativas

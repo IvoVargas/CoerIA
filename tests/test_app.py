@@ -1,13 +1,15 @@
+from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
 from nicegui.testing import User
 
+import app
 from prism.application_service import ApplicationService
 from prism.models import CourseInput, RESOURCE_PRACTICAL, RESOURCE_TEST
 from prism.persistence import SQLiteSessionStore
-from prism.workflow import create_session, create_test_agent
+from prism.workflow import create_session, create_test_agent, review_current_stage
 
 
 @pytest.mark.asyncio
@@ -78,6 +80,35 @@ def test_loading_a_session_restores_all_initial_fields() -> None:
     assert fields["program_name"] == course.program_name
     assert fields["general_aims"] == course.general_aims
     assert fields["bibliography"] == course.bibliography
+
+
+def test_opening_a_previous_stage_is_read_only() -> None:
+    course = CourseInput.create(
+        unit_name="Programação",
+        source_text="Algoritmos, estruturas de dados, funções e testes.",
+        audience="Licenciatura",
+        duration_hours=12,
+    )
+    agent = create_test_agent()
+    state = create_session(course, agent=agent)
+    state = review_current_stage(state, "approve", agent=agent)
+    original = deepcopy(state)
+    messages: list[str] = []
+
+    interface = object.__new__(app.AGIRSoloInterface)
+    interface.state = state
+    interface.viewed_stage = None
+    interface._render_workspace = messages.append
+
+    interface._view_stage("curriculum_analysis")
+
+    assert interface.viewed_stage == "curriculum_analysis"
+    assert state == original
+    assert "apenas para consulta" in messages[-1]
+
+    interface._return_to_current_stage()
+    assert interface.viewed_stage is None
+    assert state == original
 
 
 def test_application_service_cannot_load_another_owner_session(tmp_path: Path) -> None:

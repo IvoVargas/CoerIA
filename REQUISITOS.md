@@ -76,6 +76,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir aprovação ou reformulação fundamentada.
 - Permitir selecionar e reabrir qualquer etapa de autoria já alcançada, mesmo
   depois da conclusão da sessão.
+- Tratar a seleção de uma etapa anterior como navegação de consulta: não alterar
+  o estado, não criar uma versão e não invalidar dependências nessa operação.
+- Disponibilizar a ação **Reformular** dentro da etapa consultada e só iniciar a
+  alteração depois de o docente escrever e confirmar o respetivo pedido.
 - Apresentar, antes da confirmação e de qualquer chamada à IA, a nova versão a
   criar e as etapas posteriores que ficarão desatualizadas.
 - Criar uma nova versão da etapa reaberta e marcar como desatualizados os
@@ -237,8 +241,9 @@ condições de utilização conhecidas.
 ## Critérios mínimos de aceitação
 
 - O fluxo completo termina apenas após nove aprovações humanas.
-- Uma revisão pode começar em qualquer etapa já alcançada, apresenta previamente
-  o impacto, invalida o estado ativo a jusante e preserva versões antigas.
+- Uma etapa anterior pode ser consultada sem modificar a sessão; uma revisão só
+  começa depois da ação explícita **Reformular**, apresenta previamente o
+  impacto, invalida o estado ativo a jusante e preserva versões antigas.
 - Uma sessão concluída pode ser reaberta e só volta ao estado concluído depois
   de todas as etapas afetadas serem novamente aprovadas.
 - Todos os resultados têm classificação na taxonomia exclusiva escolhida, avaliação

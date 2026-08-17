@@ -39,6 +39,7 @@ from prism.presentation import (
     history_choices,
     render_current_artifact,
     render_history_artifact,
+    render_stage_artifact,
 )
 from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
 from prism.workflow import STAGE_LABELS, STAGE_ORDER, revision_targets_for_state
@@ -125,8 +126,9 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .stage-item.done { background: #e8f5ef; border-color: #b9dfcd; }
 .stage-item.current { color: white; background: linear-gradient(135deg, var(--agir-primary), var(--agir-secondary)); border-color: transparent; box-shadow: 0 8px 20px rgba(13, 118, 110, .2); }
 .stage-item.stale { background: #fff6e5; border-color: #e8bd6a; color: #6f4c12; }
-.stage-item.editable { cursor: pointer; font: inherit; }
-.stage-item.editable:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(31, 71, 75, .11); }
+.stage-item.selectable { cursor: pointer; font: inherit; }
+.stage-item.selectable:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(31, 71, 75, .11); }
+.stage-item.viewing { outline: 3px solid var(--agir-accent); outline-offset: 2px; }
 .stage-number { font-size: .72rem; font-weight: 800; opacity: .72; }
 .stage-label { font-size: .78rem; line-height: 1.25; font-weight: 700; margin-top: 5px; }
 .stage-state { font-size: .67rem; line-height: 1.2; margin-top: 6px; opacity: .78; }
@@ -186,6 +188,7 @@ class AGIRSoloInterface:
         self.service = service or SERVICE
         self.identity = identity or Identity("LOCAL", "Utilizador local", "admin")
         self.state: dict[str, Any] | None = None
+        self.viewed_stage: str | None = None
         self.uploaded_files: dict[str, bytes] = {}
         self.fields: dict[str, Any] = {}
         self.resource_inputs: dict[str, Any] = {}
@@ -579,6 +582,7 @@ class AGIRSoloInterface:
                     self._form_data(),
                     source_paths,
                 )
+            self.viewed_stage = None
             self.show_workspace(
                 "Sessão iniciada. Valide a proposta atual ou solicite uma reformulação."
             )
@@ -595,6 +599,7 @@ class AGIRSoloInterface:
 
     def show_new_session(self) -> None:
         self.state = None
+        self.viewed_stage = None
         self._set_form_data(
             {
                 "unit_name": "",
@@ -656,6 +661,7 @@ class AGIRSoloInterface:
         self._show_busy("A retomar a sessão guardada…")
         try:
             self.state = await run.io_bound(self.service.load_session, session_id)
+            self.viewed_stage = None
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.uploaded_files.clear()
             self.uploader.reset()
@@ -711,7 +717,14 @@ class AGIRSoloInterface:
 
             self._render_stage_track(state)
 
-            if state.get("status") == "completed":
+            viewed_stage = (
+                self.viewed_stage
+                if self.viewed_stage in revision_targets_for_state(state)
+                else None
+            )
+            if viewed_stage:
+                self._render_stage_preview(state, viewed_stage)
+            elif state.get("status") == "completed":
                 self._render_completed_view(state)
             elif state.get("current_stage") == "final_validation":
                 self._render_final_validation_view(state)
@@ -722,10 +735,10 @@ class AGIRSoloInterface:
 
     def _render_stage_track(self, state: dict[str, Any]) -> None:
         current_index = STAGE_ORDER.index(state["current_stage"])
-        revision_targets = set(revision_targets_for_state(state))
+        viewable_stages = set(revision_targets_for_state(state))
         stored_statuses = state.get("stage_statuses", {})
         status_labels = {
-            "approved": "Aprovado · selecionar para rever",
+            "approved": "Aprovado · selecionar para consultar",
             "awaiting_review": "Em validação",
             "generating": "A gerar",
             "stale": "Desatualizado · requer nova validação",
@@ -751,15 +764,20 @@ class AGIRSoloInterface:
                     if stored_status == "stale"
                     else "pending"
                 )
-                editable = stage in revision_targets
-                item = ui.element("button" if editable else "div").classes(
-                    f"stage-item {visual_status}" + (" editable" if editable else "")
+                selectable = stage in viewable_stages and (
+                    stage != state["current_stage"] or state.get("status") == "completed"
                 )
-                if editable:
+                viewing = stage == self.viewed_stage
+                item = ui.element("button" if selectable else "div").classes(
+                    f"stage-item {visual_status}"
+                    + (" selectable" if selectable else "")
+                    + (" viewing" if viewing else "")
+                )
+                if selectable:
                     item.props("type=button")
                     item.on(
                         "click",
-                        lambda _event, selected_stage=stage: self._open_revision_dialog(
+                        lambda _event, selected_stage=stage: self._view_stage(
                             selected_stage
                         ),
                     )
@@ -769,6 +787,19 @@ class AGIRSoloInterface:
                     ui.label(status_labels.get(stored_status, stored_status)).classes(
                         "stage-state"
                     )
+
+    def _view_stage(self, target_stage: str) -> None:
+        if not self.state or target_stage not in revision_targets_for_state(self.state):
+            return
+        self.viewed_stage = target_stage
+        self._render_workspace(
+            "Etapa aberta apenas para consulta. A sessão e os passos seguintes "
+            "permanecem inalterados."
+        )
+
+    def _return_to_current_stage(self) -> None:
+        self.viewed_stage = None
+        self._render_workspace("Regressou ao ponto atual da sessão.")
 
     def _open_revision_dialog(self, target_stage: str) -> None:
         try:
@@ -828,6 +859,37 @@ class AGIRSoloInterface:
                 ).props("unelevated no-caps").classes("primary-action")
         dialog.open()
 
+    def _render_stage_preview(self, state: dict[str, Any], stage: str) -> None:
+        """Mostra uma etapa anterior sem a tornar corrente nem a invalidar."""
+
+        with ui.element("div").classes("workspace-grid"):
+            with ui.card().classes("surface artifact-card"):
+                ui.markdown(
+                    render_stage_artifact(state, stage),
+                    extras=["tables"],
+                ).classes("artifact-markdown")
+            with ui.card().classes("surface decision-card w-full"):
+                ui.label("MODO DE CONSULTA").classes("eyebrow")
+                ui.label("Etapa anterior").classes("section-title")
+                ui.label(
+                    "Abrir esta etapa não altera a sessão. Só será criada uma "
+                    "nova versão se escolher Reformular e confirmar o pedido."
+                ).classes("text-sm muted")
+                ui.button(
+                    "Reformular esta etapa",
+                    icon="edit_note",
+                    on_click=lambda: self._open_revision_dialog(stage),
+                ).props("unelevated no-caps").classes(
+                    "primary-action w-full mt-3"
+                )
+                ui.button(
+                    "Voltar ao ponto atual",
+                    icon="arrow_back",
+                    on_click=self._return_to_current_stage,
+                ).props("outline no-caps").classes(
+                    "secondary-action w-full mt-2"
+                )
+
     def _render_authoring_view(self, state: dict[str, Any]) -> None:
         with ui.element("div").classes("workspace-grid"):
             with ui.card().classes("surface artifact-card"):
@@ -880,36 +942,30 @@ class AGIRSoloInterface:
                 "A IA não avança sem a sua decisão."
             ).classes("text-sm muted mb-2")
 
-            decision = ui.toggle(
-                {"approve": "Aprovar", "revise": "Reformular"},
-                value="approve",
-            ).props("spread no-caps").classes("full-control")
+            decision = None
+            feedback = None
+            if final:
+                ui.label(
+                    "Para rever uma componente, selecione primeiro a respetiva "
+                    "etapa na barra superior, consulte-a e escolha Reformular."
+                ).classes("soft-surface p-3 text-sm")
+            else:
+                decision = ui.toggle(
+                    {"approve": "Aprovar", "revise": "Reformular"},
+                    value="approve",
+                ).props("spread no-caps").classes("full-control")
 
-            revision_options = {
-                value: label for label, value in [
-                    (STAGE_LABELS[key], key)
-                    for key in revision_targets_for_state(state)
-                ]
-            }
-            revision_default = (
-                state["current_stage"]
-                if state["current_stage"] in revision_options
-                else next(iter(revision_options))
-            )
-            with ui.column().classes("w-full gap-3") as revision_area:
-                revision_stage = ui.select(
-                    revision_options,
-                    value=revision_default,
-                    label="Componente a reformular",
-                ).classes("full-control")
-                feedback = ui.textarea(
-                    "Feedback para a reformulação",
-                    placeholder="Explique claramente a alteração necessária.",
-                ).props("outlined autogrow").classes("full-control")
-            revision_area.set_visibility(False)
-            decision.on_value_change(
-                lambda event: revision_area.set_visibility(event.value == "revise")
-            )
+                with ui.column().classes("w-full gap-3") as revision_area:
+                    feedback = ui.textarea(
+                        "Feedback para a reformulação",
+                        placeholder="Explique claramente a alteração necessária.",
+                    ).props("outlined autogrow").classes("full-control")
+                revision_area.set_visibility(False)
+                decision.on_value_change(
+                    lambda event: revision_area.set_visibility(
+                        event.value == "revise"
+                    )
+                )
 
             resource_checks: dict[str, Any] = {}
             if state["current_stage"] == "alignment_matrix":
@@ -938,9 +994,9 @@ class AGIRSoloInterface:
                     else None
                 )
                 await self.handle_review(
-                    str(decision.value),
-                    str(feedback.value or ""),
-                    str(revision_stage.value or state["current_stage"]),
+                    "approve" if final else str(decision.value),
+                    "" if final else str(feedback.value or ""),
+                    state["current_stage"],
                     resources,
                 )
 
@@ -968,6 +1024,7 @@ class AGIRSoloInterface:
                 revision_stage,
                 resource_types,
             )
+            self.viewed_stage = None
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
@@ -986,6 +1043,7 @@ class AGIRSoloInterface:
                 target_stage,
                 feedback,
             )
+            self.viewed_stage = None
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
