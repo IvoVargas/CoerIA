@@ -63,8 +63,9 @@ a nova revisão tem de voltar a ser validada até ao fim do fluxo.
 
 Durante a consulta, selecionar a caixa do ponto atual tem o mesmo efeito de
 **Voltar ao ponto atual**. O docente também pode escolher **Editar manualmente**
-em qualquer etapa de autoria: os campos das tabelas tornam-se editáveis e as
-linhas podem ser adicionadas ou removidas. Guardar cria uma nova versão sem
+em qualquer etapa de autoria: a própria área da tabela passa para modo de
+edição, sem abrir uma interface separada, e as linhas podem ser adicionadas ou
+removidas. Guardar cria uma nova versão sem
 chamada à IA, depois de validação estrutural, e invalida apenas os artefactos
 posteriores dependentes.
 

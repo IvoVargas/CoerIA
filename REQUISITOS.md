@@ -84,7 +84,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Disponibilizar a ação **Reformular** dentro da etapa consultada e só iniciar a
   alteração depois de o docente escrever e confirmar o respetivo pedido.
 - Disponibilizar edição manual estruturada em todas as etapas de autoria,
-  permitindo alterar texto, adicionar linhas e remover linhas.
+  transformando a tabela apresentada no próprio local e permitindo alterar
+  texto, adicionar linhas e remover linhas, sem abrir um editor separado.
 - Validar a edição manual antes de a persistir; ao guardar, criar uma nova
   versão, preservar a anterior e aplicar a invalidação a jusante sem chamar a IA.
 - Apresentar, antes da confirmação e de qualquer chamada à IA, a nova versão a

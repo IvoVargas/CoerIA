@@ -44,6 +44,7 @@ async def test_manual_table_editor_renders_for_the_current_stage(
     agent = create_test_agent()
     state = create_session(course, agent=agent)
     state = review_current_stage(state, "approve", agent=agent)
+    original = deepcopy(state)
     interfaces: list[app.AGIRSoloInterface] = []
 
     @ui.page("/_test_manual_editor")
@@ -64,11 +65,18 @@ async def test_manual_table_editor_renders_for_the_current_stage(
     assert interfaces[-1].viewed_stage is None
 
     with user:
-        interfaces[-1]._open_manual_editor("curriculum_analysis")
-    await user.should_see("EDIÇÃO MANUAL")
+        interfaces[-1]._view_stage("curriculum_analysis")
+    user.find("Editar esta tabela").click()
+    await user.should_see("EDIÇÃO NA TABELA ATUAL")
+    await user.should_not_see("MODO DE CONSULTA")
     await user.should_see("Conteúdos curriculares")
     await user.should_see("Adicionar linha")
     await user.should_see("Guardar nova versão")
+    assert interfaces[-1].manual_edit_stage == "curriculum_analysis"
+    user.find("Cancelar edição").click()
+    await user.should_see("MODO DE CONSULTA")
+    assert interfaces[-1].manual_edit_stage is None
+    assert state == original
 
 
 def test_loading_a_session_restores_all_initial_fields() -> None:

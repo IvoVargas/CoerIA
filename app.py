@@ -150,6 +150,13 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .artifact-markdown table { min-width: 720px; width: 100%; border-collapse: separate; border-spacing: 0; font-size: .88rem; }
 .artifact-markdown th { background: #eaf3f1; color: #244a50; text-align: left; }
 .artifact-markdown th, .artifact-markdown td { border: 1px solid #d9e6e3; padding: 10px 12px; vertical-align: top; }
+.manual-table-scroll { width: 100%; overflow-x: auto; }
+.manual-table { min-width: max-content; width: 100%; border-collapse: collapse; }
+.manual-table th { background: #eaf3f1; color: #244a50; font-size: .78rem; text-align: left; padding: 9px; border: 1px solid #d9e6e3; }
+.manual-table td { min-width: 190px; padding: 8px; vertical-align: top; border: 1px solid #d9e6e3; background: white; }
+.manual-table td.manual-row-number { min-width: 54px; width: 54px; font-weight: 800; color: var(--agir-muted); }
+.manual-table td.manual-row-action { min-width: 54px; width: 54px; text-align: center; }
+.manual-table .q-field { min-width: 174px; }
 .decision-card { padding: 22px; position: sticky; top: 84px; }
 .info-chip { background: #edf5f3 !important; color: #24575d !important; font-weight: 650; }
 .status-banner { border-left: 4px solid var(--agir-primary); }
@@ -199,6 +206,8 @@ class AGIRSoloInterface:
         self.identity = identity or Identity("LOCAL", "Utilizador local", "admin")
         self.state: dict[str, Any] | None = None
         self.viewed_stage: str | None = None
+        self.manual_edit_stage: str | None = None
+        self.manual_edit_artifact: Any = None
         self.uploaded_files: dict[str, bytes] = {}
         self.fields: dict[str, Any] = {}
         self.resource_inputs: dict[str, Any] = {}
@@ -593,6 +602,8 @@ class AGIRSoloInterface:
                     source_paths,
                 )
             self.viewed_stage = None
+            self.manual_edit_stage = None
+            self.manual_edit_artifact = None
             self.show_workspace(
                 "Sessão iniciada. Valide a proposta atual ou solicite uma reformulação."
             )
@@ -610,6 +621,8 @@ class AGIRSoloInterface:
     def show_new_session(self) -> None:
         self.state = None
         self.viewed_stage = None
+        self.manual_edit_stage = None
+        self.manual_edit_artifact = None
         self._set_form_data(
             {
                 "unit_name": "",
@@ -672,6 +685,8 @@ class AGIRSoloInterface:
         try:
             self.state = await run.io_bound(self.service.load_session, session_id)
             self.viewed_stage = None
+            self.manual_edit_stage = None
+            self.manual_edit_artifact = None
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.uploaded_files.clear()
             self.uploader.reset()
@@ -813,6 +828,8 @@ class AGIRSoloInterface:
     def _view_stage(self, target_stage: str) -> None:
         if not self.state or target_stage not in revision_targets_for_state(self.state):
             return
+        self.manual_edit_stage = None
+        self.manual_edit_artifact = None
         self.viewed_stage = target_stage
         self._render_workspace(
             "Etapa aberta apenas para consulta. A sessão e os passos seguintes "
@@ -820,8 +837,30 @@ class AGIRSoloInterface:
         )
 
     def _return_to_current_stage(self) -> None:
+        self.manual_edit_stage = None
+        self.manual_edit_artifact = None
         self.viewed_stage = None
         self._render_workspace("Regressou ao ponto atual da sessão.")
+
+    def _start_manual_edit(self, stage: str) -> None:
+        try:
+            if not self.state:
+                raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+            editor_layout(stage)
+            self.manual_edit_artifact = active_stage_artifact(self.state, stage)
+        except USER_ERRORS as error:
+            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            return
+        self.manual_edit_stage = stage
+        self._render_workspace(
+            "Modo de edição ativado na própria tabela. As alterações ainda não "
+            "foram guardadas."
+        )
+
+    def _cancel_manual_edit(self) -> None:
+        self.manual_edit_stage = None
+        self.manual_edit_artifact = None
+        self._render_workspace("Edição manual cancelada; a sessão não foi alterada.")
 
     def _open_revision_dialog(self, target_stage: str) -> None:
         try:
@@ -884,41 +923,50 @@ class AGIRSoloInterface:
     def _render_stage_preview(self, state: dict[str, Any], stage: str) -> None:
         """Mostra uma etapa anterior sem a tornar corrente nem a invalidar."""
 
+        editing = (
+            self.manual_edit_stage == stage and self.manual_edit_artifact is not None
+        )
         with ui.element("div").classes("workspace-grid"):
             with ui.card().classes("surface artifact-card"):
-                ui.markdown(
-                    render_stage_artifact(state, stage),
-                    extras=["tables"],
-                ).classes("artifact-markdown")
-            with ui.card().classes("surface decision-card w-full"):
-                ui.label("MODO DE CONSULTA").classes("eyebrow")
-                ui.label("Etapa anterior").classes("section-title")
-                ui.label(
-                    "Abrir esta etapa não altera a sessão. Só será criada uma "
-                    "nova versão se escolher Editar manualmente ou Reformular "
-                    "e confirmar a alteração."
-                ).classes("text-sm muted")
-                ui.button(
-                    "Editar manualmente",
-                    icon="table_edit",
-                    on_click=lambda: self._open_manual_editor(stage),
-                ).props("unelevated no-caps").classes(
-                    "primary-action w-full mt-3"
-                )
-                ui.button(
-                    "Reformular esta etapa",
-                    icon="edit_note",
-                    on_click=lambda: self._open_revision_dialog(stage),
-                ).props("outline no-caps").classes(
-                    "secondary-action w-full mt-2"
-                )
-                ui.button(
-                    "Voltar ao ponto atual",
-                    icon="arrow_back",
-                    on_click=self._return_to_current_stage,
-                ).props("outline no-caps").classes(
-                    "secondary-action w-full mt-2"
-                )
+                if editing:
+                    self._render_inline_manual_editor(stage)
+                else:
+                    ui.markdown(
+                        render_stage_artifact(state, stage),
+                        extras=["tables"],
+                    ).classes("artifact-markdown")
+            if editing:
+                self._render_manual_edit_actions(state, stage)
+            else:
+                with ui.card().classes("surface decision-card w-full"):
+                    ui.label("MODO DE CONSULTA").classes("eyebrow")
+                    ui.label("Etapa anterior").classes("section-title")
+                    ui.label(
+                        "Abrir esta etapa não altera a sessão. Só será criada uma "
+                        "nova versão se escolher Editar ou Reformular e confirmar "
+                        "a alteração."
+                    ).classes("text-sm muted")
+                    ui.button(
+                        "Editar esta tabela",
+                        icon="table_edit",
+                        on_click=lambda: self._start_manual_edit(stage),
+                    ).props("unelevated no-caps").classes(
+                        "primary-action w-full mt-3"
+                    )
+                    ui.button(
+                        "Reformular esta etapa",
+                        icon="edit_note",
+                        on_click=lambda: self._open_revision_dialog(stage),
+                    ).props("outline no-caps").classes(
+                        "secondary-action w-full mt-2"
+                    )
+                    ui.button(
+                        "Voltar ao ponto atual",
+                        icon="arrow_back",
+                        on_click=self._return_to_current_stage,
+                    ).props("outline no-caps").classes(
+                        "secondary-action w-full mt-2"
+                    )
 
     def _render_manual_field(
         self,
@@ -961,24 +1009,36 @@ class AGIRSoloInterface:
                 ui.label("A tabela está vazia. Adicione pelo menos uma linha.").classes(
                     "text-sm muted"
                 )
-            for index, row in enumerate(rows):
-                with ui.card().classes("soft-surface w-full p-4 gap-3"):
-                    with ui.row().classes("w-full items-center"):
-                        ui.label(f"Linha {index + 1}").classes("font-bold")
-                        ui.space()
+                return
+            with ui.element("div").classes("manual-table-scroll"):
+                with ui.element("table").classes("manual-table"):
+                    with ui.element("thead"):
+                        with ui.element("tr"):
+                            with ui.element("th"):
+                                ui.label("#")
+                            for field in table.fields:
+                                with ui.element("th"):
+                                    ui.label(field.label)
+                            with ui.element("th"):
+                                ui.label("Remover")
+                    with ui.element("tbody"):
+                        for index, row in enumerate(rows):
+                            with ui.element("tr"):
+                                with ui.element("td").classes("manual-row-number"):
+                                    ui.label(str(index + 1))
+                                for field in table.fields:
+                                    with ui.element("td"):
+                                        self._render_manual_field(row, field)
 
-                        def remove_row(row_index: int = index) -> None:
-                            rows.pop(row_index)
-                            render_rows.refresh()
+                                def remove_row(row_index: int = index) -> None:
+                                    rows.pop(row_index)
+                                    render_rows.refresh()
 
-                        ui.button(icon="delete", on_click=remove_row).props(
-                            "flat round color=negative aria-label='Remover linha'"
-                        )
-                    with ui.grid(columns=2).classes(
-                        "w-full gap-3 max-md:grid-cols-1"
-                    ):
-                        for field in table.fields:
-                            self._render_manual_field(row, field)
+                                with ui.element("td").classes("manual-row-action"):
+                                    ui.button(icon="delete", on_click=remove_row).props(
+                                        "flat round color=negative "
+                                        "aria-label='Remover linha'"
+                                    )
 
         def add_row() -> None:
             row = new_table_row(table)
@@ -987,7 +1047,7 @@ class AGIRSoloInterface:
             rows.append(row)
             render_rows.refresh()
 
-        with ui.card().classes("surface w-full p-4 gap-3"):
+        with ui.column().classes("w-full gap-3"):
             with ui.row().classes("w-full items-center"):
                 ui.label(table.title).classes("text-lg font-bold")
                 ui.space()
@@ -996,82 +1056,92 @@ class AGIRSoloInterface:
                 ).classes("secondary-action")
             render_rows()
 
-    def _open_manual_editor(self, stage: str) -> None:
-        try:
-            if not self.state:
-                raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
-            artifact = active_stage_artifact(self.state, stage)
-            layout = editor_layout(stage)
-            impact = self.service.revision_impact(self.state, stage)
-        except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
-            return
+    def _render_inline_manual_editor(self, stage: str) -> None:
+        artifact = self.manual_edit_artifact
+        if artifact is None:
+            raise ValueError("Não existe uma edição manual ativa.")
+        layout = editor_layout(stage)
+        ui.label("EDIÇÃO NA TABELA ATUAL").classes("eyebrow")
+        ui.label(STAGE_LABELS[stage]).classes("section-title mb-2")
+        ui.label(
+            "Edite os campos abaixo ou adicione e remova linhas. Enquanto não "
+            "guardar, a versão aprovada e os passos seguintes permanecem intactos."
+        ).classes("text-sm muted mb-4")
+        with ui.column().classes("w-full gap-4"):
+            for scalar in layout.fields:
+                parent = (
+                    value_at_path(artifact, scalar.path[:-1])
+                    if scalar.path[:-1]
+                    else artifact
+                )
+                self._render_manual_field(
+                    parent,
+                    FieldSpec(scalar.path[-1], scalar.label, scalar.kind),
+                )
+            for table in layout.tables:
+                self._render_manual_table(artifact, table)
 
-        with ui.dialog() as dialog, ui.card().classes("w-full max-w-6xl p-6 gap-4"):
+    def _render_manual_edit_actions(
+        self,
+        state: dict[str, Any],
+        stage: str,
+    ) -> None:
+        impact = self.service.revision_impact(state, stage)
+        with ui.card().classes("surface decision-card w-full"):
             ui.label("EDIÇÃO MANUAL").classes("eyebrow")
-            ui.label(impact["target_label"]).classes("section-title")
+            ui.label("Guardar alterações").classes("section-title")
             ui.label(
-                "Altere os campos diretamente. Pode adicionar ou remover linhas; "
-                "a sessão só será modificada quando guardar a nova versão."
+                f"Será criada a versão {impact['next_version']} sem utilizar a IA."
             ).classes("text-sm muted")
-
-            with ui.scroll_area().classes("w-full").style("height: 68vh"):
-                with ui.column().classes("w-full gap-4 pr-3"):
-                    for scalar in layout.fields:
-                        parent = (
-                            value_at_path(artifact, scalar.path[:-1])
-                            if scalar.path[:-1]
-                            else artifact
-                        )
-                        self._render_manual_field(
-                            parent,
-                            FieldSpec(scalar.path[-1], scalar.label, scalar.kind),
-                        )
-                    for table in layout.tables:
-                        self._render_manual_table(artifact, table)
-
-                    ui.separator().classes("my-2")
-                    ui.label(
-                        f"Ao guardar será criada a versão {impact['next_version']}."
-                    ).classes("font-semibold")
-                    if impact["affected_labels"]:
-                        ui.label("Etapas que ficarão desatualizadas:").classes(
-                            "font-semibold"
-                        )
-                        for label in impact["affected_labels"]:
-                            ui.label(f"• {label}").classes("text-sm muted")
-                    reason = ui.textarea(
-                        "Nota da edição — opcional",
-                        placeholder="Explique resumidamente o motivo da alteração.",
-                    ).props("outlined autogrow").classes("w-full")
+            if impact["affected_labels"]:
+                ui.label("Etapas que ficarão desatualizadas:").classes(
+                    "font-semibold mt-2"
+                )
+                for label in impact["affected_labels"]:
+                    ui.label(f"• {label}").classes("text-xs muted")
+            reason = ui.textarea(
+                "Nota da edição — opcional",
+                placeholder="Explique resumidamente o motivo da alteração.",
+            ).props("outlined autogrow").classes("w-full mt-2")
 
             async def save_manual_version() -> None:
-                saved = await self.handle_manual_edit(
+                if self.manual_edit_artifact is None:
+                    ui.notify("A edição manual já não está ativa.", type="warning")
+                    return
+                await self.handle_manual_edit(
                     stage,
-                    artifact,
+                    self.manual_edit_artifact,
                     str(reason.value or ""),
                 )
-                if saved:
-                    dialog.close()
 
-            with ui.row().classes("w-full justify-end gap-2"):
-                ui.button("Cancelar", on_click=dialog.close).props(
-                    "flat no-caps"
-                ).classes("secondary-action")
-                ui.button(
-                    "Guardar nova versão",
-                    icon="save",
-                    on_click=save_manual_version,
-                ).props("unelevated no-caps").classes("primary-action")
-        dialog.open()
+            ui.button(
+                "Guardar nova versão",
+                icon="save",
+                on_click=save_manual_version,
+            ).props("unelevated no-caps").classes("primary-action w-full mt-3")
+            ui.button(
+                "Cancelar edição",
+                icon="close",
+                on_click=self._cancel_manual_edit,
+            ).props("outline no-caps").classes("secondary-action w-full mt-2")
 
     def _render_authoring_view(self, state: dict[str, Any]) -> None:
+        stage = state["current_stage"]
+        editing = (
+            self.manual_edit_stage == stage and self.manual_edit_artifact is not None
+        )
         with ui.element("div").classes("workspace-grid"):
             with ui.card().classes("surface artifact-card"):
-                ui.markdown(render_current_artifact(state), extras=["tables"]).classes(
-                    "artifact-markdown"
-                )
-            self._render_decision_card(state)
+                if editing:
+                    self._render_inline_manual_editor(stage)
+                else:
+                    ui.markdown(
+                        render_current_artifact(state), extras=["tables"]
+                    ).classes("artifact-markdown")
+            if editing:
+                self._render_manual_edit_actions(state, stage)
+            else:
+                self._render_decision_card(state)
 
     def _render_final_validation_view(self, state: dict[str, Any]) -> None:
         with ui.column().classes("w-full gap-5"):
@@ -1128,7 +1198,7 @@ class AGIRSoloInterface:
                 ui.button(
                     "Editar a tabela manualmente",
                     icon="table_edit",
-                    on_click=lambda: self._open_manual_editor(
+                    on_click=lambda: self._start_manual_edit(
                         state["current_stage"]
                     ),
                 ).props("outline no-caps").classes(
@@ -1209,6 +1279,8 @@ class AGIRSoloInterface:
                 resource_types,
             )
             self.viewed_stage = None
+            self.manual_edit_stage = None
+            self.manual_edit_artifact = None
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
@@ -1228,6 +1300,8 @@ class AGIRSoloInterface:
                 feedback,
             )
             self.viewed_stage = None
+            self.manual_edit_stage = None
+            self.manual_edit_artifact = None
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
@@ -1253,6 +1327,8 @@ class AGIRSoloInterface:
                 reason,
             )
             self.viewed_stage = None
+            self.manual_edit_stage = None
+            self.manual_edit_artifact = None
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
