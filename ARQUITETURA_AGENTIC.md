@@ -99,7 +99,10 @@ O fluxo pode emitir mensagens opcionais de progresso nos limites reais da
 geração, validação de qualidade e preparação para revisão. Como a geração corre
 fora do ciclo da interface, estas mensagens atravessam uma fila segura e são
 consumidas periodicamente pela interface, juntamente com o tempo decorrido e um
-indicador indeterminado. Não é calculada uma percentagem fictícia.
+único indicador indeterminado. Não é calculada uma percentagem fictícia.
+Na ausência temporária de uma nova fase reportada, a interface substitui a
+mensagem por um estado de espera explícito, sem confundir tempo decorrido com
+percentagem concluída.
 
 Nas etapas de classificação e matriz de alinhamento, a interface deriva a
 taxonomia do estado da sessão, não a repete em cada linha e apresenta o nível

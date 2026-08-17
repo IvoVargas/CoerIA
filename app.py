@@ -79,6 +79,26 @@ def _format_elapsed_duration(elapsed_seconds: float) -> str:
     return f"Tempo decorrido: {seconds} s"
 
 
+def _busy_phase_message(phase: str, phase_elapsed_seconds: float) -> str:
+    elapsed = max(0, int(phase_elapsed_seconds))
+    is_generation = phase.startswith("A gerar e validar")
+    is_resource_retry = phase.startswith("A corrigir os recursos")
+    if elapsed < 8 or not (is_generation or is_resource_retry):
+        return phase
+    if is_resource_retry:
+        if elapsed < 30:
+            return "A aguardar a nova resposta do fornecedor de IA…"
+        return "A correção dos recursos continua ativa no fornecedor de IA…"
+    if elapsed < 30:
+        return "A aguardar a resposta do fornecedor de IA…"
+    if "Recursos educativos" in phase:
+        return (
+            "O fornecedor continua a gerar os recursos educativos; "
+            "esta é normalmente a etapa mais demorada…"
+        )
+    return "O fornecedor continua a gerar a proposta; a operação está ativa…"
+
+
 @app.add_middleware
 class AuthMiddleware(BaseHTTPMiddleware):
     """Restringe páginas privadas, permitindo apenas o login e recursos internos."""
@@ -228,6 +248,8 @@ class AGIRSoloInterface:
         self.fields: dict[str, Any] = {}
         self.resource_inputs: dict[str, Any] = {}
         self.busy_started_at: float | None = None
+        self.busy_phase_started_at: float | None = None
+        self.busy_phase_text = ""
         self.busy_updates: SimpleQueue[str] | None = None
         self._build()
 
@@ -328,9 +350,6 @@ class AGIRSoloInterface:
                 ui.spinner("dots", size="3.2rem", color="primary")
                 self.busy_label = ui.label("A preparar a proposta…").classes(
                     "font-semibold text-center"
-                )
-                ui.linear_progress(value=0).props("indeterminate rounded").classes(
-                    "w-full"
                 )
                 self.busy_detail = ui.label("Processamento em curso…").classes(
                     "text-sm muted text-center"
@@ -657,7 +676,10 @@ class AGIRSoloInterface:
         progress_updates: SimpleQueue[str] | None = None,
         detail: str = "Processamento em curso…",
     ) -> None:
-        self.busy_started_at = monotonic()
+        started_at = monotonic()
+        self.busy_started_at = started_at
+        self.busy_phase_started_at = started_at
+        self.busy_phase_text = detail
         self.busy_updates = progress_updates
         self.busy_label.set_text(message)
         self.busy_detail.set_text(detail)
@@ -668,6 +690,7 @@ class AGIRSoloInterface:
     def _update_busy_progress(self) -> None:
         if self.busy_started_at is None:
             return
+        now = monotonic()
         latest_update: str | None = None
         if self.busy_updates is not None:
             while True:
@@ -676,15 +699,25 @@ class AGIRSoloInterface:
                 except Empty:
                     break
         if latest_update is not None:
-            self.busy_detail.set_text(latest_update)
+            self.busy_phase_text = latest_update
+            self.busy_phase_started_at = now
+        phase_started_at = self.busy_phase_started_at or self.busy_started_at
+        self.busy_detail.set_text(
+            _busy_phase_message(
+                self.busy_phase_text,
+                now - phase_started_at,
+            )
+        )
         self.busy_elapsed.set_text(
-            _format_elapsed_duration(monotonic() - self.busy_started_at)
+            _format_elapsed_duration(now - self.busy_started_at)
         )
 
     def _hide_busy(self) -> None:
         self._update_busy_progress()
         self.busy_timer.active = False
         self.busy_started_at = None
+        self.busy_phase_started_at = None
+        self.busy_phase_text = ""
         self.busy_updates = None
         self.busy_dialog.close()
 

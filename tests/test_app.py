@@ -28,6 +28,40 @@ def test_busy_elapsed_duration_is_readable(
     assert app._format_elapsed_duration(elapsed_seconds) == expected
 
 
+@pytest.mark.parametrize(
+    ("phase", "elapsed_seconds", "expected"),
+    [
+        (
+            "A gerar e validar «Recursos educativos»…",
+            7,
+            "A gerar e validar «Recursos educativos»…",
+        ),
+        (
+            "A gerar e validar «Recursos educativos»…",
+            8,
+            "A aguardar a resposta do fornecedor de IA…",
+        ),
+        (
+            "A gerar e validar «Recursos educativos»…",
+            30,
+            "O fornecedor continua a gerar os recursos educativos; "
+            "esta é normalmente a etapa mais demorada…",
+        ),
+        (
+            "A verificar automaticamente a qualidade dos recursos…",
+            45,
+            "A verificar automaticamente a qualidade dos recursos…",
+        ),
+    ],
+)
+def test_busy_phase_explains_long_provider_waits(
+    phase: str,
+    elapsed_seconds: float,
+    expected: str,
+) -> None:
+    assert app._busy_phase_message(phase, elapsed_seconds) == expected
+
+
 @pytest.mark.asyncio
 async def test_nicegui_initial_page_exposes_the_guided_workflow(
     user: User,

@@ -230,8 +230,10 @@ condições de utilização conhecidas.
 
 - A etapa, o progresso, a decisão pendente e os erros são sempre visíveis.
 - Durante operações demoradas, indicar a etapa de destino, a fase de execução e
-  o tempo decorrido através de um indicador indeterminado, sem inventar uma
+  o tempo decorrido, mantendo um único indicador indeterminado e sem inventar uma
   percentagem que o fornecedor não disponibilize.
+- Durante uma espera prolongada, confirmar que a operação continua ativa e que
+  a aplicação aguarda a resposta do fornecedor de IA.
 - A interface utiliza português europeu e rótulos consistentes.
 - O docente consegue iniciar ou retomar uma sessão sem editar ficheiros.
 - O preenchimento inicial é dividido em passos curtos e orientados.
