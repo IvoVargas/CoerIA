@@ -38,6 +38,11 @@ uma UC conter apenas avaliações sumativas. O preenchimento inicial pode ser
 validado localmente e, a pedido, ter todos os campos vazios preenchidos por uma
 proposta editável da IA, sem substituir os dados já introduzidos pelo docente.
 
+Durante a geração de uma etapa, a interface identifica a etapa de destino,
+apresenta a fase efetivamente reportada pelo fluxo, um indicador de atividade e
+o tempo decorrido. Não é mostrada uma percentagem artificial, pois os
+fornecedores de IA não disponibilizam progresso percentual fiável.
+
 Na classificação taxonómica e na matriz de alinhamento, a taxonomia escolhida
 não é repetida como coluna. O nível é apresentado e editado através de um
 seletor numerado: `SOLO 2` a `SOLO 5` ou `Bloom 1` a `Bloom 6`. O valor canónico

@@ -13,6 +13,21 @@ from prism.persistence import SQLiteSessionStore
 from prism.workflow import create_session, create_test_agent, review_current_stage
 
 
+@pytest.mark.parametrize(
+    ("elapsed_seconds", "expected"),
+    [
+        (0, "Tempo decorrido: 0 s"),
+        (12.9, "Tempo decorrido: 12 s"),
+        (65, "Tempo decorrido: 1 min 05 s"),
+    ],
+)
+def test_busy_elapsed_duration_is_readable(
+    elapsed_seconds: float,
+    expected: str,
+) -> None:
+    assert app._format_elapsed_duration(elapsed_seconds) == expected
+
+
 @pytest.mark.asyncio
 async def test_nicegui_initial_page_exposes_the_guided_workflow(
     user: User,

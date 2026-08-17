@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from datetime import UTC, datetime
-from typing import Any, TypedDict
+from typing import Any, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
@@ -93,6 +93,17 @@ STAGE_ORDER = (
     "resources",
     "final_validation",
 )
+
+ProgressCallback = Callable[[str], None]
+
+
+def _report_progress(
+    progress_callback: ProgressCallback | None,
+    message: str,
+) -> None:
+    if progress_callback is not None:
+        progress_callback(message)
+
 
 SCHEMA_VERSION = 6
 
@@ -854,6 +865,7 @@ def reopen_stage(
     target_stage: str,
     feedback: str,
     agent: PedagogicalAgent | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> PrismState:
     """Cria uma nova versão de uma etapa e preserva a versão coerente anterior."""
 
@@ -883,7 +895,11 @@ def reopen_stage(
         "label": STAGE_LABELS[target_stage],
         "message": "A produzir uma nova versão após confirmação do impacto.",
     }
-    return run_current_stage(updated, agent=agent)
+    return run_current_stage(
+        updated,
+        agent=agent,
+        progress_callback=progress_callback,
+    )
 
 
 def apply_manual_edit(
@@ -963,12 +979,18 @@ def apply_manual_edit(
 
 
 def run_current_stage(
-    state: PrismState, agent: PedagogicalAgent | None = None
+    state: PrismState,
+    agent: PedagogicalAgent | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> PrismState:
     """Executa o agente da etapa ativa e pára para validação do docente."""
 
     stage = state["current_stage"]
     if stage == "final_validation":
+        _report_progress(
+            progress_callback,
+            "A executar as verificações finais de estrutura e alinhamento…",
+        )
         generated = deepcopy(state)
         generated[stage] = build_final_validation(generated)
         generated.setdefault("audit", []).append(
@@ -980,12 +1002,20 @@ def run_current_stage(
             }
         )
     else:
+        _report_progress(
+            progress_callback,
+            f"A gerar e validar «{STAGE_LABELS[stage]}»…",
+        )
         active_agent = agent or build_pedagogical_team(
             state.get("ai_provider", configured_ai_provider())
         )
         generated = build_stage_executor(active_agent).invoke(state)
 
         if stage == "resources":
+            _report_progress(
+                progress_callback,
+                "A verificar automaticamente a qualidade dos recursos…",
+            )
             generated[stage] = attach_quality_report(generated, generated[stage])
             max_quality_revisions = max(
                 0, int(config_value("RESOURCE_QUALITY_MAX_REVISIONS", "1"))
@@ -996,6 +1026,11 @@ def run_current_stage(
                 and quality_revision < max_quality_revisions
             ):
                 quality_revision += 1
+                _report_progress(
+                    progress_callback,
+                    "A corrigir os recursos após a verificação automática "
+                    f"(tentativa {quality_revision} de {max_quality_revisions})…",
+                )
                 working_state = deepcopy(generated)
                 failed_checks = [
                     check.get("detail", "")
@@ -1021,6 +1056,10 @@ def run_current_stage(
                         "feedback": f"Tentativa automática {quality_revision}.",
                     }
                 )
+    _report_progress(
+        progress_callback,
+        "A preparar a proposta para revisão do docente…",
+    )
     versions = deepcopy(generated.get("versions", {}))
     versions.setdefault(stage, []).append(deepcopy(generated[stage]))
     generated["versions"] = versions
@@ -1053,6 +1092,7 @@ def create_session(
     resource_types: list[str] | None = None,
     agent: PedagogicalAgent | None = None,
     ai_provider: str | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> PrismState:
     """Inicia uma sessão no primeiro ponto de validação humana."""
 
@@ -1079,7 +1119,11 @@ def create_session(
         "current_stage": STAGE_ORDER[0],
         "status": "generating",
     }
-    return run_current_stage(state, agent=agent)
+    return run_current_stage(
+        state,
+        agent=agent,
+        progress_callback=progress_callback,
+    )
 
 
 def review_current_stage(
@@ -1088,6 +1132,7 @@ def review_current_stage(
     feedback: str = "",
     revision_stage: str | None = None,
     agent: PedagogicalAgent | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> PrismState:
     """Aplica a decisão do docente e executa a próxima etapa apropriada."""
 
@@ -1135,7 +1180,11 @@ def review_current_stage(
 
         state["current_stage"] = STAGE_ORDER[current_index + 1]
         state["status"] = "generating"
-        return run_current_stage(state, agent=agent)
+        return run_current_stage(
+            state,
+            agent=agent,
+            progress_callback=progress_callback,
+        )
 
     if decision != "revise":
         raise ValueError("A decisão deve ser 'approve' ou 'revise'.")
@@ -1143,4 +1192,10 @@ def review_current_stage(
         raise ValueError("Indique o feedback que fundamenta o pedido de reformulação.")
 
     target = revision_stage or current_stage
-    return reopen_stage(state, target, clean_feedback, agent=agent)
+    return reopen_stage(
+        state,
+        target,
+        clean_feedback,
+        agent=agent,
+        progress_callback=progress_callback,
+    )

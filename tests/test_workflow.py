@@ -82,6 +82,34 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(repeated["status"], "completed")
         self.assertEqual(len(repeated["audit"]), audit_count)
 
+    def test_workflow_reports_real_generation_phases(self) -> None:
+        updates: list[str] = []
+        state = create_session(
+            self.course,
+            agent=self.agent,
+            progress_callback=updates.append,
+        )
+
+        self.assertIn("Conteúdos e objetivos curriculares", updates[0])
+        self.assertEqual(
+            updates[-1],
+            "A preparar a proposta para revisão do docente…",
+        )
+
+        updates.clear()
+        review_current_stage(
+            state,
+            "approve",
+            agent=self.agent,
+            progress_callback=updates.append,
+        )
+
+        self.assertIn("Formulação dos resultados de aprendizagem", updates[0])
+        self.assertEqual(
+            updates[-1],
+            "A preparar a proposta para revisão do docente…",
+        )
+
     def test_feedback_is_recorded_in_the_audit_trail(self) -> None:
         state = create_session(self.course, agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)

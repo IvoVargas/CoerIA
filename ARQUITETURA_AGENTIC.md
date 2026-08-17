@@ -95,6 +95,12 @@ enquanto o workflow LangGraph permanece como fonte de verdade das transições.
 Esta separação permite testar o domínio sem navegador e substituir futuramente
 a interface sem alterar agentes, persistência ou validações.
 
+O fluxo pode emitir mensagens opcionais de progresso nos limites reais da
+geração, validação de qualidade e preparação para revisão. Como a geração corre
+fora do ciclo da interface, estas mensagens atravessam uma fila segura e são
+consumidas periodicamente pela interface, juntamente com o tempo decorrido e um
+indicador indeterminado. Não é calculada uma percentagem fictícia.
+
 Nas etapas de classificação e matriz de alinhamento, a interface deriva a
 taxonomia do estado da sessão, não a repete em cada linha e apresenta o nível
 através de opções numeradas. O seletor mostra `SOLO 2`–`SOLO 5` ou

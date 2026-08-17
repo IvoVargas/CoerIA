@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from queue import Empty, SimpleQueue
 from tempfile import TemporaryDirectory
+from time import monotonic
 from typing import Any
 
 from fastapi import Request
@@ -67,6 +69,14 @@ _history_choices = history_choices  # compatibilidade para consulta programátic
 USER_ERRORS = (ValueError, SourceIngestionError, AgentGenerationError)
 LOGGER = logging.getLogger(__name__)
 UNRESTRICTED_PAGE_ROUTES = {"/favicon.ico", "/login"}
+
+
+def _format_elapsed_duration(elapsed_seconds: float) -> str:
+    total_seconds = max(0, int(elapsed_seconds))
+    minutes, seconds = divmod(total_seconds, 60)
+    if minutes:
+        return f"Tempo decorrido: {minutes} min {seconds:02d} s"
+    return f"Tempo decorrido: {seconds} s"
 
 
 @app.add_middleware
@@ -217,6 +227,8 @@ class AGIRSoloInterface:
         self.uploaded_files: dict[str, bytes] = {}
         self.fields: dict[str, Any] = {}
         self.resource_inputs: dict[str, Any] = {}
+        self.busy_started_at: float | None = None
+        self.busy_updates: SimpleQueue[str] | None = None
         self._build()
 
     def _build(self) -> None:
@@ -310,14 +322,27 @@ class AGIRSoloInterface:
 
     def _build_busy_dialog(self) -> None:
         with ui.dialog().props("persistent") as self.busy_dialog:
-            with ui.card().classes("items-center p-8 gap-4 surface"):
+            with ui.card().classes(
+                "items-center p-8 gap-4 surface w-96 max-w-full"
+            ):
                 ui.spinner("dots", size="3.2rem", color="primary")
                 self.busy_label = ui.label("A preparar a proposta…").classes(
                     "font-semibold text-center"
                 )
-                ui.label(
-                    "Este processo pode demorar alguns instantes."
-                ).classes("text-sm muted text-center")
+                ui.linear_progress(value=0).props("indeterminate rounded").classes(
+                    "w-full"
+                )
+                self.busy_detail = ui.label("Processamento em curso…").classes(
+                    "text-sm muted text-center"
+                )
+                self.busy_elapsed = ui.label("Tempo decorrido: 0 s").classes(
+                    "text-xs muted text-center"
+                )
+        self.busy_timer = ui.timer(
+            1.0,
+            self._update_busy_progress,
+            active=False,
+        )
 
     def _build_initial_view(self) -> None:
         with ui.column().classes("gap-3 pt-4"):
@@ -590,10 +615,15 @@ class AGIRSoloInterface:
         except USER_ERRORS as error:
             ui.notify(str(error), type="negative", multi_line=True, timeout=0)
         finally:
-            self.busy_dialog.close()
+            self._hide_busy()
 
     async def handle_start_session(self) -> None:
-        self._show_busy("A gerar a primeira proposta pedagógica…")
+        progress_updates: SimpleQueue[str] = SimpleQueue()
+        self._show_busy(
+            "A gerar a primeira proposta pedagógica…",
+            progress_updates,
+            "A operação foi iniciada…",
+        )
         try:
             with TemporaryDirectory(prefix="coeria_fontes_") as temporary_directory:
                 source_paths: list[str] = []
@@ -606,6 +636,7 @@ class AGIRSoloInterface:
                     self.service.start_session,
                     self._form_data(),
                     source_paths,
+                    progress_updates.put,
                 )
             self.viewed_stage = None
             self.manual_edit_stage = None
@@ -618,11 +649,44 @@ class AGIRSoloInterface:
         except USER_ERRORS as error:
             ui.notify(str(error), type="negative", multi_line=True, timeout=0)
         finally:
-            self.busy_dialog.close()
+            self._hide_busy()
 
-    def _show_busy(self, message: str) -> None:
+    def _show_busy(
+        self,
+        message: str,
+        progress_updates: SimpleQueue[str] | None = None,
+        detail: str = "Processamento em curso…",
+    ) -> None:
+        self.busy_started_at = monotonic()
+        self.busy_updates = progress_updates
         self.busy_label.set_text(message)
+        self.busy_detail.set_text(detail)
+        self.busy_elapsed.set_text("Tempo decorrido: 0 s")
+        self.busy_timer.active = True
         self.busy_dialog.open()
+
+    def _update_busy_progress(self) -> None:
+        if self.busy_started_at is None:
+            return
+        latest_update: str | None = None
+        if self.busy_updates is not None:
+            while True:
+                try:
+                    latest_update = self.busy_updates.get_nowait()
+                except Empty:
+                    break
+        if latest_update is not None:
+            self.busy_detail.set_text(latest_update)
+        self.busy_elapsed.set_text(
+            _format_elapsed_duration(monotonic() - self.busy_started_at)
+        )
+
+    def _hide_busy(self) -> None:
+        self._update_busy_progress()
+        self.busy_timer.active = False
+        self.busy_started_at = None
+        self.busy_updates = None
+        self.busy_dialog.close()
 
     def show_new_session(self) -> None:
         self.state = None
@@ -705,7 +769,7 @@ class AGIRSoloInterface:
         except USER_ERRORS as error:
             ui.notify(str(error), type="negative", multi_line=True, timeout=0)
         finally:
-            self.busy_dialog.close()
+            self._hide_busy()
 
     def show_workspace(self, message: str = "") -> None:
         if not self.state:
@@ -1301,8 +1365,27 @@ class AGIRSoloInterface:
         revision_stage: str,
         resource_types: list[str] | None,
     ) -> None:
-        action = "A aplicar a reformulação…" if decision == "revise" else "A preparar a etapa seguinte…"
-        self._show_busy(action)
+        progress_updates: SimpleQueue[str] = SimpleQueue()
+        if decision == "revise":
+            target_label = STAGE_LABELS.get(revision_stage, "a etapa selecionada")
+            action = f"A reformular «{target_label}»…"
+        else:
+            current_stage = str((self.state or {}).get("current_stage", ""))
+            current_index = (
+                STAGE_ORDER.index(current_stage)
+                if current_stage in STAGE_ORDER
+                else len(STAGE_ORDER) - 1
+            )
+            if current_index < len(STAGE_ORDER) - 1:
+                next_label = STAGE_LABELS[STAGE_ORDER[current_index + 1]]
+                action = f"A preparar «{next_label}»…"
+            else:
+                action = "A concluir a validação…"
+        self._show_busy(
+            action,
+            progress_updates,
+            "A operação foi iniciada…",
+        )
         try:
             self.state, message = await run.io_bound(
                 self.service.review_session,
@@ -1311,6 +1394,7 @@ class AGIRSoloInterface:
                 feedback,
                 revision_stage,
                 resource_types,
+                progress_updates.put,
             )
             self.viewed_stage = None
             self.manual_edit_stage = None
@@ -1322,16 +1406,22 @@ class AGIRSoloInterface:
         except USER_ERRORS as error:
             ui.notify(str(error), type="negative", multi_line=True, timeout=0)
         finally:
-            self.busy_dialog.close()
+            self._hide_busy()
 
     async def handle_reopen_stage(self, target_stage: str, feedback: str) -> None:
-        self._show_busy("A criar uma nova versão e a atualizar dependências…")
+        progress_updates: SimpleQueue[str] = SimpleQueue()
+        self._show_busy(
+            f"A criar uma nova versão de «{STAGE_LABELS[target_stage]}»…",
+            progress_updates,
+            "A operação foi iniciada…",
+        )
         try:
             self.state, message = await run.io_bound(
                 self.service.reopen_session,
                 self.state,
                 target_stage,
                 feedback,
+                progress_updates.put,
             )
             self.viewed_stage = None
             self.manual_edit_stage = None
@@ -1343,7 +1433,7 @@ class AGIRSoloInterface:
         except USER_ERRORS as error:
             ui.notify(str(error), type="negative", multi_line=True, timeout=0)
         finally:
-            self.busy_dialog.close()
+            self._hide_busy()
 
     async def handle_manual_edit(
         self,
@@ -1372,7 +1462,7 @@ class AGIRSoloInterface:
             ui.notify(str(error), type="negative", multi_line=True, timeout=0)
             return False
         finally:
-            self.busy_dialog.close()
+            self._hide_busy()
 
     def _render_history_and_audit(self, state: dict[str, Any]) -> None:
         with ui.card().classes("surface w-full p-3 md:p-5"):
@@ -1426,7 +1516,7 @@ class AGIRSoloInterface:
         except USER_ERRORS as error:
             ui.notify(str(error), type="negative", multi_line=True, timeout=0)
         finally:
-            self.busy_dialog.close()
+            self._hide_busy()
 
 
 def build_interface(

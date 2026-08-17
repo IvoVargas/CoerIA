@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Callable
 
 from .assistance import build_initial_form_assistant, validate_initial_fields
 from .auth import normalize_user_id
@@ -56,7 +56,10 @@ class ApplicationService:
         self,
         form: dict[str, Any],
         source_files: list[str] | str | None = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
+        if progress_callback is not None:
+            progress_callback("A preparar os dados da unidade curricular…")
         source_text = str(form.get("source_text", "") or "")
         consolidated_source = build_source_text(source_text, source_files)
         course = CourseInput.create(
@@ -84,8 +87,11 @@ class ApplicationService:
                 form.get("ai_provider", configured_ai_provider())
                 or configured_ai_provider()
             ),
+            progress_callback=progress_callback,
         )
         state["source_input_text"] = source_text.strip()
+        if progress_callback is not None:
+            progress_callback("A guardar a sessão e a proposta inicial…")
         return self._persist(state)
 
     def load_session(self, session_id: str | None) -> dict[str, Any]:
@@ -134,11 +140,14 @@ class ApplicationService:
         feedback: str = "",
         revision_stage: str | None = None,
         resource_types: list[str] | None = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError(
                 "Inicie ou retome primeiro uma sessão de autoria pedagógica."
             )
+        if progress_callback is not None:
+            progress_callback("A validar a decisão e os dados da etapa atual…")
         working_state = state
         if resource_types is not None and state.get("current_stage") == "alignment_matrix":
             working_state = deepcopy(state)
@@ -161,7 +170,10 @@ class ApplicationService:
             decision=decision,
             feedback=feedback,
             revision_stage=revision_stage,
+            progress_callback=progress_callback,
         )
+        if progress_callback is not None:
+            progress_callback("A guardar a nova etapa e a rastreabilidade…")
         updated = self._persist(updated)
         if updated["status"] == "completed":
             message = "Validação final aprovada. O pacote final já pode ser exportado."
@@ -191,10 +203,20 @@ class ApplicationService:
         state: dict[str, Any] | None,
         target_stage: str,
         feedback: str,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
-        updated = reopen_stage(state, target_stage, feedback)
+        if progress_callback is not None:
+            progress_callback("A validar o impacto da reformulação…")
+        updated = reopen_stage(
+            state,
+            target_stage,
+            feedback,
+            progress_callback=progress_callback,
+        )
+        if progress_callback is not None:
+            progress_callback("A guardar a nova versão e as dependências…")
         updated = self._persist(updated)
         return (
             updated,
