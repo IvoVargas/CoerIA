@@ -85,7 +85,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   alteração depois de o docente escrever e confirmar o respetivo pedido.
 - Disponibilizar edição manual estruturada em todas as etapas de autoria,
   transformando a tabela apresentada no próprio local e permitindo alterar
-  texto, adicionar linhas e remover linhas, sem abrir um editor separado.
+  texto, adicionar linhas e remover linhas, sem abrir um editor separado nem
+  mudar os campos visíveis ou a respetiva ordem.
 - Validar a edição manual antes de a persistir; ao guardar, criar uma nova
   versão, preservar a anterior e aplicar a invalidação a jusante sem chamar a IA.
 - Apresentar, antes da confirmação e de qualquer chamada à IA, a nova versão a

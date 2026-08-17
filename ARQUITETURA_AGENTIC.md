@@ -76,7 +76,9 @@ regressa assim ao fluxo de autoria e exige uma nova validação final.
 
 A mesma fronteira transacional aplica-se à edição manual. A área da tabela troca
 da representação de consulta para controlos editáveis no mesmo local, trabalhando
-sobre uma cópia temporária da versão ativa. É possível alterar células,
+sobre uma cópia temporária da versão ativa. Os controlos mantêm os campos
+pedagógicos visíveis e a respetiva ordem, enquanto as relações técnicas que não
+são apresentadas permanecem no modelo interno. É possível alterar células,
 adicionar linhas e remover linhas. Só a ação **Guardar nova versão** executa as validações,
 persiste o artefacto com metadados de autoria humana e invalida a cadeia
 dependente. Uma falha de validação conserva tanto a sessão como o formulário de

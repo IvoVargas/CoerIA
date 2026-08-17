@@ -209,14 +209,15 @@ def render_artifact(
         )
 
     if stage == "pedagogical_design":
-        sequence = "\n".join(
-            f"- **{item['outcome_id']}** — {item['focus']} — avaliação: {item['assessment']}"
+        sequence_rows = [
+            [item["outcome_id"], item["focus"], item["assessment"]]
             for item in artifact["sequence"]
-        )
+        ]
         return (
             header
             + f"**Estratégia:** {artifact['strategy']}\n\n"
-            + f"## Sequência pedagógica\n{sequence}"
+            + "## Sequência pedagógica\n\n"
+            + _table(["Resultado", "Foco", "Avaliação"], sequence_rows)
         )
 
     if stage == "teaching_activities":
@@ -244,7 +245,8 @@ def render_artifact(
                 item["outcome_id"],
                 ", ".join(item.get("objective_ids", [])),
                 ", ".join(item.get("content_ids", [])),
-                f"{item.get('taxonomy', '—')} — {item.get('taxonomy_level', '—')}",
+                item.get("taxonomy", "—"),
+                item.get("taxonomy_level", "—"),
                 ", ".join(item.get("assessment_ids", [])),
                 ", ".join(item.get("assessment_purposes", [])),
                 ", ".join(item.get("teaching_activity_ids", [])),
@@ -256,7 +258,7 @@ def render_artifact(
         ]
         return header + _table(
             [
-                "Resultado", "Objetivos", "Conteúdos", "Taxonomia",
+                "Resultado", "Objetivos", "Conteúdos", "Taxonomia", "Nível",
                 "Avaliações", "Finalidade", "Atividades formativas",
                 "Recursos", "Alinhamento", "Justificação",
             ],

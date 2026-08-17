@@ -1,4 +1,7 @@
 from prism.manual_editing import (
+    FieldSpec,
+    apply_editor_field_value,
+    editor_field_value,
     editor_layout,
     format_editor_value,
     new_table_row,
@@ -60,3 +63,41 @@ def test_relationship_fields_round_trip_through_the_manual_editor() -> None:
         "Primeiro",
         "Segundo",
     ]
+
+
+def test_learning_outcome_editor_matches_the_visible_table() -> None:
+    table = editor_layout("learning_outcomes").tables[0]
+
+    assert [field.label for field in table.fields] == [
+        "ID",
+        "Tipo",
+        "Conteúdos",
+        "Objetivos",
+        "Verbo",
+        "Resultado de aprendizagem",
+    ]
+    assert all(field.key != "theme" for field in table.fields)
+
+
+def test_compact_relationship_fields_preserve_the_internal_model() -> None:
+    row = {
+        "outcome_id": "RA1",
+        "outcome_ids": ["RA1", "RA2"],
+        "content_links": [
+            {"content_id": "C1", "importance": "Principal"},
+            {"content_id": "C2", "importance": "Secundária"},
+        ],
+    }
+    contents = FieldSpec("content_links", "Conteúdos", "content_ids")
+    outcomes = FieldSpec("outcome_ids", "Resultados", "linked_outcomes")
+
+    assert editor_field_value(row, contents) == "C1, C2"
+    apply_editor_field_value(row, contents, "C2, C3")
+    assert row["content_links"] == [
+        {"content_id": "C2", "importance": "Secundária"},
+        {"content_id": "C3", "importance": "Secundária"},
+    ]
+
+    apply_editor_field_value(row, outcomes, "RA3, RA4")
+    assert row["outcome_ids"] == ["RA3", "RA4"]
+    assert row["outcome_id"] == "RA3"

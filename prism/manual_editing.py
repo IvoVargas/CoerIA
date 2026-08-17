@@ -44,25 +44,24 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
     "curriculum_analysis": EditorLayout(
         fields=(
             ScalarSpec(("summary",), "Síntese", "long"),
-            ScalarSpec(("themes",), "Temas — um por linha", "lines"),
             ScalarSpec(("assumptions",), "Pressupostos — um por linha", "lines"),
         ),
         tables=(
-            TableSpec(
-                "Conteúdos curriculares",
-                ("contents",),
-                (
-                    _field("id", "ID"),
-                    _field("title", "Título"),
-                    _field("description", "Descrição", "long"),
-                ),
-                {"id": "", "title": "", "description": ""},
-            ),
             TableSpec(
                 "Objetivos gerais",
                 ("objectives",),
                 (_field("id", "ID"), _field("statement", "Objetivo", "long")),
                 {"id": "", "statement": ""},
+            ),
+            TableSpec(
+                "Conteúdos identificados",
+                ("contents",),
+                (
+                    _field("id", "ID"),
+                    _field("title", "Conteúdo"),
+                    _field("description", "Descrição", "long"),
+                ),
+                {"id": "", "title": "", "description": ""},
             ),
         ),
     ),
@@ -73,16 +72,11 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (),
                 (
                     _field("id", "ID"),
-                    _field("theme", "Tema"),
-                    _field("statement", "Resultado de aprendizagem", "long"),
-                    _field("action_verb", "Verbo de ação"),
                     _field("outcome_type", "Tipo"),
-                    _field(
-                        "content_links",
-                        "Conteúdos — uma ligação ID | Principal/Secundária por linha",
-                        "content_links",
-                    ),
-                    _field("objective_ids", "Objetivos ligados — IDs separados por vírgulas", "csv"),
+                    _field("content_links", "Conteúdos", "content_ids"),
+                    _field("objective_ids", "Objetivos", "csv"),
+                    _field("action_verb", "Verbo"),
+                    _field("statement", "Resultado de aprendizagem", "long"),
                 ),
                 {
                     "id": "",
@@ -118,9 +112,8 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (),
                 (
                     _field("id", "ID"),
-                    _field("outcome_id", "Resultado principal"),
-                    _field("outcome_ids", "Resultados ligados — IDs separados por vírgulas", "csv"),
-                    _field("work_type", "Tipo de trabalho"),
+                    _field("outcome_ids", "Resultados", "linked_outcomes"),
+                    _field("work_type", "Modalidade"),
                     _field("assessment_purpose", "Finalidade"),
                     _field("activity", "Atividade", "long"),
                     _field("evidence", "Evidência", "long"),
@@ -161,12 +154,10 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (),
                 (
                     _field("id", "ID"),
-                    _field("outcome_id", "Resultado principal"),
-                    _field("outcome_ids", "Resultados ligados — IDs separados por vírgulas", "csv"),
-                    _field("assessment_ids", "Avaliações ligadas — IDs separados por vírgulas", "csv"),
+                    _field("outcome_ids", "Resultados", "linked_outcomes"),
+                    _field("assessment_ids", "Avaliações", "csv"),
                     _field("learning_context", "Contexto"),
                     _field("activity", "Atividade", "long"),
-                    _field("method", "Método", "long"),
                     _field("practice", "Prática", "long"),
                     _field("support", "Acompanhamento", "long"),
                     _field("feedback_strategy", "Feedback", "long"),
@@ -193,18 +184,15 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (),
                 (
                     _field("outcome_id", "Resultado"),
-                    _field("result", "Formulação", "long"),
-                    _field("objective_ids", "Objetivos — IDs separados por vírgulas", "csv"),
-                    _field("content_ids", "Conteúdos — IDs separados por vírgulas", "csv"),
+                    _field("objective_ids", "Objetivos", "csv"),
+                    _field("content_ids", "Conteúdos", "csv"),
                     _field("taxonomy", "Taxonomia"),
                     _field("taxonomy_level", "Nível"),
-                    _field("assessment_ids", "Avaliações — IDs separados por vírgulas", "csv"),
-                    _field("assessment_purposes", "Finalidades — separadas por vírgulas", "csv"),
-                    _field("teaching_activity_ids", "Atividades — IDs separados por vírgulas", "csv"),
-                    _field("resource_types", "Recursos — separados por vírgulas", "csv"),
-                    _field("assessment", "Tem avaliação — Sim/Não"),
-                    _field("teaching_activity", "Tem atividade — Sim/Não"),
-                    _field("status", "Estado"),
+                    _field("assessment_ids", "Avaliações", "csv"),
+                    _field("assessment_purposes", "Finalidade", "csv"),
+                    _field("teaching_activity_ids", "Atividades formativas", "csv"),
+                    _field("resource_types", "Recursos", "csv"),
+                    _field("status", "Alinhamento", "alignment_status"),
                     _field("rationale", "Justificação", "long"),
                 ),
                 {
@@ -380,6 +368,62 @@ def parse_editor_value(value: Any, kind: str) -> Any:
             )
         return links
     return text.strip()
+
+
+def editor_field_value(target: dict[str, Any], field: FieldSpec) -> Any:
+    """Apresenta apenas o valor pedagógico visível da coluna."""
+
+    if field.kind == "content_ids":
+        return ", ".join(
+            str(item.get("content_id", ""))
+            for item in target.get(field.key, [])
+            if item.get("content_id")
+        )
+    if field.kind == "linked_outcomes":
+        identifiers = target.get(field.key) or [target.get("outcome_id", "")]
+        return ", ".join(str(item) for item in identifiers if item)
+    return format_editor_value(target.get(field.key), field.kind)
+
+
+def apply_editor_field_value(
+    target: dict[str, Any],
+    field: FieldSpec,
+    value: Any,
+) -> None:
+    """Atualiza o modelo preservando relações técnicas não expostas na tabela."""
+
+    if field.kind == "content_ids":
+        identifiers = parse_editor_value(value, "csv")
+        previous = {
+            str(item.get("content_id", "")): str(
+                item.get("importance", "Principal")
+            )
+            for item in target.get(field.key, [])
+            if item.get("content_id")
+        }
+        target[field.key] = [
+            {
+                "content_id": identifier,
+                "importance": previous.get(
+                    identifier, "Principal" if index == 0 else "Secundária"
+                ),
+            }
+            for index, identifier in enumerate(identifiers)
+        ]
+        return
+    if field.kind == "linked_outcomes":
+        identifiers = parse_editor_value(value, "csv")
+        target[field.key] = identifiers
+        target["outcome_id"] = identifiers[0] if identifiers else ""
+        return
+    if field.kind == "alignment_status":
+        status = str(value or "").strip()
+        target[field.key] = status
+        evidence = "Sim" if status.casefold() == "coerente" else "Não"
+        target["assessment"] = evidence
+        target["teaching_activity"] = evidence
+        return
+    target[field.key] = parse_editor_value(value, field.kind)
 
 
 def new_table_row(table: TableSpec) -> dict[str, Any]:

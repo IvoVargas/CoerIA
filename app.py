@@ -34,10 +34,10 @@ from prism.ingestion import (
 from prism.manual_editing import (
     FieldSpec,
     TableSpec,
+    apply_editor_field_value,
+    editor_field_value,
     editor_layout,
-    format_editor_value,
     new_table_row,
-    parse_editor_value,
     value_at_path,
 )
 from prism.models import RESOURCE_PRESENTATION, SUPPORTED_RESOURCE_TYPES
@@ -151,12 +151,16 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .artifact-markdown th { background: #eaf3f1; color: #244a50; text-align: left; }
 .artifact-markdown th, .artifact-markdown td { border: 1px solid #d9e6e3; padding: 10px 12px; vertical-align: top; }
 .manual-table-scroll { width: 100%; overflow-x: auto; }
-.manual-table { min-width: max-content; width: 100%; border-collapse: collapse; }
+.manual-table { min-width: 720px; width: 100%; border-collapse: collapse; }
 .manual-table th { background: #eaf3f1; color: #244a50; font-size: .78rem; text-align: left; padding: 9px; border: 1px solid #d9e6e3; }
-.manual-table td { min-width: 190px; padding: 8px; vertical-align: top; border: 1px solid #d9e6e3; background: white; }
+.manual-table td { min-width: 110px; padding: 4px; vertical-align: top; border: 1px solid #d9e6e3; background: white; }
 .manual-table td.manual-row-number { min-width: 54px; width: 54px; font-weight: 800; color: var(--agir-muted); }
 .manual-table td.manual-row-action { min-width: 54px; width: 54px; text-align: center; }
-.manual-table .q-field { min-width: 174px; }
+.manual-table .q-field { min-width: 100px; }
+.manual-table .manual-cell-long { min-width: 210px; }
+.manual-table .manual-cell-number { min-width: 72px; }
+.manual-table .q-field__control { min-height: 40px; }
+.manual-table .q-field__native { line-height: 1.35; padding-top: 7px; padding-bottom: 7px; }
 .decision-card { padding: 22px; position: sticky; top: 84px; }
 .info-chip { background: #edf5f3 !important; color: #24575d !important; font-weight: 650; }
 .status-banner { border-left: 4px solid var(--agir-primary); }
@@ -948,7 +952,7 @@ class AGIRSoloInterface:
                     ).classes("text-sm muted")
                     ui.button(
                         "Editar esta tabela",
-                        icon="table_edit",
+                        icon="edit",
                         on_click=lambda: self._start_manual_edit(stage),
                     ).props("unelevated no-caps").classes(
                         "primary-action w-full mt-3"
@@ -972,27 +976,40 @@ class AGIRSoloInterface:
         self,
         target: dict[str, Any],
         field: FieldSpec,
+        *,
+        compact: bool = False,
     ) -> None:
-        value = format_editor_value(target.get(field.key), field.kind)
+        value = editor_field_value(target, field)
 
         def update_value(event: Any) -> None:
             try:
-                target[field.key] = parse_editor_value(event.value, field.kind)
+                apply_editor_field_value(target, field, event.value)
             except (TypeError, ValueError):
                 ui.notify(
                     f"O valor de «{field.label}» não é válido.",
                     type="warning",
                 )
 
+        label = None if compact else field.label
         if field.kind == "integer":
-            control = ui.number(field.label, value=value, precision=0)
-        elif field.kind in {"long", "lines", "csv", "content_links"}:
-            control = ui.textarea(field.label, value=value).props(
-                "outlined autogrow"
+            control = ui.number(label, value=value, precision=0)
+        elif field.kind in {"long", "lines"}:
+            control = ui.textarea(label, value=value).props("outlined autogrow")
+        else:
+            control = ui.input(label, value=value).props("outlined")
+        if compact:
+            control.props(
+                f"dense hide-bottom-space aria-label='{field.label}'"
+            ).classes(
+                "w-full manual-cell-number"
+                if field.kind == "integer"
+                else "w-full manual-cell-long"
+                if field.kind in {"long", "lines"}
+                else "w-full"
             )
         else:
-            control = ui.input(field.label, value=value).props("outlined")
-        control.classes("w-full").on_value_change(update_value)
+            control.classes("w-full")
+        control.on_value_change(update_value)
 
     def _render_manual_table(
         self,
@@ -1028,7 +1045,9 @@ class AGIRSoloInterface:
                                     ui.label(str(index + 1))
                                 for field in table.fields:
                                     with ui.element("td"):
-                                        self._render_manual_field(row, field)
+                                        self._render_manual_field(
+                                            row, field, compact=True
+                                        )
 
                                 def remove_row(row_index: int = index) -> None:
                                     rows.pop(row_index)
@@ -1197,7 +1216,7 @@ class AGIRSoloInterface:
             else:
                 ui.button(
                     "Editar a tabela manualmente",
-                    icon="table_edit",
+                    icon="edit",
                     on_click=lambda: self._start_manual_edit(
                         state["current_stage"]
                     ),

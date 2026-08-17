@@ -69,7 +69,7 @@ async def test_manual_table_editor_renders_for_the_current_stage(
     user.find("Editar esta tabela").click()
     await user.should_see("EDIÇÃO NA TABELA ATUAL")
     await user.should_not_see("MODO DE CONSULTA")
-    await user.should_see("Conteúdos curriculares")
+    await user.should_see("Conteúdos identificados")
     await user.should_see("Adicionar linha")
     await user.should_see("Guardar nova versão")
     assert interfaces[-1].manual_edit_stage == "curriculum_analysis"
