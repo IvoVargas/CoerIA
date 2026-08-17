@@ -162,6 +162,11 @@ falta; uma alteração da seleção ou dos artefactos anteriores invalida
 automaticamente esses rascunhos. No teste, os IDs sequenciais das questões e a
 cotação total são derivados deterministicamente; o modelo continua responsável
 pelo enunciado, resposta e associação de cada questão a um resultado.
+Na atividade prática, a aplicação remove ligações a IDs desconhecidos, ordena
+as etapas, acrescenta uma etapa explícita baseada no enunciado aprovado de cada
+resultado que tenha ficado sem cobertura e normaliza proporcionalmente os pesos
+positivos dos critérios para 100%. Estas correções ficam registadas nos
+metadados e todo o conteúdo continua sujeito à aprovação do docente.
 
 O ciclo gerador–crítico é controlado por `COERIA_AGENTIC_CRITIC_ENABLED`,
 `COERIA_AGENTIC_CRITIC_STAGES` e `COERIA_AGENTIC_MAX_REVISIONS`. A crítica é

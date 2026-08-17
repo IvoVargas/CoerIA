@@ -124,7 +124,11 @@ reutilizado se essa impressão digital continuar igual; caso contrário, é
 ignorado. Depois da geração completa, os rascunhos são removidos. Para o teste,
 a aplicação deriva ainda os IDs técnicos das questões e `total_points`, enquanto
 a cobertura dos resultados e o conteúdo pedagógico continuam sujeitos ao modelo,
-aos guardrails e à revisão humana.
+aos guardrails e à revisão humana. Na atividade prática, outro guardrail filtra
+IDs desconhecidos, ordena as etapas, cria uma etapa explícita a partir do
+enunciado aprovado de cada resultado ainda não coberto e normaliza
+proporcionalmente os pesos dos critérios para totalizarem 100%. As correções são
+registadas nos metadados e não dispensam a revisão humana.
 
 Nas etapas de classificação e matriz de alinhamento, a interface deriva a
 taxonomia do estado da sessão, não a repete em cada linha e apresenta o nível

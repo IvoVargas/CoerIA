@@ -132,6 +132,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Derivar deterministicamente os IDs sequenciais e a cotação total do teste e
   indicar explicitamente os resultados de aprendizagem em falta quando a
   cobertura estiver incompleta.
+- Na atividade prática, filtrar IDs desconhecidos, ordenar as etapas,
+  acrescentar uma etapa baseada no enunciado aprovado para cada resultado em
+  falta e normalizar proporcionalmente os pesos dos critérios para 100%,
+  registando todas as correções nos metadados.
 - Distinguir verificações aprovadas, avisos e erros bloqueantes.
 - Nunca aceitar como validação automática apenas uma declaração do modelo.
 

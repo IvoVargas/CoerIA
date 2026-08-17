@@ -556,6 +556,22 @@ def _schema_for(
             artifact_schema["properties"]["questions"]["items"]["properties"][
                 "outcome_id"
             ] = {"type": "string", "enum": outcome_ids}
+        elif scoped_resource_type == RESOURCE_PRACTICAL and state:
+            outcome_ids = [
+                str(item["id"])
+                for item in state.get("learning_outcomes", [])
+                if item.get("id")
+            ]
+            artifact_schema["properties"]["steps"]["items"]["properties"][
+                "outcome_ids"
+            ]["items"] = {"type": "string", "enum": outcome_ids}
+            artifact_schema["properties"]["duration_minutes"]["minimum"] = 1
+            artifact_schema["properties"]["steps"]["items"]["properties"][
+                "order"
+            ]["minimum"] = 1
+            artifact_schema["properties"]["criteria"]["items"]["properties"][
+                "weight"
+            ].update({"minimum": 1, "maximum": 100})
 
     return {
         "type": "object",
@@ -897,6 +913,167 @@ def _canonicalize_resource_test(
             }
         )
         normalized_artifact["test"]["total_points"] = total_points
+    return normalized_artifact, corrections
+
+
+def _positive_percentages(weights: list[int]) -> list[int] | None:
+    """Distribui 100 pontos por critérios, preservando as proporções recebidas."""
+
+    if not weights or len(weights) > 100:
+        return None
+    positive = [max(weight, 1) for weight in weights]
+    distributable = 100 - len(positive)
+    total = sum(positive)
+    quotients: list[int] = []
+    remainders: list[tuple[int, int]] = []
+    for index, weight in enumerate(positive):
+        quotient, remainder = divmod(weight * distributable, total)
+        quotients.append(quotient)
+        remainders.append((remainder, index))
+    missing = distributable - sum(quotients)
+    recipients = {
+        index
+        for _remainder, index in sorted(
+            remainders,
+            key=lambda item: (-item[0], item[1]),
+        )[:missing]
+    }
+    return [
+        1 + quotient + (1 if index in recipients else 0)
+        for index, quotient in enumerate(quotients)
+    ]
+
+
+def _canonicalize_resource_practical(
+    artifact: Any,
+    state: dict[str, Any],
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Repara ligações técnicas e ponderações da atividade prática."""
+
+    if (
+        not isinstance(artifact, dict)
+        or RESOURCE_PRACTICAL not in state.get("resource_types", [])
+    ):
+        return artifact, []
+    practical = artifact.get("practical_activity")
+    if not isinstance(practical, dict):
+        return artifact, []
+
+    outcomes = [
+        item
+        for item in state.get("learning_outcomes", [])
+        if isinstance(item, dict) and item.get("id")
+    ]
+    expected_ids = [str(item["id"]) for item in outcomes]
+    expected = set(expected_ids)
+    statements = {
+        str(item["id"]): str(item.get("statement", "")).strip()
+        for item in outcomes
+    }
+    steps = practical.get("steps")
+    criteria = practical.get("criteria")
+    if not isinstance(steps, list) or not isinstance(criteria, list):
+        return artifact, []
+
+    normalized_artifact = deepcopy(artifact)
+    normalized_practical = normalized_artifact["practical_activity"]
+    normalized_steps: list[Any] = []
+    corrections: list[dict[str, Any]] = []
+    covered: set[str] = set()
+    for index, step in enumerate(steps, start=1):
+        if not isinstance(step, dict):
+            normalized_steps.append(step)
+            continue
+        normalized = deepcopy(step)
+        received_ids = step.get("outcome_ids", [])
+        received_ids = received_ids if isinstance(received_ids, list) else []
+        valid_ids: list[str] = []
+        for outcome_id in received_ids:
+            identifier = str(outcome_id)
+            if identifier in expected and identifier not in valid_ids:
+                valid_ids.append(identifier)
+        changes: dict[str, Any] = {}
+        if received_ids != valid_ids:
+            changes["outcome_ids"] = {
+                "received": received_ids,
+                "used": valid_ids,
+            }
+            normalized["outcome_ids"] = valid_ids
+        if normalized.get("order") != index:
+            changes["order"] = {
+                "received": normalized.get("order"),
+                "used": index,
+            }
+            normalized["order"] = index
+        if changes:
+            corrections.append({"step": index, "changes": changes})
+        covered.update(valid_ids)
+        normalized_steps.append(normalized)
+
+    for outcome_id in expected_ids:
+        if outcome_id in covered:
+            continue
+        statement = statements.get(outcome_id) or "demonstrar o resultado previsto"
+        added_step = {
+            "order": len(normalized_steps) + 1,
+            "instruction": (
+                f"Aplicar e demonstrar o resultado {outcome_id}: {statement}. "
+                "Integrar a evidência no entregável final."
+            ),
+            "outcome_ids": [outcome_id],
+        }
+        normalized_steps.append(added_step)
+        covered.add(outcome_id)
+        corrections.append(
+            {
+                "resource": RESOURCE_PRACTICAL,
+                "added_step_for_outcome": outcome_id,
+            }
+        )
+    normalized_practical["steps"] = normalized_steps
+
+    normalized_criteria = [
+        deepcopy(item) for item in criteria if isinstance(item, dict)
+    ]
+    if not normalized_criteria:
+        normalized_criteria = [
+            {
+                "criterion": "Demonstração dos resultados de aprendizagem",
+                "description": (
+                    "Qualidade e completude das evidências apresentadas para "
+                    + ", ".join(expected_ids)
+                    + "."
+                ),
+                "weight": 100,
+            }
+        ]
+        corrections.append(
+            {
+                "resource": RESOURCE_PRACTICAL,
+                "changes": {"criteria": {"received": criteria, "used": "1 critério"}},
+            }
+        )
+    else:
+        received_weights = [
+            item.get("weight") if isinstance(item.get("weight"), int) else 0
+            for item in normalized_criteria
+        ]
+        normalized_weights = _positive_percentages(received_weights)
+        if normalized_weights is not None and received_weights != normalized_weights:
+            for item, weight in zip(normalized_criteria, normalized_weights):
+                item["weight"] = weight
+            corrections.append(
+                {
+                    "resource": RESOURCE_PRACTICAL,
+                    "changes": {
+                        "criteria_weights": {
+                            "received": received_weights,
+                            "used": normalized_weights,
+                        }
+                    },
+                }
+            )
+    normalized_practical["criteria"] = normalized_criteria
     return normalized_artifact, corrections
 
 
@@ -1387,15 +1564,30 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             }
             weight = sum(item["weight"] for item in artifact["practical_activity"]["criteria"])
             steps = artifact["practical_activity"]["steps"]
-            if (
-                covered != expected
-                or weight != 100
-                or artifact["practical_activity"]["duration_minutes"] <= 0
-                or any(item["order"] <= 0 for item in steps)
-                or any(item["weight"] <= 0 for item in artifact["practical_activity"]["criteria"])
+            problems = []
+            if covered != expected:
+                missing = sorted(expected - covered)
+                unexpected = sorted(covered - expected)
+                if missing:
+                    problems.append("IDs em falta: " + ", ".join(missing))
+                if unexpected:
+                    problems.append("IDs não permitidos: " + ", ".join(unexpected))
+            if weight != 100:
+                problems.append(f"a soma dos critérios é {weight}%")
+            if artifact["practical_activity"]["duration_minutes"] <= 0:
+                problems.append("a duração deve ser positiva")
+            if any(item["order"] <= 0 for item in steps):
+                problems.append("a ordem das etapas deve ser positiva")
+            if any(
+                item["weight"] <= 0
+                for item in artifact["practical_activity"]["criteria"]
             ):
+                problems.append("todos os critérios devem ter peso positivo")
+            if problems:
                 raise AgentGenerationError(
-                    "A atividade prática deve cobrir todos os resultados e totalizar 100% nos critérios."
+                    "A atividade prática contém incoerências: "
+                    + "; ".join(problems)
+                    + "."
                 )
 
 
@@ -1615,11 +1807,15 @@ class OpenAIPedagogicalAgent:
                         artifact,
                         state,
                     )
+                    artifact, practical_corrections = (
+                        _canonicalize_resource_practical(artifact, state)
+                    )
                     artifact, visual_corrections = (
                         _canonicalize_resource_visuals(artifact, state)
                     )
                     guardrail_corrections = [
                         *test_corrections,
+                        *practical_corrections,
                         *visual_corrections,
                     ]
                 _validate_artifact(stage, artifact, state)

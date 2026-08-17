@@ -337,7 +337,7 @@ class WorkflowTests(unittest.TestCase):
         valid_artifact = deepcopy(valid_state["resources"])
         valid_artifact.pop("quality", None)
         invalid_artifact = deepcopy(valid_artifact)
-        invalid_artifact["practical_activity"]["criteria"][0]["weight"] -= 1
+        invalid_artifact["practical_activity"]["duration_minutes"] = 0
 
         class FakeResponses:
             def __init__(self) -> None:
@@ -377,7 +377,7 @@ class WorkflowTests(unittest.TestCase):
         retry_context = json.loads(fake_responses.calls[1]["input"])
         self.assertIn("automatic_validation_feedback", retry_context)
         self.assertIn(
-            "totalizar 100%",
+            "duração deve ser positiva",
             retry_context["automatic_validation_feedback"]["validation_error"],
         )
 
@@ -642,6 +642,101 @@ class WorkflowTests(unittest.TestCase):
             set(outcome_schema["enum"]),
             {item["id"] for item in state["learning_outcomes"]},
         )
+        _validate_artifact("resources", result.artifact, state)
+
+    def test_scoped_practical_repairs_coverage_and_weights_without_retry(self) -> None:
+        state = create_session(
+            self.course,
+            resource_types=[RESOURCE_PRACTICAL],
+            agent=self.agent,
+        )
+        for _ in range(6):
+            state = review_current_stage(state, "approve", agent=self.agent)
+        state["resource_generation_scope"] = RESOURCE_PRACTICAL
+        practical = deepcopy(
+            self.agent.generate("resources", state).artifact["practical_activity"]
+        )
+        missing_outcome = state["learning_outcomes"][1]["id"]
+        for step in practical["steps"]:
+            step["outcome_ids"] = [
+                outcome_id
+                for outcome_id in step["outcome_ids"]
+                if outcome_id != missing_outcome
+            ]
+        practical["steps"][0]["outcome_ids"].append("RA-inexistente")
+        practical["steps"][0]["order"] = 99
+        practical["criteria"][0]["weight"] = 60
+        practical["criteria"][1]["weight"] = 0
+
+        class FakeResponses:
+            def __init__(self):
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(
+                    output_text=json.dumps({"artifact": practical}),
+                    id="response-practical",
+                    usage=SimpleNamespace(
+                        input_tokens=10,
+                        output_tokens=20,
+                        total_tokens=30,
+                    ),
+                )
+
+        fake_responses = FakeResponses()
+        agent = OpenAIPedagogicalAgent(
+            client_factory=lambda: SimpleNamespace(responses=fake_responses)
+        )
+        with patch.dict(
+            environ,
+            {
+                "OPENAI_API_KEY": "test-key",
+                "COERIA_OPENAI_VALIDATION_RETRIES": "2",
+            },
+            clear=False,
+        ):
+            result = agent.generate("resources", state)
+
+        self.assertEqual(len(fake_responses.calls), 1)
+        repaired = result.artifact["practical_activity"]
+        covered = {
+            outcome_id
+            for step in repaired["steps"]
+            for outcome_id in step["outcome_ids"]
+        }
+        expected = {item["id"] for item in state["learning_outcomes"]}
+        self.assertEqual(covered, expected)
+        self.assertNotIn(
+            "RA-inexistente",
+            [
+                outcome_id
+                for step in repaired["steps"]
+                for outcome_id in step["outcome_ids"]
+            ],
+        )
+        self.assertEqual(
+            [step["order"] for step in repaired["steps"]],
+            list(range(1, len(repaired["steps"]) + 1)),
+        )
+        added_step = next(
+            step
+            for step in repaired["steps"]
+            if step["outcome_ids"] == [missing_outcome]
+            and missing_outcome in step["instruction"]
+        )
+        self.assertTrue(added_step["instruction"])
+        weights = [item["weight"] for item in repaired["criteria"]]
+        self.assertEqual(sum(weights), 100)
+        self.assertTrue(all(weight > 0 for weight in weights))
+        practical_schema = fake_responses.calls[0]["text"]["format"]["schema"][
+            "properties"
+        ]["artifact"]
+        outcome_schema = practical_schema["properties"]["steps"]["items"][
+            "properties"
+        ]["outcome_ids"]["items"]
+        self.assertEqual(set(outcome_schema["enum"]), expected)
+        self.assertTrue(result.metadata["guardrail_corrections"])
         _validate_artifact("resources", result.artifact, state)
 
     def test_taxonomy_guardrail_canonicalizes_level_from_approved_verb(self) -> None:
