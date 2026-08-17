@@ -78,8 +78,15 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   depois da conclusão da sessão.
 - Tratar a seleção de uma etapa anterior como navegação de consulta: não alterar
   o estado, não criar uma versão e não invalidar dependências nessa operação.
+- Quando estiver a consultar uma etapa anterior, permitir selecionar a caixa da
+  etapa corrente para regressar ao ponto atual, com o mesmo efeito do botão
+  **Voltar ao ponto atual**.
 - Disponibilizar a ação **Reformular** dentro da etapa consultada e só iniciar a
   alteração depois de o docente escrever e confirmar o respetivo pedido.
+- Disponibilizar edição manual estruturada em todas as etapas de autoria,
+  permitindo alterar texto, adicionar linhas e remover linhas.
+- Validar a edição manual antes de a persistir; ao guardar, criar uma nova
+  versão, preservar a anterior e aplicar a invalidação a jusante sem chamar a IA.
 - Apresentar, antes da confirmação e de qualquer chamada à IA, a nova versão a
   criar e as etapas posteriores que ficarão desatualizadas.
 - Criar uma nova versão da etapa reaberta e marcar como desatualizados os
@@ -244,6 +251,8 @@ condições de utilização conhecidas.
 - Uma etapa anterior pode ser consultada sem modificar a sessão; uma revisão só
   começa depois da ação explícita **Reformular**, apresenta previamente o
   impacto, invalida o estado ativo a jusante e preserva versões antigas.
+- Uma edição manual inválida não modifica a sessão; uma edição válida fica como
+  nova versão à espera de aprovação humana.
 - Uma sessão concluída pode ser reaberta e só volta ao estado concluído depois
   de todas as etapas afetadas serem novamente aprovadas.
 - Todos os resultados têm classificação na taxonomia exclusiva escolhida, avaliação

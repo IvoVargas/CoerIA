@@ -61,6 +61,13 @@ só então descreve a alteração e vê quais as etapas dependentes que ficarão
 desatualizadas. Depois da confirmação, o estado coerente anterior é preservado e
 a nova revisão tem de voltar a ser validada até ao fim do fluxo.
 
+Durante a consulta, selecionar a caixa do ponto atual tem o mesmo efeito de
+**Voltar ao ponto atual**. O docente também pode escolher **Editar manualmente**
+em qualquer etapa de autoria: os campos das tabelas tornam-se editáveis e as
+linhas podem ser adicionadas ou removidas. Guardar cria uma nova versão sem
+chamada à IA, depois de validação estrutural, e invalida apenas os artefactos
+posteriores dependentes.
+
 A especificação completa e os critérios de aceitação encontram-se em
 [`REQUISITOS.md`](REQUISITOS.md).
 A decisão e o microciclo gerador–crítico estão descritos em

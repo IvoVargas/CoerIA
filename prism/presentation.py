@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from .workflow import STAGE_LABELS, STAGE_ORDER
@@ -292,20 +293,31 @@ def render_current_artifact(state: dict[str, Any]) -> str:
     )
 
 
-def render_stage_artifact(state: dict[str, Any], stage: str) -> str:
-    """Apresenta a versão ativa de uma etapa sem alterar o fluxo da sessão."""
+def active_stage_artifact(state: dict[str, Any], stage: str) -> Any:
+    """Devolve uma cópia da versão ativa de uma etapa."""
 
     if stage not in STAGE_ORDER:
-        return "A etapa selecionada já não está disponível."
+        raise ValueError("A etapa selecionada já não está disponível.")
     versions = state.get("versions", {}).get(stage, [])
     active_version = state.get("active_versions", {}).get(stage)
     version_number = int(active_version or len(versions) or 1)
     if 0 < version_number <= len(versions):
-        artifact = versions[version_number - 1]
-    elif stage in state:
-        artifact = state[stage]
-    else:
-        return "A etapa selecionada ainda não possui uma versão ativa."
+        return deepcopy(versions[version_number - 1])
+    if stage in state:
+        return deepcopy(state[stage])
+    raise ValueError("A etapa selecionada ainda não possui uma versão ativa.")
+
+
+def render_stage_artifact(state: dict[str, Any], stage: str) -> str:
+    """Apresenta a versão ativa de uma etapa sem alterar o fluxo da sessão."""
+
+    try:
+        artifact = active_stage_artifact(state, stage)
+    except ValueError as error:
+        return str(error)
+    versions = state.get("versions", {}).get(stage, [])
+    active_version = state.get("active_versions", {}).get(stage)
+    version_number = int(active_version or len(versions) or 1)
     metadata_versions = state.get("generation_metadata", {}).get(stage, [])
     return render_artifact(
         state,

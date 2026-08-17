@@ -1199,6 +1199,19 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 )
 
 
+def validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None:
+    """Valida um artefacto produzido por IA ou editado manualmente."""
+
+    try:
+        _validate_artifact(stage, artifact, state)
+    except AgentGenerationError:
+        raise
+    except (KeyError, TypeError, ValueError) as error:
+        raise AgentGenerationError(
+            "A edição manual contém campos incompletos ou valores inválidos."
+        ) from error
+
+
 class OpenAIPedagogicalAgent:
     """Chama a Responses API para produzir propostas pedagógicas estruturadas."""
 

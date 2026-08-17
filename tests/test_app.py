@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
+from nicegui import ui
 from nicegui.testing import User
 
 import app
@@ -28,6 +29,46 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("SOLO")
     await user.should_see("Bloom")
     await user.should_see("CoerIA v0.1.0 · SQLite")
+
+
+@pytest.mark.asyncio
+async def test_manual_table_editor_renders_for_the_current_stage(
+    user: User,
+) -> None:
+    course = CourseInput.create(
+        unit_name="Programação",
+        source_text="Algoritmos, variáveis, estruturas de dados, funções e testes.",
+        audience="Licenciatura",
+        duration_hours=12,
+    )
+    agent = create_test_agent()
+    state = create_session(course, agent=agent)
+    state = review_current_stage(state, "approve", agent=agent)
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_manual_editor")
+    def manual_editor_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_manual_editor")
+
+    await user.should_see("Editar a tabela manualmente")
+    with user:
+        interfaces[-1]._view_stage("curriculum_analysis")
+    await user.should_see("MODO DE CONSULTA")
+    user.find(marker="return-current-stage").click()
+    await user.should_not_see("MODO DE CONSULTA")
+    assert interfaces[-1].viewed_stage is None
+
+    with user:
+        interfaces[-1]._open_manual_editor("curriculum_analysis")
+    await user.should_see("EDIÇÃO MANUAL")
+    await user.should_see("Conteúdos curriculares")
+    await user.should_see("Adicionar linha")
+    await user.should_see("Guardar nova versão")
 
 
 def test_loading_a_session_restores_all_initial_fields() -> None:

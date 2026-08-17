@@ -31,9 +31,19 @@ from prism.ingestion import (
     SUPPORTED_SOURCE_SUFFIXES,
     SourceIngestionError,
 )
+from prism.manual_editing import (
+    FieldSpec,
+    TableSpec,
+    editor_layout,
+    format_editor_value,
+    new_table_row,
+    parse_editor_value,
+    value_at_path,
+)
 from prism.models import RESOURCE_PRESENTATION, SUPPORTED_RESOURCE_TYPES
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import (
+    active_stage_artifact,
     audit_rows,
     current_history_value,
     history_choices,
@@ -764,8 +774,11 @@ class AGIRSoloInterface:
                     if stored_status == "stale"
                     else "pending"
                 )
-                selectable = stage in viewable_stages and (
-                    stage != state["current_stage"] or state.get("status") == "completed"
+                returns_to_current = (
+                    stage == state["current_stage"] and self.viewed_stage is not None
+                )
+                selectable = returns_to_current or (
+                    stage in viewable_stages and stage != state["current_stage"]
                 )
                 viewing = stage == self.viewed_stage
                 item = ui.element("button" if selectable else "div").classes(
@@ -775,18 +788,27 @@ class AGIRSoloInterface:
                 )
                 if selectable:
                     item.props("type=button")
+                    if returns_to_current:
+                        item.mark("return-current-stage")
                     item.on(
                         "click",
-                        lambda _event, selected_stage=stage: self._view_stage(
-                            selected_stage
+                        lambda _event,
+                        selected_stage=stage,
+                        return_action=returns_to_current: (
+                            self._return_to_current_stage()
+                            if return_action
+                            else self._view_stage(selected_stage)
                         ),
                     )
                 with item:
                     ui.label(f"{index + 1:02d}").classes("stage-number")
                     ui.label(STAGE_LABELS[stage]).classes("stage-label")
-                    ui.label(status_labels.get(stored_status, stored_status)).classes(
-                        "stage-state"
+                    stage_status_label = (
+                        "Ponto atual · selecionar para voltar"
+                        if returns_to_current
+                        else status_labels.get(stored_status, stored_status)
                     )
+                    ui.label(stage_status_label).classes("stage-state")
 
     def _view_stage(self, target_stage: str) -> None:
         if not self.state or target_stage not in revision_targets_for_state(self.state):
@@ -873,14 +895,22 @@ class AGIRSoloInterface:
                 ui.label("Etapa anterior").classes("section-title")
                 ui.label(
                     "Abrir esta etapa não altera a sessão. Só será criada uma "
-                    "nova versão se escolher Reformular e confirmar o pedido."
+                    "nova versão se escolher Editar manualmente ou Reformular "
+                    "e confirmar a alteração."
                 ).classes("text-sm muted")
+                ui.button(
+                    "Editar manualmente",
+                    icon="table_edit",
+                    on_click=lambda: self._open_manual_editor(stage),
+                ).props("unelevated no-caps").classes(
+                    "primary-action w-full mt-3"
+                )
                 ui.button(
                     "Reformular esta etapa",
                     icon="edit_note",
                     on_click=lambda: self._open_revision_dialog(stage),
-                ).props("unelevated no-caps").classes(
-                    "primary-action w-full mt-3"
+                ).props("outline no-caps").classes(
+                    "secondary-action w-full mt-2"
                 )
                 ui.button(
                     "Voltar ao ponto atual",
@@ -889,6 +919,151 @@ class AGIRSoloInterface:
                 ).props("outline no-caps").classes(
                     "secondary-action w-full mt-2"
                 )
+
+    def _render_manual_field(
+        self,
+        target: dict[str, Any],
+        field: FieldSpec,
+    ) -> None:
+        value = format_editor_value(target.get(field.key), field.kind)
+
+        def update_value(event: Any) -> None:
+            try:
+                target[field.key] = parse_editor_value(event.value, field.kind)
+            except (TypeError, ValueError):
+                ui.notify(
+                    f"O valor de «{field.label}» não é válido.",
+                    type="warning",
+                )
+
+        if field.kind == "integer":
+            control = ui.number(field.label, value=value, precision=0)
+        elif field.kind in {"long", "lines", "csv", "content_links"}:
+            control = ui.textarea(field.label, value=value).props(
+                "outlined autogrow"
+            )
+        else:
+            control = ui.input(field.label, value=value).props("outlined")
+        control.classes("w-full").on_value_change(update_value)
+
+    def _render_manual_table(
+        self,
+        artifact: Any,
+        table: TableSpec,
+    ) -> None:
+        rows = value_at_path(artifact, table.path)
+        if not isinstance(rows, list):
+            raise ValueError(f"A tabela «{table.title}» não possui linhas editáveis.")
+
+        @ui.refreshable
+        def render_rows() -> None:
+            if not rows:
+                ui.label("A tabela está vazia. Adicione pelo menos uma linha.").classes(
+                    "text-sm muted"
+                )
+            for index, row in enumerate(rows):
+                with ui.card().classes("soft-surface w-full p-4 gap-3"):
+                    with ui.row().classes("w-full items-center"):
+                        ui.label(f"Linha {index + 1}").classes("font-bold")
+                        ui.space()
+
+                        def remove_row(row_index: int = index) -> None:
+                            rows.pop(row_index)
+                            render_rows.refresh()
+
+                        ui.button(icon="delete", on_click=remove_row).props(
+                            "flat round color=negative aria-label='Remover linha'"
+                        )
+                    with ui.grid(columns=2).classes(
+                        "w-full gap-3 max-md:grid-cols-1"
+                    ):
+                        for field in table.fields:
+                            self._render_manual_field(row, field)
+
+        def add_row() -> None:
+            row = new_table_row(table)
+            if "order" in row:
+                row["order"] = len(rows) + 1
+            rows.append(row)
+            render_rows.refresh()
+
+        with ui.card().classes("surface w-full p-4 gap-3"):
+            with ui.row().classes("w-full items-center"):
+                ui.label(table.title).classes("text-lg font-bold")
+                ui.space()
+                ui.button("Adicionar linha", icon="add", on_click=add_row).props(
+                    "outline no-caps"
+                ).classes("secondary-action")
+            render_rows()
+
+    def _open_manual_editor(self, stage: str) -> None:
+        try:
+            if not self.state:
+                raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+            artifact = active_stage_artifact(self.state, stage)
+            layout = editor_layout(stage)
+            impact = self.service.revision_impact(self.state, stage)
+        except USER_ERRORS as error:
+            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            return
+
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-6xl p-6 gap-4"):
+            ui.label("EDIÇÃO MANUAL").classes("eyebrow")
+            ui.label(impact["target_label"]).classes("section-title")
+            ui.label(
+                "Altere os campos diretamente. Pode adicionar ou remover linhas; "
+                "a sessão só será modificada quando guardar a nova versão."
+            ).classes("text-sm muted")
+
+            with ui.scroll_area().classes("w-full").style("height: 68vh"):
+                with ui.column().classes("w-full gap-4 pr-3"):
+                    for scalar in layout.fields:
+                        parent = (
+                            value_at_path(artifact, scalar.path[:-1])
+                            if scalar.path[:-1]
+                            else artifact
+                        )
+                        self._render_manual_field(
+                            parent,
+                            FieldSpec(scalar.path[-1], scalar.label, scalar.kind),
+                        )
+                    for table in layout.tables:
+                        self._render_manual_table(artifact, table)
+
+                    ui.separator().classes("my-2")
+                    ui.label(
+                        f"Ao guardar será criada a versão {impact['next_version']}."
+                    ).classes("font-semibold")
+                    if impact["affected_labels"]:
+                        ui.label("Etapas que ficarão desatualizadas:").classes(
+                            "font-semibold"
+                        )
+                        for label in impact["affected_labels"]:
+                            ui.label(f"• {label}").classes("text-sm muted")
+                    reason = ui.textarea(
+                        "Nota da edição — opcional",
+                        placeholder="Explique resumidamente o motivo da alteração.",
+                    ).props("outlined autogrow").classes("w-full")
+
+            async def save_manual_version() -> None:
+                saved = await self.handle_manual_edit(
+                    stage,
+                    artifact,
+                    str(reason.value or ""),
+                )
+                if saved:
+                    dialog.close()
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancelar", on_click=dialog.close).props(
+                    "flat no-caps"
+                ).classes("secondary-action")
+                ui.button(
+                    "Guardar nova versão",
+                    icon="save",
+                    on_click=save_manual_version,
+                ).props("unelevated no-caps").classes("primary-action")
+        dialog.open()
 
     def _render_authoring_view(self, state: dict[str, Any]) -> None:
         with ui.element("div").classes("workspace-grid"):
@@ -950,6 +1125,15 @@ class AGIRSoloInterface:
                     "etapa na barra superior, consulte-a e escolha Reformular."
                 ).classes("soft-surface p-3 text-sm")
             else:
+                ui.button(
+                    "Editar a tabela manualmente",
+                    icon="table_edit",
+                    on_click=lambda: self._open_manual_editor(
+                        state["current_stage"]
+                    ),
+                ).props("outline no-caps").classes(
+                    "secondary-action w-full mb-2"
+                )
                 decision = ui.toggle(
                     {"approve": "Aprovar", "revise": "Reformular"},
                     value="approve",
@@ -1050,6 +1234,33 @@ class AGIRSoloInterface:
             ui.notify(message, type="positive", multi_line=True)
         except USER_ERRORS as error:
             ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+        finally:
+            self.busy_dialog.close()
+
+    async def handle_manual_edit(
+        self,
+        target_stage: str,
+        artifact: Any,
+        reason: str,
+    ) -> bool:
+        self._show_busy("A validar e guardar a edição manual…")
+        try:
+            self.state, message = await run.io_bound(
+                self.service.save_manual_edit,
+                self.state,
+                target_stage,
+                artifact,
+                reason,
+            )
+            self.viewed_stage = None
+            self._set_form_data(self.service.restored_initial_fields(self.state))
+            self.show_workspace(message)
+            self.refresh_sessions()
+            ui.notify(message, type="positive", multi_line=True)
+            return True
+        except USER_ERRORS as error:
+            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            return False
         finally:
             self.busy_dialog.close()
 

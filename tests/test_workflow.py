@@ -28,6 +28,7 @@ from prism.models import CourseInput, SUPPORTED_RESOURCE_TYPES
 from prism.persistence import SQLiteSessionStore
 from prism.workflow import (
     STAGE_ORDER,
+    apply_manual_edit,
     create_session,
     create_test_agent,
     reopen_stage,
@@ -161,6 +162,47 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(snapshot["previous_status"], "completed")
         self.assertEqual(snapshot["active_versions"], previous_active_versions)
         self.assertEqual(snapshot["artifacts"]["resources"], previous_resources)
+
+    def test_manual_edit_creates_a_version_and_invalidates_only_on_save(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        original = deepcopy(state)
+        edited = deepcopy(state["curriculum_analysis"])
+        edited["contents"][0]["title"] = "Conteúdo revisto manualmente"
+
+        updated = apply_manual_edit(
+            state,
+            "curriculum_analysis",
+            edited,
+            "Corrigir a designação do primeiro conteúdo.",
+        )
+
+        self.assertEqual(state, original)
+        self.assertEqual(updated["current_stage"], "curriculum_analysis")
+        self.assertEqual(updated["status"], "awaiting_review")
+        self.assertEqual(len(updated["versions"]["curriculum_analysis"]), 2)
+        self.assertEqual(
+            updated["curriculum_analysis"]["contents"][0]["title"],
+            "Conteúdo revisto manualmente",
+        )
+        self.assertNotIn("learning_outcomes", updated)
+        self.assertEqual(updated["stage_statuses"]["learning_outcomes"], "stale")
+        self.assertTrue(
+            updated["generation_metadata"]["curriculum_analysis"][-1][
+                "manual_edit"
+            ]
+        )
+
+    def test_invalid_manual_edit_does_not_change_the_session(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        original = deepcopy(state)
+        edited = deepcopy(state["curriculum_analysis"])
+        edited["contents"] = []
+
+        with self.assertRaisesRegex(AgentGenerationError, "conteúdos e objetivos"):
+            apply_manual_edit(state, "curriculum_analysis", edited)
+
+        self.assertEqual(state, original)
 
     def test_session_store_persists_the_state_and_audit(self) -> None:
         state = create_session(self.course, agent=self.agent)

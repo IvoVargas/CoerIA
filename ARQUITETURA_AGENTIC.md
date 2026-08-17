@@ -74,6 +74,13 @@ são apagadas: permanecem consultáveis no histórico, mas deixam de estar ativa
 até serem novamente geradas ou validadas. Uma sessão anteriormente concluída
 regressa assim ao fluxo de autoria e exige uma nova validação final.
 
+A mesma fronteira transacional aplica-se à edição manual. O formulário trabalha
+sobre uma cópia temporária da versão ativa e permite alterar células, adicionar
+linhas e remover linhas. Só a ação **Guardar nova versão** executa as validações,
+persiste o artefacto com metadados de autoria humana e invalida a cadeia
+dependente. Uma falha de validação conserva tanto a sessão como o formulário de
+edição, e não origina qualquer chamada ao fornecedor de IA.
+
 ## Camada de interface
 
 A interface NiceGUI não executa diretamente regras pedagógicas. A camada

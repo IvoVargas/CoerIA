@@ -15,6 +15,7 @@ from .persistence import SQLiteSessionStore
 from .providers import configured_ai_provider
 from .workflow import (
     STAGE_LABELS,
+    apply_manual_edit,
     create_session,
     reopen_stage,
     review_current_stage,
@@ -198,6 +199,24 @@ class ApplicationService:
         return (
             updated,
             "Nova versão criada em "
+            f"{STAGE_LABELS[target_stage]}. As etapas dependentes ficaram "
+            "assinaladas para nova validação.",
+        )
+
+    def save_manual_edit(
+        self,
+        state: dict[str, Any] | None,
+        target_stage: str,
+        artifact: Any,
+        reason: str = "",
+    ) -> tuple[dict[str, Any], str]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        updated = apply_manual_edit(state, target_stage, artifact, reason)
+        updated = self._persist(updated)
+        return (
+            updated,
+            "Edição manual guardada em "
             f"{STAGE_LABELS[target_stage]}. As etapas dependentes ficaram "
             "assinaladas para nova validação.",
         )

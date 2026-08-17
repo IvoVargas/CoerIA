@@ -14,6 +14,7 @@ from .agents import (
     PedagogicalAgent,
     RuleBasedPedagogicalAgent,
     build_pedagogical_team,
+    validate_artifact,
 )
 from .branding import config_value
 from .curriculum import (
@@ -883,6 +884,82 @@ def reopen_stage(
         "message": "A produzir uma nova versão após confirmação do impacto.",
     }
     return run_current_stage(updated, agent=agent)
+
+
+def apply_manual_edit(
+    state: PrismState,
+    target_stage: str,
+    artifact: Any,
+    reason: str = "",
+) -> PrismState:
+    """Guarda uma edição humana como nova versão, sem chamar um fornecedor de IA."""
+
+    if state.get("status") not in {"awaiting_review", "completed"}:
+        raise ValueError("A sessão não está disponível para edição manual.")
+    revision_impact(state, target_stage)
+    edited_artifact = deepcopy(artifact)
+    if edited_artifact == state.get(target_stage):
+        raise ValueError("Não foram detetadas alterações para guardar.")
+
+    updated = deepcopy(state)
+    if target_stage == "resources":
+        validate_artifact(target_stage, edited_artifact, updated)
+        edited_artifact = attach_quality_report(updated, edited_artifact)
+    else:
+        validate_artifact(target_stage, edited_artifact, updated)
+
+    clean_reason = reason.strip() or "Conteúdo alterado diretamente pelo docente."
+    origin_stage = updated.get("current_stage", target_stage)
+    _archive_and_invalidate_revision(updated, target_stage, clean_reason)
+    _record_decision(
+        updated,
+        origin_stage,
+        f"Docente editou manualmente {STAGE_LABELS[target_stage]}.",
+        clean_reason,
+    )
+    updated[target_stage] = edited_artifact
+    updated.setdefault("feedback", {})[target_stage] = clean_reason
+
+    versions = deepcopy(updated.get("versions", {}))
+    versions.setdefault(target_stage, []).append(deepcopy(edited_artifact))
+    updated["versions"] = versions
+
+    stage_index = STAGE_ORDER.index(target_stage)
+    active_versions = dict(updated.get("active_versions", {}))
+    dependencies = {
+        upstream_stage: int(active_versions[upstream_stage])
+        for upstream_stage in STAGE_ORDER[:stage_index]
+        if upstream_stage in active_versions
+    }
+    version_dependencies = deepcopy(updated.get("version_dependencies", {}))
+    version_dependencies.setdefault(target_stage, []).append(dependencies)
+    updated["version_dependencies"] = version_dependencies
+    active_versions[target_stage] = len(versions[target_stage])
+    updated["active_versions"] = active_versions
+
+    generation_metadata = deepcopy(updated.get("generation_metadata", {}))
+    generation_metadata.setdefault(target_stage, []).append(
+        {
+            "provider": "Docente",
+            "model": "Edição manual",
+            "duration_ms": 0,
+            "total_tokens": 0,
+            "validation_attempts": 1,
+            "manual_edit": True,
+        }
+    )
+    updated["generation_metadata"] = generation_metadata
+    stage_statuses = dict(updated.get("stage_statuses", {}))
+    stage_statuses[target_stage] = "awaiting_review"
+    updated["stage_statuses"] = stage_statuses
+    updated["current_stage"] = target_stage
+    updated["status"] = "awaiting_review"
+    updated["review"] = {
+        "stage": target_stage,
+        "label": STAGE_LABELS[target_stage],
+        "message": "Edição manual guardada. A aguardar aprovação do docente.",
+    }
+    return updated
 
 
 def run_current_stage(
