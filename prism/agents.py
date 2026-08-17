@@ -41,7 +41,7 @@ from .providers import (
 )
 
 
-DEFAULT_MODEL = "gpt-5.6-terra"
+DEFAULT_MODEL = "gpt-5-nano"
 
 
 class AgentGenerationError(RuntimeError):
@@ -1227,7 +1227,7 @@ class OpenAIPedagogicalAgent:
         self.timeout_seconds = float(config_value("OPENAI_TIMEOUT_SECONDS", "120"))
         self.max_retries = int(config_value("OPENAI_MAX_RETRIES", "2"))
         self.max_output_tokens = int(config_value("OPENAI_MAX_OUTPUT_TOKENS", "12000"))
-        self.reasoning_effort = config_value("OPENAI_REASONING_EFFORT", "medium")
+        self.reasoning_effort = config_value("OPENAI_REASONING_EFFORT", "minimal")
         self.validation_retries = max(
             0, int(config_value("OPENAI_VALIDATION_RETRIES", "2"))
         )
@@ -1449,6 +1449,9 @@ class OpenAIPedagogicalCritic:
         self.max_output_tokens = int(
             config_value("OPENAI_CRITIC_MAX_OUTPUT_TOKENS", "2500")
         )
+        self.reasoning_effort = config_value(
+            "OPENAI_REASONING_EFFORT", "minimal"
+        )
         self.client_factory = client_factory
         self.provider_name = provider_name
         self.api_key_env = api_key_env
@@ -1531,7 +1534,7 @@ class OpenAIPedagogicalCritic:
                 model=self.model,
                 instructions=instructions,
                 input=json.dumps(context, ensure_ascii=False),
-                reasoning={"effort": "low"},
+                reasoning={"effort": self.reasoning_effort},
                 max_output_tokens=self.max_output_tokens,
                 text={
                     "format": {
@@ -1589,7 +1592,6 @@ class AgenticPedagogicalTeam:
         "assessment_activities",
         "teaching_activities",
         "alignment_matrix",
-        "resources",
     )
 
     def __init__(

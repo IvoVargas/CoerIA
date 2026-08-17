@@ -121,7 +121,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Derivar os campos factuais e o estado de cada linha da matriz a partir das
   evidências aprovadas, reservando à IA apenas a fundamentação pedagógica.
 - Executar verificações determinísticas sobre os recursos finais.
-- Reformular automaticamente recursos inválidos até ao limite configurado.
+- Gerar e validar separadamente cada tipo de recurso selecionado.
+- Reformular automaticamente apenas o recurso inválido até ao limite
+  configurado, sem repetir os restantes recursos já válidos.
 - Distinguir verificações aprovadas, avisos e erros bloqueantes.
 - Nunca aceitar como validação automática apenas uma declaração do modelo.
 
@@ -140,6 +142,10 @@ Gerar efetivamente cada tipo selecionado pelo docente:
 - ficha de aula;
 - teste com chave de correção;
 - atividade prática com etapas, entregáveis e critérios.
+
+Cada tipo deve corresponder a uma execução independente, com indicação do tipo
+corrente e da posição no conjunto selecionado. No fim, o sistema deve validar
+também o conjunto agregado antes de o apresentar ao docente.
 
 Cada recurso deve indicar os resultados de aprendizagem a que está associado.
 Recursos não selecionados devem permanecer vazios e não ser exportados.
@@ -250,6 +256,11 @@ condições de utilização conhecidas.
   necessários à etapa.
 - As tentativas do ciclo agentic são limitadas e configuráveis para controlar
   latência e custo.
+- O perfil OpenAI predefinido privilegia o menor custo compatível com a Responses
+  API e saídas estruturadas, mantendo configuráveis o modelo e o esforço de
+  raciocínio.
+- A geração textual e estrutural dos recursos é independente da posterior
+  geração de imagens.
 
 ### RNF05 — Manutenibilidade
 

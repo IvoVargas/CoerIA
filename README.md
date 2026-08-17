@@ -122,8 +122,12 @@ ficheiro partilhado:
 
 Feche e reabra o terminal depois da configuração. Basta existir a chave do
 fornecedor que será usado. O BAT também lê diretamente as variáveis guardadas no
-perfil do utilizador. O modelo OpenAI predefinido é `gpt-5.6-terra`; pode ser
-alterado através de `COERIA_OPENAI_MODEL`.
+perfil do utilizador. O perfil OpenAI predefinido privilegia o custo: usa
+[`gpt-5-nano`](https://developers.openai.com/api/docs/models/gpt-5-nano), com
+raciocínio `minimal`, tanto no gerador como no crítico. Este modelo suporta a
+Responses API e saídas estruturadas e custa, à data desta configuração, USD 0,05
+por milhão de tokens de entrada e USD 0,40 por milhão de tokens de saída. O
+modelo pode ser alterado através de `COERIA_OPENAI_MODEL`.
 
 O endpoint e o canal IAedu disponibilizados para esta aplicação já têm valores
 predefinidos no código. Podem ser substituídos através de
@@ -137,14 +141,20 @@ As respostas que cumprem o esquema JSON mas falham uma regra pedagógica ou
 aritmética são reformuladas automaticamente até ao limite definido por
 `COERIA_OPENAI_VALIDATION_RETRIES` (duas repetições por predefinição). Todas as
 tentativas são contabilizadas nas métricas de duração e tokens.
-Os recursos que falham a validação final de qualidade são também reformulados
-automaticamente até ao limite `COERIA_RESOURCE_QUALITY_MAX_REVISIONS`.
+Cada tipo de recurso selecionado é gerado e validado numa chamada separada. Se
+um recurso falhar a validação de qualidade, apenas esse tipo é reformulado até
+ao limite `COERIA_RESOURCE_QUALITY_MAX_REVISIONS`; os recursos já válidos não
+voltam a ser gerados. A geração de imagens constitui uma operação posterior e
+separada da geração textual e estrutural da apresentação.
 
 O ciclo gerador–crítico é controlado por `COERIA_AGENTIC_CRITIC_ENABLED`,
 `COERIA_AGENTIC_CRITIC_STAGES` e `COERIA_AGENTIC_MAX_REVISIONS`. A crítica é
 estruturada, fica registada nos metadados e no rasto de auditoria, e não bloqueia
-nem aprova a etapa em nome do docente. Desativar o crítico reduz chamadas e
-custos sem alterar o fluxo de aprovação humana.
+nem aprova a etapa em nome do docente. Por predefinição, os recursos não são
+submetidos a uma chamada adicional do crítico: conservam as validações
+determinísticas por tipo e a aprovação humana final. Desativar o crítico ou
+reduzir as etapas abrangidas diminui chamadas e custos sem alterar o fluxo de
+aprovação humana.
 
 As antigas variáveis `AGIR_SOLO_*` e `PRISM_*` continuam a ser reconhecidas como
 fallback para não quebrar instalações existentes; quando coexistem, prevalece a

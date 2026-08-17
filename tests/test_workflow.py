@@ -9,11 +9,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from prism.agents import (
+    DEFAULT_MODEL,
     AgentGenerationError,
     AgenticPedagogicalTeam,
     CritiqueResult,
     GenerationResult,
     OpenAIPedagogicalAgent,
+    OpenAIPedagogicalCritic,
     _validate_artifact,
     _schema_for,
 )
@@ -595,6 +597,32 @@ class WorkflowTests(unittest.TestCase):
             clear=False,
         ):
             self.assertEqual(config_value("OPENAI_MODEL"), "new-model")
+
+    def test_default_openai_profile_prioritises_cost(self) -> None:
+        cleared_configuration = {
+            f"{prefix}_{suffix}": ""
+            for prefix in ("COERIA", "AGIR_SOLO", "PRISM")
+            for suffix in ("OPENAI_MODEL", "OPENAI_REASONING_EFFORT")
+        }
+        cleared_configuration.update(
+            {
+                "COERIA_OPENAI_CRITIC_MODEL": "",
+                "AGIR_SOLO_OPENAI_CRITIC_MODEL": "",
+                "PRISM_OPENAI_CRITIC_MODEL": "",
+            }
+        )
+        with patch.dict(environ, cleared_configuration, clear=False):
+            generator = OpenAIPedagogicalAgent()
+            critic = OpenAIPedagogicalCritic()
+
+        self.assertEqual(DEFAULT_MODEL, "gpt-5-nano")
+        self.assertEqual(generator.model, "gpt-5-nano")
+        self.assertEqual(generator.reasoning_effort, "minimal")
+        self.assertEqual(critic.model, "gpt-5-nano")
+        self.assertEqual(critic.reasoning_effort, "minimal")
+        self.assertNotIn(
+            "resources", AgenticPedagogicalTeam.DEFAULT_CRITIC_STAGES
+        )
 
     def test_curricular_relations_are_explicit_and_many_to_many(self) -> None:
         state = create_session(self.course, agent=self.agent)

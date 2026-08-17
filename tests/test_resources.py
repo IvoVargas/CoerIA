@@ -12,7 +12,12 @@ from pptx import Presentation
 
 from prism.agents import GenerationResult
 from prism.exporter import export_resource_package
-from prism.models import CourseInput, SUPPORTED_RESOURCE_TYPES
+from prism.models import (
+    CourseInput,
+    RESOURCE_PRESENTATION,
+    RESOURCE_TEST,
+    SUPPORTED_RESOURCE_TYPES,
+)
 from prism.quality import evaluate_quality
 from prism.workflow import create_session, create_test_agent, review_current_stage
 
@@ -93,49 +98,90 @@ class ResourceGenerationTests(unittest.TestCase):
     def test_resource_quality_failure_triggers_a_bounded_automatic_revision(self) -> None:
         alignment_state = create_session(
             self.course,
-            resource_types=list(SUPPORTED_RESOURCE_TYPES),
+            resource_types=[RESOURCE_PRESENTATION, RESOURCE_TEST],
             agent=self.agent,
         )
         for _ in range(6):
             alignment_state = review_current_stage(
                 alignment_state, "approve", agent=self.agent
             )
-        valid_state = review_current_stage(
-            deepcopy(alignment_state), "approve", agent=self.agent
-        )
-        valid_artifact = deepcopy(valid_state["resources"])
-        valid_artifact.pop("quality", None)
-        invalid_artifact = deepcopy(valid_artifact)
-        invalid_artifact["presentation_outline"][1]["outcome_id"] = "RA_INEXISTENTE"
-
-        class SequenceAgent:
+        class SelectiveRetryAgent:
             def __init__(self):
-                self.artifacts = [invalid_artifact, valid_artifact]
-                self.calls = 0
+                self.delegate = create_test_agent()
+                self.calls = []
 
             def generate(self, stage, state):
-                self.calls += 1
+                resource_type = state["resource_types"][0]
+                self.calls.append(resource_type)
+                generation = self.delegate.generate(stage, state)
+                artifact = deepcopy(generation.artifact)
+                if (
+                    resource_type == RESOURCE_PRESENTATION
+                    and self.calls.count(resource_type) == 1
+                ):
+                    artifact["presentation_outline"][1]["outcome_id"] = (
+                        "RA_INEXISTENTE"
+                    )
                 return GenerationResult(
-                    artifact=self.artifacts.pop(0),
-                    metadata={"provider": "teste", "model": "n/a"},
+                    artifact=artifact,
+                    metadata={
+                        "provider": "teste",
+                        "model": "n/a",
+                        "validation_attempts": 1,
+                        "input_tokens": 10,
+                        "output_tokens": 5,
+                        "total_tokens": 15,
+                    },
                 )
 
-        agent = SequenceAgent()
+        agent = SelectiveRetryAgent()
+        progress = []
         with patch.dict(
             environ,
             {"COERIA_RESOURCE_QUALITY_MAX_REVISIONS": "1"},
             clear=False,
         ):
             result = review_current_stage(
-                alignment_state, "approve", agent=agent
+                alignment_state,
+                "approve",
+                agent=agent,
+                progress_callback=progress.append,
             )
 
-        self.assertEqual(agent.calls, 2)
+        self.assertEqual(
+            agent.calls,
+            [RESOURCE_PRESENTATION, RESOURCE_PRESENTATION, RESOURCE_TEST],
+        )
         self.assertTrue(result["resources"]["quality"]["passed"])
+        resource_metadata = result["generation_metadata"]["resources"][-1][
+            "resource_generations"
+        ]
+        self.assertEqual(len(resource_metadata), 2)
+        self.assertEqual(resource_metadata[0]["quality_revisions"], 1)
+        self.assertEqual(resource_metadata[1]["quality_revisions"], 0)
+        self.assertEqual(len(resource_metadata[0]["attempts"]), 2)
+        self.assertEqual(len(resource_metadata[1]["attempts"]), 1)
+        self.assertEqual(
+            result["generation_metadata"]["resources"][-1]["total_tokens"],
+            45,
+        )
         self.assertTrue(
             any(
-                "reformulados automaticamente" in item["event"]
+                RESOURCE_PRESENTATION in item["event"]
+                and "reformulado automaticamente" in item["event"]
                 for item in result["audit"]
+            )
+        )
+        self.assertTrue(
+            any(
+                f"A gerar recurso 1 de 2: {RESOURCE_PRESENTATION}" in message
+                for message in progress
+            )
+        )
+        self.assertTrue(
+            any(
+                f"A gerar recurso 2 de 2: {RESOURCE_TEST}" in message
+                for message in progress
             )
         )
 

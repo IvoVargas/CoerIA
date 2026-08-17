@@ -104,6 +104,14 @@ Na ausência temporária de uma nova fase reportada, a interface substitui a
 mensagem por um estado de espera explícito, sem confundir tempo decorrido com
 percentagem concluída.
 
+Na etapa de recursos, a unidade de execução é o tipo de recurso selecionado. A
+apresentação, a ficha de aula, o teste e a atividade prática são gerados e
+validados separadamente, pela ordem mostrada ao docente. A interface comunica o
+tipo corrente e a posição `n/N` usando o mesmo indicador indeterminado. Uma falha
+de qualidade repete apenas o recurso afetado; no fim, o conjunto agregado é
+novamente verificado antes da revisão humana. A futura geração de imagens é uma
+operação distinta da geração textual e estrutural da apresentação.
+
 Nas etapas de classificação e matriz de alinhamento, a interface deriva a
 taxonomia do estado da sessão, não a repete em cada linha e apresenta o nível
 através de opções numeradas. O seletor mostra `SOLO 2`–`SOLO 5` ou
@@ -122,10 +130,21 @@ ferramentas externas ou execuções longas geridas pelo próprio runtime.
 
 ## Configuração
 
+O perfil OpenAI predefinido privilegia o custo durante o desenvolvimento: o
+gerador e o crítico usam
+[`gpt-5-nano`](https://developers.openai.com/api/docs/models/gpt-5-nano) com
+raciocínio `minimal`. A etapa de recursos fica fora do ciclo gerador–crítico por
+predefinição, pois já dispõe de validação determinística separada e aprovação
+humana. Esta opção evita uma segunda chamada de modelo por recurso e pode ser
+alterada nas variáveis abaixo.
+
 - `COERIA_AGENTIC_CRITIC_ENABLED`: ativa ou desativa o crítico;
 - `COERIA_AGENTIC_CRITIC_STAGES`: etapas submetidas ao crítico;
 - `COERIA_AGENTIC_MAX_REVISIONS`: reformulações máximas pedidas pelo crítico;
 - `COERIA_OPENAI_CRITIC_MODEL`: modelo do crítico;
+- `COERIA_OPENAI_MODEL`: modelo do gerador OpenAI;
+- `COERIA_OPENAI_REASONING_EFFORT`: esforço de raciocínio usado pelo gerador e
+  pelo crítico OpenAI;
 - `COERIA_OPENAI_CRITIC_MAX_OUTPUT_TOKENS`: limite da crítica estruturada.
 - `COERIA_RESOURCE_QUALITY_MAX_REVISIONS`: reformulações automáticas dos
   recursos após falhas de qualidade;

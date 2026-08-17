@@ -33,7 +33,12 @@ def _metadata_text(metadata: dict[str, Any] | None) -> str:
         details.append(f"{metadata.get('duration_ms', 0)} ms")
     if metadata.get("total_tokens"):
         details.append(f"{metadata['total_tokens']} tokens")
-    if metadata.get("validation_attempts", 1) > 1:
+    resource_generations = metadata.get("resource_generations", [])
+    if resource_generations:
+        details.append(
+            f"{len(resource_generations)} recursos gerados separadamente"
+        )
+    elif metadata.get("validation_attempts", 1) > 1:
         details.append(
             f"{metadata['validation_attempts']} tentativas de validação automática"
         )

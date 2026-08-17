@@ -82,13 +82,16 @@ def _format_elapsed_duration(elapsed_seconds: float) -> str:
 def _busy_phase_message(phase: str, phase_elapsed_seconds: float) -> str:
     elapsed = max(0, int(phase_elapsed_seconds))
     is_generation = phase.startswith("A gerar e validar")
-    is_resource_retry = phase.startswith("A corrigir os recursos")
-    if elapsed < 8 or not (is_generation or is_resource_retry):
+    is_resource_generation = phase.startswith("A gerar recurso")
+    is_resource_retry = phase.startswith("A corrigir recurso")
+    if elapsed < 8 or not (
+        is_generation or is_resource_generation or is_resource_retry
+    ):
         return phase
-    if is_resource_retry:
+    if is_resource_generation or is_resource_retry:
         if elapsed < 30:
-            return "A aguardar a nova resposta do fornecedor de IA…"
-        return "A correção dos recursos continua ativa no fornecedor de IA…"
+            return "A aguardar a resposta do fornecedor de IA para este recurso…"
+        return "A geração deste recurso continua ativa no fornecedor de IA…"
     if elapsed < 30:
         return "A aguardar a resposta do fornecedor de IA…"
     if "Recursos educativos" in phase:

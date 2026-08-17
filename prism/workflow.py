@@ -701,6 +701,236 @@ def create_test_agent() -> RuleBasedPedagogicalAgent:
     return RuleBasedPedagogicalAgent(DETERMINISTIC_GENERATORS)
 
 
+RESOURCE_ARTIFACT_FIELDS = {
+    RESOURCE_PRESENTATION: "presentation_outline",
+    RESOURCE_WORKSHEET: "lesson_worksheet",
+    RESOURCE_TEST: "test",
+    RESOURCE_PRACTICAL: "practical_activity",
+}
+
+
+def _resource_generation_scope(
+    state: PrismState,
+    resource_type: str,
+) -> PrismState:
+    scoped = deepcopy(state)
+    scoped["resource_types"] = [resource_type]
+    for row in scoped.get("alignment_matrix", []):
+        row["resource_types"] = [resource_type]
+    return scoped
+
+
+def _aggregate_resource_metadata(
+    records: list[tuple[str, list[GenerationResult], int]],
+) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for resource_type, generations, quality_revisions in records:
+        attempts = [deepcopy(generation.metadata) for generation in generations]
+
+        def attempt_total(field: str) -> int:
+            return sum(int(item.get(field, 0) or 0) for item in attempts)
+
+        row: dict[str, Any] = {
+            "resource_type": resource_type,
+            "quality_revisions": quality_revisions,
+            "provider": ", ".join(
+                dict.fromkeys(
+                    str(item.get("provider", "agente")) for item in attempts
+                )
+            ),
+            "model": ", ".join(
+                dict.fromkeys(
+                    str(item.get("model", "não registado")) for item in attempts
+                )
+            ),
+            "duration_ms": attempt_total("duration_ms"),
+            "input_tokens": attempt_total("input_tokens"),
+            "output_tokens": attempt_total("output_tokens"),
+            "total_tokens": attempt_total("total_tokens"),
+            "validation_attempts": attempt_total("validation_attempts"),
+            "attempts": attempts,
+        }
+        agentic_attempts = [
+            item.get("agentic", {})
+            for item in attempts
+            if item.get("agentic", {}).get("enabled")
+        ]
+        if agentic_attempts:
+            review_values = [
+                details.get("critic_passed") for details in agentic_attempts
+            ]
+            row["agentic"] = {
+                "enabled": True,
+                "critic_passed": (
+                    False
+                    if False in review_values
+                    else True
+                    if len(review_values) == len(attempts)
+                    and all(value is True for value in review_values)
+                    else None
+                ),
+                "findings": [
+                    deepcopy(finding)
+                    for details in agentic_attempts
+                    for finding in details.get("findings", [])
+                ],
+                "revision_instructions": "; ".join(
+                    details["revision_instructions"]
+                    for details in agentic_attempts
+                    if details.get("revision_instructions")
+                ),
+                "automatic_revisions": sum(
+                    int(details.get("automatic_revisions", 0) or 0)
+                    for details in agentic_attempts
+                ),
+                "runs": [
+                    deepcopy(run)
+                    for details in agentic_attempts
+                    for run in details.get("runs", [])
+                ],
+            }
+        rows.append(row)
+
+    def total(field: str) -> int:
+        return sum(int(row.get(field, 0) or 0) for row in rows)
+
+    providers = list(dict.fromkeys(str(row.get("provider", "agente")) for row in rows))
+    models = list(
+        dict.fromkeys(str(row.get("model", "não registado")) for row in rows)
+    )
+    metadata: dict[str, Any] = {
+        "provider": ", ".join(providers),
+        "model": ", ".join(models),
+        "duration_ms": total("duration_ms"),
+        "input_tokens": total("input_tokens"),
+        "output_tokens": total("output_tokens"),
+        "total_tokens": total("total_tokens"),
+        "validation_attempts": total("validation_attempts"),
+        "resource_generations": rows,
+    }
+    agentic_rows = [
+        (row["resource_type"], row.get("agentic", {}))
+        for row in rows
+        if row.get("agentic", {}).get("enabled")
+    ]
+    if agentic_rows:
+        review_values = [details.get("critic_passed") for _, details in agentic_rows]
+        critic_passed = (
+            False
+            if False in review_values
+            else True
+            if len(review_values) == len(rows)
+            and all(value is True for value in review_values)
+            else None
+        )
+        metadata["agentic"] = {
+            "enabled": True,
+            "critic_passed": critic_passed,
+            "findings": [
+                {"resource_type": resource_type, **deepcopy(finding)}
+                for resource_type, details in agentic_rows
+                for finding in details.get("findings", [])
+            ],
+            "revision_instructions": "; ".join(
+                f"{resource_type}: {details['revision_instructions']}"
+                for resource_type, details in agentic_rows
+                if details.get("revision_instructions")
+            ),
+            "automatic_revisions": sum(
+                int(details.get("automatic_revisions", 0) or 0)
+                for _, details in agentic_rows
+            ),
+            "runs": [
+                {"resource_type": resource_type, **deepcopy(run)}
+                for resource_type, details in agentic_rows
+                for run in details.get("runs", [])
+            ],
+        }
+    return metadata
+
+
+class _SeparateResourceAgent:
+    """Gera e valida cada tipo de recurso sem repetir os restantes."""
+
+    def __init__(
+        self,
+        agent: PedagogicalAgent,
+        progress_callback: ProgressCallback | None = None,
+    ) -> None:
+        self.agent = agent
+        self.progress_callback = progress_callback
+
+    def generate(self, stage: str, state: dict[str, Any]) -> GenerationResult:
+        if stage != "resources":
+            return self.agent.generate(stage, state)
+
+        selected_types = validate_resource_types(state.get("resource_types"))
+        total_resources = len(selected_types)
+        max_quality_revisions = max(
+            0,
+            int(config_value("RESOURCE_QUALITY_MAX_REVISIONS", "1")),
+        )
+        records: list[tuple[str, list[GenerationResult], int]] = []
+        generated_artifacts: list[tuple[str, dict[str, Any]]] = []
+
+        for index, resource_type in enumerate(selected_types, start=1):
+            working_state = _resource_generation_scope(state, resource_type)
+            quality_revision = 0
+            generations: list[GenerationResult] = []
+            while True:
+                action = "A gerar" if quality_revision == 0 else "A corrigir"
+                _report_progress(
+                    self.progress_callback,
+                    f"{action} recurso {index} de {total_resources}: {resource_type}…",
+                )
+                generation = self.agent.generate("resources", working_state)
+                generations.append(generation)
+                artifact = deepcopy(generation.artifact)
+                checked_artifact = attach_quality_report(working_state, artifact)
+                if (
+                    checked_artifact.get("quality", {}).get("passed")
+                    or quality_revision >= max_quality_revisions
+                ):
+                    break
+
+                quality_revision += 1
+                failed_checks = [
+                    check.get("detail", "")
+                    for check in checked_artifact.get("quality", {}).get("checks", [])
+                    if check.get("status") == "error"
+                ]
+                working_state = deepcopy(working_state)
+                working_state.setdefault("feedback", {})["resources"] = (
+                    f"Reformulação automática de {resource_type} após validação "
+                    "de qualidade: "
+                    + "; ".join(failed_checks)
+                )
+
+            records.append((resource_type, generations, quality_revision))
+            generated_artifacts.append((resource_type, artifact))
+            conclusion = (
+                "concluído"
+                if checked_artifact.get("quality", {}).get("passed")
+                else "concluído com erros de qualidade"
+            )
+            _report_progress(
+                self.progress_callback,
+                f"Recurso {index} de {total_resources} {conclusion}: {resource_type}.",
+            )
+
+        combined = deepcopy(generated_artifacts[0][1])
+        combined.pop("quality", None)
+        combined["selected_types"] = list(selected_types)
+        for resource_type, artifact in generated_artifacts:
+            field = RESOURCE_ARTIFACT_FIELDS[resource_type]
+            combined[field] = deepcopy(artifact[field])
+
+        return GenerationResult(
+            artifact=combined,
+            metadata=_aggregate_resource_metadata(records),
+        )
+
+
 def _stage_node(stage: str, agent: PedagogicalAgent):
     def execute(state: PrismState) -> dict[str, Any]:
         generation: GenerationResult = agent.generate(stage, state)
@@ -726,6 +956,22 @@ def _stage_node(stage: str, agent: PedagogicalAgent):
                     "feedback": agentic.get("revision_instructions") or "—",
                 }
             )
+        for resource in generation.metadata.get("resource_generations", []):
+            revisions = int(resource.get("quality_revisions", 0) or 0)
+            if revisions:
+                audit_update["audit"].append(
+                    {
+                        "timestamp": datetime.now(UTC).strftime(
+                            "%Y-%m-%d %H:%M:%S UTC"
+                        ),
+                        "stage": STAGE_LABELS[stage],
+                        "event": (
+                            f"{resource['resource_type']} reformulado "
+                            "automaticamente após falha na validação de qualidade."
+                        ),
+                        "feedback": f"{revisions} tentativa(s) adicional(is).",
+                    }
+                )
         return {
             stage: generation.artifact,
             "generation_metadata": metadata,
@@ -1009,53 +1255,20 @@ def run_current_stage(
         active_agent = agent or build_pedagogical_team(
             state.get("ai_provider", configured_ai_provider())
         )
-        generated = build_stage_executor(active_agent).invoke(state)
+        execution_agent: PedagogicalAgent = active_agent
+        if stage == "resources":
+            execution_agent = _SeparateResourceAgent(
+                active_agent,
+                progress_callback,
+            )
+        generated = build_stage_executor(execution_agent).invoke(state)
 
         if stage == "resources":
             _report_progress(
                 progress_callback,
-                "A verificar automaticamente a qualidade dos recursos…",
+                "A verificar o conjunto final dos recursos…",
             )
             generated[stage] = attach_quality_report(generated, generated[stage])
-            max_quality_revisions = max(
-                0, int(config_value("RESOURCE_QUALITY_MAX_REVISIONS", "1"))
-            )
-            quality_revision = 0
-            while (
-                not generated[stage].get("quality", {}).get("passed")
-                and quality_revision < max_quality_revisions
-            ):
-                quality_revision += 1
-                _report_progress(
-                    progress_callback,
-                    "A corrigir os recursos após a verificação automática "
-                    f"(tentativa {quality_revision} de {max_quality_revisions})…",
-                )
-                working_state = deepcopy(generated)
-                failed_checks = [
-                    check.get("detail", "")
-                    for check in generated[stage].get("quality", {}).get("checks", [])
-                    if check.get("status") == "error"
-                ]
-                working_state.setdefault("feedback", {})["resources"] = (
-                    "Reformulação automática após validação de qualidade: "
-                    + "; ".join(failed_checks)
-                )
-                generated = build_stage_executor(active_agent).invoke(working_state)
-                generated[stage] = attach_quality_report(generated, generated[stage])
-                generated.setdefault("audit", []).append(
-                    {
-                        "timestamp": datetime.now(UTC).strftime(
-                            "%Y-%m-%d %H:%M:%S UTC"
-                        ),
-                        "stage": STAGE_LABELS[stage],
-                        "event": (
-                            "Recursos reformulados automaticamente após falha "
-                            "na validação de qualidade."
-                        ),
-                        "feedback": f"Tentativa automática {quality_revision}.",
-                    }
-                )
     _report_progress(
         progress_callback,
         "A preparar a proposta para revisão do docente…",

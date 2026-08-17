@@ -48,9 +48,19 @@ def test_busy_elapsed_duration_is_readable(
             "esta é normalmente a etapa mais demorada…",
         ),
         (
-            "A verificar automaticamente a qualidade dos recursos…",
+            "A gerar recurso 2 de 4: Teste…",
+            8,
+            "A aguardar a resposta do fornecedor de IA para este recurso…",
+        ),
+        (
+            "A corrigir recurso 1 de 4: Apresentação PowerPoint…",
+            30,
+            "A geração deste recurso continua ativa no fornecedor de IA…",
+        ),
+        (
+            "A verificar o conjunto final dos recursos…",
             45,
-            "A verificar automaticamente a qualidade dos recursos…",
+            "A verificar o conjunto final dos recursos…",
         ),
     ],
 )
