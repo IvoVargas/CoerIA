@@ -50,11 +50,16 @@ def test_busy_elapsed_duration_is_readable(
         (
             "A gerar recurso 2 de 4: Teste…",
             8,
+            "A gerar recurso 2 de 4: Teste…",
+        ),
+        (
+            "A gerar recurso 2 de 4: Teste…",
+            20,
             "A aguardar a resposta do fornecedor de IA para este recurso…",
         ),
         (
             "A corrigir recurso 1 de 4: Apresentação PowerPoint…",
-            30,
+            60,
             "A geração deste recurso continua ativa no fornecedor de IA…",
         ),
         (

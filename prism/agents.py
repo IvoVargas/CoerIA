@@ -473,7 +473,7 @@ def _schema_for(
                                     "outcome_id": string,
                                     "prompt": string,
                                     "question_type": string,
-                                    "points": {"type": "integer"},
+                                    "points": {"type": "integer", "minimum": 1},
                                     "answer_key": string,
                                 },
                                 "required": ["id", "outcome_id", "prompt", "question_type", "points", "answer_key"],
@@ -536,9 +536,18 @@ def _schema_for(
     )
     if scoped_resource_type:
         resource_field = RESOURCE_ARTIFACT_FIELDS[scoped_resource_type]
-        artifact_schema = artifact_schemas["resources"]["properties"][
-            resource_field
-        ]
+        artifact_schema = deepcopy(
+            artifact_schemas["resources"]["properties"][resource_field]
+        )
+        if scoped_resource_type == RESOURCE_TEST and state:
+            outcome_ids = [
+                str(item["id"])
+                for item in state.get("learning_outcomes", [])
+                if item.get("id")
+            ]
+            artifact_schema["properties"]["questions"]["items"]["properties"][
+                "outcome_id"
+            ] = {"type": "string", "enum": outcome_ids}
 
     return {
         "type": "object",
@@ -820,6 +829,67 @@ def _expand_scoped_resource_payload(
     }
     artifact[resource_field] = resource_payload
     return artifact
+
+
+def _canonicalize_resource_test(
+    artifact: Any,
+    state: dict[str, Any],
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Deriva IDs técnicos e cotação total das questões devolvidas."""
+
+    if (
+        not isinstance(artifact, dict)
+        or RESOURCE_TEST not in state.get("resource_types", [])
+    ):
+        return artifact, []
+    test = artifact.get("test")
+    if not isinstance(test, dict) or not isinstance(test.get("questions"), list):
+        return artifact, []
+
+    normalized_questions: list[Any] = []
+    corrections: list[dict[str, Any]] = []
+    total_points = 0
+    for index, question in enumerate(test["questions"], start=1):
+        if not isinstance(question, dict):
+            normalized_questions.append(question)
+            continue
+        normalized = deepcopy(question)
+        canonical_id = f"Q{index}"
+        if normalized.get("id") != canonical_id:
+            corrections.append(
+                {
+                    "question": index,
+                    "changes": {
+                        "id": {
+                            "received": normalized.get("id"),
+                            "used": canonical_id,
+                        }
+                    },
+                }
+            )
+            normalized["id"] = canonical_id
+        points = normalized.get("points")
+        if isinstance(points, int):
+            total_points += points
+        normalized_questions.append(normalized)
+
+    normalized_artifact = deepcopy(artifact)
+    normalized_artifact["test"]["questions"] = normalized_questions
+    received_total = normalized_artifact["test"].get("total_points")
+    if received_total != total_points:
+        corrections.append(
+            {
+                "resource": RESOURCE_TEST,
+                "changes": {
+                    "total_points": {
+                        "received": received_total,
+                        "used": total_points,
+                    }
+                },
+            }
+        )
+        normalized_artifact["test"]["total_points"] = total_points
+    return normalized_artifact, corrections
 
 
 def _canonicalize_resource_visuals(
@@ -1277,15 +1347,28 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             if len(question_ids) != len(set(question_ids)):
                 raise AgentGenerationError("O teste contém identificadores de questão duplicados.")
             covered = {item["outcome_id"] for item in artifact["test"]["questions"]}
+            if covered != expected:
+                missing = sorted(expected - covered)
+                unexpected = sorted(covered - expected)
+                details = []
+                if missing:
+                    details.append("IDs em falta: " + ", ".join(missing))
+                if unexpected:
+                    details.append(
+                        "IDs não permitidos: " + ", ".join(unexpected)
+                    )
+                raise AgentGenerationError(
+                    "O teste não cobre exatamente todos os resultados de "
+                    "aprendizagem. " + "; ".join(details) + "."
+                )
             points = sum(item["points"] for item in artifact["test"]["questions"])
             if (
-                covered != expected
-                or points != artifact["test"]["total_points"]
+                points != artifact["test"]["total_points"]
                 or points <= 0
                 or any(item["points"] <= 0 for item in artifact["test"]["questions"])
             ):
                 raise AgentGenerationError(
-                    "O teste deve cobrir todos os resultados e apresentar uma cotação coerente."
+                    "O teste deve apresentar pontos positivos e uma cotação total coerente."
                 )
 
         if "Atividade prática" in requested:
@@ -1509,9 +1592,17 @@ class OpenAIPedagogicalAgent:
                         _canonicalize_alignment_matrix(artifact, state)
                     )
                 elif stage == "resources":
-                    artifact, guardrail_corrections = (
+                    artifact, test_corrections = _canonicalize_resource_test(
+                        artifact,
+                        state,
+                    )
+                    artifact, visual_corrections = (
                         _canonicalize_resource_visuals(artifact, state)
                     )
+                    guardrail_corrections = [
+                        *test_corrections,
+                        *visual_corrections,
+                    ]
                 _validate_artifact(stage, artifact, state)
             except (AgentGenerationError, json.JSONDecodeError, KeyError, TypeError) as error:
                 validation_message = (

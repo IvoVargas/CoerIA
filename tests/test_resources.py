@@ -5,19 +5,24 @@ from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
 from os import environ
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from docx import Document
 from pptx import Presentation
 
-from prism.agents import GenerationResult
+from prism.agents import AgentGenerationError, GenerationResult
+from prism.application_service import ApplicationService
 from prism.exporter import export_resource_package
 from prism.models import (
     CourseInput,
+    RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
+    RESOURCE_WORKSHEET,
     SUPPORTED_RESOURCE_TYPES,
 )
+from prism.persistence import SQLiteSessionStore
 from prism.quality import evaluate_quality
 from prism.workflow import create_session, create_test_agent, review_current_stage
 
@@ -105,6 +110,7 @@ class ResourceGenerationTests(unittest.TestCase):
             alignment_state = review_current_stage(
                 alignment_state, "approve", agent=self.agent
             )
+
         class SelectiveRetryAgent:
             def __init__(self):
                 self.delegate = create_test_agent()
@@ -182,6 +188,100 @@ class ResourceGenerationTests(unittest.TestCase):
             any(
                 f"A gerar recurso 2 de 2: {RESOURCE_TEST}" in message
                 for message in progress
+            )
+        )
+
+    def test_failed_resource_generation_resumes_from_persisted_drafts(self) -> None:
+        alignment_state = create_session(
+            self.course,
+            resource_types=list(SUPPORTED_RESOURCE_TYPES),
+            agent=self.agent,
+        )
+        for _ in range(6):
+            alignment_state = review_current_stage(
+                alignment_state,
+                "approve",
+                agent=self.agent,
+            )
+
+        class FailTestOnceAgent:
+            def __init__(self):
+                self.delegate = create_test_agent()
+                self.calls = []
+                self.failed = False
+
+            def generate(self, stage, state):
+                resource_type = state["resource_types"][0]
+                self.calls.append(resource_type)
+                if resource_type == RESOURCE_TEST and not self.failed:
+                    self.failed = True
+                    raise AgentGenerationError("Falha controlada no teste.")
+                return self.delegate.generate(stage, state)
+
+        agent = FailTestOnceAgent()
+        first_progress = []
+        second_progress = []
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(
+                Path(temporary_directory) / "resource-drafts.db"
+            )
+            service = ApplicationService(store)
+            alignment_state["session_id"] = store.save(alignment_state)
+            with patch(
+                "prism.workflow.build_pedagogical_team",
+                return_value=agent,
+            ):
+                with self.assertRaisesRegex(
+                    AgentGenerationError,
+                    "2 recursos já concluídos",
+                ):
+                    service.review_session(
+                        alignment_state,
+                        "approve",
+                        resource_types=list(SUPPORTED_RESOURCE_TYPES),
+                        progress_callback=first_progress.append,
+                    )
+
+                persisted = service.load_session(alignment_state["session_id"])
+                self.assertEqual(persisted["current_stage"], "alignment_matrix")
+                self.assertEqual(persisted["status"], "awaiting_review")
+                self.assertNotIn("resources", persisted)
+                self.assertEqual(
+                    set(persisted["resource_generation_drafts"]["entries"]),
+                    {RESOURCE_PRESENTATION, RESOURCE_WORKSHEET},
+                )
+                completed, _ = service.review_session(
+                    persisted,
+                    "approve",
+                    resource_types=list(SUPPORTED_RESOURCE_TYPES),
+                    progress_callback=second_progress.append,
+                )
+
+            stored_completed = service.load_session(completed["session_id"])
+
+        self.assertEqual(
+            agent.calls,
+            [
+                RESOURCE_PRESENTATION,
+                RESOURCE_WORKSHEET,
+                RESOURCE_TEST,
+                RESOURCE_TEST,
+                RESOURCE_PRACTICAL,
+            ],
+        )
+        self.assertNotIn("resource_generation_drafts", completed)
+        self.assertNotIn("resource_generation_drafts", stored_completed)
+        self.assertTrue(completed["resources"]["quality"]["passed"])
+        self.assertTrue(
+            any(
+                f"reutilizado: {RESOURCE_PRESENTATION}" in message
+                for message in second_progress
+            )
+        )
+        self.assertTrue(
+            any(
+                f"reutilizado: {RESOURCE_WORKSHEET}" in message
+                for message in second_progress
             )
         )
 

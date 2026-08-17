@@ -126,6 +126,12 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   deterministicamente a seleção e os campos vazios dos restantes recursos.
 - Reformular automaticamente apenas o recurso inválido até ao limite
   configurado, sem repetir os restantes recursos já válidos.
+- Persistir como rascunhos técnicos os recursos já validados quando um tipo
+  posterior falha e retomá-los apenas se a seleção e todas as entradas
+  pedagógicas permanecerem inalteradas.
+- Derivar deterministicamente os IDs sequenciais e a cotação total do teste e
+  indicar explicitamente os resultados de aprendizagem em falta quando a
+  cobertura estiver incompleta.
 - Distinguir verificações aprovadas, avisos e erros bloqueantes.
 - Nunca aceitar como validação automática apenas uma declaração do modelo.
 

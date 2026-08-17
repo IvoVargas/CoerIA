@@ -555,6 +555,89 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(result.artifact["test"]["questions"])
         _validate_artifact("resources", result.artifact, state)
 
+    def test_scoped_test_repairs_coverage_and_derives_total_points(self) -> None:
+        state = create_session(
+            self.course,
+            resource_types=[RESOURCE_TEST],
+            agent=self.agent,
+        )
+        for _ in range(6):
+            state = review_current_stage(state, "approve", agent=self.agent)
+        state["resource_generation_scope"] = RESOURCE_TEST
+        valid_test = deepcopy(
+            self.agent.generate("resources", state).artifact["test"]
+        )
+        valid_test["total_points"] = 1
+        valid_test["questions"][0]["id"] = "duplicado"
+        incomplete_test = deepcopy(valid_test)
+        missing_outcome = incomplete_test["questions"].pop()["outcome_id"]
+
+        class FakeResponses:
+            def __init__(self):
+                self.calls = []
+                self.payloads = [incomplete_test, valid_test]
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(
+                    output_text=json.dumps(
+                        {"artifact": self.payloads.pop(0)}
+                    ),
+                    id=f"response-{len(self.calls)}",
+                    usage=SimpleNamespace(
+                        input_tokens=10,
+                        output_tokens=20,
+                        total_tokens=30,
+                    ),
+                )
+
+        fake_responses = FakeResponses()
+        agent = OpenAIPedagogicalAgent(
+            client_factory=lambda: SimpleNamespace(responses=fake_responses)
+        )
+        with patch.dict(
+            environ,
+            {
+                "OPENAI_API_KEY": "test-key",
+                "COERIA_OPENAI_VALIDATION_RETRIES": "1",
+            },
+            clear=False,
+        ):
+            result = agent.generate("resources", state)
+
+        retry_context = json.loads(fake_responses.calls[1]["input"])
+        self.assertIn(
+            missing_outcome,
+            retry_context["automatic_validation_feedback"]["validation_error"],
+        )
+        expected_total = sum(
+            question["points"] for question in result.artifact["test"]["questions"]
+        )
+        self.assertEqual(result.artifact["test"]["total_points"], expected_total)
+        self.assertEqual(
+            [
+                question["id"]
+                for question in result.artifact["test"]["questions"]
+            ],
+            [
+                f"Q{index}"
+                for index in range(
+                    1,
+                    len(result.artifact["test"]["questions"]) + 1,
+                )
+            ],
+        )
+        outcome_schema = fake_responses.calls[0]["text"]["format"]["schema"][
+            "properties"
+        ]["artifact"]["properties"]["questions"]["items"]["properties"][
+            "outcome_id"
+        ]
+        self.assertEqual(
+            set(outcome_schema["enum"]),
+            {item["id"] for item in state["learning_outcomes"]},
+        )
+        _validate_artifact("resources", result.artifact, state)
+
     def test_taxonomy_guardrail_canonicalizes_level_from_approved_verb(self) -> None:
         state = create_session(self.course, agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)

@@ -14,6 +14,7 @@ from .models import CourseInput, validate_resource_types
 from .persistence import SQLiteSessionStore
 from .providers import configured_ai_provider
 from .workflow import (
+    ResourceGenerationError,
     STAGE_LABELS,
     apply_manual_edit,
     create_session,
@@ -165,13 +166,21 @@ class ApplicationService:
                     "Para alterar os recursos, solicite a revisão da matriz de alinhamento."
                 )
 
-        updated = review_current_stage(
-            working_state,
-            decision=decision,
-            feedback=feedback,
-            revision_stage=revision_stage,
-            progress_callback=progress_callback,
-        )
+        try:
+            updated = review_current_stage(
+                working_state,
+                decision=decision,
+                feedback=feedback,
+                revision_stage=revision_stage,
+                progress_callback=progress_callback,
+            )
+        except ResourceGenerationError as error:
+            draft_state = deepcopy(working_state)
+            draft_state["resource_generation_drafts"] = deepcopy(error.drafts)
+            persisted_draft_state = self._persist(draft_state)
+            state.clear()
+            state.update(deepcopy(persisted_draft_state))
+            raise
         if progress_callback is not None:
             progress_callback("A guardar a nova etapa e a rastreabilidade…")
         updated = self._persist(updated)

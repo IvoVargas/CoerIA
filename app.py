@@ -84,14 +84,14 @@ def _busy_phase_message(phase: str, phase_elapsed_seconds: float) -> str:
     is_generation = phase.startswith("A gerar e validar")
     is_resource_generation = phase.startswith("A gerar recurso")
     is_resource_retry = phase.startswith("A corrigir recurso")
-    if elapsed < 8 or not (
-        is_generation or is_resource_generation or is_resource_retry
-    ):
-        return phase
     if is_resource_generation or is_resource_retry:
-        if elapsed < 30:
+        if elapsed < 20:
+            return phase
+        if elapsed < 60:
             return "A aguardar a resposta do fornecedor de IA para este recurso…"
         return "A geração deste recurso continua ativa no fornecedor de IA…"
+    if elapsed < 8 or not is_generation:
+        return phase
     if elapsed < 30:
         return "A aguardar a resposta do fornecedor de IA…"
     if "Recursos educativos" in phase:

@@ -116,6 +116,16 @@ Assim, o modelo não pode alterar a seleção do docente e a resposta não trans
 estruturas desnecessárias. A futura geração de imagens é uma operação distinta
 da geração textual e estrutural da apresentação.
 
+Quando uma chamada falha, as propostas dos tipos anteriores que já passaram a
+validação são persistidas como rascunhos técnicos, sem aprovar a etapa nem alterar
+os artefactos pedagógicos ativos. O rascunho inclui uma impressão digital da
+seleção e de todas as entradas relevantes. Na tentativa seguinte, só é
+reutilizado se essa impressão digital continuar igual; caso contrário, é
+ignorado. Depois da geração completa, os rascunhos são removidos. Para o teste,
+a aplicação deriva ainda os IDs técnicos das questões e `total_points`, enquanto
+a cobertura dos resultados e o conteúdo pedagógico continuam sujeitos ao modelo,
+aos guardrails e à revisão humana.
+
 Nas etapas de classificação e matriz de alinhamento, a interface deriva a
 taxonomia do estado da sessão, não a repete em cada linha e apresenta o nível
 através de opções numeradas. O seletor mostra `SOLO 2`–`SOLO 5` ou

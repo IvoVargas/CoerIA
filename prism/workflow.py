@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -10,6 +12,7 @@ from typing import Any, Callable, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from .agents import (
+    AgentGenerationError,
     GenerationResult,
     PedagogicalAgent,
     RESOURCE_ARTIFACT_FIELDS,
@@ -64,6 +67,7 @@ class PrismState(TypedDict, total=False):
     review: dict[str, str]
     resource_types: list[str]
     resource_generation_scope: str
+    resource_generation_drafts: dict[str, Any]
     versions: dict[str, list[Any]]
     generation_metadata: dict[str, list[dict[str, Any]]]
     version_dependencies: dict[str, list[dict[str, int]]]
@@ -97,6 +101,14 @@ STAGE_ORDER = (
 )
 
 ProgressCallback = Callable[[str], None]
+
+
+class ResourceGenerationError(AgentGenerationError):
+    """Preserva os recursos válidos quando outro tipo falha."""
+
+    def __init__(self, message: str, drafts: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.drafts = deepcopy(drafts)
 
 
 def _report_progress(
@@ -715,6 +727,58 @@ def _resource_generation_scope(
     return scoped
 
 
+def _resource_draft_fingerprint(
+    state: PrismState,
+    selected_types: list[str],
+) -> str:
+    relevant_state = {
+        "ai_provider": state.get("ai_provider"),
+        "course": state.get("course"),
+        "resource_types": selected_types,
+        **{
+            stage: state.get(stage)
+            for stage in STAGE_ORDER[: STAGE_ORDER.index("resources")]
+        },
+    }
+    serialized = json.dumps(
+        relevant_state,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _resource_draft_payload(
+    fingerprint: str,
+    selected_types: list[str],
+    entries: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "fingerprint": fingerprint,
+        "selected_types": list(selected_types),
+        "entries": deepcopy(entries),
+    }
+
+
+def _matching_resource_drafts(
+    state: PrismState,
+    fingerprint: str,
+    selected_types: list[str],
+) -> dict[str, Any]:
+    drafts = state.get("resource_generation_drafts", {})
+    if not isinstance(drafts, dict):
+        return {}
+    if (
+        drafts.get("fingerprint") != fingerprint
+        or drafts.get("selected_types") != selected_types
+        or not isinstance(drafts.get("entries"), dict)
+    ):
+        return {}
+    return deepcopy(drafts["entries"])
+
+
 def _aggregate_resource_metadata(
     records: list[tuple[str, list[GenerationResult], int]],
 ) -> dict[str, Any]:
@@ -865,11 +929,57 @@ class _SeparateResourceAgent:
             0,
             int(config_value("RESOURCE_QUALITY_MAX_REVISIONS", "1")),
         )
+        draft_fingerprint = _resource_draft_fingerprint(state, selected_types)
+        draft_entries = _matching_resource_drafts(
+            state,
+            draft_fingerprint,
+            selected_types,
+        )
         records: list[tuple[str, list[GenerationResult], int]] = []
         generated_artifacts: list[tuple[str, dict[str, Any]]] = []
 
         for index, resource_type in enumerate(selected_types, start=1):
             working_state = _resource_generation_scope(state, resource_type)
+            cached_entry = draft_entries.get(resource_type, {})
+            cached_metadata = cached_entry.get("generation_metadata", [])
+            cached_artifact = deepcopy(cached_entry.get("artifact", {}))
+            if (
+                isinstance(cached_artifact, dict)
+                and isinstance(cached_metadata, list)
+                and cached_metadata
+            ):
+                cached_quality = attach_quality_report(
+                    working_state,
+                    cached_artifact,
+                )
+                if cached_quality.get("quality", {}).get("passed"):
+                    cached_generations = [
+                        GenerationResult(
+                            artifact=deepcopy(cached_artifact),
+                            metadata=deepcopy(metadata),
+                        )
+                        for metadata in cached_metadata
+                    ]
+                    records.append(
+                        (
+                            resource_type,
+                            cached_generations,
+                            int(cached_entry.get("quality_revisions", 0) or 0),
+                        )
+                    )
+                    generated_artifacts.append(
+                        (resource_type, cached_artifact)
+                    )
+                    _report_progress(
+                        self.progress_callback,
+                        (
+                            f"Recurso {index} de {total_resources} reutilizado: "
+                            f"{resource_type}."
+                        ),
+                    )
+                    continue
+            draft_entries.pop(resource_type, None)
+
             quality_revision = 0
             generations: list[GenerationResult] = []
             while True:
@@ -878,7 +988,31 @@ class _SeparateResourceAgent:
                     self.progress_callback,
                     f"{action} recurso {index} de {total_resources}: {resource_type}…",
                 )
-                generation = self.agent.generate("resources", working_state)
+                try:
+                    generation = self.agent.generate("resources", working_state)
+                except AgentGenerationError as error:
+                    drafts = _resource_draft_payload(
+                        draft_fingerprint,
+                        selected_types,
+                        draft_entries,
+                    )
+                    completed = len(draft_entries)
+                    if completed == 1:
+                        resume_message = (
+                            " 1 recurso já concluído foi guardado; a próxima "
+                            "tentativa será retomada no recurso em falta."
+                        )
+                    elif completed > 1:
+                        resume_message = (
+                            f" {completed} recursos já concluídos foram guardados; "
+                            "a próxima tentativa será retomada no recurso em falta."
+                        )
+                    else:
+                        resume_message = ""
+                    raise ResourceGenerationError(
+                        f"{error}{resume_message}",
+                        drafts,
+                    ) from error
                 generations.append(generation)
                 artifact = deepcopy(generation.artifact)
                 checked_artifact = attach_quality_report(working_state, artifact)
@@ -903,6 +1037,13 @@ class _SeparateResourceAgent:
 
             records.append((resource_type, generations, quality_revision))
             generated_artifacts.append((resource_type, artifact))
+            draft_entries[resource_type] = {
+                "artifact": deepcopy(artifact),
+                "generation_metadata": [
+                    deepcopy(item.metadata) for item in generations
+                ],
+                "quality_revisions": quality_revision,
+            }
             conclusion = (
                 "concluído"
                 if checked_artifact.get("quality", {}).get("passed")
@@ -1084,6 +1225,7 @@ def _archive_and_invalidate_revision(
         }
     )
     state["revision_snapshots"] = snapshots
+    state.pop("resource_generation_drafts", None)
 
     stage_statuses = dict(state.get("stage_statuses", {}))
     active_versions = dict(state.get("active_versions", {}))
@@ -1264,6 +1406,7 @@ def run_current_stage(
                 "A verificar o conjunto final dos recursos…",
             )
             generated[stage] = attach_quality_report(generated, generated[stage])
+            generated.pop("resource_generation_drafts", None)
     _report_progress(
         progress_callback,
         "A preparar a proposta para revisão do docente…",

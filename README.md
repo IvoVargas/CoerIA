@@ -151,6 +151,14 @@ alterar a seleção do docente e reduz os tokens de saída. A geração de image
 constitui uma operação posterior e separada da geração textual e estrutural da
 apresentação.
 
+Se uma chamada falhar depois de outros recursos já terem sido validados, estes
+ficam guardados como rascunhos técnicos associados à mesma seleção e aos mesmos
+artefactos de entrada. A tentativa seguinte reutiliza-os e retoma no recurso em
+falta; uma alteração da seleção ou dos artefactos anteriores invalida
+automaticamente esses rascunhos. No teste, os IDs sequenciais das questões e a
+cotação total são derivados deterministicamente; o modelo continua responsável
+pelo enunciado, resposta e associação de cada questão a um resultado.
+
 O ciclo gerador–crítico é controlado por `COERIA_AGENTIC_CRITIC_ENABLED`,
 `COERIA_AGENTIC_CRITIC_STAGES` e `COERIA_AGENTIC_MAX_REVISIONS`. A crítica é
 estruturada, fica registada nos metadados e no rasto de auditoria, e não bloqueia
