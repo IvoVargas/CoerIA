@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from prism.agents import (
     DEFAULT_MODEL,
+    DEFAULT_RESOURCE_MODEL,
     AgentGenerationError,
     AgenticPedagogicalTeam,
     CritiqueResult,
@@ -484,6 +485,8 @@ class WorkflowTests(unittest.TestCase):
 
                 fake_responses = FakeResponses()
                 agent = OpenAIPedagogicalAgent(
+                    model="gpt-5-nano",
+                    resource_model="gpt-4o-mini",
                     client_factory=lambda: SimpleNamespace(
                         responses=fake_responses
                     )
@@ -500,6 +503,9 @@ class WorkflowTests(unittest.TestCase):
 
                 schema = fake_responses.calls[0]["text"]["format"]["schema"]
                 request_context = json.loads(fake_responses.calls[0]["input"])
+                self.assertEqual(fake_responses.calls[0]["model"], "gpt-4o-mini")
+                self.assertNotIn("reasoning", fake_responses.calls[0])
+                self.assertEqual(result.metadata["model"], "gpt-4o-mini")
                 self.assertNotIn("selected_types", json.dumps(schema))
                 self.assertEqual(
                     request_context["requested_resource_types"], [resource_type]
@@ -806,7 +812,11 @@ class WorkflowTests(unittest.TestCase):
         cleared_configuration = {
             f"{prefix}_{suffix}": ""
             for prefix in ("COERIA", "AGIR_SOLO", "PRISM")
-            for suffix in ("OPENAI_MODEL", "OPENAI_REASONING_EFFORT")
+            for suffix in (
+                "OPENAI_MODEL",
+                "OPENAI_RESOURCE_MODEL",
+                "OPENAI_REASONING_EFFORT",
+            )
         }
         cleared_configuration.update(
             {
@@ -820,7 +830,9 @@ class WorkflowTests(unittest.TestCase):
             critic = OpenAIPedagogicalCritic()
 
         self.assertEqual(DEFAULT_MODEL, "gpt-5-nano")
+        self.assertEqual(DEFAULT_RESOURCE_MODEL, "gpt-4o-mini")
         self.assertEqual(generator.model, "gpt-5-nano")
+        self.assertEqual(generator.resource_model, "gpt-4o-mini")
         self.assertEqual(generator.reasoning_effort, "minimal")
         self.assertEqual(critic.model, "gpt-5-nano")
         self.assertEqual(critic.reasoning_effort, "minimal")

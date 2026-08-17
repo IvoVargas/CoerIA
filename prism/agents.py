@@ -48,6 +48,14 @@ from .providers import (
 
 
 DEFAULT_MODEL = "gpt-5-nano"
+DEFAULT_RESOURCE_MODEL = "gpt-4o-mini"
+
+
+def _supports_reasoning_effort(model: str) -> bool:
+    """Indica se o modelo aceita o parâmetro ``reasoning.effort``."""
+
+    normalized = model.strip().lower()
+    return normalized.startswith(("gpt-5", "o1", "o3", "o4"))
 
 
 class AgentGenerationError(RuntimeError):
@@ -1411,11 +1419,17 @@ class OpenAIPedagogicalAgent:
         self,
         model: str | None = None,
         *,
+        resource_model: str | None = None,
         client_factory: Callable[[], Any] | None = None,
         provider_name: str = "OpenAI Responses API",
         api_key_env: str = "OPENAI_API_KEY",
     ) -> None:
         self.model = model or config_value("OPENAI_MODEL", DEFAULT_MODEL)
+        self.resource_model = (
+            resource_model
+            or (model if model is not None else None)
+            or config_value("OPENAI_RESOURCE_MODEL", DEFAULT_RESOURCE_MODEL)
+        )
         self.timeout_seconds = float(config_value("OPENAI_TIMEOUT_SECONDS", "120"))
         self.max_retries = int(config_value("OPENAI_MAX_RETRIES", "2"))
         self.max_output_tokens = int(config_value("OPENAI_MAX_OUTPUT_TOKENS", "12000"))
@@ -1531,6 +1545,7 @@ class OpenAIPedagogicalAgent:
         total_tokens = 0
         attempts = self.validation_retries + 1
         guardrail_corrections: list[dict[str, Any]] = []
+        request_model = self.resource_model if stage == "resources" else self.model
 
         for attempt in range(1, attempts + 1):
             request_context = dict(base_context)
@@ -1538,13 +1553,12 @@ class OpenAIPedagogicalAgent:
                 request_context["automatic_validation_feedback"] = repair_feedback
 
             try:
-                response = client.responses.create(
-                    model=self.model,
-                    instructions=instructions,
-                    input=json.dumps(request_context, ensure_ascii=False),
-                    reasoning={"effort": self.reasoning_effort},
-                    max_output_tokens=self.max_output_tokens,
-                    text={
+                request_options = {
+                    "model": request_model,
+                    "instructions": instructions,
+                    "input": json.dumps(request_context, ensure_ascii=False),
+                    "max_output_tokens": self.max_output_tokens,
+                    "text": {
                         "format": {
                             "type": "json_schema",
                             "name": (
@@ -1557,7 +1571,12 @@ class OpenAIPedagogicalAgent:
                             "schema": _schema_for(stage, state),
                         }
                     },
-                )
+                }
+                if _supports_reasoning_effort(request_model):
+                    request_options["reasoning"] = {
+                        "effort": self.reasoning_effort
+                    }
+                response = client.responses.create(**request_options)
             except Exception as error:
                 raise AgentGenerationError(
                     f"Não foi possível gerar {STAGE_ROLES[stage]}. {error}"
@@ -1633,7 +1652,7 @@ class OpenAIPedagogicalAgent:
             duration_ms = round((perf_counter() - started_at) * 1000)
             metadata = {
                 "provider": self.provider_name,
-                "model": self.model,
+                "model": request_model,
                 "response_id": getattr(response, "id", "não disponível"),
                 "duration_ms": duration_ms,
                 "input_tokens": total_input_tokens,
