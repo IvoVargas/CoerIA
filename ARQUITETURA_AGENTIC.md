@@ -64,6 +64,14 @@ crítica: papel, modelo, identificador de resposta, duração, tokens, observaç
 número de reformulações. O rasto de auditoria regista também as decisões e o
 feedback humano.
 
+Cada versão regista ainda as versões ativas dos artefactos anteriores que lhe
+serviram de entrada. Quando o docente reabre uma etapa, o sistema apresenta o
+impacto antes de executar a alteração, guarda uma fotografia coerente do estado
+anterior e marca como desatualizadas as etapas dependentes. Estas propostas não
+são apagadas: permanecem consultáveis no histórico, mas deixam de estar ativas
+até serem novamente geradas ou validadas. Uma sessão anteriormente concluída
+regressa assim ao fluxo de autoria e exige uma nova validação final.
+
 ## Camada de interface
 
 A interface NiceGUI não executa diretamente regras pedagógicas. A camada

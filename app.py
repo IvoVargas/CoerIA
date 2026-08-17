@@ -41,7 +41,7 @@ from prism.presentation import (
     render_history_artifact,
 )
 from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
-from prism.workflow import REVISION_TARGETS, STAGE_LABELS, STAGE_ORDER
+from prism.workflow import STAGE_LABELS, STAGE_ORDER, revision_targets_for_state
 
 
 SESSION_STORE = SQLiteSessionStore()
@@ -121,11 +121,15 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   display: grid; grid-template-columns: repeat(9, minmax(126px, 1fr)); gap: 8px;
   width: 100%; overflow-x: auto; padding: 4px 2px 12px;
 }
-.stage-item { min-width: 126px; border-radius: 14px; padding: 12px; border: 1px solid var(--agir-border); background: white; }
+.stage-item { min-width: 126px; border-radius: 14px; padding: 12px; border: 1px solid var(--agir-border); background: white; color: inherit; text-align: left; }
 .stage-item.done { background: #e8f5ef; border-color: #b9dfcd; }
 .stage-item.current { color: white; background: linear-gradient(135deg, var(--agir-primary), var(--agir-secondary)); border-color: transparent; box-shadow: 0 8px 20px rgba(13, 118, 110, .2); }
+.stage-item.stale { background: #fff6e5; border-color: #e8bd6a; color: #6f4c12; }
+.stage-item.editable { cursor: pointer; font: inherit; }
+.stage-item.editable:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(31, 71, 75, .11); }
 .stage-number { font-size: .72rem; font-weight: 800; opacity: .72; }
 .stage-label { font-size: .78rem; line-height: 1.25; font-weight: 700; margin-top: 5px; }
+.stage-state { font-size: .67rem; line-height: 1.2; margin-top: 6px; opacity: .78; }
 .workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 22px; align-items: start; }
 .artifact-card { min-width: 0; padding: 26px 30px; overflow-x: auto; }
 .artifact-markdown { color: var(--agir-ink); line-height: 1.65; width: 100%; }
@@ -718,18 +722,111 @@ class AGIRSoloInterface:
 
     def _render_stage_track(self, state: dict[str, Any]) -> None:
         current_index = STAGE_ORDER.index(state["current_stage"])
+        revision_targets = set(revision_targets_for_state(state))
+        stored_statuses = state.get("stage_statuses", {})
+        status_labels = {
+            "approved": "Aprovado · selecionar para rever",
+            "awaiting_review": "Em validação",
+            "generating": "A gerar",
+            "stale": "Desatualizado · requer nova validação",
+            "pending": "Pendente",
+        }
         with ui.element("div").classes("stage-track"):
             for index, stage in enumerate(STAGE_ORDER):
-                status = (
+                stored_status = stored_statuses.get(stage)
+                if not stored_status:
+                    stored_status = (
+                        "approved"
+                        if index < current_index or state.get("status") == "completed"
+                        else "awaiting_review"
+                        if index == current_index
+                        else "pending"
+                    )
+                visual_status = (
                     "done"
-                    if index < current_index or state.get("status") == "completed"
+                    if stored_status == "approved"
                     else "current"
-                    if index == current_index
+                    if stored_status in {"awaiting_review", "generating"}
+                    else "stale"
+                    if stored_status == "stale"
                     else "pending"
                 )
-                with ui.element("div").classes(f"stage-item {status}"):
+                editable = stage in revision_targets
+                item = ui.element("button" if editable else "div").classes(
+                    f"stage-item {visual_status}" + (" editable" if editable else "")
+                )
+                if editable:
+                    item.props("type=button")
+                    item.on(
+                        "click",
+                        lambda _event, selected_stage=stage: self._open_revision_dialog(
+                            selected_stage
+                        ),
+                    )
+                with item:
                     ui.label(f"{index + 1:02d}").classes("stage-number")
                     ui.label(STAGE_LABELS[stage]).classes("stage-label")
+                    ui.label(status_labels.get(stored_status, stored_status)).classes(
+                        "stage-state"
+                    )
+
+    def _open_revision_dialog(self, target_stage: str) -> None:
+        try:
+            impact = self.service.revision_impact(self.state, target_stage)
+        except USER_ERRORS as error:
+            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            return
+
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6 gap-4"):
+            ui.label("REABRIR ETAPA").classes("eyebrow")
+            ui.label(impact["target_label"]).classes("section-title")
+            ui.label(
+                f"Será criada a versão {impact['next_version']} desta etapa. "
+                "O estado atualmente aprovado será preservado no histórico."
+            ).classes("text-sm")
+            if impact["was_completed"]:
+                ui.label(
+                    "A sessão deixará temporariamente o estado Concluído até uma "
+                    "nova validação final."
+                ).classes("soft-surface p-3 text-sm font-medium")
+            affected_labels = impact["affected_labels"]
+            if affected_labels:
+                ui.label("Etapas que ficarão desatualizadas:").classes("font-semibold")
+                with ui.column().classes("gap-1"):
+                    for label in affected_labels:
+                        ui.label(f"• {label}").classes("text-sm muted")
+            else:
+                ui.label(
+                    "Nenhuma etapa posterior já gerada será afetada."
+                ).classes("text-sm muted")
+            feedback = ui.textarea(
+                "Alteração a efetuar",
+                placeholder=(
+                    "Descreva de forma concreta o que pretende editar ou reformular."
+                ),
+            ).props("outlined autogrow").classes("w-full")
+
+            async def confirm_revision() -> None:
+                clean_feedback = str(feedback.value or "").strip()
+                if not clean_feedback:
+                    ui.notify(
+                        "Descreva a alteração antes de confirmar.",
+                        type="warning",
+                    )
+                    return
+                dialog.close()
+                await self.handle_reopen_stage(target_stage, clean_feedback)
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancelar", on_click=dialog.close).props(
+                    "flat no-caps"
+                ).classes("secondary-action")
+                ui.button(
+                    "Confirmar e criar nova versão",
+                    icon="edit_note",
+                    on_click=confirm_revision,
+                ).props("unelevated no-caps").classes("primary-action")
+        dialog.open()
 
     def _render_authoring_view(self, state: dict[str, Any]) -> None:
         with ui.element("div").classes("workspace-grid"):
@@ -791,7 +888,7 @@ class AGIRSoloInterface:
             revision_options = {
                 value: label for label, value in [
                     (STAGE_LABELS[key], key)
-                    for key in REVISION_TARGETS[state["current_stage"]]
+                    for key in revision_targets_for_state(state)
                 ]
             }
             revision_default = (
@@ -875,6 +972,24 @@ class AGIRSoloInterface:
             self.show_workspace(message)
             self.refresh_sessions()
             ui.notify(message, type="positive")
+        except USER_ERRORS as error:
+            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+        finally:
+            self.busy_dialog.close()
+
+    async def handle_reopen_stage(self, target_stage: str, feedback: str) -> None:
+        self._show_busy("A criar uma nova versão e a atualizar dependências…")
+        try:
+            self.state, message = await run.io_bound(
+                self.service.reopen_session,
+                self.state,
+                target_stage,
+                feedback,
+            )
+            self._set_form_data(self.service.restored_initial_fields(self.state))
+            self.show_workspace(message)
+            self.refresh_sessions()
+            ui.notify(message, type="positive", multi_line=True)
         except USER_ERRORS as error:
             ui.notify(str(error), type="negative", multi_line=True, timeout=0)
         finally:

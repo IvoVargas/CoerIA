@@ -27,9 +27,13 @@ class HistoryViewTests(unittest.TestCase):
             agent=agent,
         )
 
-        choices = [value for _label, value in app._history_choices(state)]
+        labelled_choices = app._history_choices(state)
+        choices = [value for _label, value in labelled_choices]
         self.assertIn("curriculum_analysis::0", choices)
         self.assertIn("curriculum_analysis::1", choices)
+        labels = {value: label for label, value in labelled_choices}
+        self.assertIn("(ativa)", labels["curriculum_analysis::1"])
+        self.assertIn("(desatualizada)", labels["learning_outcomes::0"])
         self.assertIn("versão 1", app.render_history_artifact("curriculum_analysis::0", state))
         self.assertIn("versão 2", app.render_history_artifact("curriculum_analysis::1", state))
 

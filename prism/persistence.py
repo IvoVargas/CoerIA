@@ -21,9 +21,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 5:
-        state["migrated_from_schema_version"] = previous_version
-    state["schema_version"] = 5
+    if previous_version < 6:
+        state.setdefault("migrated_from_schema_version", previous_version)
+    state["schema_version"] = 6
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -198,6 +198,37 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     versions = state.setdefault("versions", {})
     if state.get("outcome_taxonomy") and "outcome_taxonomy" not in versions:
         versions["outcome_taxonomy"] = [state["outcome_taxonomy"]]
+    from .workflow import STAGE_ORDER
+
+    current_stage = state.get("current_stage", STAGE_ORDER[0])
+    current_index = (
+        STAGE_ORDER.index(current_stage)
+        if current_stage in STAGE_ORDER
+        else 0
+    )
+    stage_statuses = state.setdefault("stage_statuses", {})
+    for index, stage in enumerate(STAGE_ORDER):
+        if stage in stage_statuses:
+            continue
+        if state.get("status") == "completed" and stage in state:
+            stage_statuses[stage] = "approved"
+        elif stage == current_stage and stage in state:
+            stage_statuses[stage] = "awaiting_review"
+        elif index < current_index and stage in state:
+            stage_statuses[stage] = "approved"
+        else:
+            stage_statuses[stage] = "pending"
+
+    active_versions = state.setdefault("active_versions", {})
+    version_dependencies = state.setdefault("version_dependencies", {})
+    for stage in STAGE_ORDER:
+        stage_versions = versions.get(stage, [])
+        if stage in state and stage_versions:
+            active_versions.setdefault(stage, len(stage_versions))
+        dependencies = version_dependencies.setdefault(stage, [])
+        while len(dependencies) < len(stage_versions):
+            dependencies.append({})
+    state.setdefault("revision_snapshots", [])
     return state
 
 

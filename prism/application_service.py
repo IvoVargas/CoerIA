@@ -13,7 +13,13 @@ from .ingestion import build_source_text, recover_direct_source_text
 from .models import CourseInput, validate_resource_types
 from .persistence import SQLiteSessionStore
 from .providers import configured_ai_provider
-from .workflow import STAGE_LABELS, create_session, review_current_stage
+from .workflow import (
+    STAGE_LABELS,
+    create_session,
+    reopen_stage,
+    review_current_stage,
+    revision_impact,
+)
 
 
 class ApplicationService:
@@ -169,6 +175,32 @@ class ApplicationService:
                 f"{STAGE_LABELS[updated['current_stage']]}."
             )
         return updated, message
+
+    @staticmethod
+    def revision_impact(
+        state: dict[str, Any] | None,
+        target_stage: str,
+    ) -> dict[str, Any]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        return revision_impact(state, target_stage)
+
+    def reopen_session(
+        self,
+        state: dict[str, Any] | None,
+        target_stage: str,
+        feedback: str,
+    ) -> tuple[dict[str, Any], str]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        updated = reopen_stage(state, target_stage, feedback)
+        updated = self._persist(updated)
+        return (
+            updated,
+            "Nova versão criada em "
+            f"{STAGE_LABELS[target_stage]}. As etapas dependentes ficaram "
+            "assinaladas para nova validação.",
+        )
 
     def export_session(
         self,

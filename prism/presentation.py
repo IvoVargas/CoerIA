@@ -292,21 +292,33 @@ def render_current_artifact(state: dict[str, Any]) -> str:
 def current_history_value(state: dict[str, Any]) -> str | None:
     stage = state.get("current_stage")
     versions = state.get("versions", {}).get(stage, [])
-    return f"{stage}::{len(versions) - 1}" if stage and versions else None
+    active_version = state.get("active_versions", {}).get(stage)
+    if stage and versions:
+        index = int(active_version or len(versions)) - 1
+        return f"{stage}::{index}"
+    return None
 
 
 def history_choices(state: dict[str, Any]) -> list[tuple[str, str]]:
     choices: list[tuple[str, str]] = []
     versions = state.get("versions", {})
-    current_stage = state.get("current_stage")
+    active_versions = state.get("active_versions", {})
+    stage_statuses = state.get("stage_statuses", {})
     for stage in STAGE_ORDER:
         for index, _artifact in enumerate(versions.get(stage, [])):
             value = f"{stage}::{index}"
-            is_current = (
-                stage == current_stage
+            is_active = active_versions.get(stage) == index + 1
+            is_latest_stale = (
+                stage_statuses.get(stage) == "stale"
                 and index == len(versions.get(stage, [])) - 1
             )
-            suffix = " (atual)" if is_current else ""
+            suffix = (
+                " (ativa)"
+                if is_active
+                else " (desatualizada)"
+                if is_latest_stale
+                else ""
+            )
             choices.append(
                 (f"{STAGE_LABELS[stage]} — versão {index + 1}{suffix}", value)
             )
@@ -328,9 +340,7 @@ def render_history_artifact(
 
     stage_versions = state["versions"][stage]
     metadata_versions = state.get("generation_metadata", {}).get(stage, [])
-    is_current = (
-        stage == state.get("current_stage") and index == len(stage_versions) - 1
-    )
+    is_current = state.get("active_versions", {}).get(stage) == index + 1
     return render_artifact(
         state,
         stage,

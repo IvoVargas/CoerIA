@@ -74,10 +74,15 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 
 - Parar depois de cada etapa para decisão do docente.
 - Permitir aprovação ou reformulação fundamentada.
-- Permitir regressar apenas a componentes pedagogicamente anteriores ou à
-  componente atual.
-- Eliminar do estado ativo artefactos dependentes que ficaram inválidos, sem
-  apagar as respetivas versões históricas.
+- Permitir selecionar e reabrir qualquer etapa de autoria já alcançada, mesmo
+  depois da conclusão da sessão.
+- Apresentar, antes da confirmação e de qualquer chamada à IA, a nova versão a
+  criar e as etapas posteriores que ficarão desatualizadas.
+- Criar uma nova versão da etapa reaberta e marcar como desatualizados os
+  artefactos dependentes, sem apagar as versões históricas nem a fotografia
+  coerente anterior à revisão.
+- Obrigar a percorrer e aprovar novamente as etapas afetadas até à validação
+  final.
 - Não alterar o estado persistido se a nova geração falhar.
 - Apresentar a validação final num ecrã separado antes da conclusão.
 
@@ -149,6 +154,11 @@ condições de utilização conhecidas.
 - Listar sessões existentes e permitir retomá-las pelo identificador.
 - Preservar todas as versões geradas, incluindo as substituídas.
 - Permitir consultar qualquer versão pela interface.
+- Registar a versão ativa de cada etapa e as versões dos artefactos usados como
+  dependências de cada nova geração.
+- Identificar na interface versões ativas e artefactos desatualizados.
+- Guardar uma fotografia coerente dos artefactos e versões ativas antes de cada
+  revisão em cascata.
 
 ### RF07 — Exportação
 
@@ -227,7 +237,10 @@ condições de utilização conhecidas.
 ## Critérios mínimos de aceitação
 
 - O fluxo completo termina apenas após nove aprovações humanas.
-- Uma revisão invalida o estado ativo a jusante e preserva versões antigas.
+- Uma revisão pode começar em qualquer etapa já alcançada, apresenta previamente
+  o impacto, invalida o estado ativo a jusante e preserva versões antigas.
+- Uma sessão concluída pode ser reaberta e só volta ao estado concluído depois
+  de todas as etapas afetadas serem novamente aprovadas.
 - Todos os resultados têm classificação na taxonomia exclusiva escolhida, avaliação
   e atividade formativa.
 - Cada resultado contém um único verbo de ação.

@@ -30,7 +30,9 @@ from prism.workflow import (
     STAGE_ORDER,
     create_session,
     create_test_agent,
+    reopen_stage,
     review_current_stage,
+    revision_impact,
     validate_alignment,
 )
 
@@ -120,6 +122,46 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("pedagogical_design", state)
 
+    def test_completed_session_can_reopen_a_previous_stage_safely(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        for _ in STAGE_ORDER:
+            state = review_current_stage(state, "approve", agent=self.agent)
+        self.assertEqual(state["status"], "completed")
+
+        previous_resources = deepcopy(state["resources"])
+        previous_active_versions = deepcopy(state["active_versions"])
+        impact = revision_impact(state, "learning_outcomes")
+
+        self.assertTrue(impact["was_completed"])
+        self.assertIn("resources", impact["affected_stages"])
+        self.assertEqual(impact["next_version"], 2)
+
+        updated = reopen_stage(
+            state,
+            "learning_outcomes",
+            "Tornar os resultados mais específicos.",
+            agent=self.agent,
+        )
+
+        self.assertEqual(state["status"], "completed")
+        self.assertEqual(updated["current_stage"], "learning_outcomes")
+        self.assertEqual(updated["status"], "awaiting_review")
+        self.assertEqual(
+            updated["stage_statuses"]["learning_outcomes"],
+            "awaiting_review",
+        )
+        self.assertEqual(updated["stage_statuses"]["resources"], "stale")
+        self.assertNotIn("resources", updated)
+        self.assertEqual(len(updated["versions"]["learning_outcomes"]), 2)
+        self.assertEqual(
+            updated["version_dependencies"]["learning_outcomes"][-1],
+            {"curriculum_analysis": 1},
+        )
+        snapshot = updated["revision_snapshots"][-1]
+        self.assertEqual(snapshot["previous_status"], "completed")
+        self.assertEqual(snapshot["active_versions"], previous_active_versions)
+        self.assertEqual(snapshot["artifacts"]["resources"], previous_resources)
+
     def test_session_store_persists_the_state_and_audit(self) -> None:
         state = create_session(self.course, agent=self.agent)
         with TemporaryDirectory() as temporary_directory:
@@ -162,12 +204,15 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 5)
+        self.assertEqual(restored["schema_version"], 6)
         self.assertEqual(restored["migrated_from_schema_version"], 1)
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
         self.assertTrue(restored["curriculum_analysis"]["objectives"])
         self.assertIn("program_name", restored["course"])
+        self.assertIn("stage_statuses", restored)
+        self.assertIn("active_versions", restored)
+        self.assertIn("revision_snapshots", restored)
 
     def test_session_id_survives_a_langgraph_transition(self) -> None:
         state = create_session(self.course, agent=self.agent)

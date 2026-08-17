@@ -63,6 +63,10 @@ class PrismState(TypedDict, total=False):
     resource_types: list[str]
     versions: dict[str, list[Any]]
     generation_metadata: dict[str, list[dict[str, Any]]]
+    version_dependencies: dict[str, list[dict[str, int]]]
+    active_versions: dict[str, int]
+    stage_statuses: dict[str, str]
+    revision_snapshots: list[dict[str, Any]]
 
 
 STAGE_LABELS = {
@@ -89,62 +93,13 @@ STAGE_ORDER = (
     "final_validation",
 )
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
+# Uma etapa pode reabrir qualquer etapa já alcançada. A validação dinâmica
+# abaixo exclui artefactos que ainda nunca foram gerados para a sessão.
 REVISION_TARGETS = {
-    "curriculum_analysis": ("curriculum_analysis",),
-    "learning_outcomes": (
-        "curriculum_analysis",
-        "learning_outcomes",
-    ),
-    "outcome_taxonomy": (
-        "learning_outcomes",
-        "outcome_taxonomy",
-    ),
-    "assessment_activities": (
-        "learning_outcomes",
-        "outcome_taxonomy",
-        "assessment_activities",
-    ),
-    "pedagogical_design": (
-        "learning_outcomes",
-        "outcome_taxonomy",
-        "assessment_activities",
-        "pedagogical_design",
-    ),
-    "teaching_activities": (
-        "learning_outcomes",
-        "outcome_taxonomy",
-        "assessment_activities",
-        "pedagogical_design",
-        "teaching_activities",
-    ),
-    "alignment_matrix": (
-        "learning_outcomes",
-        "outcome_taxonomy",
-        "assessment_activities",
-        "pedagogical_design",
-        "teaching_activities",
-    ),
-    "resources": (
-        "learning_outcomes",
-        "outcome_taxonomy",
-        "assessment_activities",
-        "pedagogical_design",
-        "teaching_activities",
-        "alignment_matrix",
-        "resources",
-    ),
-    "final_validation": (
-        "learning_outcomes",
-        "outcome_taxonomy",
-        "assessment_activities",
-        "pedagogical_design",
-        "teaching_activities",
-        "alignment_matrix",
-        "resources",
-        "final_validation",
-    ),
+    stage: STAGE_ORDER[: index + 1]
+    for index, stage in enumerate(STAGE_ORDER)
 }
 
 
@@ -807,10 +762,127 @@ def _record_decision(
     )
 
 
-def _clear_downstream_artifacts(state: PrismState, stage: str) -> None:
-    start_index = STAGE_ORDER.index(stage)
-    for artifact_key in STAGE_ORDER[start_index:]:
-        state.pop(artifact_key, None)
+def revision_targets_for_state(state: PrismState) -> tuple[str, ...]:
+    """Devolve as etapas de autoria já alcançadas que podem ser reabertas."""
+
+    current_stage = state.get("current_stage", STAGE_ORDER[0])
+    if current_stage not in STAGE_ORDER:
+        return ()
+    reached_index = (
+        len(STAGE_ORDER) - 1
+        if state.get("status") == "completed"
+        else STAGE_ORDER.index(current_stage)
+    )
+    versions = state.get("versions", {})
+    return tuple(
+        stage
+        for stage in STAGE_ORDER[: reached_index + 1]
+        if stage != "final_validation"
+        and (stage in state or bool(versions.get(stage)))
+    )
+
+
+def revision_impact(state: PrismState, target_stage: str) -> dict[str, Any]:
+    """Calcula o impacto antes de qualquer mutação ou chamada ao fornecedor."""
+
+    targets = revision_targets_for_state(state)
+    if target_stage not in targets:
+        raise ValueError("A etapa selecionada ainda não pode ser reaberta.")
+    target_index = STAGE_ORDER.index(target_stage)
+    generated_downstream = [
+        stage
+        for stage in STAGE_ORDER[target_index + 1 :]
+        if stage in state
+    ]
+    return {
+        "target_stage": target_stage,
+        "target_label": STAGE_LABELS[target_stage],
+        "next_version": len(state.get("versions", {}).get(target_stage, [])) + 1,
+        "affected_stages": generated_downstream,
+        "affected_labels": [STAGE_LABELS[stage] for stage in generated_downstream],
+        "was_completed": state.get("status") == "completed",
+    }
+
+
+def _archive_and_invalidate_revision(
+    state: PrismState,
+    target_stage: str,
+    feedback: str,
+) -> None:
+    """Preserva o estado coerente anterior e invalida a cadeia dependente."""
+
+    target_index = STAGE_ORDER.index(target_stage)
+    artifacts = {
+        stage: deepcopy(state[stage])
+        for stage in STAGE_ORDER
+        if stage in state
+    }
+    snapshots = deepcopy(state.get("revision_snapshots", []))
+    snapshots.append(
+        {
+            "revision_id": f"R{len(snapshots) + 1}",
+            "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "target_stage": target_stage,
+            "feedback": feedback,
+            "previous_status": state.get("status", ""),
+            "active_versions": deepcopy(state.get("active_versions", {})),
+            "resource_types": list(state.get("resource_types", [])),
+            "artifacts": artifacts,
+        }
+    )
+    state["revision_snapshots"] = snapshots
+
+    stage_statuses = dict(state.get("stage_statuses", {}))
+    active_versions = dict(state.get("active_versions", {}))
+    for stage in STAGE_ORDER[target_index:]:
+        existed = stage in state
+        state.pop(stage, None)
+        active_versions.pop(stage, None)
+        if stage == target_stage:
+            stage_statuses[stage] = "generating"
+        elif existed:
+            stage_statuses[stage] = "stale"
+        else:
+            stage_statuses[stage] = "pending"
+    state["stage_statuses"] = stage_statuses
+    state["active_versions"] = active_versions
+
+
+def reopen_stage(
+    state: PrismState,
+    target_stage: str,
+    feedback: str,
+    agent: PedagogicalAgent | None = None,
+) -> PrismState:
+    """Cria uma nova versão de uma etapa e preserva a versão coerente anterior."""
+
+    if state.get("status") not in {"awaiting_review", "completed"}:
+        raise ValueError("A sessão não está disponível para reabertura.")
+    clean_feedback = feedback.strip()
+    if not clean_feedback:
+        raise ValueError("Indique a alteração que pretende efetuar.")
+    revision_impact(state, target_stage)
+
+    updated = deepcopy(state)
+    origin_stage = updated.get("current_stage", target_stage)
+    _record_decision(
+        updated,
+        origin_stage,
+        f"Docente reabriu {STAGE_LABELS[target_stage]} para nova versão.",
+        clean_feedback,
+    )
+    feedback_by_stage = dict(updated.get("feedback", {}))
+    feedback_by_stage[target_stage] = clean_feedback
+    updated["feedback"] = feedback_by_stage
+    _archive_and_invalidate_revision(updated, target_stage, clean_feedback)
+    updated["current_stage"] = target_stage
+    updated["status"] = "generating"
+    updated["review"] = {
+        "stage": target_stage,
+        "label": STAGE_LABELS[target_stage],
+        "message": "A produzir uma nova versão após confirmação do impacto.",
+    }
+    return run_current_stage(updated, agent=agent)
 
 
 def run_current_stage(
@@ -875,6 +947,21 @@ def run_current_stage(
     versions = deepcopy(generated.get("versions", {}))
     versions.setdefault(stage, []).append(deepcopy(generated[stage]))
     generated["versions"] = versions
+    stage_index = STAGE_ORDER.index(stage)
+    active_versions = dict(generated.get("active_versions", {}))
+    dependencies = {
+        upstream_stage: int(active_versions[upstream_stage])
+        for upstream_stage in STAGE_ORDER[:stage_index]
+        if upstream_stage in active_versions
+    }
+    version_dependencies = deepcopy(generated.get("version_dependencies", {}))
+    version_dependencies.setdefault(stage, []).append(dependencies)
+    generated["version_dependencies"] = version_dependencies
+    active_versions[stage] = len(versions[stage])
+    generated["active_versions"] = active_versions
+    stage_statuses = dict(generated.get("stage_statuses", {}))
+    stage_statuses[stage] = "awaiting_review"
+    generated["stage_statuses"] = stage_statuses
     generated["status"] = "awaiting_review"
     generated["review"] = {
         "stage": stage,
@@ -904,6 +991,10 @@ def create_session(
         "audit": [],
         "versions": {},
         "generation_metadata": {},
+        "version_dependencies": {},
+        "active_versions": {},
+        "stage_statuses": {stage: "pending" for stage in STAGE_ORDER},
+        "revision_snapshots": [],
         "resource_types": selected_resource_types,
         "ai_provider": validate_ai_provider(
             ai_provider or configured_ai_provider()
@@ -929,7 +1020,7 @@ def review_current_stage(
         # Uma segunda submissão do botão final não deve criar uma exceção nem
         # duplicar a decisão já registada.
         return state
-    if state.get("status") != "awaiting_review":
+    if state.get("status") not in {"awaiting_review", "completed"}:
         raise ValueError("A sessão não está num ponto de validação humana.")
 
     current_stage = state["current_stage"]
@@ -949,6 +1040,9 @@ def review_current_stage(
                 "Selecione a componente que deve ser revista."
             )
         _record_decision(state, current_stage, "Docente aprovou a proposta.")
+        stage_statuses = dict(state.get("stage_statuses", {}))
+        stage_statuses[current_stage] = "approved"
+        state["stage_statuses"] = stage_statuses
         current_index = STAGE_ORDER.index(current_stage)
         if current_index == len(STAGE_ORDER) - 1:
             state["status"] = "completed"
@@ -972,19 +1066,4 @@ def review_current_stage(
         raise ValueError("Indique o feedback que fundamenta o pedido de reformulação.")
 
     target = revision_stage or current_stage
-    if target not in REVISION_TARGETS[current_stage]:
-        raise ValueError("A componente selecionada não pode ser revista a partir desta etapa.")
-
-    _record_decision(
-        state,
-        current_stage,
-        f"Docente solicitou revisão em {STAGE_LABELS[target]}.",
-        clean_feedback,
-    )
-    feedback_by_stage = dict(state.get("feedback", {}))
-    feedback_by_stage[target] = clean_feedback
-    state["feedback"] = feedback_by_stage
-    _clear_downstream_artifacts(state, target)
-    state["current_stage"] = target
-    state["status"] = "generating"
-    return run_current_stage(state, agent=agent)
+    return reopen_stage(state, target, clean_feedback, agent=agent)
