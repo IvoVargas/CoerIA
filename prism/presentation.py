@@ -245,8 +245,10 @@ def render_artifact(
                 item["outcome_id"],
                 ", ".join(item.get("objective_ids", [])),
                 ", ".join(item.get("content_ids", [])),
-                item.get("taxonomy", "—"),
-                item.get("taxonomy_level", "—"),
+                taxonomy_level_label(
+                    item.get("taxonomy", "SOLO"),
+                    item.get("taxonomy_level", "—"),
+                ),
                 ", ".join(item.get("assessment_ids", [])),
                 ", ".join(item.get("assessment_purposes", [])),
                 ", ".join(item.get("teaching_activity_ids", [])),
@@ -258,7 +260,7 @@ def render_artifact(
         ]
         return header + _table(
             [
-                "Resultado", "Objetivos", "Conteúdos", "Taxonomia", "Nível",
+                "Resultado", "Objetivos", "Conteúdos", "Nível",
                 "Avaliações", "Finalidade", "Atividades formativas",
                 "Recursos", "Alinhamento", "Justificação",
             ],

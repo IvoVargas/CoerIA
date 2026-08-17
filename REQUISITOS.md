@@ -64,9 +64,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Classificar o tipo de resultado e a importância da sua ligação aos conteúdos.
 - Usar um único verbo pertencente ao vocabulário controlado do nível declarado.
 - Na opção SOLO, não usar o nível pré-estrutural para formular resultados.
-- Na etapa de classificação, omitir a coluna redundante da taxonomia e mostrar
-  o nível num seletor com designação e número: `SOLO 2`–`SOLO 5` ou
-  `Bloom 1`–`Bloom 6`.
+- Nas etapas de classificação e matriz de alinhamento, omitir a coluna redundante
+  da taxonomia e mostrar o nível num seletor com designação e número:
+  `SOLO 2`–`SOLO 5` ou `Bloom 1`–`Bloom 6`.
 - Não estabelecer uma equivalência rígida entre níveis SOLO e Bloom.
 - Permitir relações muitos-para-muitos entre conteúdos, resultados, avaliações
   e atividades formativas.
