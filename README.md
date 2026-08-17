@@ -144,8 +144,12 @@ tentativas são contabilizadas nas métricas de duração e tokens.
 Cada tipo de recurso selecionado é gerado e validado numa chamada separada. Se
 um recurso falhar a validação de qualidade, apenas esse tipo é reformulado até
 ao limite `COERIA_RESOURCE_QUALITY_MAX_REVISIONS`; os recursos já válidos não
-voltam a ser gerados. A geração de imagens constitui uma operação posterior e
-separada da geração textual e estrutural da apresentação.
+voltam a ser gerados. Em cada chamada, o modelo devolve apenas o conteúdo do
+recurso corrente; a seleção e as estruturas vazias dos restantes recursos são
+acrescentadas deterministicamente pela aplicação. Isto impede o modelo de
+alterar a seleção do docente e reduz os tokens de saída. A geração de imagens
+constitui uma operação posterior e separada da geração textual e estrutural da
+apresentação.
 
 O ciclo gerador–crítico é controlado por `COERIA_AGENTIC_CRITIC_ENABLED`,
 `COERIA_AGENTIC_CRITIC_STAGES` e `COERIA_AGENTIC_MAX_REVISIONS`. A crítica é

@@ -26,7 +26,14 @@ from prism.curriculum import (
     taxonomy_verb_allowed,
 )
 from prism.branding import APP_NAME, config_value
-from prism.models import CourseInput, SUPPORTED_RESOURCE_TYPES
+from prism.models import (
+    CourseInput,
+    RESOURCE_PRACTICAL,
+    RESOURCE_PRESENTATION,
+    RESOURCE_TEST,
+    RESOURCE_WORKSHEET,
+    SUPPORTED_RESOURCE_TYPES,
+)
 from prism.persistence import SQLiteSessionStore
 from prism.workflow import (
     STAGE_ORDER,
@@ -432,6 +439,120 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue(2 <= len(slide["visual_items"]) <= 4)
             self.assertTrue(slide["visual_source"])
             self.assertTrue(slide["alt_text"])
+        _validate_artifact("resources", result.artifact, state)
+
+    def test_openai_agent_requests_only_the_current_resource_payload(self) -> None:
+        state = create_session(
+            self.course,
+            resource_types=list(SUPPORTED_RESOURCE_TYPES),
+            agent=self.agent,
+        )
+        for _ in range(6):
+            state = review_current_stage(state, "approve", agent=self.agent)
+
+        resource_fields = {
+            RESOURCE_PRESENTATION: "presentation_outline",
+            RESOURCE_WORKSHEET: "lesson_worksheet",
+            RESOURCE_TEST: "test",
+            RESOURCE_PRACTICAL: "practical_activity",
+        }
+        for resource_type, resource_field in resource_fields.items():
+            with self.subTest(resource_type=resource_type):
+                scoped_state = deepcopy(state)
+                scoped_state["resource_types"] = [resource_type]
+                scoped_state["resource_generation_scope"] = resource_type
+                for row in scoped_state["alignment_matrix"]:
+                    row["resource_types"] = [resource_type]
+                expected = self.agent.generate("resources", scoped_state).artifact
+                resource_payload = deepcopy(expected[resource_field])
+
+                class FakeResponses:
+                    def __init__(self):
+                        self.calls = []
+
+                    def create(self, **kwargs):
+                        self.calls.append(kwargs)
+                        return SimpleNamespace(
+                            output_text=json.dumps({"artifact": resource_payload}),
+                            id="response-resource",
+                            usage=SimpleNamespace(
+                                input_tokens=10,
+                                output_tokens=20,
+                                total_tokens=30,
+                            ),
+                        )
+
+                fake_responses = FakeResponses()
+                agent = OpenAIPedagogicalAgent(
+                    client_factory=lambda: SimpleNamespace(
+                        responses=fake_responses
+                    )
+                )
+                with patch.dict(
+                    environ,
+                    {
+                        "OPENAI_API_KEY": "test-key",
+                        "COERIA_OPENAI_VALIDATION_RETRIES": "0",
+                    },
+                    clear=False,
+                ):
+                    result = agent.generate("resources", scoped_state)
+
+                schema = fake_responses.calls[0]["text"]["format"]["schema"]
+                request_context = json.loads(fake_responses.calls[0]["input"])
+                self.assertNotIn("selected_types", json.dumps(schema))
+                self.assertEqual(
+                    request_context["requested_resource_types"], [resource_type]
+                )
+                self.assertIn(
+                    "Não devolvas selected_types",
+                    fake_responses.calls[0]["instructions"],
+                )
+                self.assertEqual(result.artifact["selected_types"], [resource_type])
+                self.assertEqual(result.artifact[resource_field], resource_payload)
+                self.assertEqual(
+                    result.metadata["resource_generation_scope"], resource_type
+                )
+                _validate_artifact("resources", result.artifact, scoped_state)
+
+    def test_scoped_resource_selection_is_not_controlled_by_the_model(self) -> None:
+        state = create_session(
+            self.course,
+            resource_types=[RESOURCE_TEST],
+            agent=self.agent,
+        )
+        for _ in range(6):
+            state = review_current_stage(state, "approve", agent=self.agent)
+        state["resource_generation_scope"] = RESOURCE_TEST
+        legacy_response = self.agent.generate("resources", state).artifact
+        legacy_response["selected_types"] = list(SUPPORTED_RESOURCE_TYPES)
+
+        fake_responses = SimpleNamespace(
+            create=lambda **_kwargs: SimpleNamespace(
+                output_text=json.dumps({"artifact": legacy_response}),
+                id="response-legacy-resource",
+                usage=SimpleNamespace(
+                    input_tokens=10,
+                    output_tokens=20,
+                    total_tokens=30,
+                ),
+            )
+        )
+        agent = OpenAIPedagogicalAgent(
+            client_factory=lambda: SimpleNamespace(responses=fake_responses)
+        )
+        with patch.dict(
+            environ,
+            {
+                "OPENAI_API_KEY": "test-key",
+                "COERIA_OPENAI_VALIDATION_RETRIES": "0",
+            },
+            clear=False,
+        ):
+            result = agent.generate("resources", state)
+
+        self.assertEqual(result.artifact["selected_types"], [RESOURCE_TEST])
+        self.assertTrue(result.artifact["test"]["questions"])
         _validate_artifact("resources", result.artifact, state)
 
     def test_taxonomy_guardrail_canonicalizes_level_from_approved_verb(self) -> None:

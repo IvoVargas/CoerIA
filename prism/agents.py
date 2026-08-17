@@ -33,6 +33,12 @@ from .curriculum import (
     taxonomy_verb_allowed,
     validate_taxonomy_choice,
 )
+from .models import (
+    RESOURCE_PRACTICAL,
+    RESOURCE_PRESENTATION,
+    RESOURCE_TEST,
+    RESOURCE_WORKSHEET,
+)
 from .providers import (
     AI_PROVIDER_IAEDU,
     AI_PROVIDER_OPENAI,
@@ -140,7 +146,55 @@ STAGE_REQUIREMENTS = {
 }
 
 
-def _schema_for(stage: str) -> dict[str, Any]:
+RESOURCE_ARTIFACT_FIELDS = {
+    RESOURCE_PRESENTATION: "presentation_outline",
+    RESOURCE_WORKSHEET: "lesson_worksheet",
+    RESOURCE_TEST: "test",
+    RESOURCE_PRACTICAL: "practical_activity",
+}
+
+RESOURCE_REQUIREMENTS = {
+    RESOURCE_PRESENTATION: (
+        "Lista de slides com title, bullets, outcome_id, visual_kind, "
+        "visual_title, visual_items, visual_source e alt_text. Cobre todos os "
+        "resultados de aprendizagem e inclui slides de capa e síntese."
+    ),
+    RESOURCE_WORKSHEET: (
+        "Objeto da ficha com title, overview, instructions e sections. Cada "
+        "secção contém heading, content, outcome_ids e activity e o conjunto "
+        "cobre todos os resultados de aprendizagem."
+    ),
+    RESOURCE_TEST: (
+        "Objeto do teste com title, instructions, total_points e questions. "
+        "Cada questão contém id, outcome_id, prompt, question_type, points e "
+        "answer_key; o conjunto cobre todos os resultados e total_points é a "
+        "soma exata dos pontos."
+    ),
+    RESOURCE_PRACTICAL: (
+        "Objeto da atividade com title, context, duration_minutes, materials, "
+        "steps, deliverables e criteria. As etapas cobrem todos os resultados "
+        "e os pesos positivos dos critérios totalizam exatamente 100."
+    ),
+}
+
+
+def _scoped_resource_type(state: dict[str, Any] | None) -> str | None:
+    if not state or not state.get("resource_generation_scope"):
+        return None
+    resource_type = str(state["resource_generation_scope"])
+    if resource_type not in RESOURCE_ARTIFACT_FIELDS:
+        raise AgentGenerationError("O tipo de recurso isolado não é suportado.")
+    if list(state.get("resource_types", [])) != [resource_type]:
+        raise AgentGenerationError(
+            "O âmbito interno da geração não corresponde ao recurso atual."
+        )
+    return resource_type
+
+
+def _schema_for(
+    stage: str,
+    state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Devolve um esquema JSON com um objeto obrigatório na raiz.
 
     A Responses API requer um objeto na raiz de um ``json_schema``. Algumas
@@ -476,10 +530,20 @@ def _schema_for(stage: str) -> dict[str, Any]:
             ],
         },
     }
+    artifact_schema = artifact_schemas[stage]
+    scoped_resource_type = (
+        _scoped_resource_type(state) if stage == "resources" else None
+    )
+    if scoped_resource_type:
+        resource_field = RESOURCE_ARTIFACT_FIELDS[scoped_resource_type]
+        artifact_schema = artifact_schemas["resources"]["properties"][
+            resource_field
+        ]
+
     return {
         "type": "object",
         "additionalProperties": False,
-        "properties": {"artifact": artifact_schemas[stage]},
+        "properties": {"artifact": artifact_schema},
         "required": ["artifact"],
     }
 
@@ -711,6 +775,51 @@ def _canonicalize_alignment_matrix(
                 {"outcome_id": item["outcome_id"], "changes": changes}
             )
     return normalized, corrections
+
+
+def _expand_scoped_resource_payload(
+    payload: Any,
+    state: dict[str, Any],
+) -> dict[str, Any]:
+    """Acrescenta deterministicamente a seleção e os recursos não pedidos."""
+
+    resource_type = _scoped_resource_type(state)
+    if resource_type is None:
+        return payload
+
+    resource_field = RESOURCE_ARTIFACT_FIELDS[resource_type]
+    resource_payload = (
+        payload[resource_field]
+        if isinstance(payload, dict) and resource_field in payload
+        else payload
+    )
+    artifact = {
+        "selected_types": [resource_type],
+        "presentation_outline": [],
+        "lesson_worksheet": {
+            "title": "",
+            "overview": "",
+            "instructions": "",
+            "sections": [],
+        },
+        "test": {
+            "title": "",
+            "instructions": "",
+            "total_points": 0,
+            "questions": [],
+        },
+        "practical_activity": {
+            "title": "",
+            "context": "",
+            "duration_minutes": 0,
+            "materials": [],
+            "steps": [],
+            "deliverables": [],
+            "criteria": [],
+        },
+    }
+    artifact[resource_field] = resource_payload
+    return artifact
 
 
 def _canonicalize_resource_visuals(
@@ -1255,6 +1364,14 @@ class OpenAIPedagogicalAgent:
         selected_taxonomy = validate_taxonomy_choice(
             state.get("course", {}).get("taxonomy_type", "SOLO")
         )
+        scoped_resource_type = (
+            _scoped_resource_type(state) if stage == "resources" else None
+        )
+        artifact_requirement = (
+            RESOURCE_REQUIREMENTS[scoped_resource_type]
+            if scoped_resource_type
+            else STAGE_REQUIREMENTS[stage]
+        )
         instructions = (
             f"És o {STAGE_ROLES[stage]} numa aplicação de autoria pedagógica assistida. "
             "Responde em português europeu. Trabalha exclusivamente a partir dos dados "
@@ -1263,7 +1380,7 @@ class OpenAIPedagogicalAgent:
             f"Taxonomia {selected_taxonomy}; nunca combines SOLO e Bloom. "
             "Quando houver feedback, aplica-o de modo explícito. "
             "A tua proposta será validada por um docente antes de o fluxo avançar. "
-            f"Formato obrigatório do campo artifact: {STAGE_REQUIREMENTS[stage]} "
+            f"Formato obrigatório do campo artifact: {artifact_requirement} "
             "Devolve o resultado no objeto raiz {\"artifact\": ...}."
         )
         if stage in {"outcome_taxonomy", "learning_outcomes"}:
@@ -1301,6 +1418,13 @@ class OpenAIPedagogicalAgent:
                 " Os únicos identificadores de resultados de aprendizagem permitidos são: "
                 f"{', '.join(outcome_ids)}. Confirma aritmeticamente as somas antes de responder."
             )
+            if scoped_resource_type:
+                instructions += (
+                    f" Gera exclusivamente {scoped_resource_type}. O campo artifact "
+                    "contém diretamente o conteúdo desse recurso. Não devolvas "
+                    "selected_types nem campos dos outros recursos; esses campos são "
+                    "controlados deterministicamente pela aplicação."
+                )
 
         started_at = perf_counter()
         try:
@@ -1340,9 +1464,14 @@ class OpenAIPedagogicalAgent:
                     text={
                         "format": {
                             "type": "json_schema",
-                            "name": f"coeria_{stage}",
+                            "name": (
+                                f"coeria_{stage}_"
+                                f"{RESOURCE_ARTIFACT_FIELDS[scoped_resource_type]}"
+                                if scoped_resource_type
+                                else f"coeria_{stage}"
+                            ),
                             "strict": True,
-                            "schema": _schema_for(stage),
+                            "schema": _schema_for(stage, state),
                         }
                     },
                 )
@@ -1358,9 +1487,15 @@ class OpenAIPedagogicalAgent:
                 total_tokens += getattr(usage, "total_tokens", 0) or 0
 
             artifact: Any = None
+            raw_artifact: Any = None
             try:
                 payload = json.loads(response.output_text)
-                artifact = payload["artifact"]
+                raw_artifact = payload["artifact"]
+                artifact = (
+                    _expand_scoped_resource_payload(raw_artifact, state)
+                    if stage == "resources"
+                    else raw_artifact
+                )
                 if stage == "outcome_taxonomy":
                     artifact, guardrail_corrections = (
                         _canonicalize_outcome_taxonomy(artifact, state)
@@ -1391,28 +1526,36 @@ class OpenAIPedagogicalAgent:
                     ) from error
                 repair_feedback = {
                     "instruction": (
-                        "Corrige o problema indicado e devolve novamente o artefacto "
-                        "completo, preservando o conteúdo que já está correto."
+                        "Corrige o problema indicado e devolve novamente apenas o "
+                        "recurso atual, preservando o conteúdo que já está correto."
+                        if scoped_resource_type
+                        else "Corrige o problema indicado e devolve novamente o "
+                        "artefacto completo, preservando o conteúdo que já está correto."
                     ),
                     "validation_error": validation_message,
-                    "previous_artifact": artifact,
+                    "previous_artifact": (
+                        raw_artifact if scoped_resource_type else artifact
+                    ),
                 }
                 continue
 
             duration_ms = round((perf_counter() - started_at) * 1000)
+            metadata = {
+                "provider": self.provider_name,
+                "model": self.model,
+                "response_id": getattr(response, "id", "não disponível"),
+                "duration_ms": duration_ms,
+                "input_tokens": total_input_tokens,
+                "output_tokens": total_output_tokens,
+                "total_tokens": total_tokens,
+                "validation_attempts": attempt,
+                "guardrail_corrections": guardrail_corrections,
+            }
+            if scoped_resource_type:
+                metadata["resource_generation_scope"] = scoped_resource_type
             return GenerationResult(
                 artifact=artifact,
-                metadata={
-                    "provider": self.provider_name,
-                    "model": self.model,
-                    "response_id": getattr(response, "id", "não disponível"),
-                    "duration_ms": duration_ms,
-                    "input_tokens": total_input_tokens,
-                    "output_tokens": total_output_tokens,
-                    "total_tokens": total_tokens,
-                    "validation_attempts": attempt,
-                    "guardrail_corrections": guardrail_corrections,
-                },
+                metadata=metadata,
             )
 
         raise AgentGenerationError("A geração terminou sem produzir uma proposta válida.")

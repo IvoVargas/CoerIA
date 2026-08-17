@@ -122,6 +122,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   evidências aprovadas, reservando à IA apenas a fundamentação pedagógica.
 - Executar verificações determinísticas sobre os recursos finais.
 - Gerar e validar separadamente cada tipo de recurso selecionado.
+- Pedir ao fornecedor apenas o conteúdo do recurso corrente e derivar
+  deterministicamente a seleção e os campos vazios dos restantes recursos.
 - Reformular automaticamente apenas o recurso inválido até ao limite
   configurado, sem repetir os restantes recursos já válidos.
 - Distinguir verificações aprovadas, avisos e erros bloqueantes.

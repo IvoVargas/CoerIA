@@ -109,8 +109,12 @@ apresentação, a ficha de aula, o teste e a atividade prática são gerados e
 validados separadamente, pela ordem mostrada ao docente. A interface comunica o
 tipo corrente e a posição `n/N` usando o mesmo indicador indeterminado. Uma falha
 de qualidade repete apenas o recurso afetado; no fim, o conjunto agregado é
-novamente verificado antes da revisão humana. A futura geração de imagens é uma
-operação distinta da geração textual e estrutural da apresentação.
+novamente verificado antes da revisão humana. O esquema enviado ao fornecedor
+contém apenas o recurso corrente: `selected_types`, os campos vazios dos outros
+recursos e a agregação final são controlados deterministicamente pela aplicação.
+Assim, o modelo não pode alterar a seleção do docente e a resposta não transporta
+estruturas desnecessárias. A futura geração de imagens é uma operação distinta
+da geração textual e estrutural da apresentação.
 
 Nas etapas de classificação e matriz de alinhamento, a interface deriva a
 taxonomia do estado da sessão, não a repete em cada linha e apresenta o nível

@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 from .agents import (
     GenerationResult,
     PedagogicalAgent,
+    RESOURCE_ARTIFACT_FIELDS,
     RuleBasedPedagogicalAgent,
     build_pedagogical_team,
     validate_artifact,
@@ -62,6 +63,7 @@ class PrismState(TypedDict, total=False):
     status: str
     review: dict[str, str]
     resource_types: list[str]
+    resource_generation_scope: str
     versions: dict[str, list[Any]]
     generation_metadata: dict[str, list[dict[str, Any]]]
     version_dependencies: dict[str, list[dict[str, int]]]
@@ -701,20 +703,13 @@ def create_test_agent() -> RuleBasedPedagogicalAgent:
     return RuleBasedPedagogicalAgent(DETERMINISTIC_GENERATORS)
 
 
-RESOURCE_ARTIFACT_FIELDS = {
-    RESOURCE_PRESENTATION: "presentation_outline",
-    RESOURCE_WORKSHEET: "lesson_worksheet",
-    RESOURCE_TEST: "test",
-    RESOURCE_PRACTICAL: "practical_activity",
-}
-
-
 def _resource_generation_scope(
     state: PrismState,
     resource_type: str,
 ) -> PrismState:
     scoped = deepcopy(state)
     scoped["resource_types"] = [resource_type]
+    scoped["resource_generation_scope"] = resource_type
     for row in scoped.get("alignment_matrix", []):
         row["resource_types"] = [resource_type]
     return scoped
