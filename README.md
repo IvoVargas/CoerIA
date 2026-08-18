@@ -124,16 +124,16 @@ ficheiro partilhado:
 
 Feche e reabra o terminal depois da configuração. Basta existir a chave do
 fornecedor que será usado. O BAT também lê diretamente as variáveis guardadas no
-perfil do utilizador. O perfil OpenAI predefinido privilegia o custo: o gerador
-das etapas do programa e o crítico usam
-[`gpt-5-nano`](https://developers.openai.com/api/docs/models/gpt-5-nano), com
-raciocínio `minimal`. Os recursos educativos usam
-[`gpt-4o-mini`](https://developers.openai.com/api/docs/models/gpt-4o-mini), sem o
-parâmetro de raciocínio, por oferecer maior robustez no seguimento das instruções
-estruturadas com um custo ainda reduzido. À data desta configuração, o primeiro
-custa USD 0,05/0,40 e o segundo USD 0,15/0,60 por milhão de tokens de
-entrada/saída. Os modelos podem ser alterados através de `COERIA_OPENAI_MODEL` e
-`COERIA_OPENAI_RESOURCE_MODEL`.
+perfil do utilizador. O perfil OpenAI predefinido usa `gpt-4o-mini` em todas as
+chamadas textuais da aplicação — proposta inicial, gerador pedagógico, crítico e
+recursos. Esta variante já era usada nos recursos pela maior robustez no
+seguimento de instruções estruturadas e passa agora a substituir `gpt-5-nano`
+nas restantes etapas, privilegiando consistência com um custo ainda reduzido.
+Como `gpt-4o-mini` não usa `reasoning.effort`, esse parâmetro só é enviado quando
+um modelo compatível for configurado. O modelo pode ser alterado globalmente
+através de `COERIA_OPENAI_MODEL`; `COERIA_OPENAI_RESOURCE_MODEL` e
+`COERIA_OPENAI_CRITIC_MODEL` permanecem disponíveis apenas para substituições
+específicas.
 
 O endpoint e o canal IAedu disponibilizados para esta aplicação já têm valores
 predefinidos no código. Podem ser substituídos através de

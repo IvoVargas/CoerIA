@@ -28,6 +28,7 @@ from .curriculum import (
     OUTCOME_TYPES,
     SOLO_LEVELS,
     TAXONOMY_CHOICES,
+    TAXONOMY_VERBS,
     taxonomy_catalogue_for_prompt,
     taxonomy_level_for_verb,
     taxonomy_verb_allowed,
@@ -47,8 +48,8 @@ from .providers import (
 )
 
 
-DEFAULT_MODEL = "gpt-5-nano"
-DEFAULT_RESOURCE_MODEL = "gpt-4o-mini"
+DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_RESOURCE_MODEL = DEFAULT_MODEL
 
 
 def _supports_reasoning_effort(model: str) -> bool:
@@ -551,6 +552,41 @@ def _schema_for(
         },
     }
     artifact_schema = artifact_schemas[stage]
+    if stage == "learning_outcomes" and state:
+        artifact_schema = deepcopy(artifact_schema)
+        selected_taxonomy = validate_taxonomy_choice(
+            state.get("course", {}).get("taxonomy_type", "SOLO")
+        )
+        allowed_verbs = [
+            verb
+            for verbs in TAXONOMY_VERBS[selected_taxonomy].values()
+            for verb in verbs
+        ]
+        content_ids = [
+            str(item.get("id", ""))
+            for item in state.get("curriculum_analysis", {}).get("contents", [])
+            if str(item.get("id", "")).strip()
+        ]
+        objective_ids = [
+            str(item.get("id", ""))
+            for item in state.get("curriculum_analysis", {}).get("objectives", [])
+            if str(item.get("id", "")).strip()
+        ]
+        item_schema = artifact_schema["items"]["properties"]
+        item_schema["action_verb"] = {
+            "type": "string",
+            "enum": allowed_verbs,
+        }
+        if content_ids:
+            item_schema["content_links"]["items"]["properties"]["content_id"] = {
+                "type": "string",
+                "enum": content_ids,
+            }
+        if objective_ids:
+            item_schema["objective_ids"]["items"] = {
+                "type": "string",
+                "enum": objective_ids,
+            }
     scoped_resource_type = (
         _scoped_resource_type(state) if stage == "resources" else None
     )
@@ -615,6 +651,21 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     for artifact_stage in stage_order[:stage_index]:
         if artifact_stage in state:
             context[artifact_stage] = state[artifact_stage]
+    if stage == "learning_outcomes":
+        curriculum = state.get("curriculum_analysis", {})
+        context["learning_outcome_coverage_rules"] = {
+            "required_content_ids": [
+                item["id"] for item in curriculum.get("contents", [])
+            ],
+            "required_objective_ids": [
+                item["id"] for item in curriculum.get("objectives", [])
+            ],
+            "rule": (
+                "A união de content_links.content_id deve ser exatamente a lista de "
+                "required_content_ids e a união de objective_ids deve ser exatamente a "
+                "lista de required_objective_ids. Não omitir nem inventar IDs."
+            ),
+        }
     if stage == "outcome_taxonomy":
         selected_taxonomy = validate_taxonomy_choice(
             state["course"].get("taxonomy_type", "SOLO")
@@ -1425,8 +1476,17 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             link["content_id"] for item in artifact for link in item.get("content_links", [])
         }
         if linked_contents != expected_contents:
+            missing = sorted(expected_contents - linked_contents)
+            unknown = sorted(linked_contents - expected_contents)
+            details = []
+            if missing:
+                details.append("em falta: " + ", ".join(missing))
+            if unknown:
+                details.append("IDs desconhecidos: " + ", ".join(unknown))
             raise AgentGenerationError(
-                "Os resultados devem cobrir todos e apenas os conteúdos curriculares."
+                "Os resultados devem cobrir todos e apenas os conteúdos curriculares"
+                + (" (" + "; ".join(details) + ")" if details else "")
+                + "."
             )
         expected_objectives = {
             item["id"] for item in state["curriculum_analysis"]["objectives"]
@@ -1437,8 +1497,17 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             for identifier in item.get("objective_ids", [])
         }
         if linked_objectives != expected_objectives:
+            missing = sorted(expected_objectives - linked_objectives)
+            unknown = sorted(linked_objectives - expected_objectives)
+            details = []
+            if missing:
+                details.append("em falta: " + ", ".join(missing))
+            if unknown:
+                details.append("IDs desconhecidos: " + ", ".join(unknown))
             raise AgentGenerationError(
-                "Os resultados devem cobrir todos e apenas os objetivos gerais."
+                "Os resultados devem cobrir todos e apenas os objetivos gerais"
+                + (" (" + "; ".join(details) + ")" if details else "")
+                + "."
             )
         taxonomy_type = validate_taxonomy_choice(
             state["course"].get("taxonomy_type", "SOLO")
@@ -1450,9 +1519,16 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             )
         ]
         if invalid:
+            invalid_by_id = {item["id"]: item for item in artifact if item["id"] in invalid}
+            details = "; ".join(
+                f"{identifier}: verbo='{invalid_by_id[identifier].get('action_verb', '')}', "
+                f"enunciado='{invalid_by_id[identifier].get('statement', '')}'"
+                for identifier in invalid
+            )
             raise AgentGenerationError(
-                "Cada resultado deve começar por exatamente um verbo de ação: "
-                + ", ".join(invalid)
+                "Cada resultado deve começar pelo action_verb declarado e conter "
+                "exatamente um verbo de ação controlado, sem coordenações do tipo "
+                "'e/ou + infinitivo'. Corrigir: " + details
             )
 
     if stage in {"assessment_activities", "teaching_activities"}:
@@ -1822,6 +1898,19 @@ class OpenAIPedagogicalAgent:
                     ensure_ascii=False,
                 )
                 + "."
+            )
+        if stage == "learning_outcomes":
+            curriculum = state.get("curriculum_analysis", {})
+            required_contents = [item["id"] for item in curriculum.get("contents", [])]
+            required_objectives = [item["id"] for item in curriculum.get("objectives", [])]
+            instructions += (
+                " Em cada resultado, statement começa exatamente pelo action_verb declarado. "
+                "Depois desse verbo usa complementos nominais sempre que possível: não uses "
+                "outro verbo do catálogo em nenhum ponto da frase e evita coordenações "
+                "'e + infinitivo' ou 'ou + infinitivo'. Antes de responder, faz uma verificação "
+                "de cobertura: a união de todos os content_links.content_id tem de ser exatamente "
+                f"{required_contents} e a união de todos os objective_ids tem de ser exatamente "
+                f"{required_objectives}. Não omitas nem inventes identificadores."
             )
         if stage == "outcome_taxonomy":
             instructions += (

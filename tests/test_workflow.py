@@ -924,12 +924,12 @@ class WorkflowTests(unittest.TestCase):
             generator = OpenAIPedagogicalAgent()
             critic = OpenAIPedagogicalCritic()
 
-        self.assertEqual(DEFAULT_MODEL, "gpt-5-nano")
+        self.assertEqual(DEFAULT_MODEL, "gpt-4o-mini")
         self.assertEqual(DEFAULT_RESOURCE_MODEL, "gpt-4o-mini")
-        self.assertEqual(generator.model, "gpt-5-nano")
+        self.assertEqual(generator.model, "gpt-4o-mini")
         self.assertEqual(generator.resource_model, "gpt-4o-mini")
         self.assertEqual(generator.reasoning_effort, "minimal")
-        self.assertEqual(critic.model, "gpt-5-nano")
+        self.assertEqual(critic.model, "gpt-4o-mini")
         self.assertEqual(critic.reasoning_effort, "minimal")
         self.assertNotIn(
             "resources", AgenticPedagogicalTeam.DEFAULT_CRITIC_STAGES
@@ -1008,6 +1008,40 @@ class WorkflowTests(unittest.TestCase):
                 "Analisar e comparar os dados recolhidos.", "analisar", "SOLO"
             )
         )
+
+    def test_learning_outcome_validation_reports_missing_content_ids(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        outcomes = deepcopy(state["learning_outcomes"])
+        missing_content = state["curriculum_analysis"]["contents"][-1]["id"]
+        for outcome in outcomes:
+            outcome["content_links"] = [
+                link
+                for link in outcome.get("content_links", [])
+                if link["content_id"] != missing_content
+            ]
+
+        with self.assertRaisesRegex(AgentGenerationError, missing_content):
+            _validate_artifact("learning_outcomes", outcomes, state)
+
+    def test_learning_outcome_schema_restricts_verbs_and_curricular_ids(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        schema = _schema_for("learning_outcomes", state)
+        properties = schema["properties"]["artifact"]["items"]["properties"]
+
+        allowed_contents = {
+            item["id"] for item in state["curriculum_analysis"]["contents"]
+        }
+        allowed_objectives = {
+            item["id"] for item in state["curriculum_analysis"]["objectives"]
+        }
+        self.assertEqual(
+            set(properties["content_links"]["items"]["properties"]["content_id"]["enum"]),
+            allowed_contents,
+        )
+        self.assertEqual(set(properties["objective_ids"]["items"]["enum"]), allowed_objectives)
+        self.assertIn("analisar", properties["action_verb"]["enum"])
 
     def test_agentic_team_revises_once_and_preserves_human_control(self) -> None:
         class FakeGenerator:

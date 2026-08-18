@@ -154,17 +154,15 @@ ferramentas externas ou execuções longas geridas pelo próprio runtime.
 
 ## Configuração
 
-O perfil OpenAI predefinido privilegia o custo durante o desenvolvimento: o
-gerador das etapas do programa e o crítico usam
-[`gpt-5-nano`](https://developers.openai.com/api/docs/models/gpt-5-nano) com
-raciocínio `minimal`. A geração dos recursos usa
-[`gpt-4o-mini`](https://developers.openai.com/api/docs/models/gpt-4o-mini), sem o
-parâmetro de raciocínio, para obter maior robustez no cumprimento dos esquemas e
-das ligações aos resultados de aprendizagem sem aumentar o custo das restantes
-etapas. A etapa de recursos fica fora do ciclo gerador–crítico por predefinição,
-pois já dispõe de validação determinística separada e aprovação humana. Esta
-opção evita uma segunda chamada de modelo por recurso e pode ser alterada nas
-variáveis abaixo.
+O perfil OpenAI predefinido usa `gpt-4o-mini` em todas as chamadas textuais da
+aplicação: assistência inicial, gerador pedagógico, crítico e geração de recursos.
+A uniformização aproveita a variante que já era usada nos recursos pela maior
+robustez no cumprimento de esquemas estruturados e substitui `gpt-5-nano` nas
+restantes etapas. `reasoning.effort` só é enviado quando o modelo configurado o
+suporta. A etapa de recursos continua fora do ciclo gerador–crítico por
+predefinição, pois já dispõe de validação determinística separada e aprovação
+humana. As variáveis específicas de crítico e recursos são mantidas como
+mecanismos opcionais de substituição.
 
 - `COERIA_AGENTIC_CRITIC_ENABLED`: ativa ou desativa o crítico;
 - `COERIA_AGENTIC_CRITIC_STAGES`: etapas submetidas ao crítico;
