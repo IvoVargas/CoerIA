@@ -92,7 +92,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.1.0 · SQLite")
+    await user.should_see("CoerIA v0.2.1 · SQLite")
 
 
 @pytest.mark.asyncio
