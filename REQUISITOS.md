@@ -181,8 +181,16 @@ Para cada imagem, o estado deve guardar o tipo de origem, o identificador da
 fonte e o texto alternativo. Uma imagem extraída deve conservar o nome do
 documento e, quando tecnicamente disponível, a página ou o slide; uma imagem
 gerada deve ser identificada como tal e conservar fornecedor, modelo, instrução,
-tamanho e qualidade de geração. O docente deve poder rever a imagem antes da
-aprovação do recurso. Não é permitido descarregar silenciosamente imagens da Web
+tamanho e qualidade de geração. A extração de PDF deve examinar todas as páginas
+antes de aplicar o limite do catálogo, eliminar imagens pequenas ou fragmentárias,
+normalizar os candidatos para PNG/JPEG RGB, equilibrar a seleção entre páginas e,
+quando objetos próximos constituam uma figura composta, preferir um recorte
+renderizado da figura completa. O docente deve selecionar, através de miniaturas,
+as imagens documentais que podem ser disponibilizadas ao LLM antes da criação da
+apresentação. Os bytes devolvidos por um gerador de imagens devem ser validados
+com Pillow; qualquer rejeição ou fallback para diagrama deve produzir um aviso
+explícito. O docente deve poder rever a imagem antes da aprovação do recurso.
+Não é permitido descarregar silenciosamente imagens da Web
 sem proveniência e condições de utilização conhecidas. A entrada direta de
 ficheiros de imagem isolados fica fora do âmbito do protótipo, uma vez que o
 PowerPoint final permanece editável e permite ao docente acrescentar esses

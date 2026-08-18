@@ -108,8 +108,15 @@ constituídos apenas por imagem necessitam de OCR externo.
 
 O CoerIA extrai o conteúdo textual destes documentos e, quando aplicável,
 imagens internas de `.pdf`, `.docx` e `.pptx`, conservando a proveniência
-documental disponível. A apresentação também pode recorrer a imagens geradas por
-IA mediante consentimento explícito do docente e validação antes da exportação.
+documental disponível. Nos PDFs, todas as páginas são examinadas antes de aplicar
+o limite do catálogo visual; imagens pequenas e fragmentos são filtrados, os
+candidatos são normalizados para PNG/JPEG RGB e distribuídos entre páginas.
+Objetos raster próximos que formem uma figura composta são renderizados como um
+recorte único. Antes de o LLM criar a apresentação, o docente vê miniaturas e
+escolhe explicitamente quais imagens documentais podem ser disponibilizadas ao
+agente. A apresentação também pode recorrer a imagens geradas por IA mediante
+consentimento explícito; os bytes gerados são validados pelo Pillow e qualquer
+fallback para diagrama é apresentado como aviso explícito.
 A entrada direta de ficheiros de imagem isolados não faz parte do âmbito do
 protótipo; essas imagens podem ser acrescentadas posteriormente ao PowerPoint
 editável.

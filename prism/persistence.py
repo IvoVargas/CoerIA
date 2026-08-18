@@ -21,9 +21,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 10:
+    if previous_version < 11:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 10
+    state["schema_version"] = 11
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -32,6 +32,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         {"mode": "bounded-generator-critic", "human_approval_required": True},
     )
     state.setdefault("source_images", [])
+    state.setdefault("selected_source_image_ids", [])
     state.setdefault("source_reduction", {})
     state.setdefault("generated_images", [])
     state.setdefault("ai_image_generation_enabled", False)
@@ -48,6 +49,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             slide.setdefault("visual_mode", "diagrama")
             slide.setdefault("visual_asset_id", "")
             slide.setdefault("visual_prompt", "")
+            slide.setdefault("visual_warning", "")
 
     migrate_presentation_visuals(state.get("resources"))
     version_map = state.get("versions", {})

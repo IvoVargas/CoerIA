@@ -1044,11 +1044,19 @@ def export_resource_package(state: dict[str, Any]) -> str:
             "visual_assets": {
                 "document_images": [
                     {
-                        key: asset.get(key)
-                        for key in (
-                            "id", "origin_type", "source_file", "source_location",
-                            "filename", "media_type", "approved",
-                        )
+                        **{
+                            key: asset.get(key)
+                            for key in (
+                                "id", "origin_type", "candidate_kind", "source_file",
+                                "source_location", "filename", "media_type", "width_px",
+                                "height_px", "image_mode", "approved",
+                            )
+                        },
+                        "selected_for_llm": str(asset.get("id", ""))
+                        in {
+                            str(item)
+                            for item in state.get("selected_source_image_ids", [])
+                        },
                     }
                     for asset in state.get("source_images", [])
                     if isinstance(asset, dict)

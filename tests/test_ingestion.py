@@ -108,7 +108,7 @@ class SourceIngestionTests(unittest.TestCase):
             image_path = directory / "figura.png"
             Image.new(
                 "RGB",
-                (60, 40),
+                (640, 400),
                 (20, 120, 160),
             ).save(image_path)
 
@@ -167,8 +167,92 @@ class SourceIngestionTests(unittest.TestCase):
             self.assertEqual(asset["origin_type"], "document")
             self.assertTrue(asset["filename"])
             self.assertTrue(asset["data_base64"])
+            self.assertTrue(asset["thumbnail_base64"])
+            self.assertEqual(asset["image_mode"], "RGB")
+            self.assertGreaterEqual(asset["width_px"], 240)
+            self.assertGreaterEqual(asset["height_px"], 160)
             self.assertFalse(asset["approved"])
             self.assertEqual(asset["alt_text"], "")
+
+    def test_pdf_catalogue_is_balanced_across_pages_after_full_scan(self) -> None:
+        import io
+        import pymupdf
+
+        def png_bytes(colour):
+            buffer = io.BytesIO()
+            Image.new("RGB", (500, 320), colour).save(buffer, format="PNG")
+            return buffer.getvalue()
+
+        with TemporaryDirectory() as temporary_directory:
+            pdf_path = Path(temporary_directory) / "catalogo.pdf"
+            document = pymupdf.open()
+            page1 = document.new_page(width=600, height=800)
+            page1.insert_image(pymupdf.Rect(40, 60, 230, 210), stream=png_bytes((180, 20, 20)))
+            page1.insert_image(pymupdf.Rect(350, 500, 550, 680), stream=png_bytes((20, 180, 20)))
+            page2 = document.new_page(width=600, height=800)
+            page2.insert_image(pymupdf.Rect(100, 180, 420, 430), stream=png_bytes((20, 20, 180)))
+            document.save(pdf_path)
+            document.close()
+
+            with patch.dict(environ, {"COERIA_MAX_EXTRACTED_IMAGES": "2"}, clear=False):
+                assets = extract_source_images([pdf_path])
+
+        self.assertEqual(len(assets), 2)
+        self.assertEqual(
+            {asset["source_location"] for asset in assets},
+            {"Página 1", "Página 2"},
+        )
+
+    def test_pdf_small_fragments_are_filtered_and_composite_is_rendered(self) -> None:
+        import io
+        import pymupdf
+
+        def png_bytes(size, colour):
+            buffer = io.BytesIO()
+            Image.new("RGB", size, colour).save(buffer, format="PNG")
+            return buffer.getvalue()
+
+        with TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+
+            filtered_path = directory / "filtrado.pdf"
+            document = pymupdf.open()
+            page = document.new_page(width=600, height=800)
+            page.insert_image(
+                pymupdf.Rect(20, 20, 50, 50),
+                stream=png_bytes((40, 40), (10, 10, 10)),
+            )
+            page.insert_image(
+                pymupdf.Rect(100, 120, 420, 360),
+                stream=png_bytes((640, 400), (100, 140, 180)),
+            )
+            document.save(filtered_path)
+            document.close()
+            filtered = extract_source_images([filtered_path])
+
+            composite_path = directory / "composta.pdf"
+            document = pymupdf.open()
+            page = document.new_page(width=600, height=800)
+            page.insert_image(
+                pymupdf.Rect(100, 160, 260, 360),
+                stream=png_bytes((500, 400), (180, 100, 80)),
+            )
+            page.insert_image(
+                pymupdf.Rect(270, 160, 430, 360),
+                stream=png_bytes((500, 400), (80, 100, 180)),
+            )
+            document.save(composite_path)
+            document.close()
+            composite = extract_source_images([composite_path])
+
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["candidate_kind"], "embedded")
+        self.assertEqual(filtered[0]["image_mode"], "RGB")
+
+        self.assertEqual(len(composite), 1)
+        self.assertEqual(composite[0]["candidate_kind"], "composite_render")
+        self.assertEqual(composite[0]["composite_object_count"], 2)
+        self.assertEqual(composite[0]["image_mode"], "RGB")
 
     def test_raw_source_can_exceed_normal_context_limit_for_later_reduction(self) -> None:
         with patch.dict(

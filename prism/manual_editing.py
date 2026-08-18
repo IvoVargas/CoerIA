@@ -418,11 +418,16 @@ def editor_reference_options(
         }
     if field.key == "visual_asset_id":
         options = {"": "Sem imagem documental"}
+        selected_source_ids = {
+            str(item).strip()
+            for item in state.get("selected_source_image_ids", [])
+            if str(item).strip()
+        }
         for asset in state.get("source_images", []):
             if not isinstance(asset, dict):
                 continue
             identifier = str(asset.get("id", "")).strip()
-            if not identifier:
+            if not identifier or identifier not in selected_source_ids:
                 continue
             source_file = str(asset.get("source_file", "")).strip()
             location = str(asset.get("source_location", "")).strip()

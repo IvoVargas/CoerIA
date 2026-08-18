@@ -1095,6 +1095,70 @@ class AGIRSoloInterface:
                 ).props("unelevated no-caps").classes("primary-action")
         dialog.open()
 
+    def _render_source_image_selector(
+        self, state: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Mostra miniaturas para seleção humana antes de gerar a apresentação."""
+
+        assets = [
+            asset
+            for asset in state.get("source_images", [])
+            if isinstance(asset, dict) and str(asset.get("id", "")).strip()
+        ]
+        if not assets:
+            return {}
+
+        selected_ids = {
+            str(item).strip()
+            for item in state.get("selected_source_image_ids", [])
+            if str(item).strip()
+        }
+        controls: dict[str, Any] = {}
+        ui.separator().classes("my-3")
+        ui.label("IMAGENS DOCUMENTAIS CANDIDATAS").classes("eyebrow")
+        ui.label(
+            "Selecione as imagens que podem ser disponibilizadas ao LLM para criar a "
+            "apresentação. Nenhuma imagem documental é enviada ao agente sem esta "
+            "seleção humana prévia."
+        ).classes("text-sm muted mb-3")
+        with ui.row().classes("w-full gap-3 items-stretch flex-wrap"):
+            for asset in assets:
+                identifier = str(asset.get("id", "")).strip()
+                thumbnail = str(
+                    asset.get("thumbnail_base64") or asset.get("data_base64", "")
+                ).strip()
+                media_type = str(
+                    asset.get("thumbnail_media_type") or asset.get("media_type", "image/png")
+                ).strip()
+                with ui.card().classes("surface p-3").style("width: min(100%, 300px);"):
+                    if thumbnail:
+                        ui.image(f"data:{media_type};base64,{thumbnail}").classes(
+                            "w-full rounded"
+                        ).style(
+                            "height: 160px; object-fit: contain; background: #f4f7fa;"
+                        )
+                    source = str(asset.get("source_file", "")).strip()
+                    location = str(asset.get("source_location", "")).strip()
+                    ui.label(source or "Documento de referência").classes(
+                        "font-semibold text-sm"
+                    )
+                    if location:
+                        ui.label(location).classes("text-xs muted")
+                    kind = str(asset.get("candidate_kind", "embedded"))
+                    if kind == "composite_render":
+                        ui.label("Figura composta · recorte renderizado").classes(
+                            "text-xs muted"
+                        )
+                    width = asset.get("width_px")
+                    height = asset.get("height_px")
+                    if width and height:
+                        ui.label(f"{width}×{height} px · RGB").classes("text-xs muted")
+                    controls[identifier] = ui.checkbox(
+                        "Disponibilizar ao LLM",
+                        value=identifier in selected_ids,
+                    ).classes("mt-1")
+        return controls
+
     def _render_selected_image_previews(
         self, state: dict[str, Any]
     ) -> None:
@@ -1120,10 +1184,24 @@ class AGIRSoloInterface:
             asset = assets.get(str(slide.get("visual_asset_id", "")).strip())
             if asset is not None:
                 selected.append((index, slide, asset))
-        if not selected:
+        warnings = [
+            (index, str(slide.get("visual_warning", "")).strip())
+            for index, slide in enumerate(slides, start=1)
+            if isinstance(slide, dict) and str(slide.get("visual_warning", "")).strip()
+        ]
+        if not selected and not warnings:
             return
 
         ui.separator().classes("my-4")
+        if warnings:
+            ui.label("AVISOS VISUAIS").classes("eyebrow")
+            with ui.column().classes("w-full gap-2 mb-3"):
+                for slide_number, warning in warnings:
+                    ui.label(f"Slide {slide_number}: {warning}").classes(
+                        "text-sm text-orange-900 bg-orange-50 rounded p-2 w-full"
+                    )
+        if not selected:
+            return
         ui.label("IMAGENS SELECIONADAS").classes("eyebrow")
         ui.label(
             "Confirme visualmente estas imagens antes de aprovar os recursos. "
@@ -1516,6 +1594,7 @@ class AGIRSoloInterface:
                 )
 
             resource_checks: dict[str, Any] = {}
+            source_image_checks: dict[str, Any] = {}
             if state["current_stage"] == "alignment_matrix":
                 ui.separator().classes("my-2")
                 ui.label("Confirmar recursos").classes("font-semibold")
@@ -1528,6 +1607,7 @@ class AGIRSoloInterface:
                         resource_type,
                         value=resource_type in selected,
                     )
+                source_image_checks = self._render_source_image_selector(state)
             elif state["current_stage"] == "resources":
                 ui.separator().classes("my-2")
                 ui.label("Recursos confirmados").classes("font-semibold")
@@ -1541,11 +1621,24 @@ class AGIRSoloInterface:
                     if resource_checks
                     else None
                 )
+                selected_source_image_ids = None
+                if source_image_checks:
+                    selected_resources = set(resources or state.get("resource_types", []))
+                    selected_source_image_ids = (
+                        [
+                            identifier
+                            for identifier, checkbox in source_image_checks.items()
+                            if checkbox.value
+                        ]
+                        if "Apresentação PowerPoint" in selected_resources
+                        else []
+                    )
                 await self.handle_review(
                     "approve" if final else str(decision.value),
                     "" if final else str(feedback.value or ""),
                     state["current_stage"],
                     resources,
+                    selected_source_image_ids,
                 )
 
             ui.button(
@@ -1560,6 +1653,7 @@ class AGIRSoloInterface:
         feedback: str,
         revision_stage: str,
         resource_types: list[str] | None,
+        selected_source_image_ids: list[str] | None = None,
     ) -> None:
         progress_updates: SimpleQueue[str] = SimpleQueue()
         if decision == "revise":
@@ -1590,6 +1684,7 @@ class AGIRSoloInterface:
                 feedback,
                 revision_stage,
                 resource_types,
+                selected_source_image_ids,
                 progress_updates.put,
             )
             self.viewed_stage = None

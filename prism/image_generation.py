@@ -9,6 +9,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from .branding import APP_NAME, config_value
+from .image_utils import ImageValidationError, build_thumbnail, normalise_image_bytes
 
 
 DEFAULT_IMAGE_MODEL = "gpt-image-2"
@@ -140,13 +141,23 @@ class OpenAIImageGenerator:
             encoded = str(getattr(data[0], "b64_json", "") or "").strip() if data else ""
             if not encoded:
                 raise ImageGenerationError("O fornecedor não devolveu dados de imagem.")
-            # Garante que o conteúdo devolvido é Base64 válido antes de o persistir.
-            base64.b64decode(encoded, validate=True)
+            try:
+                raw_bytes = base64.b64decode(encoded, validate=True)
+                normalized = normalise_image_bytes(
+                    raw_bytes,
+                    filename=f"coeria_slide_{slide_number}_ia.png",
+                )
+            except (ValueError, ImageValidationError) as error:
+                raise ImageGenerationError(
+                    "O gerador devolveu bytes de imagem inválidos ou não descodificáveis "
+                    f"pelo Pillow: {error}"
+                ) from error
         except ImageGenerationError:
             raise
         except Exception as error:
             raise ImageGenerationError(f"Falha na geração da imagem: {error}") from error
 
+        normalized_bytes = bytes(normalized["data"])
         identifier = f"ai-{uuid4().hex[:20]}"
         return {
             "id": identifier,
@@ -156,13 +167,17 @@ class OpenAIImageGenerator:
             "prompt": prompt,
             "size": self.size,
             "quality": self.quality,
-            "output_format": "png",
-            "filename": f"coeria_slide_{slide_number}_ia.png",
-            "media_type": "image/png",
-            "data_base64": encoded,
+            "output_format": str(normalized["media_type"]).split("/")[-1],
+            "filename": str(normalized["filename"]),
+            "media_type": str(normalized["media_type"]),
+            "data_base64": base64.b64encode(normalized_bytes).decode("ascii"),
+            "width_px": int(normalized["width_px"]),
+            "height_px": int(normalized["height_px"]),
+            "image_mode": "RGB",
             "alt_text": alt_text,
             "approved": False,
             "created_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            **build_thumbnail(normalized_bytes),
         }
 
 
@@ -196,10 +211,11 @@ def enrich_presentation_with_ai_images(
         if not enabled:
             slide["visual_mode"] = "diagrama"
             slide["visual_asset_id"] = ""
-            slide["visual_source"] = (
-                f"Diagrama nativo gerado pelo {APP_NAME}; a geração de imagens por IA "
-                "não foi autorizada nesta sessão."
+            slide["visual_warning"] = (
+                "Fallback para diagrama: a geração de imagens por IA não foi autorizada "
+                "nesta sessão."
             )
+            slide["visual_source"] = f"Diagrama nativo gerado pelo {APP_NAME}."
             records.append(
                 {
                     "slide": index,
@@ -212,10 +228,11 @@ def enrich_presentation_with_ai_images(
         if len(generated_assets) >= maximum:
             slide["visual_mode"] = "diagrama"
             slide["visual_asset_id"] = ""
-            slide["visual_source"] = (
-                f"Diagrama nativo gerado pelo {APP_NAME}; foi atingido o limite "
-                "configurado de imagens geradas por IA."
+            slide["visual_warning"] = (
+                "Fallback para diagrama: foi atingido o limite configurado de imagens "
+                "geradas por IA."
             )
+            slide["visual_source"] = f"Diagrama nativo gerado pelo {APP_NAME}."
             records.append(
                 {
                     "slide": index,
@@ -239,10 +256,11 @@ def enrich_presentation_with_ai_images(
         except ImageGenerationError as error:
             slide["visual_mode"] = "diagrama"
             slide["visual_asset_id"] = ""
-            slide["visual_source"] = (
-                f"Diagrama nativo gerado pelo {APP_NAME}; não foi possível obter "
-                "a imagem por IA."
+            slide["visual_warning"] = (
+                "Fallback para diagrama: a imagem gerada por IA foi rejeitada. "
+                + str(error)
             )
+            slide["visual_source"] = f"Diagrama nativo gerado pelo {APP_NAME}."
             records.append(
                 {
                     "slide": index,
@@ -259,6 +277,7 @@ def enrich_presentation_with_ai_images(
 
         generated_assets.append(asset)
         slide["visual_asset_id"] = asset["id"]
+        slide["visual_warning"] = ""
         slide["visual_source"] = (
             f"Imagem gerada por IA — {asset['provider']}, modelo {asset['model']}."
         )

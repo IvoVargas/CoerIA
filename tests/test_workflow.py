@@ -284,7 +284,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 10)
+        self.assertEqual(restored["schema_version"], 11)
         self.assertEqual(restored["migrated_from_schema_version"], 1)
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
@@ -293,6 +293,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("stage_statuses", restored)
         self.assertIn("active_versions", restored)
         self.assertIn("revision_snapshots", restored)
+        self.assertEqual(restored["selected_source_image_ids"], [])
 
     def test_session_id_survives_a_langgraph_transition(self) -> None:
         state = create_session(self.course, agent=self.agent)

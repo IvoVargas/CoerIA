@@ -50,6 +50,7 @@ class PrismState(TypedDict, total=False):
     session_id: str
     source_input_text: str
     source_images: list[dict[str, Any]]
+    selected_source_image_ids: list[str]
     source_reduction: dict[str, Any]
     generated_images: list[dict[str, Any]]
     ai_image_generation_enabled: bool
@@ -124,7 +125,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 # Uma etapa pode reabrir qualquer etapa já alcançada. A validação dinâmica
 # abaixo exclui artefactos que ainda nunca foram gerados para a sessão.
@@ -1498,6 +1499,7 @@ def create_session(
         "revision_snapshots": [],
         "resource_types": selected_resource_types,
         "generated_images": [],
+        "selected_source_image_ids": [],
         "ai_image_generation_enabled": bool(ai_image_generation_enabled),
         "ai_provider": validate_ai_provider(
             ai_provider or configured_ai_provider()

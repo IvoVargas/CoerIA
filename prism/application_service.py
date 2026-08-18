@@ -180,6 +180,7 @@ class ApplicationService:
         feedback: str = "",
         revision_stage: str | None = None,
         resource_types: list[str] | None = None,
+        selected_source_image_ids: list[str] | None = None,
         progress_callback: Callable[[str], None] | None = None,
     ) -> tuple[dict[str, Any], str]:
         if not state:
@@ -204,6 +205,30 @@ class ApplicationService:
                 raise ValueError(
                     "Para alterar os recursos, solicite a revisão da matriz de alinhamento."
                 )
+
+        if selected_source_image_ids is not None:
+            if state.get("current_stage") != "alignment_matrix":
+                raise ValueError(
+                    "A seleção de imagens documentais só pode ser alterada antes da geração dos recursos."
+                )
+            if working_state is state:
+                working_state = deepcopy(state)
+            available_ids = {
+                str(item.get("id", "")).strip()
+                for item in working_state.get("source_images", [])
+                if isinstance(item, dict) and str(item.get("id", "")).strip()
+            }
+            requested_ids = [str(item).strip() for item in selected_source_image_ids if str(item).strip()]
+            unknown = [item for item in requested_ids if item not in available_ids]
+            if unknown:
+                raise ValueError(
+                    "A seleção contém imagens que já não estão disponíveis: "
+                    + ", ".join(unknown)
+                )
+            presentation_selected = RESOURCE_PRESENTATION in working_state.get("resource_types", [])
+            working_state["selected_source_image_ids"] = (
+                list(dict.fromkeys(requested_ids)) if presentation_selected else []
+            )
 
         try:
             updated = review_current_stage(

@@ -408,10 +408,17 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             "sintese",
         }
         presentation_slides = resource_data.get("presentation_outline", [])
+        selected_source_ids = {
+            str(item).strip()
+            for item in state.get("selected_source_image_ids", [])
+            if str(item).strip()
+        }
         source_asset_ids = {
             str(item.get("id", ""))
             for item in state.get("source_images", [])
-            if isinstance(item, dict) and str(item.get("id", "")).strip()
+            if isinstance(item, dict)
+            and str(item.get("id", "")).strip()
+            and str(item.get("id", "")).strip() in selected_source_ids
         }
         generated_assets = {
             str(item.get("id", "")): item

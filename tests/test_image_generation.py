@@ -105,6 +105,10 @@ class ImageGenerationTests(unittest.TestCase):
         self.assertTrue(asset["prompt"])
         self.assertEqual(asset["size"], "1536x864")
         self.assertEqual(asset["quality"], "low")
+        self.assertEqual(asset["image_mode"], "RGB")
+        self.assertTrue(asset["thumbnail_base64"])
+        self.assertEqual(asset["width_px"], 320)
+        self.assertEqual(asset["height_px"], 180)
         self.assertFalse(asset["approved"])
         slide = artifact["presentation_outline"][1]
         self.assertEqual(slide["visual_mode"], "ia")
@@ -115,6 +119,27 @@ class ImageGenerationTests(unittest.TestCase):
         self.assertEqual(call["size"], "1536x864")
         self.assertEqual(call["quality"], "low")
         self.assertEqual(call["output_format"], "png")
+
+    def test_invalid_generated_bytes_fall_back_with_explicit_warning(self) -> None:
+        encoded = base64.b64encode(b"isto-nao-e-uma-imagem").decode("ascii")
+        fake_client = _FakeClient(encoded)
+        generator = OpenAIImageGenerator(
+            model="gpt-image-test",
+            client_factory=lambda: fake_client,
+        )
+        artifact, assets, records = enrich_presentation_with_ai_images(
+            self._state(),
+            self._artifact(),
+            generator=generator,
+        )
+
+        self.assertEqual(assets, [])
+        self.assertEqual(records[0]["status"], "failed")
+        slide = artifact["presentation_outline"][1]
+        self.assertEqual(slide["visual_mode"], "diagrama")
+        self.assertEqual(slide["visual_asset_id"], "")
+        self.assertIn("Fallback para diagrama", slide["visual_warning"])
+        self.assertIn("Pillow", slide["visual_warning"])
 
     def test_generation_without_authorization_falls_back_to_diagram(self) -> None:
         state = self._state()

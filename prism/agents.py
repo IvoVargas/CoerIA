@@ -705,8 +705,15 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         "resource_types", []
     ):
         source_images = []
+        selected_source_ids = {
+            str(item).strip()
+            for item in state.get("selected_source_image_ids", [])
+            if str(item).strip()
+        }
         for asset in state.get("source_images", []):
             if not isinstance(asset, dict) or not str(asset.get("id", "")).strip():
+                continue
+            if str(asset.get("id", "")).strip() not in selected_source_ids:
                 continue
             source_images.append(
                 {
@@ -715,6 +722,9 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                     "source_location": str(asset.get("source_location", "")),
                     "filename": str(asset.get("filename", "")),
                     "media_type": str(asset.get("media_type", "")),
+                    "candidate_kind": str(asset.get("candidate_kind", "embedded")),
+                    "width_px": int(asset.get("width_px", 0) or 0),
+                    "height_px": int(asset.get("height_px", 0) or 0),
                 }
             )
         context["source_image_catalogue"] = source_images
@@ -1206,10 +1216,17 @@ def _canonicalize_resource_visuals(
         for item in state.get("learning_outcomes", [])
         if item.get("id")
     }
+    selected_source_ids = {
+        str(item).strip()
+        for item in state.get("selected_source_image_ids", [])
+        if str(item).strip()
+    }
     source_assets = {
         str(item.get("id", "")): item
         for item in state.get("source_images", [])
-        if isinstance(item, dict) and str(item.get("id", "")).strip()
+        if isinstance(item, dict)
+        and str(item.get("id", "")).strip()
+        and str(item.get("id", "")).strip() in selected_source_ids
     }
 
     def clean_text(value: Any) -> str:
@@ -1359,6 +1376,7 @@ def _canonicalize_resource_visuals(
                 )
         canonical = {
             "visual_mode": visual_mode,
+            "visual_warning": clean_text(slide.get("visual_warning")),
             "visual_asset_id": visual_asset_id,
             "visual_prompt": visual_prompt,
             "visual_kind": canonical_kind,
