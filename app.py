@@ -197,6 +197,7 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table .q-field__control { min-height: 40px; }
 .manual-table .q-field__native { line-height: 1.35; padding-top: 7px; padding-bottom: 7px; }
 .decision-card { padding: 22px; position: sticky; top: 84px; }
+.consultation-card { padding: 20px 22px; }
 .info-chip { background: #edf5f3 !important; color: #24575d !important; font-weight: 650; }
 .status-banner { border-left: 4px solid var(--agir-primary); }
 .final-hero { padding: 28px; color: white; background: linear-gradient(130deg, #0d766e, #184f60); border-radius: 22px; }
@@ -1266,49 +1267,55 @@ class AGIRSoloInterface:
         editing = (
             self.manual_edit_stage == stage and self.manual_edit_artifact is not None
         )
-        with ui.element("div").classes("workspace-grid"):
-            with ui.card().classes("surface artifact-card"):
-                if editing:
-                    self._render_inline_manual_editor(stage)
-                else:
-                    ui.markdown(
-                        render_stage_artifact(state, stage),
-                        extras=["tables"],
-                    ).classes("artifact-markdown")
-                    if stage == "resources":
-                        self._render_selected_image_previews(state)
+        with ui.column().classes("w-full gap-4"):
             if editing:
+                with ui.card().classes("surface artifact-card w-full"):
+                    self._render_inline_manual_editor(stage)
                 self._render_manual_edit_actions(state, stage)
-            else:
-                with ui.card().classes("surface decision-card w-full"):
-                    ui.label("MODO DE CONSULTA").classes("eyebrow")
-                    ui.label("Etapa anterior").classes("section-title")
-                    ui.label(
-                        "Abrir esta etapa não altera a sessão. Só será criada uma "
-                        "nova versão se escolher Editar ou Reformular e confirmar "
-                        "a alteração."
-                    ).classes("text-sm muted")
+                return
+
+            # Em consulta, os controlos ficam imediatamente sob o percurso de etapas
+            # e o conteúdo ocupa toda a largura disponível. Isto é especialmente
+            # importante nas etapas tabulares, evitando comprimir colunas numa grelha
+            # lateral de decisão.
+            with ui.card().classes("surface consultation-card w-full"):
+                ui.label("MODO DE CONSULTA").classes("eyebrow")
+                ui.label("Etapa anterior").classes("section-title")
+                ui.label(
+                    "Abrir esta etapa não altera a sessão. Só será criada uma "
+                    "nova versão se escolher Editar ou Reformular e confirmar "
+                    "a alteração."
+                ).classes("text-sm muted")
+                with ui.row().classes("w-full gap-2 flex-wrap mt-3"):
                     ui.button(
                         "Editar esta tabela",
                         icon="edit",
                         on_click=lambda: self._start_manual_edit(stage),
-                    ).props("unelevated no-caps").classes(
-                        "primary-action w-full mt-3"
+                    ).props("unelevated no-caps").classes("primary-action").style(
+                        "min-width: 210px; flex: 1 1 210px;"
                     )
                     ui.button(
                         "Reformular esta etapa",
                         icon="edit_note",
                         on_click=lambda: self._open_revision_dialog(stage),
-                    ).props("outline no-caps").classes(
-                        "secondary-action w-full mt-2"
+                    ).props("outline no-caps").classes("secondary-action").style(
+                        "min-width: 210px; flex: 1 1 210px;"
                     )
                     ui.button(
                         "Voltar ao ponto atual",
                         icon="arrow_back",
                         on_click=self._return_to_current_stage,
-                    ).props("outline no-caps").classes(
-                        "secondary-action w-full mt-2"
+                    ).props("outline no-caps").classes("secondary-action").style(
+                        "min-width: 210px; flex: 1 1 210px;"
                     )
+
+            with ui.card().classes("surface artifact-card w-full"):
+                ui.markdown(
+                    render_stage_artifact(state, stage),
+                    extras=["tables"],
+                ).classes("artifact-markdown")
+                if stage == "resources":
+                    self._render_selected_image_previews(state)
 
     def _render_manual_field(
         self,
