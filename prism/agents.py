@@ -1376,7 +1376,6 @@ def _canonicalize_resource_visuals(
                 )
         canonical = {
             "visual_mode": visual_mode,
-            "visual_warning": clean_text(slide.get("visual_warning")),
             "visual_asset_id": visual_asset_id,
             "visual_prompt": visual_prompt,
             "visual_kind": canonical_kind,
