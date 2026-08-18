@@ -189,7 +189,9 @@ ficheiros após a exportação.
 - Guardar localmente em SQLite o estado completo da sessão.
 - Registar data, etapa, proposta, modelo, identificador da resposta, duração,
   utilização de tokens, decisão e feedback do docente.
-- Listar sessões existentes e permitir retomá-las pelo identificador.
+- Listar sessões existentes, permitir retomá-las e eliminar definitivamente
+  apenas as sessões pertencentes ao utilizador autenticado, mediante confirmação
+  explícita.
 - Preservar todas as versões geradas, incluindo as substituídas.
 - Permitir consultar qualquer versão pela interface.
 - Registar a versão ativa de cada etapa e as versões dos artefactos usados como

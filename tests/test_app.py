@@ -248,6 +248,29 @@ def test_application_service_cannot_load_another_owner_session(tmp_path: Path) -
         other_service.load_session(session_id)
 
 
+def test_application_service_deletes_only_owner_session(tmp_path: Path) -> None:
+    store = SQLiteSessionStore(tmp_path / "coeria.db")
+    session_id = store.save(
+        {
+            "course": {"unit_name": "UC a eliminar"},
+            "current_stage": "contents",
+            "status": "in_progress",
+            "audit": [],
+        },
+        owner_id="D01",
+    )
+
+    owner_service = ApplicationService(store, owner_id="D01")
+    other_service = ApplicationService(store, owner_id="D02")
+
+    with pytest.raises(ValueError, match="já não está disponível"):
+        other_service.delete_session(session_id)
+
+    assert store.load(session_id, owner_id="D01") is not None
+    owner_service.delete_session(session_id)
+    assert store.load(session_id, owner_id="D01") is None
+
+
 def test_manual_assistance_validates_without_starting_a_session() -> None:
     result = ApplicationService.validate_initial_form(
         {

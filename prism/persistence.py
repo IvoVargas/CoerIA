@@ -470,3 +470,61 @@ class SQLiteSessionStore:
             except (TypeError, json.JSONDecodeError):
                 continue
         return summaries
+
+    def delete(
+        self,
+        session_id: str,
+        owner_id: str | None = None,
+    ) -> bool:
+        """Elimina uma sessão e o respetivo rasto de auditoria.
+
+        Quando ``owner_id`` é fornecido, a operação só é executada se a
+        sessão pertencer a esse utilizador.
+        """
+
+        identifier = str(session_id or "").strip()
+        if not identifier:
+            return False
+
+        owner = normalize_user_id(owner_id) if owner_id is not None else None
+        connection = self._connect()
+        try:
+            with connection:
+                if owner is None:
+                    row = connection.execute(
+                        "SELECT 1 FROM sessions WHERE session_id = ?",
+                        (identifier,),
+                    ).fetchone()
+                else:
+                    row = connection.execute(
+                        """
+                        SELECT 1 FROM sessions
+                        WHERE session_id = ? AND owner_id = ?
+                        """,
+                        (identifier, owner),
+                    ).fetchone()
+
+                if row is None:
+                    return False
+
+                connection.execute(
+                    "DELETE FROM audit_events WHERE session_id = ?",
+                    (identifier,),
+                )
+                if owner is None:
+                    cursor = connection.execute(
+                        "DELETE FROM sessions WHERE session_id = ?",
+                        (identifier,),
+                    )
+                else:
+                    cursor = connection.execute(
+                        """
+                        DELETE FROM sessions
+                        WHERE session_id = ? AND owner_id = ?
+                        """,
+                        (identifier, owner),
+                    )
+        finally:
+            connection.close()
+
+        return cursor.rowcount > 0

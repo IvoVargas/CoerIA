@@ -105,3 +105,36 @@ def test_legacy_database_is_migrated_to_a_reserved_owner(tmp_path: Path) -> None
 
     assert store.load("old-session", owner_id="D01") is None
     assert store.load("old-session", owner_id="LEGACY") is not None
+
+
+def test_session_delete_removes_state_and_audit_events(tmp_path: Path) -> None:
+    store = SQLiteSessionStore(tmp_path / "coeria.db")
+    state = _minimal_state("UC a eliminar")
+    state["audit"] = [
+        {
+            "timestamp": "2026-08-18 10:00:00 UTC",
+            "stage": "contents",
+            "event": "generated",
+            "feedback": "",
+        }
+    ]
+    session_id = store.save(state, owner_id="D01")
+
+    assert store.delete(session_id, owner_id="D01") is True
+    assert store.load(session_id, owner_id="D01") is None
+    assert store.list_sessions(owner_id="D01") == []
+
+    with sqlite3.connect(store.database_path) as connection:
+        audit_count = connection.execute(
+            "SELECT COUNT(*) FROM audit_events WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()[0]
+    assert audit_count == 0
+
+
+def test_session_delete_is_restricted_to_owner(tmp_path: Path) -> None:
+    store = SQLiteSessionStore(tmp_path / "coeria.db")
+    session_id = store.save(_minimal_state("UC reservada"), owner_id="D01")
+
+    assert store.delete(session_id, owner_id="D02") is False
+    assert store.load(session_id, owner_id="D01") is not None

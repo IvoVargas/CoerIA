@@ -121,6 +121,15 @@ class ApplicationService:
             raise ValueError("A sessão selecionada já não está disponível.")
         return state
 
+    def delete_session(self, session_id: str | None) -> None:
+        """Elimina definitivamente uma sessão pertencente ao utilizador atual."""
+
+        if not session_id:
+            raise ValueError("Selecione uma sessão para eliminar.")
+        deleted = self.store.delete(session_id, owner_id=self.owner_id)
+        if not deleted:
+            raise ValueError("A sessão selecionada já não está disponível.")
+
     @staticmethod
     def restored_initial_fields(state: dict[str, Any]) -> dict[str, Any]:
         course = state.get("course", {})

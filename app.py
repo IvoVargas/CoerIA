@@ -782,21 +782,78 @@ class AGIRSoloInterface:
                 return
             for item in sessions:
                 session_id = item["session_id"]
+                unit_name = item.get("unit_name", "Sessão sem título")
 
                 async def load_selected(_event=None, selected_id=session_id) -> None:
                     await self.handle_load_session(selected_id)
 
-                with ui.button(on_click=load_selected).props("flat no-caps align=left").classes(
-                    "session-entry p-2"
-                ):
-                    with ui.column().classes("items-start gap-0 text-left"):
-                        ui.label(item.get("unit_name", "Sessão sem título")).classes(
-                            "font-semibold text-sm"
-                        )
-                        ui.label(
-                            f"{item.get('ai_provider', 'OpenAI')} · "
-                            f"{STAGE_LABELS.get(item.get('current_stage', ''), 'Sessão')}"
-                        ).classes("text-xs opacity-65")
+                def delete_selected(
+                    _event=None,
+                    selected_id=session_id,
+                    selected_name=unit_name,
+                ) -> None:
+                    self.open_delete_session_dialog(selected_id, selected_name)
+
+                with ui.row().classes("w-full items-center gap-1 no-wrap"):
+                    with ui.button(on_click=load_selected).props(
+                        "flat no-caps align=left"
+                    ).classes("session-entry p-2").style(
+                        "flex: 1 1 auto; width: auto; min-width: 0"
+                    ):
+                        with ui.column().classes("items-start gap-0 text-left"):
+                            ui.label(unit_name).classes("font-semibold text-sm")
+                            ui.label(
+                                f"{item.get('ai_provider', 'OpenAI')} · "
+                                f"{STAGE_LABELS.get(item.get('current_stage', ''), 'Sessão')}"
+                            ).classes("text-xs opacity-65")
+                    ui.button(
+                        icon="delete_outline",
+                        on_click=delete_selected,
+                    ).props(
+                        "flat round dense color=negative "
+                        "aria-label='Eliminar sessão'"
+                    ).tooltip("Eliminar sessão")
+
+    def open_delete_session_dialog(
+        self,
+        session_id: str,
+        unit_name: str,
+    ) -> None:
+        async def confirm_delete() -> None:
+            dialog.close()
+            await self.handle_delete_session(session_id)
+
+        with ui.dialog() as dialog, ui.card().classes(
+            "p-5 w-96 max-w-full surface"
+        ):
+            ui.icon("delete_forever", size="2.2rem", color="negative")
+            ui.label("Eliminar sessão?").classes("section-title")
+            ui.label(unit_name).classes("font-semibold")
+            ui.label(
+                "Esta operação é definitiva e elimina também o histórico e "
+                "o rasto de auditoria desta sessão."
+            ).classes("muted")
+            with ui.row().classes("w-full justify-end mt-3"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat no-caps")
+                ui.button(
+                    "Eliminar definitivamente",
+                    icon="delete_forever",
+                    on_click=confirm_delete,
+                ).props("unelevated no-caps color=negative")
+        dialog.open()
+
+    async def handle_delete_session(self, session_id: str) -> None:
+        try:
+            await run.io_bound(self.service.delete_session, session_id)
+            is_current = bool(
+                self.state and self.state.get("session_id") == session_id
+            )
+            if is_current:
+                self.show_new_session()
+            self.refresh_sessions()
+            ui.notify("Sessão eliminada definitivamente.", type="positive")
+        except USER_ERRORS as error:
+            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
 
     async def handle_load_session(self, session_id: str) -> None:
         self._show_busy("A retomar a sessão guardada…")

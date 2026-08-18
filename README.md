@@ -67,8 +67,9 @@ associada ao identificador pseudónimo do docente autenticado e não é listada
 nem carregada por outro participante. O nome técnico do ficheiro e o pacote Python `prism` são
 mantidos temporariamente por compatibilidade com sessões e instalações
 anteriores à adoção da identidade CoerIA. A interface permite a cada docente
-retomar as respetivas sessões e consultar todas as versões, incluindo propostas
-substituídas por reformulações. A barra de etapas permite abrir para consulta
+retomar e eliminar definitivamente as suas próprias sessões através da barra
+lateral, bem como consultar todas as versões, incluindo propostas substituídas
+por reformulações. A barra de etapas permite abrir para consulta
 qualquer ponto de autoria já alcançado, incluindo numa sessão concluída, sem
 alterar o estado. Dentro dessa página, o docente pode escolher **Reformular**;
 só então descreve a alteração e vê quais as etapas dependentes que ficarão
