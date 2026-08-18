@@ -83,6 +83,29 @@ Nunca reutilizar uma tag já publicada para apontar para outro commit. Criar uma
 
 ---
 
+## Atualização automatizada com `deploy/update.sh`
+
+Para um deploy normal, o procedimento abaixo está automatizado em `deploy/update.sh`. O script deve ser executado na VPS pelo utilizador proprietário do checkout (`ubuntu` na instalação atual), **sem `sudo` no próprio script**; o script pede `sudo` apenas nas operações administrativas necessárias.
+
+Exemplo:
+
+```bash
+cd /opt/coeria/app
+./deploy/update.sh v0.2.2
+```
+
+O script valida que o checkout está limpo, cria backup, faz `fetch` e checkout da tag, atualiza `COERIA_APP_VERSION`, instala `requirements-vps.lock`, executa a suíte com uma base temporária, reinicia o serviço apenas se os testes passarem e verifica o acesso local/HTTPS, Nginx e serviços.
+
+Se qualquer etapa crítica falhar, o processo termina imediatamente. O script não executa `git reset --hard`, não altera ownership e não imprime segredos.
+
+Para consultar a ajuda:
+
+```bash
+./deploy/update.sh --help
+```
+
+---
+
 ## 2. Atualizar a VPS para uma nova versão
 
 Os exemplos seguintes usam `v0.2.0`. Substituir pela tag que se pretende instalar.
