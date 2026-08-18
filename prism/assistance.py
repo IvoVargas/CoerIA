@@ -6,7 +6,7 @@ import json
 import os
 from typing import Any, Callable
 
-from .agents import AgentGenerationError, DEFAULT_MODEL
+from .agents import AgentGenerationError, DEFAULT_MODEL, supports_reasoning_effort
 from .branding import config_value
 from .curriculum import validate_taxonomy_choice
 from .providers import (
@@ -259,13 +259,12 @@ class OpenAIInitialFormAssistant:
         previous_proposal: dict[str, Any] | None = None
         for attempt in range(1, attempts + 1):
             try:
-                response = client.responses.create(
-                    model=self.model,
-                    instructions=instructions,
-                    input=json.dumps(request_context, ensure_ascii=False),
-                    reasoning={"effort": "low"},
-                    max_output_tokens=self.max_output_tokens,
-                    text={
+                request_options: dict[str, Any] = {
+                    "model": self.model,
+                    "instructions": instructions,
+                    "input": json.dumps(request_context, ensure_ascii=False),
+                    "max_output_tokens": self.max_output_tokens,
+                    "text": {
                         "format": {
                             "type": "json_schema",
                             "name": "coeria_initial_form",
@@ -273,7 +272,10 @@ class OpenAIInitialFormAssistant:
                             "schema": schema,
                         }
                     },
-                )
+                }
+                if supports_reasoning_effort(self.model):
+                    request_options["reasoning"] = {"effort": "low"}
+                response = client.responses.create(**request_options)
                 proposal = json.loads(response.output_text)
                 previous_proposal = proposal
                 merged = _merge_initial_proposal(data, proposal)

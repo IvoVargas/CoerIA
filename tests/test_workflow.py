@@ -903,6 +903,48 @@ class WorkflowTests(unittest.TestCase):
         ):
             self.assertEqual(config_value("OPENAI_MODEL"), "new-model")
 
+
+    def test_gpt_4o_mini_critic_omits_reasoning_parameter(self) -> None:
+        calls = []
+
+        def create(**kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                output_text=json.dumps(
+                    {
+                        "passed": True,
+                        "findings": [],
+                        "revision_instructions": "",
+                    }
+                ),
+                id="response-critic",
+                usage=SimpleNamespace(
+                    input_tokens=10,
+                    output_tokens=5,
+                    total_tokens=15,
+                ),
+            )
+
+        critic = OpenAIPedagogicalCritic(
+            model="gpt-4o-mini",
+            client_factory=lambda: SimpleNamespace(
+                responses=SimpleNamespace(create=create)
+            ),
+        )
+        state = {
+            "course": {"taxonomy_type": "SOLO"},
+        }
+        with patch.dict(environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+            result = critic.review(
+                "curriculum_analysis",
+                state,
+                {"contents": [], "objectives": []},
+            )
+
+        self.assertTrue(result.passed)
+        self.assertEqual(calls[0]["model"], "gpt-4o-mini")
+        self.assertNotIn("reasoning", calls[0])
+
     def test_default_openai_profile_prioritises_cost(self) -> None:
         cleared_configuration = {
             f"{prefix}_{suffix}": ""

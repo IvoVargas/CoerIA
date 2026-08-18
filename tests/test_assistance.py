@@ -24,6 +24,47 @@ class InitialAssistanceTests(unittest.TestCase):
         )
         self.assertTrue(result["valid"])
 
+
+    def test_gpt_4o_mini_initial_assistance_omits_reasoning_parameter(self) -> None:
+        proposal = {
+            "unit_name": "Introdução às Pescas",
+            "audience": "Licenciatura",
+            "duration_hours": 18,
+            "source_text": (
+                "Ecossistemas aquáticos, técnicas de captura e gestão sustentável "
+                "dos recursos pesqueiros em contextos costeiros e oceânicos."
+            ),
+            "program_name": "Ciências do Mar",
+            "program_type": "Licenciatura",
+            "academic_year": "1.º ano",
+            "semester": "1.º semestre",
+            "cnaef_code": "624",
+            "cnaef_name": "Pescas",
+            "ects_credits": 6,
+            "contact_hours": 45,
+            "autonomous_hours": 117,
+            "general_aims": "Compreender o setor pesqueiro.",
+            "explanation": "Proposta sujeita a confirmação pelo docente.",
+        }
+
+        calls = []
+
+        def create(**kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(output_text=json.dumps(proposal))
+
+        with patch.dict(environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+            result = OpenAIInitialFormAssistant(
+                model="gpt-4o-mini",
+                client_factory=lambda: SimpleNamespace(
+                    responses=SimpleNamespace(create=create)
+                ),
+            ).propose({"taxonomy_type": "SOLO"})
+
+        self.assertEqual(result["unit_name"], "Introdução às Pescas")
+        self.assertEqual(calls[0]["model"], "gpt-4o-mini")
+        self.assertNotIn("reasoning", calls[0])
+
     def test_requested_proposal_preserves_the_exclusive_taxonomy(self) -> None:
         proposal = {
             "unit_name": "Introdução às Pescas",

@@ -52,11 +52,15 @@ DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_RESOURCE_MODEL = DEFAULT_MODEL
 
 
-def _supports_reasoning_effort(model: str) -> bool:
+def supports_reasoning_effort(model: str) -> bool:
     """Indica se o modelo aceita o parâmetro ``reasoning.effort``."""
 
     normalized = model.strip().lower()
     return normalized.startswith(("gpt-5", "o1", "o3", "o4"))
+
+
+# Alias interno mantido para compatibilidade com testes/código anterior.
+_supports_reasoning_effort = supports_reasoning_effort
 
 
 class AgentGenerationError(RuntimeError):
@@ -2030,7 +2034,7 @@ class OpenAIPedagogicalAgent:
                         }
                     },
                 }
-                if _supports_reasoning_effort(request_model):
+                if supports_reasoning_effort(request_model):
                     request_options["reasoning"] = {
                         "effort": self.reasoning_effort
                     }
@@ -2245,13 +2249,12 @@ class OpenAIPedagogicalCritic:
                     max_retries=self.max_retries,
                 )
             )
-            response = client.responses.create(
-                model=self.model,
-                instructions=instructions,
-                input=json.dumps(context, ensure_ascii=False),
-                reasoning={"effort": self.reasoning_effort},
-                max_output_tokens=self.max_output_tokens,
-                text={
+            request_options: dict[str, Any] = {
+                "model": self.model,
+                "instructions": instructions,
+                "input": json.dumps(context, ensure_ascii=False),
+                "max_output_tokens": self.max_output_tokens,
+                "text": {
                     "format": {
                         "type": "json_schema",
                         "name": f"coeria_critic_{stage}",
@@ -2259,7 +2262,12 @@ class OpenAIPedagogicalCritic:
                         "schema": schema,
                     }
                 },
-            )
+            }
+            if supports_reasoning_effort(self.model):
+                request_options["reasoning"] = {
+                    "effort": self.reasoning_effort
+                }
+            response = client.responses.create(**request_options)
             payload = json.loads(response.output_text)
         except Exception as error:
             raise AgentGenerationError(f"A revisão agentic não ficou disponível. {error}") from error
