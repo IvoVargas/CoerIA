@@ -11,12 +11,13 @@ from .assistance import build_initial_form_assistant, validate_initial_fields
 from .auth import normalize_user_id
 from .exporter import export_resource_package
 from .ingestion import (
-    build_source_text,
+    build_raw_source_text,
     extract_source_images,
     recover_direct_source_text,
 )
 from .models import CourseInput, RESOURCE_PRESENTATION, validate_resource_types
 from .persistence import SQLiteSessionStore
+from .source_reduction import reduce_source_text
 from .providers import configured_ai_provider
 from .workflow import (
     ResourceGenerationError,
@@ -67,7 +68,17 @@ class ApplicationService:
         if progress_callback is not None:
             progress_callback("A preparar os dados da unidade curricular…")
         source_text = str(form.get("source_text", "") or "")
-        consolidated_source = build_source_text(source_text, source_files)
+        selected_provider = str(
+            form.get("ai_provider", configured_ai_provider())
+            or configured_ai_provider()
+        )
+        raw_source = build_raw_source_text(source_text, source_files)
+        reduction = reduce_source_text(
+            raw_source,
+            provider=selected_provider,
+            progress_callback=progress_callback,
+        )
+        consolidated_source = reduction.text
         source_images = extract_source_images(source_files)
         ai_image_generation_enabled = bool(form.get("ai_image_generation_enabled"))
         if (
@@ -100,15 +111,13 @@ class ApplicationService:
         state = create_session(
             course,
             list(form.get("resource_types", []) or []),
-            ai_provider=str(
-                form.get("ai_provider", configured_ai_provider())
-                or configured_ai_provider()
-            ),
+            ai_provider=selected_provider,
             ai_image_generation_enabled=ai_image_generation_enabled,
             progress_callback=progress_callback,
         )
         state["source_input_text"] = source_text.strip()
         state["source_images"] = source_images
+        state["source_reduction"] = reduction.metadata
         if progress_callback is not None:
             progress_callback("A guardar a sessão e a proposta inicial…")
         return self._persist(state)

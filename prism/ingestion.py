@@ -16,6 +16,7 @@ from .branding import config_value
 SUPPORTED_SOURCE_SUFFIXES = {".txt", ".md", ".tex", ".pdf", ".docx", ".pptx"}
 DIRECT_SOURCE_MARKER = "[Texto introduzido pelo docente]"
 DEFAULT_MAX_SOURCE_CHARS = 120_000
+DEFAULT_MAX_RAW_SOURCE_CHARS = 2_000_000
 DEFAULT_MAX_FILE_BYTES = 12 * 1024 * 1024
 DEFAULT_MAX_EXTRACTED_IMAGE_BYTES = 5 * 1024 * 1024
 DEFAULT_MAX_EXTRACTED_IMAGES = 30
@@ -359,12 +360,10 @@ def _normalise_paths(file_paths: str | Path | Iterable[str | Path] | None) -> li
     return list(file_paths)
 
 
-def build_source_text(
+def _combine_source_text(
     source_text: str,
     file_paths: str | Path | Iterable[str | Path] | None = None,
 ) -> str:
-    """Combina texto direto e documentos, preservando a origem de cada excerto."""
-
     parts: list[str] = []
     direct = (source_text or "").strip()
     if direct:
@@ -374,12 +373,45 @@ def build_source_text(
         path = Path(path_value)
         parts.append(f"[Ficheiro: {path.name}]\n{extract_file_text(path)}")
 
-    combined = "\n\n".join(parts).strip()
+    return "\n\n".join(parts).strip()
+
+
+def build_raw_source_text(
+    source_text: str,
+    file_paths: str | Path | Iterable[str | Path] | None = None,
+) -> str:
+    """Combina fontes extensas antes da eventual redução automática por IA."""
+
+    combined = _combine_source_text(source_text, file_paths)
+    max_chars = _configured_limit(
+        "MAX_RAW_SOURCE_CHARS", DEFAULT_MAX_RAW_SOURCE_CHARS
+    )
+    if len(combined) > max_chars:
+        raise SourceIngestionError(
+            f"As fontes contêm {len(combined):,} caracteres e excedem o limite absoluto "
+            f"de ingestão de {max_chars:,}. Remova documentos redundantes ou aumente "
+            "COERIA_MAX_RAW_SOURCE_CHARS de forma consciente."
+        )
+    return combined
+
+
+def build_source_text(
+    source_text: str,
+    file_paths: str | Path | Iterable[str | Path] | None = None,
+) -> str:
+    """Combina fontes respeitando o orçamento normal do contexto do pipeline.
+
+    Mantém-se como API compatível para validações/testes. A aplicação usa
+    :func:`build_raw_source_text` e reduz automaticamente fontes extensas antes
+    de iniciar o fluxo pedagógico.
+    """
+
+    combined = build_raw_source_text(source_text, file_paths)
     max_chars = _configured_limit("MAX_SOURCE_CHARS", DEFAULT_MAX_SOURCE_CHARS)
     if len(combined) > max_chars:
         raise SourceIngestionError(
             f"As fontes contêm {len(combined):,} caracteres e excedem o limite de "
-            f"{max_chars:,}. Reduza ou divida os documentos."
+            f"{max_chars:,}."
         )
     return combined
 

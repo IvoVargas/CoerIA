@@ -11,6 +11,7 @@ from pptx.util import Inches
 
 from prism.ingestion import (
     SourceIngestionError,
+    build_raw_source_text,
     build_source_text,
     extract_source_images,
     recover_direct_source_text,
@@ -168,6 +169,21 @@ class SourceIngestionTests(unittest.TestCase):
             self.assertTrue(asset["data_base64"])
             self.assertFalse(asset["approved"])
             self.assertEqual(asset["alt_text"], "")
+
+    def test_raw_source_can_exceed_normal_context_limit_for_later_reduction(self) -> None:
+        with patch.dict(
+            environ,
+            {
+                "COERIA_MAX_SOURCE_CHARS": "20",
+                "COERIA_MAX_RAW_SOURCE_CHARS": "200",
+            },
+            clear=False,
+        ):
+            result = build_raw_source_text(
+                "Texto deliberadamente superior ao limite normal do contexto."
+            )
+
+        self.assertGreater(len(result), 20)
 
     def test_configured_source_limit_is_enforced(self) -> None:
         with patch.dict(environ, {"PRISM_MAX_SOURCE_CHARS": "20"}):

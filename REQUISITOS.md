@@ -28,8 +28,12 @@ materiais produzidos.
   validar pelo docente.
 - Aceitar texto introduzido diretamente e um ou mais ficheiros de apoio.
 - Extrair texto de `.txt`, `.md`, `.tex`, `.pdf`, `.docx` e `.pptx`.
-- Rejeitar ficheiros vazios, formatos não suportados e fontes excessivamente
-  grandes com uma mensagem compreensível.
+- Rejeitar ficheiros vazios e formatos não suportados com uma mensagem compreensível.
+- Para conjuntos de fontes acima do orçamento normal do contexto, reduzir
+  automaticamente o texto por blocos com o fornecedor selecionado antes da
+  análise curricular, preservando a proveniência e registando a operação; apenas
+  rejeitar quando for ultrapassado o limite absoluto de ingestão configurado ou
+  quando a redução segura não for possível.
 - Permitir escolher OpenAI ou IAedu antes de iniciar a sessão.
 - Informar que o conteúdo fornecido é enviado exclusivamente ao fornecedor de
   IA selecionado durante a geração.
@@ -189,9 +193,7 @@ ficheiros após a exportação.
 - Guardar localmente em SQLite o estado completo da sessão.
 - Registar data, etapa, proposta, modelo, identificador da resposta, duração,
   utilização de tokens, decisão e feedback do docente.
-- Listar sessões existentes, permitir retomá-las e eliminar definitivamente
-  apenas as sessões pertencentes ao utilizador autenticado, mediante confirmação
-  explícita.
+- Listar sessões existentes, permitir retomá-las e eliminar definitivamente apenas as sessões pertencentes ao utilizador autenticado, mediante confirmação explícita.
 - Preservar todas as versões geradas, incluindo as substituídas.
 - Permitir consultar qualquer versão pela interface.
 - Registar a versão ativa de cada etapa e as versões dos artefactos usados como
@@ -266,7 +268,7 @@ ficheiros após a exportação.
 
 - Cada chamada externa regista duração e utilização de tokens quando fornecida
   pela API.
-- Limites de fonte, tempo de chamada e tentativas são configuráveis.
+- Limites de ingestão bruta, redução de fonte, tempo de chamada e tentativas são configuráveis.
 - O contexto enviado a cada agente contém apenas artefactos anteriores
   necessários à etapa.
 - As tentativas do ciclo agentic são limitadas e configuráveis para controlar

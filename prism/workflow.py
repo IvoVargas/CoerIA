@@ -50,6 +50,7 @@ class PrismState(TypedDict, total=False):
     session_id: str
     source_input_text: str
     source_images: list[dict[str, Any]]
+    source_reduction: dict[str, Any]
     generated_images: list[dict[str, Any]]
     ai_image_generation_enabled: bool
     ai_provider: str
@@ -123,7 +124,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # Uma etapa pode reabrir qualquer etapa já alcançada. A validação dinâmica
 # abaixo exclui artefactos que ainda nunca foram gerados para a sessão.

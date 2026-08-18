@@ -67,9 +67,8 @@ associada ao identificador pseudónimo do docente autenticado e não é listada
 nem carregada por outro participante. O nome técnico do ficheiro e o pacote Python `prism` são
 mantidos temporariamente por compatibilidade com sessões e instalações
 anteriores à adoção da identidade CoerIA. A interface permite a cada docente
-retomar e eliminar definitivamente as suas próprias sessões através da barra
-lateral, bem como consultar todas as versões, incluindo propostas substituídas
-por reformulações. A barra de etapas permite abrir para consulta
+retomar as respetivas sessões e consultar todas as versões, incluindo propostas
+eliminar definitivamente as suas próprias sessões através da barra lateral e substituídas por reformulações. A barra de etapas permite abrir para consulta
 qualquer ponto de autoria já alcançado, incluindo numa sessão concluída, sem
 alterar o estado. Dentro dessa página, o docente pode escolher **Reformular**;
 só então descreve a alteração e vê quais as etapas dependentes que ficarão
@@ -99,9 +98,13 @@ A decisão e o microciclo gerador–crítico estão descritos em
 ## Fontes aceites
 
 É possível combinar texto direto com vários ficheiros `.txt`, `.md`, `.tex`,
-`.pdf`, `.docx` e `.pptx`. Os limites predefinidos são 12 MB por ficheiro e
-120 000 caracteres no conjunto das fontes. PDFs constituídos apenas por imagem
-necessitam de OCR externo.
+`.pdf`, `.docx` e `.pptx`. O limite predefinido é 12 MB por ficheiro e o limite
+absoluto de ingestão é 2 000 000 de caracteres no conjunto das fontes. Quando o
+texto extraído ultrapassa 120 000 caracteres, o CoerIA reduz automaticamente as
+fontes por blocos com o fornecedor de IA selecionado, preservando etiquetas de
+proveniência, antes de iniciar a análise curricular. Esta redução pode implicar
+chamadas adicionais ao fornecedor e fica registada no estado da sessão. PDFs
+constituídos apenas por imagem necessitam de OCR externo.
 
 O CoerIA extrai o conteúdo textual destes documentos e, quando aplicável,
 imagens internas de `.pdf`, `.docx` e `.pptx`, conservando a proveniência
@@ -255,6 +258,7 @@ cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado
 - `prism/workflow.py`: estado e fluxo LangGraph;
 - `prism/quality.py`: validações determinísticas independentes do modelo;
 - `prism/ingestion.py`: extração e limites das fontes documentais;
+- `prism/source_reduction.py`: redução automática e auditável de fontes extensas;
 - `prism/persistence.py`: sessões, versões e auditoria em SQLite;
 - `prism/auth.py`: autenticação por código, sessão assinada e limitação de tentativas;
 - `prism/exporter.py`: PowerPoint, documentos Word e pacote ZIP;
