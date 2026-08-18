@@ -161,7 +161,7 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             selected_taxonomy,
         ):
             taxonomy_issues.append(
-                f"{outcome.get('id', '?')}: deve conter um único verbo de ação"
+                f"{outcome.get('id', '?')}: deve conter um único verbo de ação principal"
             )
     checks.append(
         _check(

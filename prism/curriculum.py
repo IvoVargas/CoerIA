@@ -241,27 +241,22 @@ def has_single_action_verb(
     declared_verb: str,
     taxonomy: str,
 ) -> bool:
-    """Confirma um único verbo de ação principal no resultado.
+    """Confirma um único verbo de ação *principal* no resultado.
 
-    Os agentes usam infinitivos de um catálogo controlado. A regra rejeita um
-    segundo verbo desse catálogo e construções coordenadas como «analisar e
-    comparar», mesmo que o segundo verbo não pertença ao nível selecionado.
+    O enunciado tem de começar pelo ``action_verb`` declarado. Podem surgir
+    infinitivos subordinados em complementos («explicar como configurar»,
+    «reconhecer como construir»), porque não representam um segundo resultado
+    de aprendizagem. Continuam proibidas coordenações que acumulam ações
+    principais, como «analisar ... e comparar ...» ou «identificar ... ou
+    classificar ...».
     """
 
-    selected = validate_taxonomy_choice(taxonomy)
+    # Valida também a taxonomia, mantendo o mesmo comportamento de erro para
+    # escolhas desconhecidas mesmo que a regra abaixo não precise do catálogo.
+    validate_taxonomy_choice(taxonomy)
     clean_statement = normalise_text(statement)
     clean_verb = normalise_text(declared_verb)
     if not clean_verb or not clean_statement.startswith(clean_verb + " "):
-        return False
-
-    all_verbs = {
-        normalise_text(verb)
-        for verbs in TAXONOMY_VERBS[selected].values()
-        for verb in verbs
-    }
-    words = re.findall(r"[a-zà-öø-ÿ]+", clean_statement)
-    controlled_occurrences = [word for word in words if word in all_verbs]
-    if controlled_occurrences != [clean_verb]:
         return False
 
     coordinated_infinitive = re.search(

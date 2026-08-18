@@ -17,7 +17,7 @@ docente continua a ser obrigatória e soberana.
 ## Fluxo
 
 1. conteúdos e objetivos gerais com IDs;
-2. resultados de aprendizagem com um único verbo;
+2. resultados de aprendizagem com um único verbo de ação principal;
 3. classificação exclusiva por SOLO ou Bloom;
 4. avaliação formativa ou sumativa;
 5. design pedagógico por *backward design*;

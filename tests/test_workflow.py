@@ -1046,9 +1046,37 @@ class WorkflowTests(unittest.TestCase):
                 "Analisar os dados recolhidos.", "analisar", "SOLO"
             )
         )
+        self.assertTrue(
+            has_single_action_verb(
+                "Reconhecer como construir topologias simples.",
+                "reconhecer",
+                "SOLO",
+            )
+        )
+        self.assertTrue(
+            has_single_action_verb(
+                "Explicar como configurar uma interface de rede.",
+                "explicar",
+                "SOLO",
+            )
+        )
         self.assertFalse(
             has_single_action_verb(
                 "Analisar e comparar os dados recolhidos.", "analisar", "SOLO"
+            )
+        )
+        self.assertFalse(
+            has_single_action_verb(
+                "Interpretar endereços IP e construir topologias simples.",
+                "interpretar",
+                "SOLO",
+            )
+        )
+        self.assertFalse(
+            has_single_action_verb(
+                "Interpretar endereços IP e construir topologias simples.",
+                "definir",
+                "SOLO",
             )
         )
 

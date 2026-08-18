@@ -114,7 +114,9 @@ STAGE_REQUIREMENTS = {
     "learning_outcomes": (
         "Lista de 4 a 10 objetos {id, theme, statement, action_verb, outcome_type, "
         "content_links, objective_ids}. Cada resultado contém exatamente um verbo de ação "
-        "observável, começa por esse verbo e liga-se a conteúdos e objetivos existentes."
+        "principal observável, começa por esse verbo e liga-se a conteúdos e objetivos "
+        "existentes. Infinitivos subordinados podem surgir em complementos, mas não como "
+        "ações principais coordenadas."
     ),
     "outcome_taxonomy": (
         "Lista de objetos {outcome_id, taxonomy, level, action_verb}. taxonomy deve ser "
@@ -1685,9 +1687,12 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 for identifier in invalid
             )
             raise AgentGenerationError(
-                "Cada resultado deve começar pelo action_verb declarado e conter "
-                "exatamente um verbo de ação controlado, sem coordenações do tipo "
-                "'e/ou + infinitivo'. Corrigir: " + details
+                "Cada resultado deve começar pelo action_verb declarado e conter um "
+                "único verbo de ação principal. São permitidos infinitivos subordinados "
+                "em complementos (por exemplo, 'explicar como configurar'), mas não "
+                "coordenações de duas ações principais do tipo 'e/ou + infinitivo'. "
+                "Se o objetivo geral de origem tiver várias ações coordenadas, distribui-as "
+                "por resultados diferentes em vez de copiares a coordenação. Corrigir: " + details
             )
 
     if stage in {"assessment_activities", "teaching_activities"}:
@@ -2064,9 +2069,13 @@ class OpenAIPedagogicalAgent:
             required_objectives = [item["id"] for item in curriculum.get("objectives", [])]
             instructions += (
                 " Em cada resultado, statement começa exatamente pelo action_verb declarado. "
-                "Depois desse verbo usa complementos nominais sempre que possível: não uses "
-                "outro verbo do catálogo em nenhum ponto da frase e evita coordenações "
-                "'e + infinitivo' ou 'ou + infinitivo'. Antes de responder, faz uma verificação "
+                "Esse é o único verbo de ação principal. Podes usar infinitivos subordinados "
+                "quando forem necessários para completar o sentido (por exemplo, 'explicar como "
+                "configurar'), mas evita coordenar duas ações principais com 'e + infinitivo' "
+                "ou 'ou + infinitivo'. Se um objetivo geral contiver várias ações coordenadas, "
+                "não o copies literalmente: distribui essas ações por resultados diferentes, "
+                "podendo repetir o mesmo objective_id em mais de um resultado. Antes de responder, "
+                "faz uma verificação "
                 "de cobertura: a união de todos os content_links.content_id tem de ser exatamente "
                 f"{required_contents} e a união de todos os objective_ids tem de ser exatamente "
                 f"{required_objectives}. Não omitas nem inventes identificadores."

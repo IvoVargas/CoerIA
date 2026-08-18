@@ -49,7 +49,7 @@ materiais produzidos.
 Executar, por ordem, as seguintes etapas:
 
 1. estruturação e validação de conteúdos e objetivos gerais;
-2. formulação de resultados de aprendizagem com um único verbo de ação;
+2. formulação de resultados de aprendizagem com um único verbo de ação principal;
 3. classificação dos resultados exclusivamente por SOLO ou Bloom;
 4. proposta de avaliações formativas ou sumativas;
 5. design pedagógico por *backward design*;
@@ -66,7 +66,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Formular entre 4 e 10 resultados de aprendizagem, preferencialmente 5 a 7.
 - Ligar todos os resultados a conteúdos e objetivos existentes.
 - Classificar o tipo de resultado e a importância da sua ligação aos conteúdos.
-- Usar um único verbo pertencente ao vocabulário controlado do nível declarado.
+- Usar um único verbo de ação principal pertencente ao vocabulário controlado do nível declarado; infinitivos subordinados podem ser usados em complementos, mas não como ações principais coordenadas.
 - Na opção SOLO, não usar o nível pré-estrutural para formular resultados.
 - Nas etapas de classificação e matriz de alinhamento, omitir a coluna redundante
   da taxonomia e mostrar o nível num seletor com designação e número:
@@ -309,7 +309,7 @@ ficheiros após a exportação.
   de todas as etapas afetadas serem novamente aprovadas.
 - Todos os resultados têm classificação na taxonomia exclusiva escolhida, avaliação
   e atividade formativa.
-- Cada resultado contém um único verbo de ação.
+- Cada resultado contém um único verbo de ação principal; infinitivos subordinados em complementos são permitidos, mas ações principais coordenadas são rejeitadas.
 - Cada avaliação é Formativa ou Sumativa, nunca Mista.
 - Todos os conteúdos estão ligados a pelo menos um resultado; todas as
   avaliações e atividades possuem IDs próprios e ligações explícitas.
