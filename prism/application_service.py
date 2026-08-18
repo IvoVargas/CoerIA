@@ -218,16 +218,31 @@ class ApplicationService:
                 for item in working_state.get("source_images", [])
                 if isinstance(item, dict) and str(item.get("id", "")).strip()
             }
-            requested_ids = [str(item).strip() for item in selected_source_image_ids if str(item).strip()]
+            requested_ids = [
+                str(item).strip()
+                for item in selected_source_image_ids
+                if str(item).strip()
+            ]
+            requested_ids = list(dict.fromkeys(requested_ids))
             unknown = [item for item in requested_ids if item not in available_ids]
             if unknown:
                 raise ValueError(
                     "A seleção contém imagens que já não estão disponíveis: "
                     + ", ".join(unknown)
                 )
-            presentation_selected = RESOURCE_PRESENTATION in working_state.get("resource_types", [])
+            presentation_selected = RESOURCE_PRESENTATION in working_state.get(
+                "resource_types", []
+            )
+            content_slide_capacity = len(working_state.get("learning_outcomes", []))
+            if presentation_selected and len(requested_ids) > content_slide_capacity:
+                raise ValueError(
+                    "Foram selecionadas mais imagens documentais do que os slides de "
+                    "conteúdo previstos. Selecione no máximo "
+                    f"{content_slide_capacity} imagem(ns) para garantir que todas são "
+                    "usadas na apresentação."
+                )
             working_state["selected_source_image_ids"] = (
-                list(dict.fromkeys(requested_ids)) if presentation_selected else []
+                requested_ids if presentation_selected else []
             )
 
         try:

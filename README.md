@@ -113,8 +113,11 @@ o limite do catálogo visual; imagens pequenas e fragmentos são filtrados, os
 candidatos são normalizados para PNG/JPEG RGB e distribuídos entre páginas.
 Objetos raster próximos que formem uma figura composta são renderizados como um
 recorte único. Antes de o LLM criar a apresentação, o docente vê miniaturas e
-escolhe explicitamente quais imagens documentais podem ser disponibilizadas ao
-agente. A apresentação também pode recorrer a imagens geradas por IA mediante
+escolhe explicitamente quais imagens documentais devem ser usadas na apresentação.
+Quando o fornecedor é OpenAI, as miniaturas selecionadas são enviadas como entrada
+visual para permitir a associação semântica ao slide mais adequado; um guardrail
+determinístico garante que cada imagem escolhida é usada pelo menos uma vez num
+slide de conteúdo. A apresentação também pode recorrer a imagens geradas por IA mediante
 consentimento explícito; os bytes gerados são validados pelo Pillow e qualquer
 fallback para diagrama é apresentado como aviso explícito.
 A entrada direta de ficheiros de imagem isolados não faz parte do âmbito do

@@ -1117,9 +1117,9 @@ class AGIRSoloInterface:
         ui.separator().classes("my-3")
         ui.label("IMAGENS DOCUMENTAIS CANDIDATAS").classes("eyebrow")
         ui.label(
-            "Selecione as imagens que podem ser disponibilizadas ao LLM para criar a "
-            "apresentação. Nenhuma imagem documental é enviada ao agente sem esta "
-            "seleção humana prévia."
+            "Selecione as imagens que devem ser usadas na apresentação. O CoerIA envia "
+            "as miniaturas ao modelo para escolher o slide mais adequado e garante que "
+            "cada imagem selecionada é usada pelo menos uma vez num slide de conteúdo."
         ).classes("text-sm muted mb-3")
         with ui.row().classes("w-full gap-3 items-stretch flex-wrap"):
             for asset in assets:
@@ -1154,7 +1154,7 @@ class AGIRSoloInterface:
                     if width and height:
                         ui.label(f"{width}×{height} px · RGB").classes("text-xs muted")
                     controls[identifier] = ui.checkbox(
-                        "Disponibilizar ao LLM",
+                        "Usar na apresentação",
                         value=identifier in selected_ids,
                     ).classes("mt-1")
         return controls

@@ -186,8 +186,11 @@ antes de aplicar o limite do catálogo, eliminar imagens pequenas ou fragmentár
 normalizar os candidatos para PNG/JPEG RGB, equilibrar a seleção entre páginas e,
 quando objetos próximos constituam uma figura composta, preferir um recorte
 renderizado da figura completa. O docente deve selecionar, através de miniaturas,
-as imagens documentais que podem ser disponibilizadas ao LLM antes da criação da
-apresentação. Os bytes devolvidos por um gerador de imagens devem ser validados
+as imagens documentais que devem ser usadas antes da criação da apresentação. O
+pipeline deve garantir que cada imagem selecionada é usada pelo menos uma vez num
+slide de conteúdo; quando o fornecedor suporta visão, as miniaturas devem ser
+fornecidas ao modelo para melhorar a associação semântica entre imagem e slide. Os
+bytes devolvidos por um gerador de imagens devem ser validados
 com Pillow; qualquer rejeição ou fallback para diagrama deve produzir um aviso
 explícito. O docente deve poder rever a imagem antes da aprovação do recurso.
 Não é permitido descarregar silenciosamente imagens da Web
