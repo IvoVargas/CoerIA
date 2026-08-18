@@ -134,17 +134,50 @@ sudo nginx -t
 check_http() {
   local url="$1"
   local label="$2"
-  local code
-  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$url" || true)"
-  if [[ ! "$code" =~ ^[23][0-9][0-9]$ ]]; then
-    fail "$label devolveu HTTP ${code:-sem resposta}: $url"
+  local attempts="${3:-1}"
+  local delay="${4:-2}"
+  local code="000"
+  local attempt
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    code="$(
+      curl \
+        --silent \
+        --request GET \
+        --output /dev/null \
+        --write-out '%{http_code}' \
+        --max-time 10 \
+        "$url" \
+      || true
+    )"
+    code="${code:-000}"
+
+    if [[ "$code" =~ ^[23][0-9][0-9]$ ]]; then
+      printf '%s: HTTP %s\n' "$label" "$code"
+      return 0
+    fi
+
+    if (( attempt < attempts )); then
+      printf '%s ainda indisponível (HTTP %s). Nova tentativa em %ss (%s/%s).\n' \
+        "$label" "$code" "$delay" "$attempt" "$attempts"
+      sleep "$delay"
+    fi
+  done
+
+  if [[ "$label" == "Local" ]]; then
+    sudo systemctl status "$SERVICE" --no-pager -l || true
+    sudo journalctl -u "$SERVICE" -n 100 --no-pager || true
+    sudo ss -ltnp | grep ':7860' || true
   fi
-  printf '%s: HTTP %s\n' "$label" "$code"
+
+  fail "$label não ficou disponível após $attempts tentativas (último HTTP $code): $url"
 }
 
 log "Verificar aplicação"
-check_http "$LOCAL_URL" "Local"
-check_http "$PUBLIC_URL" "HTTPS"
+# O NiceGUI pode precisar de alguns segundos para começar a aceitar ligações
+# depois de o systemd considerar o processo ativo.
+check_http "$LOCAL_URL" "Local" 15 2
+check_http "$PUBLIC_URL" "HTTPS" 5 2
 
 log "Verificar serviços"
 for unit in coeria nginx coeria-backup.timer; do

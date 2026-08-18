@@ -94,7 +94,7 @@ cd /opt/coeria/app
 ./deploy/update.sh v0.2.2
 ```
 
-O script valida que o checkout está limpo, cria backup, faz `fetch` e checkout da tag, atualiza `COERIA_APP_VERSION`, instala `requirements-vps.lock`, executa a suíte com uma base temporária, reinicia o serviço apenas se os testes passarem e verifica o acesso local/HTTPS, Nginx e serviços.
+O script valida que o checkout está limpo, cria backup, faz `fetch` e checkout da tag, atualiza `COERIA_APP_VERSION`, instala `requirements-vps.lock`, executa a suíte com uma base temporária, reinicia o serviço apenas se os testes passarem e verifica o acesso local/HTTPS, Nginx e serviços. Depois do restart, o health check local usa pedidos `GET` e repete a tentativa até 15 vezes (intervalos de 2 segundos), porque o processo pode estar `active` no systemd antes de o NiceGUI começar a aceitar ligações.
 
 Se qualquer etapa crítica falhar, o processo termina imediatamente. O script não executa `git reset --hard`, não altera ownership e não imprime segredos.
 
@@ -219,8 +219,8 @@ sudo journalctl -u coeria -n 50 --no-pager
 ### 2.8 Verificar a aplicação local e externamente
 
 ```bash
-curl -I http://127.0.0.1:7860/login
-curl -I https://coeria.ivovargas.pt/login
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:7860/login
+curl -sS -o /dev/null -w '%{http_code}\n' https://coeria.ivovargas.pt/login
 sudo nginx -t
 systemctl is-active coeria nginx coeria-backup.timer
 git -C /opt/coeria/app describe --tags --always
@@ -264,8 +264,8 @@ sudo systemctl restart coeria
 # 6. Verificação
 sudo systemctl status coeria --no-pager
 sudo journalctl -u coeria -n 50 --no-pager
-curl -I http://127.0.0.1:7860/login
-curl -I https://coeria.ivovargas.pt/login
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:7860/login
+curl -sS -o /dev/null -w '%{http_code}\n' https://coeria.ivovargas.pt/login
 sudo nginx -t
 systemctl is-active coeria nginx coeria-backup.timer
 git -C /opt/coeria/app describe --tags --always
@@ -336,6 +336,22 @@ sudo -u coeria sh -c '
   /opt/coeria/venv/bin/python -m pytest -q -p no:cacheprovider tests
 '
 ```
+
+---
+
+### Health check falha logo após `systemctl restart`, mas o serviço fica ativo
+
+O systemd pode considerar o processo `active` antes de o NiceGUI/Uvicorn começar a aceitar ligações em `127.0.0.1:7860`. Por isso, um único `curl` imediatamente após o restart pode devolver HTTP `000`/`connection refused` mesmo quando a aplicação fica operacional alguns segundos depois.
+
+Confirmar com:
+
+```bash
+sudo systemctl status coeria --no-pager -l
+sudo ss -ltnp | grep ':7860'
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:7860/login
+```
+
+O endpoint `/login` aceita `GET`; um `curl -I` envia `HEAD` e pode devolver `405 Method Not Allowed` mesmo quando a aplicação está saudável. O `deploy/update.sh` usa por isso `GET`, aceita códigos `2xx`/`3xx` e repete automaticamente o health check local durante cerca de 30 segundos.
 
 ---
 
@@ -433,7 +449,7 @@ Instalar e ativar a aplicação:
 sudo install -o root -g root -m 0644 /opt/coeria/app/deploy/coeria.service /etc/systemd/system/coeria.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now coeria
-curl -I http://127.0.0.1:7860/login
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:7860/login
 ```
 
 Instalar o virtual host Nginx depois de obter o certificado TLS adequado:
