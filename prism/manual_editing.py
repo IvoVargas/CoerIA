@@ -236,6 +236,9 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     _field("title", "Título"),
                     _field("bullets", "Pontos — um por linha", "lines"),
                     _field("outcome_id", "Resultado"),
+                    _field("visual_mode", "Modo visual"),
+                    _field("visual_asset_id", "Imagem associada"),
+                    _field("visual_prompt", "Instrução da imagem IA", "long"),
                     _field("visual_kind", "Tipo visual"),
                     _field("visual_title", "Título visual"),
                     _field("visual_items", "Itens visuais — um por linha", "lines"),
@@ -246,6 +249,9 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "title": "",
                     "bullets": [],
                     "outcome_id": "",
+                    "visual_mode": "diagrama",
+                    "visual_asset_id": "",
+                    "visual_prompt": "",
                     "visual_kind": "conceito",
                     "visual_title": "",
                     "visual_items": [],
@@ -402,7 +408,43 @@ def editor_reference_options(
     state: dict[str, Any],
     field: FieldSpec,
 ) -> dict[str, str] | None:
-    """Devolve opções de etapas anteriores para os campos que guardam IDs."""
+    """Devolve opções controladas para relações e escolhas estruturais."""
+
+    if field.key == "visual_mode":
+        return {
+            "diagrama": "Diagrama nativo editável",
+            "documento": "Imagem extraída de documento",
+            "ia": "Imagem gerada por IA",
+        }
+    if field.key == "visual_asset_id":
+        options = {"": "Sem imagem documental"}
+        for asset in state.get("source_images", []):
+            if not isinstance(asset, dict):
+                continue
+            identifier = str(asset.get("id", "")).strip()
+            if not identifier:
+                continue
+            source_file = str(asset.get("source_file", "")).strip()
+            location = str(asset.get("source_location", "")).strip()
+            filename = str(asset.get("filename", "")).strip()
+            description = source_file
+            if location:
+                description += f" — {location}"
+            if filename and filename != source_file:
+                description += f" — {filename}"
+            options[identifier] = description or identifier
+        for asset in state.get("generated_images", []):
+            if not isinstance(asset, dict):
+                continue
+            identifier = str(asset.get("id", "")).strip()
+            if not identifier:
+                continue
+            provider = str(asset.get("provider", "IA")).strip()
+            model = str(asset.get("model", "")).strip()
+            options[identifier] = (
+                f"Gerada por IA — {provider}" + (f" — {model}" if model else "")
+            )
+        return options
 
     source = REFERENCE_FIELDS.get(field.key)
     if source is None:
@@ -497,6 +539,23 @@ def apply_editor_field_value(
         evidence = "Sim" if status.casefold() == "coerente" else "Não"
         target["assessment"] = evidence
         target["teaching_activity"] = evidence
+        return
+    if field.key == "visual_mode":
+        mode = str(value or "diagrama").strip() or "diagrama"
+        target[field.key] = mode
+        if mode not in {"documento", "ia"}:
+            target["visual_asset_id"] = ""
+            target["visual_prompt"] = ""
+        elif mode == "documento":
+            target["visual_prompt"] = ""
+        return
+    if field.key == "visual_asset_id":
+        identifier = str(value or "").strip()
+        target[field.key] = identifier
+        if identifier.startswith("ai-"):
+            target["visual_mode"] = "ia"
+        else:
+            target["visual_mode"] = "documento" if identifier else "diagrama"
         return
     target[field.key] = parse_editor_value(value, field.kind)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any, Callable
@@ -9,8 +10,12 @@ from typing import Any, Callable
 from .assistance import build_initial_form_assistant, validate_initial_fields
 from .auth import normalize_user_id
 from .exporter import export_resource_package
-from .ingestion import build_source_text, recover_direct_source_text
-from .models import CourseInput, validate_resource_types
+from .ingestion import (
+    build_source_text,
+    extract_source_images,
+    recover_direct_source_text,
+)
+from .models import CourseInput, RESOURCE_PRESENTATION, validate_resource_types
 from .persistence import SQLiteSessionStore
 from .providers import configured_ai_provider
 from .workflow import (
@@ -63,6 +68,17 @@ class ApplicationService:
             progress_callback("A preparar os dados da unidade curricular…")
         source_text = str(form.get("source_text", "") or "")
         consolidated_source = build_source_text(source_text, source_files)
+        source_images = extract_source_images(source_files)
+        ai_image_generation_enabled = bool(form.get("ai_image_generation_enabled"))
+        if (
+            ai_image_generation_enabled
+            and RESOURCE_PRESENTATION in list(form.get("resource_types", []) or [])
+            and not os.getenv("OPENAI_API_KEY")
+        ):
+            raise ValueError(
+                "A geração de imagens por IA foi autorizada, mas OPENAI_API_KEY não "
+                "está disponível. Configure a chave ou desative esta opção."
+            )
         course = CourseInput.create(
             str(form.get("unit_name", "") or ""),
             consolidated_source,
@@ -88,9 +104,11 @@ class ApplicationService:
                 form.get("ai_provider", configured_ai_provider())
                 or configured_ai_provider()
             ),
+            ai_image_generation_enabled=ai_image_generation_enabled,
             progress_callback=progress_callback,
         )
         state["source_input_text"] = source_text.strip()
+        state["source_images"] = source_images
         if progress_callback is not None:
             progress_callback("A guardar a sessão e a proposta inicial…")
         return self._persist(state)
@@ -132,6 +150,9 @@ class ApplicationService:
                 state.get("ai_provider", configured_ai_provider())
             ),
             "resource_types": list(state.get("resource_types", [])),
+            "ai_image_generation_enabled": bool(
+                state.get("ai_image_generation_enabled", False)
+            ),
         }
 
     def review_session(
@@ -279,4 +300,5 @@ class ApplicationService:
         original = dict(form)
         provider = original.pop("ai_provider", configured_ai_provider())
         original.pop("resource_types", None)
+        original.pop("ai_image_generation_enabled", None)
         return build_initial_form_assistant(str(provider)).propose(original)

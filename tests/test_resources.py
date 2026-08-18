@@ -1,3 +1,4 @@
+import base64
 import json
 import unittest
 import zipfile
@@ -8,12 +9,14 @@ from os import environ
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from PIL import Image
 from docx import Document
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from prism.agents import AgentGenerationError, GenerationResult
 from prism.application_service import ApplicationService
-from prism.exporter import export_resource_package
+from prism.exporter import export_presentation, export_resource_package
 from prism.models import (
     CourseInput,
     RESOURCE_PRACTICAL,
@@ -61,7 +64,10 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertTrue(resources["presentation_outline"])
         self.assertTrue(
             all(
-                slide.get("visual_kind")
+                slide.get("visual_mode") == "diagrama"
+                and slide.get("visual_asset_id") == ""
+                and slide.get("visual_prompt") == ""
+                and slide.get("visual_kind")
                 and slide.get("visual_title")
                 and 2 <= len(slide.get("visual_items", [])) <= 4
                 and slide.get("visual_source")
@@ -74,6 +80,135 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertTrue(resources["practical_activity"]["steps"])
         self.assertTrue(resources["quality"]["passed"])
         self.assertEqual(resources["quality"]["status"], "OK")
+
+    def test_document_image_is_approved_and_embedded_in_presentation(self) -> None:
+        state = self._resource_state()
+        image_buffer = BytesIO()
+        Image.new("RGB", (320, 180), (30, 110, 170)).save(
+            image_buffer, format="PNG"
+        )
+        asset_id = "document-test-image"
+        state["source_images"] = [
+            {
+                "id": asset_id,
+                "origin_type": "document",
+                "source_file": "apoio.pdf",
+                "source_location": "Página 3",
+                "filename": "figura.png",
+                "media_type": "image/png",
+                "data_base64": base64.b64encode(image_buffer.getvalue()).decode(
+                    "ascii"
+                ),
+                "alt_text": "",
+                "approved": False,
+            }
+        ]
+        slide = state["resources"]["presentation_outline"][1]
+        slide["visual_mode"] = "documento"
+        slide["visual_asset_id"] = asset_id
+        slide["visual_source"] = "Imagem extraída de apoio.pdf, Página 3."
+        slide["alt_text"] = "Figura documental usada para apoiar o conteúdo do slide."
+        state["resources"]["quality"] = evaluate_quality(
+            state, state["resources"]
+        )
+        self.assertTrue(state["resources"]["quality"]["passed"])
+
+        state = review_current_stage(state, "approve", agent=self.agent)
+        self.assertTrue(state["source_images"][0]["approved"])
+        state = review_current_stage(state, "approve", agent=self.agent)
+        self.assertEqual(state["status"], "completed")
+
+        presentation_path = Path(export_presentation(state))
+        try:
+            presentation = Presentation(presentation_path)
+            pictures = [
+                shape
+                for shape in presentation.slides[1].shapes
+                if shape.shape_type == MSO_SHAPE_TYPE.PICTURE
+            ]
+            self.assertEqual(len(pictures), 1)
+            descriptions = [
+                properties.get("descr", "")
+                for properties in pictures[0]._element.xpath(".//p:cNvPr")
+            ]
+            self.assertTrue(any("Figura documental" in item for item in descriptions))
+        finally:
+            presentation_path.unlink(missing_ok=True)
+
+    def test_ai_generated_image_is_approved_and_embedded_in_presentation(self) -> None:
+        state = self._resource_state()
+        image_buffer = BytesIO()
+        Image.new("RGB", (320, 180), (90, 50, 140)).save(
+            image_buffer, format="PNG"
+        )
+        asset_id = "ai-test-image"
+        state["generated_images"] = [
+            {
+                "id": asset_id,
+                "origin_type": "ai_generated",
+                "provider": "OpenAI Image API",
+                "model": "gpt-image-test",
+                "prompt": "Ilustração educativa de teste.",
+                "filename": "coeria_slide_2_ia.png",
+                "media_type": "image/png",
+                "data_base64": base64.b64encode(image_buffer.getvalue()).decode(
+                    "ascii"
+                ),
+                "alt_text": "Ilustração educativa gerada por IA.",
+                "approved": False,
+                "created_at": "2026-08-18 00:00:00 UTC",
+            }
+        ]
+        state["ai_image_generation_enabled"] = True
+        slide = state["resources"]["presentation_outline"][1]
+        slide["visual_mode"] = "ia"
+        slide["visual_asset_id"] = asset_id
+        slide["visual_prompt"] = "Representar visualmente o conceito sem texto."
+        slide["visual_source"] = (
+            "Imagem gerada por IA — OpenAI Image API, modelo gpt-image-test."
+        )
+        slide["alt_text"] = "Ilustração educativa gerada por IA."
+        state["resources"]["quality"] = evaluate_quality(
+            state, state["resources"]
+        )
+        self.assertTrue(state["resources"]["quality"]["passed"])
+
+        state = review_current_stage(state, "approve", agent=self.agent)
+        self.assertTrue(state["generated_images"][0]["approved"])
+        state = review_current_stage(state, "approve", agent=self.agent)
+        self.assertEqual(state["status"], "completed")
+
+        presentation_path = Path(export_presentation(state))
+        try:
+            presentation = Presentation(presentation_path)
+            pictures = [
+                shape
+                for shape in presentation.slides[1].shapes
+                if shape.shape_type == MSO_SHAPE_TYPE.PICTURE
+            ]
+            self.assertEqual(len(pictures), 1)
+            slide_text = "\n".join(
+                shape.text
+                for shape in presentation.slides[1].shapes
+                if hasattr(shape, "text_frame")
+            )
+            self.assertIn("OpenAI Image API", slide_text)
+            self.assertIn("gpt-image-test", slide_text)
+        finally:
+            presentation_path.unlink(missing_ok=True)
+
+    def test_quality_rejects_unknown_document_image_id(self) -> None:
+        state = self._resource_state()
+        tampered = deepcopy(state)
+        slide = tampered["resources"]["presentation_outline"][1]
+        slide["visual_mode"] = "documento"
+        slide["visual_asset_id"] = "document-inexistente"
+        report = evaluate_quality(tampered, tampered["resources"])
+        visual_check = next(
+            item for item in report["checks"] if item["id"] == "presentation_visuals"
+        )
+        self.assertFalse(report["passed"])
+        self.assertEqual(visual_check["status"], "error")
 
     def test_quality_validation_is_independent_from_the_generator(self) -> None:
         state = self._resource_state()
@@ -311,6 +446,9 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertEqual(manifest["ai_provider"], "OpenAI")
                 self.assertEqual(set(manifest["selected_resources"]), set(SUPPORTED_RESOURCE_TYPES))
                 self.assertEqual(manifest["primary_product"], program_name)
+                self.assertIn("visual_assets", manifest)
+                self.assertIn("document_images", manifest["visual_assets"])
+                self.assertIn("ai_generated_images", manifest["visual_assets"])
                 program = Document(BytesIO(package.read(program_name)))
                 program_text = "\n".join(
                     [paragraph.text for paragraph in program.paragraphs]

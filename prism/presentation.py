@@ -100,10 +100,35 @@ def _render_resources(artifact: dict[str, Any]) -> str:
                 check.get("label", ""),
                 check.get("detail", ""),
             ])
+    visual_section = ""
+    if "Apresentação PowerPoint" in selected:
+        visual_rows = []
+        for index, slide in enumerate(artifact.get("presentation_outline", []), start=1):
+            mode = str(slide.get("visual_mode", "diagrama"))
+            mode_label = (
+                "Imagem documental"
+                if mode == "documento"
+                else "Imagem gerada por IA"
+                if mode == "ia"
+                else "Diagrama nativo"
+            )
+            visual_rows.append([
+                index,
+                slide.get("title", ""),
+                mode_label,
+                slide.get("visual_source", ""),
+            ])
+        if visual_rows:
+            visual_section = (
+                "\n\n## Elementos visuais da apresentação\n\n"
+                + _table(["Slide", "Título", "Modo", "Fonte"], visual_rows)
+            )
+
     return (
         f"**Tipos selecionados:** {', '.join(selected) or 'nenhum'}\n\n"
         + "## Recursos produzidos\n\n"
         + _table(["Recurso", "Quantidade", "Unidade"], resource_rows)
+        + visual_section
         + f"\n\n## Validação automática — {quality.get('status', 'Não calculada')}\n\n"
         + _table(["", "Verificação", "Resultado"], check_rows)
     )

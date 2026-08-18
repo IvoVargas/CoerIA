@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import csv
 import io
 import json
@@ -21,6 +22,7 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor as PptxRGBColor
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_CONNECTOR
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.parts.image import Image as PptxImage
 from pptx.util import Inches, Pt
 
 from .branding import APP_FULL_NAME, APP_NAME
@@ -569,6 +571,98 @@ def _add_visual_panel(slide: Any, slide_data: dict[str, Any]) -> None:
     )
 
 
+def _add_raster_image_panel(
+    slide: Any,
+    slide_data: dict[str, Any],
+    asset: dict[str, Any],
+) -> bool:
+    """Insere uma imagem documental ou gerada preservando proporções e acessibilidade."""
+
+    encoded = str(asset.get("data_base64", "")).strip()
+    if not encoded:
+        return False
+    try:
+        blob = base64.b64decode(encoded, validate=True)
+        width_px, height_px = PptxImage.from_blob(blob).size
+    except Exception:
+        return False
+    if width_px <= 0 or height_px <= 0:
+        return False
+
+    panel_x, panel_y, panel_w, panel_h = 6.45, 1.55, 6.1, 4.95
+    panel = slide.shapes.add_shape(
+        MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE,
+        Inches(panel_x),
+        Inches(panel_y),
+        Inches(panel_w),
+        Inches(panel_h),
+    )
+    panel.fill.solid()
+    panel.fill.fore_color.rgb = PPT_PALE
+    panel.line.color.rgb = PptxRGBColor(211, 222, 232)
+
+    visual_title = str(slide_data.get("visual_title", "Imagem documental"))
+    alt_text = str(slide_data.get("alt_text", visual_title))
+    _add_ppt_textbox(
+        slide,
+        visual_title,
+        6.8,
+        1.78,
+        5.4,
+        0.5,
+        size=21,
+        color=PPT_NAVY,
+        bold=True,
+        align=PP_ALIGN.CENTER,
+    )
+
+    max_w, max_h = 5.25, 3.65
+    ratio = width_px / height_px
+    draw_w = max_w
+    draw_h = draw_w / ratio
+    if draw_h > max_h:
+        draw_h = max_h
+        draw_w = draw_h * ratio
+    draw_x = panel_x + (panel_w - draw_w) / 2
+    draw_y = 2.48 + (max_h - draw_h) / 2
+    picture = slide.shapes.add_picture(
+        io.BytesIO(blob),
+        Inches(draw_x),
+        Inches(draw_y),
+        width=Inches(draw_w),
+        height=Inches(draw_h),
+    )
+    _set_shape_alt_text(picture, alt_text)
+
+    if asset.get("origin_type") == "ai_generated":
+        provider = str(asset.get("provider", "IA")).strip()
+        model = str(asset.get("model", "")).strip()
+        provenance = "Gerada por IA · " + provider
+        if model:
+            provenance += f" · {model}"
+    else:
+        location = str(asset.get("source_location", "")).strip()
+        filename = str(asset.get("source_file", "")).strip() or str(
+            asset.get("filename", "")
+        ).strip()
+        provenance = filename
+        if location:
+            provenance += f" · {location}"
+    if provenance:
+        _add_ppt_textbox(
+            slide,
+            provenance,
+            6.82,
+            6.18,
+            5.35,
+            0.22,
+            size=9,
+            color=PPT_MUTED,
+            align=PP_ALIGN.CENTER,
+        )
+    return True
+
+
 def _add_slide_source(slide: Any, source: str, *, light: bool = False) -> None:
     _add_ppt_textbox(
         slide,
@@ -593,6 +687,14 @@ def export_presentation(state: dict[str, Any], output_path: Path | str | None = 
     presentation.slide_width = Inches(13.333)
     presentation.slide_height = Inches(7.5)
     blank_layout = presentation.slide_layouts[6]
+    visual_assets = {
+        str(asset.get("id", "")): asset
+        for collection in ("source_images", "generated_images")
+        for asset in state.get(collection, [])
+        if isinstance(asset, dict)
+        and str(asset.get("id", "")).strip()
+        and asset.get("approved") is True
+    }
 
     for index, slide_data in enumerate(slides):
         slide = presentation.slides.add_slide(blank_layout)
@@ -753,7 +855,27 @@ def export_presentation(state: dict[str, Any], output_path: Path | str | None = 
             paragraph.font.size = Pt(18 if len(bullets) <= 4 else 16)
             paragraph.font.color.rgb = PPT_INK
             paragraph.space_after = Pt(13)
-        _add_visual_panel(slide, slide_data)
+        visual_mode = str(slide_data.get("visual_mode", "diagrama"))
+        visual_asset_id = str(slide_data.get("visual_asset_id", "")).strip()
+        used_raster_image = False
+        if visual_mode in {"documento", "ia"} and visual_asset_id:
+            asset = visual_assets.get(visual_asset_id)
+            if asset is not None:
+                used_raster_image = _add_raster_image_panel(
+                    slide, slide_data, asset
+                )
+        if not used_raster_image:
+            _add_visual_panel(slide, slide_data)
+            if visual_mode == "documento":
+                source = (
+                    f"Diagrama nativo gerado pelo {APP_NAME}; a imagem documental "
+                    "selecionada não estava disponível no momento da exportação."
+                )
+            elif visual_mode == "ia":
+                source = (
+                    f"Diagrama nativo gerado pelo {APP_NAME}; a imagem gerada por IA "
+                    "não estava aprovada ou disponível no momento da exportação."
+                )
         _add_slide_source(slide, source)
 
     if output_path is None:
@@ -919,6 +1041,31 @@ def export_resource_package(state: dict[str, Any]) -> str:
             "quality": quality,
             "primary_product": program_path.name,
             "files": [archive_name for _path, archive_name in generated],
+            "visual_assets": {
+                "document_images": [
+                    {
+                        key: asset.get(key)
+                        for key in (
+                            "id", "origin_type", "source_file", "source_location",
+                            "filename", "media_type", "approved",
+                        )
+                    }
+                    for asset in state.get("source_images", [])
+                    if isinstance(asset, dict)
+                ],
+                "ai_generated_images": [
+                    {
+                        key: asset.get(key)
+                        for key in (
+                            "id", "origin_type", "provider", "model", "prompt",
+                            "size", "quality", "output_format", "filename", "media_type",
+                            "alt_text", "approved", "created_at",
+                        )
+                    }
+                    for asset in state.get("generated_images", [])
+                    if isinstance(asset, dict)
+                ],
+            },
         }
 
         with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:

@@ -4,12 +4,15 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from PIL import Image
 from docx import Document
 from pptx import Presentation
+from pptx.util import Inches
 
 from prism.ingestion import (
     SourceIngestionError,
     build_source_text,
+    extract_source_images,
     recover_direct_source_text,
 )
 
@@ -94,6 +97,77 @@ class SourceIngestionTests(unittest.TestCase):
         self.assertIn("Conteudo PDF", result)
         self.assertIn("Conteúdo DOCX", result)
         self.assertIn("Conteúdo PPTX", result)
+
+    def test_images_are_extracted_from_reference_documents_with_provenance(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+
+            image_path = directory / "figura.png"
+            Image.new(
+                "RGB",
+                (60, 40),
+                (20, 120, 160),
+            ).save(image_path)
+
+            pdf_path = directory / "fonte.pdf"
+            Image.open(image_path).convert("RGB").save(
+                pdf_path,
+                "PDF",
+            )
+
+            docx_path = directory / "fonte.docx"
+            document = Document()
+            document.add_paragraph("Documento com imagem.")
+            document.add_picture(str(image_path))
+            document.save(docx_path)
+
+            pptx_path = directory / "fonte.pptx"
+            presentation = Presentation()
+            slide = presentation.slides.add_slide(
+                presentation.slide_layouts[6]
+            )
+            slide.shapes.add_picture(
+                str(image_path),
+                Inches(1),
+                Inches(1),
+            )
+            presentation.save(pptx_path)
+
+            assets = extract_source_images(
+                [pdf_path, docx_path, pptx_path]
+            )
+
+        self.assertEqual(len(assets), 3)
+
+        pdf_asset = next(
+            item
+            for item in assets
+            if item["source_file"] == "fonte.pdf"
+        )
+        self.assertEqual(pdf_asset["source_location"], "Página 1")
+
+        docx_asset = next(
+            item
+            for item in assets
+            if item["source_file"] == "fonte.docx"
+        )
+        self.assertEqual(docx_asset["source_location"], "")
+
+        pptx_asset = next(
+            item
+            for item in assets
+            if item["source_file"] == "fonte.pptx"
+        )
+        self.assertEqual(pptx_asset["source_location"], "Slide 1")
+
+        for asset in assets:
+            self.assertEqual(asset["origin_type"], "document")
+            self.assertTrue(asset["filename"])
+            self.assertTrue(asset["data_base64"])
+            self.assertFalse(asset["approved"])
+            self.assertEqual(asset["alt_text"], "")
 
     def test_configured_source_limit_is_enforced(self) -> None:
         with patch.dict(environ, {"PRISM_MAX_SOURCE_CHARS": "20"}):

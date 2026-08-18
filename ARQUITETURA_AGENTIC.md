@@ -113,8 +113,14 @@ novamente verificado antes da revisão humana. O esquema enviado ao fornecedor
 contém apenas o recurso corrente: `selected_types`, os campos vazios dos outros
 recursos e a agregação final são controlados deterministicamente pela aplicação.
 Assim, o modelo não pode alterar a seleção do docente e a resposta não transporta
-estruturas desnecessárias. A futura geração de imagens é uma operação distinta
-da geração textual e estrutural da apresentação.
+estruturas desnecessárias. A geração de imagens é uma operação distinta da
+geração textual e estrutural da apresentação. Depois de a estrutura indicar um
+visual documental ou uma proposta de imagem por IA, a aplicação resolve o ativo
+fora da chamada estrutural: reutiliza apenas IDs de imagens extraídas das fontes
+ou, quando existe consentimento explícito, chama a OpenAI Image API. O estado
+persiste proveniência, fornecedor, modelo, instrução e parâmetros de geração;
+a interface mostra o resultado ao docente e a exportação só incorpora ativos
+marcados como aprovados. Qualquer falha regressa ao diagrama nativo editável.
 
 Quando uma chamada falha, as propostas dos tipos anteriores que já passaram a
 validação são persistidas como rascunhos técnicos, sem aprovar a etapa nem alterar

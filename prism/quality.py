@@ -408,9 +408,45 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             "sintese",
         }
         presentation_slides = resource_data.get("presentation_outline", [])
+        source_asset_ids = {
+            str(item.get("id", ""))
+            for item in state.get("source_images", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        }
+        generated_assets = {
+            str(item.get("id", "")): item
+            for item in state.get("generated_images", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        }
+        generated_asset_ids = set(generated_assets)
+        pending_ai_allowed = bool(
+            state.get("resource_generation_scope")
+            and state.get("ai_image_generation_enabled")
+        )
         invalid_visual_slides = []
         for index, slide in enumerate(presentation_slides, start=1):
             visual_items = slide.get("visual_items", [])
+            visual_mode = str(slide.get("visual_mode", ""))
+            visual_asset_id = str(slide.get("visual_asset_id", "")).strip()
+            visual_prompt = str(slide.get("visual_prompt", "")).strip()
+            valid_asset = (
+                visual_mode == "diagrama" and not visual_asset_id
+            ) or (
+                visual_mode == "documento" and visual_asset_id in source_asset_ids
+            ) or (
+                visual_mode == "ia"
+                and (
+                    (
+                        visual_asset_id in generated_asset_ids
+                        and bool(str(generated_assets[visual_asset_id].get("prompt", "")).strip())
+                    )
+                    or (
+                        pending_ai_allowed
+                        and not visual_asset_id
+                        and bool(visual_prompt)
+                    )
+                )
+            )
             if (
                 slide.get("visual_kind") not in allowed_visual_kinds
                 or not str(slide.get("visual_title", "")).strip()
@@ -418,6 +454,8 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 or any(not str(item).strip() for item in visual_items)
                 or not str(slide.get("visual_source", "")).strip()
                 or not str(slide.get("alt_text", "")).strip()
+                or visual_mode not in {"diagrama", "documento", "ia"}
+                or not valid_asset
             ):
                 invalid_visual_slides.append(str(index))
         checks.append(
@@ -426,8 +464,9 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 "Elementos visuais da apresentação",
                 "pass" if presentation_slides and not invalid_visual_slides else "error",
                 (
-                    "Todos os slides incluem um elemento visual relevante, editável, "
-                    "com fonte e texto alternativo."
+                    "Todos os slides incluem um elemento visual válido (diagrama "
+                    "editável, imagem documental ou imagem gerada por IA), com fonte "
+                    "e texto alternativo."
                     if presentation_slides and not invalid_visual_slides
                     else "Especificação visual incompleta nos slides: "
                     + (", ".join(invalid_visual_slides) or "todos")

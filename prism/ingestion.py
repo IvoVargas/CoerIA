@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import base64
+import mimetypes
 import re
+from hashlib import sha256
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
+from zipfile import BadZipFile, ZipFile
 
 from .branding import config_value
 
@@ -13,6 +17,8 @@ SUPPORTED_SOURCE_SUFFIXES = {".txt", ".md", ".tex", ".pdf", ".docx", ".pptx"}
 DIRECT_SOURCE_MARKER = "[Texto introduzido pelo docente]"
 DEFAULT_MAX_SOURCE_CHARS = 120_000
 DEFAULT_MAX_FILE_BYTES = 12 * 1024 * 1024
+DEFAULT_MAX_EXTRACTED_IMAGE_BYTES = 5 * 1024 * 1024
+DEFAULT_MAX_EXTRACTED_IMAGES = 30
 
 
 class SourceIngestionError(ValueError):
@@ -90,6 +96,227 @@ def _read_pptx(path: Path) -> str:
         return "\n\n".join(parts)
     except Exception as error:
         raise SourceIngestionError(f"Não foi possível extrair texto de {path.name}.") from error
+
+
+def _image_media_type(filename: str) -> str:
+    guessed, _encoding = mimetypes.guess_type(filename)
+    return guessed or "application/octet-stream"
+
+
+def _source_image_asset(
+    *,
+    data: bytes,
+    source_file: str,
+    filename: str,
+    location: str = "",
+) -> dict[str, Any] | None:
+    """Normaliza uma imagem documental para persistência no estado da sessão."""
+
+    if not data or len(data) > DEFAULT_MAX_EXTRACTED_IMAGE_BYTES:
+        return None
+
+    digest = sha256(
+        source_file.encode("utf-8")
+        + b"\0"
+        + location.encode("utf-8")
+        + b"\0"
+        + data
+    ).hexdigest()[:20]
+
+    return {
+        "id": f"document-{digest}",
+        "origin_type": "document",
+        "source_file": source_file,
+        "source_location": location,
+        "filename": Path(filename).name or f"imagem-{digest}.bin",
+        "media_type": _image_media_type(filename),
+        "data_base64": base64.b64encode(data).decode("ascii"),
+        "alt_text": "",
+        "approved": False,
+    }
+
+
+def _extract_pdf_images(path: Path) -> list[dict[str, Any]]:
+    try:
+        from pypdf import PdfReader
+    except ImportError as error:
+        raise SourceIngestionError(
+            "A extração de imagens de PDF requer a dependência pypdf. "
+            "Reinstale os requisitos."
+        ) from error
+
+    assets: list[dict[str, Any]] = []
+
+    try:
+        reader = PdfReader(str(path))
+
+        for page_index, page in enumerate(reader.pages, start=1):
+            try:
+                page_images = list(page.images)
+            except Exception:
+                continue
+
+            for image_index, image in enumerate(page_images, start=1):
+                try:
+                    filename = str(
+                        getattr(image, "name", "")
+                        or f"imagem-{image_index}.bin"
+                    )
+
+                    asset = _source_image_asset(
+                        data=bytes(image.data),
+                        source_file=path.name,
+                        filename=filename,
+                        location=f"Página {page_index}",
+                    )
+                except Exception:
+                    continue
+
+                if asset is not None:
+                    assets.append(asset)
+
+                    if len(assets) >= DEFAULT_MAX_EXTRACTED_IMAGES:
+                        return assets
+
+        return assets
+
+    except Exception:
+        return []
+
+
+def _extract_docx_images(path: Path) -> list[dict[str, Any]]:
+    assets: list[dict[str, Any]] = []
+
+    try:
+        with ZipFile(path) as archive:
+            media_names = sorted(
+                name
+                for name in archive.namelist()
+                if name.startswith("word/media/")
+                and not name.endswith("/")
+            )
+
+            for media_name in media_names[:DEFAULT_MAX_EXTRACTED_IMAGES]:
+                asset = _source_image_asset(
+                    data=archive.read(media_name),
+                    source_file=path.name,
+                    filename=Path(media_name).name,
+                )
+
+                if asset is not None:
+                    assets.append(asset)
+
+        return assets
+
+    except (BadZipFile, KeyError, OSError):
+        return []
+
+
+def _extract_pptx_images(path: Path) -> list[dict[str, Any]]:
+    try:
+        from pptx import Presentation
+        from pptx.enum.shapes import MSO_SHAPE_TYPE
+    except ImportError as error:
+        raise SourceIngestionError(
+            "A extração de imagens de PPTX requer a dependência python-pptx. "
+            "Reinstale os requisitos."
+        ) from error
+
+    assets: list[dict[str, Any]] = []
+
+    def visit_shapes(shapes: Any, slide_index: int) -> bool:
+        for shape in shapes:
+            if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+                if visit_shapes(shape.shapes, slide_index):
+                    return True
+                continue
+
+            if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
+                continue
+
+            image = shape.image
+
+            asset = _source_image_asset(
+                data=bytes(image.blob),
+                source_file=path.name,
+                filename=str(
+                    image.filename or f"imagem.{image.ext}"
+                ),
+                location=f"Slide {slide_index}",
+            )
+
+            if asset is not None:
+                assets.append(asset)
+
+                if len(assets) >= DEFAULT_MAX_EXTRACTED_IMAGES:
+                    return True
+
+        return False
+
+    try:
+        presentation = Presentation(str(path))
+
+        for slide_index, slide in enumerate(
+            presentation.slides,
+            start=1,
+        ):
+            if visit_shapes(slide.shapes, slide_index):
+                break
+
+        return assets
+
+    except Exception:
+        return []
+
+
+def extract_file_images(
+    path_value: str | Path,
+) -> list[dict[str, Any]]:
+    """Extrai imagens raster de fontes documentais com proveniência rastreável."""
+
+    path = Path(path_value)
+
+    if not path.is_file():
+        raise SourceIngestionError(
+            f"O ficheiro {path.name or path} não está disponível."
+        )
+
+    suffix = path.suffix.lower()
+
+    if suffix == ".pdf":
+        return _extract_pdf_images(path)
+
+    if suffix == ".docx":
+        return _extract_docx_images(path)
+
+    if suffix == ".pptx":
+        return _extract_pptx_images(path)
+
+    return []
+
+
+def extract_source_images(
+    file_paths: str | Path | Iterable[str | Path] | None = None,
+) -> list[dict[str, Any]]:
+    """Extrai e desduplica imagens dos documentos carregados como referência."""
+
+    assets: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    for path_value in _normalise_paths(file_paths):
+        for asset in extract_file_images(path_value):
+            asset_id = str(asset["id"])
+
+            if asset_id in seen_ids:
+                continue
+
+            seen_ids.add(asset_id)
+            assets.append(asset)
+
+            if len(assets) >= DEFAULT_MAX_EXTRACTED_IMAGES:
+                return assets
+
+    return assets
 
 
 def extract_file_text(path_value: str | Path) -> str:

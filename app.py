@@ -551,6 +551,17 @@ class AGIRSoloInterface:
                     resource_type,
                     value=resource_type == RESOURCE_PRESENTATION,
                 )
+        self.fields["ai_image_generation_enabled"] = ui.checkbox(
+            "Permitir geração de imagens por IA na apresentação",
+            value=False,
+        ).classes("mt-3")
+        ui.label(
+            "Opcional. A geração visual usa sempre a OpenAI Image API e a mesma "
+            "OPENAI_API_KEY configurada para a OpenAI, mesmo quando o fornecedor "
+            "pedagógico selecionado é IAedu. Pode implicar custo adicional. A aplicação "
+            "gera no máximo o número configurado de imagens e todas ficam sujeitas à "
+            "aprovação do docente antes da exportação."
+        ).classes("text-xs muted")
 
     async def handle_upload(self, event: events.UploadEventArguments) -> None:
         self.uploaded_files[event.file.name] = await event.file.read()
@@ -749,6 +760,7 @@ class AGIRSoloInterface:
                 "general_aims": "",
                 "bibliography": "",
                 "resource_types": [RESOURCE_PRESENTATION],
+                "ai_image_generation_enabled": False,
             }
         )
         self.uploaded_files.clear()
@@ -1026,6 +1038,93 @@ class AGIRSoloInterface:
                 ).props("unelevated no-caps").classes("primary-action")
         dialog.open()
 
+    def _render_selected_image_previews(
+        self, state: dict[str, Any]
+    ) -> None:
+        """Mostra ao docente as imagens selecionadas antes da aprovação."""
+
+        slides = state.get("resources", {}).get("presentation_outline", [])
+        assets: dict[str, dict[str, Any]] = {}
+        for collection in ("source_images", "generated_images"):
+            for asset in state.get(collection, []):
+                if not isinstance(asset, dict):
+                    continue
+                identifier = str(asset.get("id", "")).strip()
+                if identifier:
+                    assets[identifier] = asset
+
+        selected: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+        for index, slide in enumerate(slides, start=1):
+            if not isinstance(slide, dict) or slide.get("visual_mode") not in {
+                "documento",
+                "ia",
+            }:
+                continue
+            asset = assets.get(str(slide.get("visual_asset_id", "")).strip())
+            if asset is not None:
+                selected.append((index, slide, asset))
+        if not selected:
+            return
+
+        ui.separator().classes("my-4")
+        ui.label("IMAGENS SELECIONADAS").classes("eyebrow")
+        ui.label(
+            "Confirme visualmente estas imagens antes de aprovar os recursos. "
+            "As imagens geradas por IA apresentam também fornecedor, modelo e "
+            "instrução utilizada."
+        ).classes("text-sm muted mb-3")
+        with ui.row().classes("w-full gap-3 items-stretch flex-wrap"):
+            for slide_number, slide, asset in selected:
+                encoded = str(asset.get("data_base64", "")).strip()
+                media_type = str(asset.get("media_type", "image/png")).strip()
+                is_ai = asset.get("origin_type") == "ai_generated"
+                with ui.card().classes("surface p-3").style(
+                    "width: min(100%, 340px);"
+                ):
+                    if encoded:
+                        ui.image(
+                            f"data:{media_type};base64,{encoded}"
+                        ).classes("w-full rounded").style(
+                            "height: 190px; object-fit: contain; background: #f4f7fa;"
+                        )
+                    ui.label(
+                        f"Slide {slide_number} — {slide.get('title', '')}"
+                    ).classes("font-semibold text-sm")
+                    if is_ai:
+                        provider = str(asset.get("provider", "IA")).strip()
+                        model = str(asset.get("model", "")).strip()
+                        ui.label(
+                            f"Gerada por IA · {provider}" + (f" · {model}" if model else "")
+                        ).classes("text-xs muted")
+                        size = str(asset.get("size", "")).strip()
+                        quality = str(asset.get("quality", "")).strip()
+                        if size or quality:
+                            detail = " · ".join(
+                                part for part in (size, f"qualidade {quality}" if quality else "")
+                                if part
+                            )
+                            ui.label(detail).classes("text-xs muted")
+                        prompt = str(asset.get("prompt", "")).strip()
+                        if prompt:
+                            ui.label("Instrução utilizada:").classes(
+                                "text-xs font-semibold mt-1"
+                            )
+                            ui.label(prompt).classes("text-xs muted")
+                    else:
+                        source = str(asset.get("source_file", "")).strip()
+                        location = str(asset.get("source_location", "")).strip()
+                        if location:
+                            source += f" · {location}"
+                        ui.label(source or "Origem documental").classes(
+                            "text-xs muted"
+                        )
+                    ui.label(
+                        "Aprovada"
+                        if asset.get("approved") is True
+                        else "A aguardar aprovação dos recursos"
+                    ).classes("text-xs font-semibold mt-1")
+
+
     def _render_stage_preview(self, state: dict[str, Any], stage: str) -> None:
         """Mostra uma etapa anterior sem a tornar corrente nem a invalidar."""
 
@@ -1041,6 +1140,8 @@ class AGIRSoloInterface:
                         render_stage_artifact(state, stage),
                         extras=["tables"],
                     ).classes("artifact-markdown")
+                    if stage == "resources":
+                        self._render_selected_image_previews(state)
             if editing:
                 self._render_manual_edit_actions(state, stage)
             else:
@@ -1272,6 +1373,8 @@ class AGIRSoloInterface:
                     ui.markdown(
                         render_current_artifact(state), extras=["tables"]
                     ).classes("artifact-markdown")
+                    if stage == "resources":
+                        self._render_selected_image_previews(state)
             if editing:
                 self._render_manual_edit_actions(state, stage)
             else:

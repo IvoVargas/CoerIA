@@ -102,11 +102,13 @@ A decisão e o microciclo gerador–crítico estão descritos em
 120 000 caracteres no conjunto das fontes. PDFs constituídos apenas por imagem
 necessitam de OCR externo.
 
-Na versão alvo, as imagens da apresentação podem ser fornecidas diretamente
-pelo utilizador, extraídas destes documentos de referência ou geradas por IA. A
-extração das imagens internas dos documentos e o carregamento direto de
-ficheiros de imagem ainda se encontram em implementação; a ingestão atual
-extrai o respetivo conteúdo textual.
+O CoerIA extrai o conteúdo textual destes documentos e, quando aplicável,
+imagens internas de `.pdf`, `.docx` e `.pptx`, conservando a proveniência
+documental disponível. A apresentação também pode recorrer a imagens geradas por
+IA mediante consentimento explícito do docente e validação antes da exportação.
+A entrada direta de ficheiros de imagem isolados não faz parte do âmbito do
+protótipo; essas imagens podem ser acrescentadas posteriormente ao PowerPoint
+editável.
 
 ## Configuração do fornecedor de IA
 
@@ -153,7 +155,14 @@ recurso corrente; a seleção e as estruturas vazias dos restantes recursos são
 acrescentadas deterministicamente pela aplicação. Isto impede o modelo de
 alterar a seleção do docente e reduz os tokens de saída. A geração de imagens
 constitui uma operação posterior e separada da geração textual e estrutural da
-apresentação.
+apresentação. É opcional e exige consentimento explícito no formulário. As imagens
+podem ser extraídas de documentos de referência ou geradas pela OpenAI Image API;
+antes da exportação, o docente vê as imagens selecionadas e aprova o recurso. A
+geração por IA usa `OPENAI_API_KEY` independentemente de o fornecedor pedagógico
+da sessão ser OpenAI ou IAedu. Por predefinição usa `gpt-image-2`, qualidade `low`,
+formato horizontal 16:9 (`1536x864`) e no máximo duas imagens por apresentação.
+Fornecedor, modelo, instrução, tamanho e qualidade ficam registados no estado e no
+manifesto de exportação.
 
 Se uma chamada falhar depois de outros recursos já terem sido validados, estes
 ficam guardados como rascunhos técnicos associados à mesma seleção e aos mesmos
@@ -258,10 +267,12 @@ cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado
 - A crítica por LLM é uma segunda opinião pedagógica, não uma certificação.
 - Não existe publicação automática em LMS nem colaboração simultânea.
 - O protótipo não executa OCR, áudio ou vídeo.
-- A entrada direta, a extração documental e a geração de imagens raster ainda
-  não estão concluídas. Quando não existe uma imagem de origem controlada, a
-  apresentação recorre a diagramas e elementos gráficos nativos, sem inventar
-  proveniência.
+- A entrada direta de ficheiros de imagem isolados não faz parte do âmbito do
+  protótipo; o docente pode acrescentá-los posteriormente ao PowerPoint editável.
+  O CoerIA extrai imagens de documentos de referência e pode gerar imagens por IA
+  com consentimento explícito, mantendo proveniência e aprovação humana. Quando
+  não existe uma imagem de origem controlada ou a geração falha, a apresentação
+  recorre a diagramas e elementos gráficos nativos, sem inventar proveniência.
 
 ## Licença
 

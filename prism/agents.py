@@ -141,9 +141,14 @@ STAGE_REQUIREMENTS = {
         "Objeto com selected_types, presentation_outline, lesson_worksheet, test e "
         "practical_activity. Preenche apenas os recursos pedidos e mantém vazios os "
         "restantes. Cada elemento deve indicar os resultados de aprendizagem associados. "
-        "Cada slide da apresentação inclui visual_kind, visual_title, visual_items, "
-        "visual_source e alt_text. visual_items contém entre 2 e 4 textos não vazios; "
-        "visual_title, visual_source e alt_text também nunca podem estar vazios. Os "
+        "Cada slide da apresentação inclui visual_mode, visual_asset_id, visual_prompt, visual_kind, "
+        "visual_title, visual_items, visual_source e alt_text. visual_mode é diagrama, "
+        "documento ou ia. visual_asset_id fica vazio em diagrama, contém um ID válido "
+        "do catálogo source_image_catalogue em documento e é preenchido pela aplicação "
+        "após gerar uma imagem quando visual_mode é ia. visual_prompt contém a instrução "
+        "específica para a imagem IA e fica vazio nos restantes modos. visual_items contém entre "
+        "2 e 4 textos não vazios; visual_title, visual_source e alt_text também nunca "
+        "podem estar vazios. Os "
         "elementos visuais devem apoiar o conteúdo e não servir apenas de decoração. "
         "Cada recurso pedido deve cobrir exatamente todos os IDs dos resultados de "
         "aprendizagem, sem usar IDs desconhecidos. No teste, a soma dos pontos das "
@@ -163,8 +168,8 @@ RESOURCE_ARTIFACT_FIELDS = {
 
 RESOURCE_REQUIREMENTS = {
     RESOURCE_PRESENTATION: (
-        "Lista de slides com title, bullets, outcome_id, visual_kind, "
-        "visual_title, visual_items, visual_source e alt_text. Cobre todos os "
+        "Lista de slides com title, bullets, outcome_id, visual_mode, visual_asset_id, "
+        "visual_prompt, visual_kind, visual_title, visual_items, visual_source e alt_text. Cobre todos os "
         "resultados de aprendizagem e inclui slides de capa e síntese."
     ),
     RESOURCE_WORKSHEET: (
@@ -425,6 +430,12 @@ def _schema_for(
                             "title": string,
                             "bullets": {"type": "array", "items": string},
                             "outcome_id": string,
+                            "visual_mode": {
+                                "type": "string",
+                                "enum": ["diagrama", "documento", "ia"],
+                            },
+                            "visual_asset_id": string,
+                            "visual_prompt": string,
                             "visual_kind": {
                                 "type": "string",
                                 "enum": ["capa", "conceito", "processo", "comparacao", "sintese"],
@@ -435,8 +446,9 @@ def _schema_for(
                             "alt_text": string,
                         },
                         "required": [
-                            "title", "bullets", "outcome_id", "visual_kind",
-                            "visual_title", "visual_items", "visual_source", "alt_text"
+                            "title", "bullets", "outcome_id", "visual_mode",
+                            "visual_asset_id", "visual_prompt", "visual_kind", "visual_title",
+                            "visual_items", "visual_source", "alt_text"
                         ],
                     },
                 },
@@ -634,6 +646,30 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         context["required_alignment_mapping"] = list(
             _expected_alignment_rows(state).values()
         )
+    if stage == "resources" and "Apresentação PowerPoint" in state.get(
+        "resource_types", []
+    ):
+        source_images = []
+        for asset in state.get("source_images", []):
+            if not isinstance(asset, dict) or not str(asset.get("id", "")).strip():
+                continue
+            source_images.append(
+                {
+                    "id": str(asset.get("id", "")),
+                    "source_file": str(asset.get("source_file", "")),
+                    "source_location": str(asset.get("source_location", "")),
+                    "filename": str(asset.get("filename", "")),
+                    "media_type": str(asset.get("media_type", "")),
+                }
+            )
+        context["source_image_catalogue"] = source_images
+        context["ai_image_generation"] = {
+            "enabled": bool(state.get("ai_image_generation_enabled")),
+            "rule": (
+                "Usar apenas quando a imagem acrescenta valor pedagógico real; "
+                "a aplicação limita e valida a geração antes da exportação."
+            ),
+        }
     return context
 
 
@@ -1080,11 +1116,12 @@ def _canonicalize_resource_practical(
 def _canonicalize_resource_visuals(
     artifact: Any, state: dict[str, Any]
 ) -> tuple[Any, list[dict[str, Any]]]:
-    """Completa metadados visuais derivados sem repetir toda a geração.
+    """Completa e valida deterministicamente a especificação visual dos slides.
 
-    A apresentação exportada usa diagramas nativos. Quando o fornecedor deixa
-    vazios campos estruturais desses diagramas, os valores em falta podem ser
-    derivados dos artefactos já aprovados sem alterar o conteúdo pedagógico.
+    Os diagramas nativos continuam sempre disponíveis como fallback editável. Uma
+    imagem documental só é selecionada quando o fornecedor devolve um ID que existe
+    realmente no catálogo extraído da sessão. A capa e o slide final permanecem com
+    diagrama nativo para preservar a composição institucional da apresentação.
     """
 
     if not isinstance(artifact, dict):
@@ -1096,10 +1133,28 @@ def _canonicalize_resource_visuals(
 
     allowed_kinds = {"capa", "conceito", "processo", "comparacao", "sintese"}
     kind_aliases = {"comparação": "comparacao", "síntese": "sintese"}
+    mode_aliases = {
+        "diagram": "diagrama",
+        "diagrama": "diagrama",
+        "document": "documento",
+        "documento": "documento",
+        "imagem": "documento",
+        "image": "documento",
+        "ia": "ia",
+        "ai": "ia",
+        "gerada": "ia",
+        "imagem gerada": "ia",
+        "imagem_ia": "ia",
+    }
     outcomes = {
         str(item.get("id", "")): item
         for item in state.get("learning_outcomes", [])
         if item.get("id")
+    }
+    source_assets = {
+        str(item.get("id", "")): item
+        for item in state.get("source_images", [])
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
     }
 
     def clean_text(value: Any) -> str:
@@ -1195,15 +1250,62 @@ def _canonicalize_resource_visuals(
                 if len(visual_items) == 4:
                     break
 
-        visual_source = clean_text(slide.get("visual_source")) or (
-            "Diagrama nativo gerado pelo CoerIA a partir dos artefactos aprovados."
+        raw_mode = mode_aliases.get(
+            clean_text(slide.get("visual_mode")).casefold(),
+            clean_text(slide.get("visual_mode")).casefold(),
         )
-        alt_text = clean_text(slide.get("alt_text")) or (
-            f"Diagrama «{visual_title}» com os elementos "
-            + ", ".join(visual_items)
-            + "."
-        )
+        raw_asset_id = clean_text(slide.get("visual_asset_id"))
+        is_boundary_slide = offset == 0 or offset == slide_count - 1
+        visual_prompt = clean_text(slide.get("visual_prompt"))
+        ai_enabled = bool(state.get("ai_image_generation_enabled"))
+        if (
+            not is_boundary_slide
+            and raw_mode == "documento"
+            and raw_asset_id in source_assets
+        ):
+            visual_mode = "documento"
+            visual_asset_id = raw_asset_id
+            visual_prompt = ""
+            asset = source_assets[visual_asset_id]
+            source_file = clean_text(asset.get("source_file")) or "documento fornecido"
+            source_location = clean_text(asset.get("source_location"))
+            visual_source = f"Imagem extraída de {source_file}"
+            if source_location:
+                visual_source += f", {source_location}"
+            visual_source += "."
+        elif (
+            not is_boundary_slide
+            and raw_mode == "ia"
+            and ai_enabled
+            and visual_prompt
+        ):
+            visual_mode = "ia"
+            visual_asset_id = ""
+            visual_source = "Imagem proposta para geração por IA, sujeita a validação do docente."
+        else:
+            visual_mode = "diagrama"
+            visual_asset_id = ""
+            visual_prompt = ""
+            visual_source = clean_text(slide.get("visual_source")) or (
+                "Diagrama nativo gerado pelo CoerIA a partir dos artefactos aprovados."
+            )
+
+        alt_text = clean_text(slide.get("alt_text"))
+        if not alt_text:
+            if visual_mode == "documento":
+                alt_text = f"Imagem documental associada a {visual_title}."
+            elif visual_mode == "ia":
+                alt_text = f"Imagem gerada por IA associada a {visual_title}."
+            else:
+                alt_text = (
+                    f"Diagrama «{visual_title}» com os elementos "
+                    + ", ".join(visual_items)
+                    + "."
+                )
         canonical = {
+            "visual_mode": visual_mode,
+            "visual_asset_id": visual_asset_id,
+            "visual_prompt": visual_prompt,
             "visual_kind": canonical_kind,
             "visual_title": visual_title,
             "visual_items": visual_items,
@@ -1220,7 +1322,6 @@ def _canonicalize_resource_visuals(
             corrections.append({"slide": offset + 1, "changes": changes})
 
     return {**artifact, "presentation_outline": normalized_slides}, corrections
-
 
 def _require_exact_coverage(
     artifact: list[dict[str, Any]], expected: set[str], key: str, message: str
@@ -1504,6 +1605,21 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 "comparacao",
                 "sintese",
             }
+            source_asset_ids = {
+                str(item.get("id", ""))
+                for item in state.get("source_images", [])
+                if isinstance(item, dict) and str(item.get("id", "")).strip()
+            }
+            generated_assets = {
+                str(item.get("id", "")): item
+                for item in state.get("generated_images", [])
+                if isinstance(item, dict) and str(item.get("id", "")).strip()
+            }
+            generated_asset_ids = set(generated_assets)
+            pending_ai_allowed = bool(
+                state.get("resource_generation_scope")
+                and state.get("ai_image_generation_enabled")
+            )
             invalid_slides = []
             for index, slide in enumerate(artifact["presentation_outline"], start=1):
                 visual_items = slide.get("visual_items", [])
@@ -1511,12 +1627,38 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                     2 <= len(visual_items) <= 4
                     and all(str(item).strip() for item in visual_items)
                 )
+                visual_mode = str(slide.get("visual_mode", ""))
+                visual_asset_id = str(slide.get("visual_asset_id", "")).strip()
+                visual_prompt = str(slide.get("visual_prompt", "")).strip()
+                valid_mode = visual_mode in {"diagrama", "documento", "ia"}
+                valid_asset = (
+                    visual_mode == "diagrama" and not visual_asset_id
+                ) or (
+                    visual_mode == "documento"
+                    and visual_asset_id in source_asset_ids
+                ) or (
+                    visual_mode == "ia"
+                    and bool(state.get("ai_image_generation_enabled"))
+                    and (
+                        (
+                            visual_asset_id in generated_asset_ids
+                            and bool(str(generated_assets[visual_asset_id].get("prompt", "")).strip())
+                        )
+                        or (
+                            pending_ai_allowed
+                            and not visual_asset_id
+                            and bool(visual_prompt)
+                        )
+                    )
+                )
                 if (
                     slide.get("visual_kind") not in allowed_visual_kinds
                     or not str(slide.get("visual_title", "")).strip()
                     or not valid_items
                     or not str(slide.get("visual_source", "")).strip()
                     or not str(slide.get("alt_text", "")).strip()
+                    or not valid_mode
+                    or not valid_asset
                 ):
                     invalid_slides.append(str(index))
             if invalid_slides:
@@ -1707,6 +1849,41 @@ class OpenAIPedagogicalAgent:
                 " Os únicos identificadores de resultados de aprendizagem permitidos são: "
                 f"{', '.join(outcome_ids)}. Confirma aritmeticamente as somas antes de responder."
             )
+            if scoped_resource_type in {None, RESOURCE_PRESENTATION}:
+                instructions += (
+                    " Para cada slide, visual_mode pode ser diagrama, documento ou ia. "
+                    "Capa e síntese final devem usar diagrama. "
+                )
+                if state.get("source_images"):
+                    instructions += (
+                        "Usa documento apenas quando um item de source_image_catalogue tiver "
+                        "proveniência suficientemente clara para justificar a sua relevância "
+                        "pedagógica; nesse caso copia exatamente o respetivo id para "
+                        "visual_asset_id e deixa visual_prompt vazio. Não inventes IDs nem "
+                        "deduzas o conteúdo de uma imagem quando o nome, ficheiro ou página/slide "
+                        "não o permitem. "
+                    )
+                else:
+                    instructions += (
+                        "Não existem imagens documentais disponíveis; nunca uses documento e "
+                        "não inventes visual_asset_id. "
+                    )
+                if state.get("ai_image_generation_enabled"):
+                    instructions += (
+                        "A geração de imagens por IA foi autorizada. Podes usar ia apenas em "
+                        "slides de conteúdo onde uma ilustração acrescente valor pedagógico real; "
+                        "nesse caso deixa visual_asset_id vazio e escreve em visual_prompt uma "
+                        "instrução visual específica, sem pedir texto decorativo dentro da imagem. "
+                    )
+                else:
+                    instructions += (
+                        "A geração de imagens por IA não foi autorizada; nunca uses ia e deixa "
+                        "visual_prompt vazio. "
+                    )
+                instructions += (
+                    "Quando houver dúvida usa diagrama. Os campos visual_kind, visual_title e "
+                    "visual_items continuam obrigatórios como fallback editável."
+                )
             if scoped_resource_type:
                 instructions += (
                     f" Gera exclusivamente {scoped_resource_type}. O campo artifact "

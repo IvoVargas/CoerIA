@@ -168,20 +168,21 @@ devem ter finalidade, origem e texto alternativo identificados; os diagramas e
 gráficos devem ser editáveis quando forem criados pelo sistema. Áudio, vídeo e
 storyboards não fazem parte do âmbito.
 
-As imagens raster podem ter uma das seguintes origens:
+As imagens raster tratadas pelo protótipo podem ter uma das seguintes origens:
 
-- ficheiro de imagem fornecido diretamente pelo utilizador;
 - imagem extraída de um documento carregado como fonte de referência;
-- imagem gerada por IA para o slide.
+- imagem gerada por IA para o slide, mediante consentimento explícito.
 
 Para cada imagem, o estado deve guardar o tipo de origem, o identificador da
-fonte e o texto alternativo. Uma imagem fornecida deve conservar o nome do
-ficheiro e a origem declarada; uma imagem extraída deve conservar o nome do
+fonte e o texto alternativo. Uma imagem extraída deve conservar o nome do
 documento e, quando tecnicamente disponível, a página ou o slide; uma imagem
-gerada deve ser identificada como tal e conservar fornecedor, modelo e instrução
-de geração. O docente deve poder rever a imagem antes da aprovação do recurso.
-Não é permitido descarregar silenciosamente imagens da Web sem proveniência e
-condições de utilização conhecidas.
+gerada deve ser identificada como tal e conservar fornecedor, modelo, instrução,
+tamanho e qualidade de geração. O docente deve poder rever a imagem antes da
+aprovação do recurso. Não é permitido descarregar silenciosamente imagens da Web
+sem proveniência e condições de utilização conhecidas. A entrada direta de
+ficheiros de imagem isolados fica fora do âmbito do protótipo, uma vez que o
+PowerPoint final permanece editável e permite ao docente acrescentar esses
+ficheiros após a exportação.
 
 ### RF06 — Persistência, versões e rastreabilidade
 
@@ -305,6 +306,7 @@ condições de utilização conhecidas.
 - O pacote exportado contém recursos, matriz, auditoria e manifesto coerentes.
 - O pacote exportado contém o programa da UC em português e apresentações com
   elementos visuais pedagogicamente relevantes.
-- Uma apresentação pode utilizar imagens fornecidas pelo utilizador, extraídas
-  das fontes documentais ou geradas por IA, mantendo proveniência, texto
-  alternativo e validação humana em qualquer das três modalidades.
+- Uma apresentação pode utilizar imagens extraídas das fontes documentais ou
+  geradas por IA, mantendo proveniência, texto alternativo e validação humana em
+  ambas as modalidades; ficheiros de imagem isolados podem ser acrescentados pelo
+  docente ao PowerPoint editável após a exportação.

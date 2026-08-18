@@ -41,6 +41,7 @@ from .models import (
 )
 from .quality import attach_quality_report
 from .providers import configured_ai_provider, validate_ai_provider
+from .image_generation import enrich_presentation_with_ai_images
 
 
 class PrismState(TypedDict, total=False):
@@ -48,6 +49,9 @@ class PrismState(TypedDict, total=False):
     orchestration: dict[str, Any]
     session_id: str
     source_input_text: str
+    source_images: list[dict[str, Any]]
+    generated_images: list[dict[str, Any]]
+    ai_image_generation_enabled: bool
     ai_provider: str
     course: dict[str, Any]
     feedback: dict[str, str]
@@ -119,7 +123,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 9
 
 # Uma etapa pode reabrir qualquer etapa já alcançada. A validação dinâmica
 # abaixo exclui artefactos que ainda nunca foram gerados para a sessão.
@@ -490,6 +494,9 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 f"Estrutura alinhada com a Taxonomia {taxonomy_type}.",
             ],
             "outcome_id": "",
+            "visual_mode": "diagrama",
+            "visual_asset_id": "",
+            "visual_prompt": "",
             "visual_kind": "capa",
             "visual_title": "Percurso da unidade curricular",
             "visual_items": [
@@ -515,6 +522,9 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                     assessment_for(outcome["id"])["criterion"],
                 ],
                 "outcome_id": outcome["id"],
+                "visual_mode": "diagrama",
+                "visual_asset_id": "",
+                "visual_prompt": "",
                 "visual_kind": ("processo", "conceito", "comparacao")[index % 3],
                 "visual_title": f"Como trabalhar {outcome['id']}",
                 "visual_items": [
@@ -538,6 +548,9 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 "Registar feedback para uma futura reformulação.",
             ],
             "outcome_id": "",
+            "visual_mode": "diagrama",
+            "visual_asset_id": "",
+            "visual_prompt": "",
             "visual_kind": "sintese",
             "visual_title": "Ciclo de melhoria docente",
             "visual_items": ["Rever", "Adaptar", "Registar feedback"],
@@ -1061,15 +1074,32 @@ class _SeparateResourceAgent:
             field = RESOURCE_ARTIFACT_FIELDS[resource_type]
             combined[field] = deepcopy(artifact[field])
 
+        generated_images: list[dict[str, Any]] = []
+        image_records: list[dict[str, Any]] = []
+        if RESOURCE_PRESENTATION in selected_types:
+            combined, generated_images, image_records = enrich_presentation_with_ai_images(
+                state,
+                combined,
+                progress_callback=self.progress_callback,
+            )
+        combined["_generated_images"] = generated_images
+        metadata = _aggregate_resource_metadata(records)
+        if image_records:
+            metadata["image_generations"] = image_records
+
         return GenerationResult(
             artifact=combined,
-            metadata=_aggregate_resource_metadata(records),
+            metadata=metadata,
         )
 
 
 def _stage_node(stage: str, agent: PedagogicalAgent):
     def execute(state: PrismState) -> dict[str, Any]:
         generation: GenerationResult = agent.generate(stage, state)
+        artifact = deepcopy(generation.artifact)
+        state_updates: dict[str, Any] = {}
+        if stage == "resources" and isinstance(artifact, dict):
+            state_updates["generated_images"] = artifact.pop("_generated_images", [])
         metadata = deepcopy(state.get("generation_metadata", {}))
         metadata.setdefault(stage, []).append(generation.metadata)
         audit_update = _audit_update(
@@ -1109,8 +1139,9 @@ def _stage_node(stage: str, agent: PedagogicalAgent):
                     }
                 )
         return {
-            stage: generation.artifact,
+            stage: artifact,
             "generation_metadata": metadata,
+            **state_updates,
             **audit_update,
         }
 
@@ -1443,6 +1474,7 @@ def create_session(
     resource_types: list[str] | None = None,
     agent: PedagogicalAgent | None = None,
     ai_provider: str | None = None,
+    ai_image_generation_enabled: bool = False,
     progress_callback: ProgressCallback | None = None,
 ) -> PrismState:
     """Inicia uma sessão no primeiro ponto de validação humana."""
@@ -1464,6 +1496,8 @@ def create_session(
         "stage_statuses": {stage: "pending" for stage in STAGE_ORDER},
         "revision_snapshots": [],
         "resource_types": selected_resource_types,
+        "generated_images": [],
+        "ai_image_generation_enabled": bool(ai_image_generation_enabled),
         "ai_provider": validate_ai_provider(
             ai_provider or configured_ai_provider()
         ),
@@ -1475,6 +1509,22 @@ def create_session(
         agent=agent,
         progress_callback=progress_callback,
     )
+
+
+def _mark_selected_images_approved(state: PrismState) -> None:
+    """Regista as imagens documentais ou geradas aceites pelo docente."""
+
+    selected_ids = {
+        str(slide.get("visual_asset_id", "")).strip()
+        for slide in state.get("resources", {}).get("presentation_outline", [])
+        if isinstance(slide, dict)
+        and slide.get("visual_mode") in {"documento", "ia"}
+        and str(slide.get("visual_asset_id", "")).strip()
+    }
+    for collection in ("source_images", "generated_images"):
+        for asset in state.get(collection, []):
+            if isinstance(asset, dict):
+                asset["approved"] = str(asset.get("id", "")) in selected_ids
 
 
 def review_current_stage(
@@ -1512,6 +1562,8 @@ def review_current_stage(
                 "A estrutura final contém verificações bloqueantes. "
                 "Selecione a componente que deve ser revista."
             )
+        if current_stage == "resources":
+            _mark_selected_images_approved(state)
         _record_decision(state, current_stage, "Docente aprovou a proposta.")
         stage_statuses = dict(state.get("stage_statuses", {}))
         stage_statuses[current_stage] = "approved"

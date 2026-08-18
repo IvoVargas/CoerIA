@@ -21,9 +21,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 6:
+    if previous_version < 9:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 6
+    state["schema_version"] = 9
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -31,6 +31,34 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         "orchestration",
         {"mode": "bounded-generator-critic", "human_approval_required": True},
     )
+    state.setdefault("source_images", [])
+    state.setdefault("generated_images", [])
+    state.setdefault("ai_image_generation_enabled", False)
+
+    def migrate_presentation_visuals(resources: Any) -> None:
+        if not isinstance(resources, dict):
+            return
+        slides = resources.get("presentation_outline", [])
+        if not isinstance(slides, list):
+            return
+        for slide in slides:
+            if not isinstance(slide, dict):
+                continue
+            slide.setdefault("visual_mode", "diagrama")
+            slide.setdefault("visual_asset_id", "")
+            slide.setdefault("visual_prompt", "")
+
+    migrate_presentation_visuals(state.get("resources"))
+    version_map = state.get("versions", {})
+    if isinstance(version_map, dict):
+        for resource_version in version_map.get("resources", []):
+            migrate_presentation_visuals(resource_version)
+    for snapshot in state.get("revision_snapshots", []):
+        if not isinstance(snapshot, dict):
+            continue
+        artifacts = snapshot.get("artifacts", {})
+        if isinstance(artifacts, dict):
+            migrate_presentation_visuals(artifacts.get("resources"))
 
     course = state.setdefault("course", {})
     for key, default in {
