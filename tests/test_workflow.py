@@ -325,6 +325,74 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["ai_provider"], "IAedu")
         team_factory.assert_called_once_with("IAedu")
 
+
+    def test_learning_outcome_retry_is_explicit_and_has_safe_final_fallback(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        valid_artifact = deepcopy(
+            self.agent.generate("learning_outcomes", state).artifact
+        )
+        invalid_artifact = deepcopy(valid_artifact)
+        first = invalid_artifact[0]
+        second = invalid_artifact[1]
+        first["statement"] = (
+            f"{first['action_verb'].capitalize()} conceitos essenciais e explicar "
+            "como aplicá-los."
+        )
+        second["statement"] = (
+            f"{second['action_verb'].capitalize()} e comparar estruturas fundamentais."
+        )
+
+        class FakeResponses:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(
+                    output_text=json.dumps({"artifact": invalid_artifact}),
+                    id=f"response-{len(self.calls)}",
+                    usage=SimpleNamespace(
+                        input_tokens=10,
+                        output_tokens=20,
+                        total_tokens=30,
+                    ),
+                )
+
+        fake_responses = FakeResponses()
+        agent = OpenAIPedagogicalAgent(
+            client_factory=lambda: SimpleNamespace(responses=fake_responses)
+        )
+        with patch.dict(
+            environ,
+            {
+                "OPENAI_API_KEY": "test-key",
+                "COERIA_OPENAI_VALIDATION_RETRIES": "2",
+            },
+            clear=False,
+        ):
+            result = agent.generate("learning_outcomes", state)
+
+        self.assertEqual(len(fake_responses.calls), 3)
+        self.assertIn(
+            "REPARAÇÃO OBRIGATÓRIA DA TENTATIVA ANTERIOR",
+            fake_responses.calls[1]["instructions"],
+        )
+        self.assertIn(
+            "não pode ser repetida",
+            fake_responses.calls[2]["instructions"],
+        )
+        self.assertEqual(result.metadata["validation_attempts"], 3)
+        self.assertEqual(len(result.metadata["guardrail_corrections"]), 2)
+        for outcome in result.artifact:
+            self.assertTrue(
+                has_single_action_verb(
+                    outcome["statement"],
+                    outcome["action_verb"],
+                    state["course"]["taxonomy_type"],
+                )
+            )
+        _validate_artifact("learning_outcomes", result.artifact, state)
+
     def test_openai_agent_repairs_a_semantically_invalid_resource(self) -> None:
         state = create_session(
             self.course,

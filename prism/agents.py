@@ -1973,6 +1973,119 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 )
 
 
+def _learning_outcome_retry_instructions(
+    validation_message: str,
+    state: dict[str, Any],
+) -> str:
+    """Instruções fortes para reparar resultados rejeitados pelo guardrail.
+
+    O feedback de validação faz parte das instruções (não apenas do contexto JSON)
+    para reduzir a probabilidade de o modelo repetir coordenações já rejeitadas.
+    """
+
+    curriculum = state.get("curriculum_analysis", {})
+    objectives = [
+        {"id": item.get("id", ""), "statement": item.get("statement", "")}
+        for item in curriculum.get("objectives", [])
+    ]
+    return (
+        "\n\nREPARAÇÃO OBRIGATÓRIA DA TENTATIVA ANTERIOR. "
+        "A resposta anterior foi rejeitada pelo validador e não pode ser repetida. "
+        f"Erro concreto: {validation_message} "
+        "Reescreve apenas o necessário, preservando os resultados que já estão corretos. "
+        "Para cada resultado indicado em 'Corrigir', mantém exatamente um verbo de ação "
+        "principal. Se existir uma construção 'verbo 1 ... e/ou verbo 2 ...', tens de: "
+        "(a) reformular o resultado para conservar apenas uma ação principal; ou "
+        "(b) separar as ações em dois resultados distintos, cada um iniciado por um verbo "
+        "do catálogo controlado. Um mesmo objective_id pode aparecer em mais de um resultado. "
+        "Não copies literalmente objetivos gerais coordenados. Depois da reparação, confirma "
+        "novamente a cobertura exata de todos os content_ids e objective_ids. "
+        "Objetivos gerais de referência: "
+        + json.dumps(objectives, ensure_ascii=False)
+        + "."
+    )
+
+
+def _simplify_coordinated_learning_outcome_statement(
+    statement: str,
+    declared_verb: str,
+) -> str | None:
+    """Último fallback: remove uma segunda ação principal coordenada.
+
+    Só atua quando o enunciado já começa pelo verbo declarado. Não inventa verbos nem
+    altera ligações curriculares. É usado apenas depois de esgotadas as retentativas do
+    modelo, evitando bloquear a sessão por coordenações persistentes.
+    """
+
+    text = str(statement or "").strip()
+    verb = str(declared_verb or "").strip()
+    if not text or not verb:
+        return None
+    if not re.match(rf"^{re.escape(verb)}\b", text, flags=re.IGNORECASE):
+        return None
+
+    match = re.search(
+        r"\s+(?:e|ou)\s+([A-Za-zÀ-ÖØ-öø-ÿ]+(?:ar|er|ir))\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+
+    before = text[: match.start()].strip(" ,;:")
+    second_verb_end = match.end()
+    if before.casefold() == verb.casefold():
+        rest = text[second_verb_end:].strip(" ,;:")
+        if not rest:
+            return None
+        candidate = f"{text[:len(verb)]} {rest}"
+    else:
+        candidate = before
+
+    candidate = candidate.rstrip(" .;:") + "."
+    return candidate
+
+
+def _fallback_repair_learning_outcome_coordination(
+    artifact: Any,
+    state: dict[str, Any],
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Repara coordenações persistentes apenas como fallback final.
+
+    A reparação só é aceite se o artefacto completo passar a validação normal.
+    """
+
+    if not isinstance(artifact, list):
+        return artifact, []
+    taxonomy = validate_taxonomy_choice(
+        state.get("course", {}).get("taxonomy_type", "SOLO")
+    )
+    repaired = deepcopy(artifact)
+    corrections: list[dict[str, Any]] = []
+    for item in repaired:
+        statement = str(item.get("statement", ""))
+        declared = str(item.get("action_verb", ""))
+        if has_single_action_verb(statement, declared, taxonomy):
+            continue
+        candidate = _simplify_coordinated_learning_outcome_statement(
+            statement, declared
+        )
+        if candidate is None or not has_single_action_verb(
+            candidate, declared, taxonomy
+        ):
+            return artifact, []
+        item["statement"] = candidate
+        corrections.append(
+            {
+                "field": f"{item.get('id', '?')}.statement",
+                "reason": "segunda ação principal removida após retentativas de IA",
+                "from": statement,
+                "to": candidate,
+            }
+        )
+    return repaired, corrections
+
+
 def validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None:
     """Valida um artefacto produzido por IA ou editado manualmente."""
 
@@ -2186,9 +2299,15 @@ class OpenAIPedagogicalAgent:
                 request_context["automatic_validation_feedback"] = repair_feedback
 
             try:
+                attempt_instructions = instructions
+                if repair_feedback and stage == "learning_outcomes":
+                    attempt_instructions += _learning_outcome_retry_instructions(
+                        str(repair_feedback.get("validation_error", "")),
+                        state,
+                    )
                 request_options = {
                     "model": request_model,
-                    "instructions": instructions,
+                    "instructions": attempt_instructions,
                     "input": json.dumps(request_context, ensure_ascii=False),
                     "max_output_tokens": self.max_output_tokens,
                     "text": {
@@ -2276,25 +2395,54 @@ class OpenAIPedagogicalAgent:
                     if isinstance(error, AgentGenerationError)
                     else "A resposta estruturada está incompleta ou contém tipos inválidos."
                 )
+                fallback_accepted = False
                 if attempt == attempts:
-                    raise AgentGenerationError(
-                        f"{validation_message} A geração foi repetida automaticamente "
-                        f"{attempts} vezes sem produzir uma proposta válida."
-                    ) from error
-                repair_feedback = {
-                    "instruction": (
-                        "Corrige o problema indicado e devolve novamente apenas o "
-                        "recurso atual, preservando o conteúdo que já está correto."
-                        if scoped_resource_type
-                        else "Corrige o problema indicado e devolve novamente o "
-                        "artefacto completo, preservando o conteúdo que já está correto."
-                    ),
-                    "validation_error": validation_message,
-                    "previous_artifact": (
-                        raw_artifact if scoped_resource_type else artifact
-                    ),
-                }
-                continue
+                    if (
+                        stage == "learning_outcomes"
+                        and isinstance(error, AgentGenerationError)
+                        and validation_message.startswith(
+                            "Cada resultado deve começar pelo action_verb declarado"
+                        )
+                    ):
+                        repaired_artifact, fallback_corrections = (
+                            _fallback_repair_learning_outcome_coordination(
+                                artifact, state
+                            )
+                        )
+                        if fallback_corrections:
+                            try:
+                                _validate_artifact(
+                                    stage, repaired_artifact, state
+                                )
+                            except AgentGenerationError:
+                                pass
+                            else:
+                                artifact = repaired_artifact
+                                guardrail_corrections = [
+                                    *guardrail_corrections,
+                                    *fallback_corrections,
+                                ]
+                                fallback_accepted = True
+                    if not fallback_accepted:
+                        raise AgentGenerationError(
+                            f"{validation_message} A geração foi repetida automaticamente "
+                            f"{attempts} vezes sem produzir uma proposta válida."
+                        ) from error
+                if not fallback_accepted:
+                    repair_feedback = {
+                        "instruction": (
+                            "Corrige o problema indicado e devolve novamente apenas o "
+                            "recurso atual, preservando o conteúdo que já está correto."
+                            if scoped_resource_type
+                            else "Corrige o problema indicado e devolve novamente o "
+                            "artefacto completo, preservando o conteúdo que já está correto."
+                        ),
+                        "validation_error": validation_message,
+                        "previous_artifact": (
+                            raw_artifact if scoped_resource_type else artifact
+                        ),
+                    }
+                    continue
 
             duration_ms = round((perf_counter() - started_at) * 1000)
             metadata = {

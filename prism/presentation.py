@@ -42,6 +42,11 @@ def _metadata_text(metadata: dict[str, Any] | None) -> str:
         details.append(
             f"{metadata['validation_attempts']} tentativas de validação automática"
         )
+    guardrail_corrections = metadata.get("guardrail_corrections", [])
+    if guardrail_corrections:
+        details.append(
+            f"{len(guardrail_corrections)} correções automáticas de guardrail"
+        )
     agentic = metadata.get("agentic", {})
     if agentic.get("enabled"):
         result = (
