@@ -102,9 +102,12 @@ A decisão e o microciclo gerador–crítico estão descritos em
 absoluto de ingestão é 2 000 000 de caracteres no conjunto das fontes. Quando o
 texto extraído ultrapassa 120 000 caracteres, o CoerIA reduz automaticamente as
 fontes por blocos com o fornecedor de IA selecionado, preservando etiquetas de
-proveniência, antes de iniciar a análise curricular. Esta redução pode implicar
-chamadas adicionais ao fornecedor e fica registada no estado da sessão. PDFs
-constituídos apenas por imagem necessitam de OCR externo.
+proveniência e conceitos distintivos de cada documento, antes de iniciar a análise
+curricular. A análise recebe ainda a lista auditável das fontes reduzidas e deve
+explicitar, para cada uma, a contribuição curricular, conceitos-chave e conteúdos
+associados; uma fonte curta ou colocada primeiro não recebe prioridade automática.
+Esta redução pode implicar chamadas adicionais ao fornecedor e fica registada no
+estado da sessão. PDFs constituídos apenas por imagem necessitam de OCR externo.
 
 O CoerIA extrai o conteúdo textual destes documentos e, quando aplicável,
 imagens internas de `.pdf`, `.docx` e `.pptx`, conservando a proveniência

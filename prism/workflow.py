@@ -214,6 +214,22 @@ def analyse_curriculum(state: PrismState) -> dict[str, Any]:
         ],
         "feedback_considered": feedback or None,
     }
+    reduction_sources = [
+        str(item.get("source", "")).strip()
+        for item in state.get("source_reduction", {}).get("sources", [])
+        if str(item.get("source", "")).strip()
+    ]
+    if state.get("source_reduction", {}).get("applied") and reduction_sources:
+        content_ids = [item["id"] for item in result["contents"]]
+        result["source_coverage"] = [
+            {
+                "source": source,
+                "contribution": "Fonte considerada na estruturação curricular.",
+                "key_concepts": [topics[index % len(topics)]],
+                "content_ids": [content_ids[index % len(content_ids)]],
+            }
+            for index, source in enumerate(reduction_sources)
+        ]
     return {
         "curriculum_analysis": result,
         **_audit_update(state, "curriculum_analysis", "Análise curricular produzida.", feedback),
@@ -1477,6 +1493,7 @@ def create_session(
     agent: PedagogicalAgent | None = None,
     ai_provider: str | None = None,
     ai_image_generation_enabled: bool = False,
+    source_reduction: dict[str, Any] | None = None,
     progress_callback: ProgressCallback | None = None,
 ) -> PrismState:
     """Inicia uma sessão no primeiro ponto de validação humana."""
@@ -1500,6 +1517,7 @@ def create_session(
         "resource_types": selected_resource_types,
         "generated_images": [],
         "selected_source_image_ids": [],
+        "source_reduction": deepcopy(source_reduction or {}),
         "ai_image_generation_enabled": bool(ai_image_generation_enabled),
         "ai_provider": validate_ai_provider(
             ai_provider or configured_ai_provider()

@@ -183,12 +183,32 @@ def render_artifact(
         assumptions = "\n".join(
             f"- {item}" for item in artifact.get("assumptions", [])
         )
+        source_rows = [
+            [
+                item.get("source", "—"),
+                item.get("contribution", ""),
+                ", ".join(str(value) for value in item.get("key_concepts", [])),
+                ", ".join(str(value) for value in item.get("content_ids", [])),
+            ]
+            for item in artifact.get("source_coverage", [])
+            if isinstance(item, dict)
+        ]
+        source_section = (
+            "\n\n## Cobertura das fontes documentais\n\n"
+            + _table(
+                ["Fonte", "Contributo curricular", "Conceitos-chave", "Conteúdos"],
+                source_rows,
+            )
+            if source_rows
+            else ""
+        )
         return (
             header
             + f"{artifact['summary']}\n\n## Objetivos gerais\n\n"
             + _table(["ID", "Objetivo"], objective_rows)
             + "\n\n## Conteúdos identificados\n\n"
             + _table(["ID", "Conteúdo", "Descrição"], content_rows)
+            + source_section
             + f"\n\n## Pressupostos\n{assumptions}"
         )
 

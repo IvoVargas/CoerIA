@@ -87,10 +87,11 @@ def _split_paragraphs(text: str, max_chars: int) -> list[str]:
 
 
 def _source_sections(text: str) -> list[tuple[str, str]]:
-    """Recupera as etiquetas de proveniência produzidas por ingestion.py."""
+    """Recupera etiquetas de proveniência originais ou já reduzidas."""
 
     marker = re.compile(
-        r"(?m)^\[(Texto introduzido pelo docente|Ficheiro: [^\]]+)\]\s*$"
+        r"(?m)^\[(?P<label>Texto introduzido pelo docente|Ficheiro: [^\]]+|"
+        r"Fonte reduzida: [^\]]+)\]\s*$"
     )
     matches = list(marker.finditer(text))
     if not matches:
@@ -101,9 +102,29 @@ def _source_sections(text: str) -> list[tuple[str, str]]:
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         body = text[start:end].strip()
-        if body:
-            sections.append((match.group(1), body))
+        if not body:
+            continue
+        label = match.group("label")
+        if label.startswith("Fonte reduzida: "):
+            label = label[len("Fonte reduzida: ") :]
+            label = re.sub(r"\s+— bloco \d+/\d+$", "", label).strip()
+        sections.append((label, body))
     return sections or [("Fonte documental", text.strip())]
+
+
+def _source_stats(text: str, chunk_chars: int) -> list[dict[str, Any]]:
+    """Resume a representatividade documental antes da redução."""
+
+    stats: list[dict[str, Any]] = []
+    for label, body in _source_sections(text):
+        stats.append(
+            {
+                "source": label,
+                "original_chars": len(body),
+                "initial_chunks": len(_split_paragraphs(body, chunk_chars)),
+            }
+        )
+    return stats
 
 
 def _build_chunks(text: str, max_chars: int) -> list[tuple[str, int, int, str]]:
@@ -181,10 +202,13 @@ def _reduce_chunk(
         "posterior numa análise curricular, privilegiando COBERTURA sobre estilo. Extrai "
         "tópicos e subtópicos, conceitos, definições, métodos, procedimentos, exemplos "
         "pedagogicamente relevantes, objetivos, requisitos, critérios e outras restrições "
-        "presentes no fragmento. Mantém terminologia técnica e relações importantes. "
-        "Não inventes, não completes lacunas e não introduzas conhecimento externo. "
-        "Cada item deve ser autónomo, específico e conciso; elimina apenas redundância, "
-        "texto administrativo irrelevante e repetição. Responde em português europeu."
+        "presentes no fragmento. Preserva explicitamente conceitos distintivos, nomes de "
+        "modelos, teorias, princípios, autores ou frameworks que apareçam na fonte; não os "
+        "elimines apenas por não coincidirem com uma ficha curricular curta. Mantém "
+        "terminologia técnica e relações importantes. Não inventes, não completes lacunas "
+        "e não introduzas conhecimento externo. Cada item deve ser autónomo, específico e "
+        "conciso; elimina apenas redundância, texto administrativo irrelevante e repetição. "
+        "Responde em português europeu."
     )
     input_payload = {
         "source": source_label,
@@ -244,6 +268,10 @@ def reduce_source_text(
 
     source = (text or "").strip()
     target_chars = _positive_int("MAX_SOURCE_CHARS", DEFAULT_MAX_SOURCE_CHARS)
+    configured_chunk_chars = _positive_int(
+        "SOURCE_REDUCTION_CHUNK_CHARS", DEFAULT_REDUCTION_CHUNK_CHARS
+    )
+    initial_sources = _source_stats(source, configured_chunk_chars)
     if len(source) <= target_chars:
         return SourceReductionResult(
             source,
@@ -256,15 +284,14 @@ def reduce_source_text(
                 "model": "",
                 "passes": 0,
                 "chunks": 0,
+                "sources": initial_sources,
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "total_tokens": 0,
             },
         )
 
-    chunk_chars = _positive_int(
-        "SOURCE_REDUCTION_CHUNK_CHARS", DEFAULT_REDUCTION_CHUNK_CHARS
-    )
+    chunk_chars = configured_chunk_chars
     max_output_tokens = _positive_int(
         "SOURCE_REDUCTION_MAX_OUTPUT_TOKENS",
         DEFAULT_REDUCTION_MAX_OUTPUT_TOKENS,
@@ -272,6 +299,7 @@ def reduce_source_text(
     max_passes = _positive_int(
         "SOURCE_REDUCTION_MAX_PASSES", DEFAULT_REDUCTION_MAX_PASSES
     )
+    sources = _source_stats(source, chunk_chars)
     client, model, provider_name = _provider_client(provider)
     original_chars = len(source)
     working = source
@@ -328,6 +356,7 @@ def reduce_source_text(
                     "model": model,
                     "passes": pass_index,
                     "chunks": total_chunks,
+                    "sources": sources,
                     **totals,
                     "duration_ms": int((perf_counter() - started_at) * 1000),
                 },

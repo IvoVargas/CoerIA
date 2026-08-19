@@ -558,6 +558,35 @@ def _schema_for(
         },
     }
     artifact_schema = artifact_schemas[stage]
+    if stage == "curriculum_analysis" and state:
+        reduction = state.get("source_reduction", {})
+        source_names = [
+            str(item.get("source", "")).strip()
+            for item in reduction.get("sources", [])
+            if str(item.get("source", "")).strip()
+        ]
+        if reduction.get("applied") and source_names:
+            artifact_schema = deepcopy(artifact_schema)
+            artifact_schema["properties"]["source_coverage"] = {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "source": {"type": "string", "enum": source_names},
+                        "contribution": string,
+                        "key_concepts": {"type": "array", "items": string},
+                        "content_ids": {"type": "array", "items": string},
+                    },
+                    "required": [
+                        "source", "contribution", "key_concepts", "content_ids"
+                    ],
+                },
+            }
+            artifact_schema["required"] = [
+                *artifact_schema["required"],
+                "source_coverage",
+            ]
     if stage == "learning_outcomes" and state:
         artifact_schema = deepcopy(artifact_schema)
         selected_taxonomy = validate_taxonomy_choice(
@@ -657,6 +686,26 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     for artifact_stage in stage_order[:stage_index]:
         if artifact_stage in state:
             context[artifact_stage] = state[artifact_stage]
+    if stage == "curriculum_analysis":
+        reduction = state.get("source_reduction", {})
+        source_stats = [
+            {
+                "source": str(item.get("source", "")),
+                "original_chars": int(item.get("original_chars", 0) or 0),
+                "initial_chunks": int(item.get("initial_chunks", 0) or 0),
+            }
+            for item in reduction.get("sources", [])
+            if str(item.get("source", "")).strip()
+        ]
+        if reduction.get("applied") and source_stats:
+            context["source_coverage_rules"] = {
+                "sources": source_stats,
+                "rule": (
+                    "Analisa todas as fontes, independentemente da ordem ou tamanho. "
+                    "A proposta deve mostrar a contribuição distintiva de cada fonte "
+                    "em source_coverage e ligar cada fonte a pelo menos um conteúdo C*."
+                ),
+            }
     if stage == "learning_outcomes":
         curriculum = state.get("curriculum_analysis", {})
         context["learning_outcome_coverage_rules"] = {
@@ -1574,6 +1623,50 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             raise AgentGenerationError(
                 "A análise curricular deve conter conteúdos e objetivos com IDs únicos."
             )
+
+        reduction = state.get("source_reduction", {})
+        expected_sources = [
+            str(item.get("source", "")).strip()
+            for item in reduction.get("sources", [])
+            if str(item.get("source", "")).strip()
+        ]
+        if reduction.get("applied") and expected_sources:
+            coverage = artifact.get("source_coverage", [])
+            received_sources = [
+                str(item.get("source", "")).strip()
+                for item in coverage
+                if isinstance(item, dict)
+            ]
+            known_content_ids = {str(identifier) for identifier in content_ids}
+            invalid_rows = [
+                item
+                for item in coverage
+                if not isinstance(item, dict)
+                or not str(item.get("contribution", "")).strip()
+                or not [
+                    concept for concept in item.get("key_concepts", [])
+                    if str(concept).strip()
+                ]
+                or not [
+                    identifier for identifier in item.get("content_ids", [])
+                    if str(identifier).strip()
+                ]
+                or any(
+                    str(identifier) not in known_content_ids
+                    for identifier in item.get("content_ids", [])
+                )
+            ]
+            if (
+                set(received_sources) != set(expected_sources)
+                or len(received_sources) != len(set(received_sources))
+                or invalid_rows
+            ):
+                missing = sorted(set(expected_sources) - set(received_sources))
+                raise AgentGenerationError(
+                    "A análise curricular deve demonstrar cobertura de todas as fontes "
+                    "reduzidas, com contribuição, conceitos-chave e conteúdos associados"
+                    + (f" (em falta: {', '.join(missing)})." if missing else ".")
+                )
         return
 
     if stage in {
@@ -2176,6 +2269,27 @@ class OpenAIPedagogicalAgent:
                 )
                 + "."
             )
+        if stage == "curriculum_analysis":
+            reduction = state.get("source_reduction", {})
+            source_names = [
+                str(item.get("source", "")).strip()
+                for item in reduction.get("sources", [])
+                if str(item.get("source", "")).strip()
+            ]
+            if reduction.get("applied") and source_names:
+                instructions += (
+                    " As fontes documentais foram reduzidas automaticamente, mas todas devem "
+                    "ser analisadas. Não dês prioridade automática à primeira fonte, à mais "
+                    "curta ou à ficha formal da UC. Usa os metadados explícitos da UC e os "
+                    "documentos curriculares para delimitar o âmbito, e usa as restantes fontes "
+                    "para enriquecer os conteúdos com contributos distintivos que estejam "
+                    "realmente presentes nos textos. Preserva nomes de modelos, teorias, "
+                    "princípios e frameworks relevantes. Em source_coverage inclui exatamente "
+                    f"uma linha para cada uma destas fontes: {source_names}. Cada linha deve "
+                    "explicar a contribuição específica da fonte, listar conceitos-chave "
+                    "observáveis nela e ligar essa contribuição a pelo menos um ID C*. Antes "
+                    "de responder, confirma que nenhuma fonte ficou sem representação. "
+                )
         if stage == "learning_outcomes":
             curriculum = state.get("curriculum_analysis", {})
             required_contents = [item["id"] for item in curriculum.get("contents", [])]

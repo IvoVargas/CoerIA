@@ -113,6 +113,7 @@ class ApplicationService:
             list(form.get("resource_types", []) or []),
             ai_provider=selected_provider,
             ai_image_generation_enabled=ai_image_generation_enabled,
+            source_reduction=reduction.metadata,
             progress_callback=progress_callback,
         )
         state["source_input_text"] = source_text.strip()

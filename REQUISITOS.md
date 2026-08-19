@@ -31,9 +31,13 @@ materiais produzidos.
 - Rejeitar ficheiros vazios e formatos não suportados com uma mensagem compreensível.
 - Para conjuntos de fontes acima do orçamento normal do contexto, reduzir
   automaticamente o texto por blocos com o fornecedor selecionado antes da
-  análise curricular, preservando a proveniência e registando a operação; apenas
-  rejeitar quando for ultrapassado o limite absoluto de ingestão configurado ou
-  quando a redução segura não for possível.
+  análise curricular, preservando a proveniência, conceitos distintivos e a
+  representatividade de cada documento, e registando a operação.
+- Na análise curricular de fontes reduzidas, demonstrar explicitamente a cobertura
+  de cada documento através da sua contribuição, conceitos-chave e conteúdos C*
+  associados, sem dar prioridade automática à primeira fonte ou à fonte mais curta.
+- Apenas rejeitar quando for ultrapassado o limite absoluto de ingestão configurado
+  ou quando a redução segura não for possível.
 - Permitir escolher OpenAI ou IAedu antes de iniciar a sessão.
 - Informar que o conteúdo fornecido é enviado exclusivamente ao fornecedor de
   IA selecionado durante a geração.

@@ -61,6 +61,82 @@ class WorkflowTests(unittest.TestCase):
         )
         self.agent = create_test_agent()
 
+    def test_reduced_sources_require_explicit_curriculum_coverage(self) -> None:
+        reduction = {
+            "applied": True,
+            "sources": [
+                {"source": "Ficheiro: programa.pdf", "original_chars": 1000, "initial_chunks": 1},
+                {"source": "Ficheiro: Mayer.pdf", "original_chars": 8000, "initial_chunks": 3},
+            ],
+        }
+        state = create_session(
+            self.course,
+            agent=self.agent,
+            source_reduction=reduction,
+        )
+        coverage = state["curriculum_analysis"]["source_coverage"]
+        self.assertEqual(
+            {item["source"] for item in coverage},
+            {"Ficheiro: programa.pdf", "Ficheiro: Mayer.pdf"},
+        )
+
+        invalid = deepcopy(state["curriculum_analysis"])
+        invalid["source_coverage"] = invalid["source_coverage"][:1]
+        with self.assertRaisesRegex(AgentGenerationError, "cobertura de todas as fontes"):
+            _validate_artifact("curriculum_analysis", invalid, state)
+
+    def test_openai_curriculum_prompt_and_schema_preserve_all_reduced_sources(self) -> None:
+        reduction = {
+            "applied": True,
+            "sources": [
+                {"source": "Ficheiro: FUC.pdf", "original_chars": 11000, "initial_chunks": 1},
+                {"source": "Ficheiro: Mayer.pdf", "original_chars": 128000, "initial_chunks": 2},
+                {"source": "Ficheiro: Sweller.pdf", "original_chars": 852000, "initial_chunks": 11},
+            ],
+        }
+        expected_state = create_session(
+            self.course,
+            agent=self.agent,
+            source_reduction=reduction,
+        )
+        artifact = deepcopy(expected_state["curriculum_analysis"])
+
+        class FakeResponses:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(
+                    output_text=json.dumps({"artifact": artifact}, ensure_ascii=False),
+                    id="response-curriculum",
+                    usage=SimpleNamespace(input_tokens=10, output_tokens=20, total_tokens=30),
+                )
+
+        responses = FakeResponses()
+        agent = OpenAIPedagogicalAgent(
+            client_factory=lambda: SimpleNamespace(responses=responses)
+        )
+        state = {
+            "course": self.course.to_dict(),
+            "source_reduction": reduction,
+            "feedback": {},
+            "resource_types": list(SUPPORTED_RESOURCE_TYPES),
+        }
+        with patch.dict(environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+            result = agent.generate("curriculum_analysis", state)
+
+        self.assertEqual(result.artifact, artifact)
+        call = responses.calls[0]
+        schema = call["text"]["format"]["schema"]
+        self.assertIn("source_coverage", schema["properties"]["artifact"]["properties"])
+        self.assertIn("nenhuma fonte ficou sem representação", call["instructions"])
+        request_context = json.loads(call["input"])
+        self.assertEqual(
+            len(request_context["source_coverage_rules"]["sources"]),
+            3,
+        )
+
     def test_workflow_stops_at_each_human_review(self) -> None:
         state = create_session(self.course, agent=self.agent)
         self.assertEqual(state["current_stage"], "curriculum_analysis")

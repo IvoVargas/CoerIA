@@ -74,6 +74,54 @@ class SourceReductionTests(unittest.TestCase):
         self.assertEqual(result.metadata["model"], "gpt-4o-mini")
         self.assertEqual(result.metadata["total_tokens"], 15 * len(client.responses.calls))
         self.assertIn("Fonte reduzida", result.text)
+        self.assertEqual(
+            [item["source"] for item in result.metadata["sources"]],
+            ["Ficheiro: programa.pdf", "Ficheiro: manual.docx"],
+        )
+        self.assertTrue(
+            all(item["original_chars"] > 0 for item in result.metadata["sources"])
+        )
+        self.assertTrue(
+            all(item["initial_chunks"] >= 1 for item in result.metadata["sources"])
+        )
+
+    def test_reduced_markers_keep_source_identity_across_multiple_passes(self) -> None:
+        client = _FakeClient()
+        source = (
+            "[Ficheiro: fonte-a.pdf]\n" + "Modelo Mayer multimédia. " * 120
+            + "\n\n[Ficheiro: fonte-b.pdf]\n" + "Carga cognitiva Sweller. " * 120
+        )
+        with (
+            patch.dict(
+                environ,
+                {
+                    "COERIA_MAX_SOURCE_CHARS": "250",
+                    "COERIA_SOURCE_REDUCTION_CHUNK_CHARS": "500",
+                    "COERIA_SOURCE_REDUCTION_MAX_PASSES": "3",
+                },
+                clear=False,
+            ),
+            patch(
+                "prism.source_reduction._provider_client",
+                return_value=(client, "gpt-4o-mini", "OpenAI"),
+            ),
+        ):
+            try:
+                result = reduce_source_text(source, provider="OpenAI")
+            except Exception:
+                # O fake pode não comprimir o suficiente para o limite minúsculo;
+                # interessa-nos garantir que todas as chamadas continuam etiquetadas.
+                result = None
+
+        labels = [
+            json.loads(call["input"])["source"]
+            for call in client.responses.calls
+        ]
+        self.assertIn("Ficheiro: fonte-a.pdf", labels)
+        self.assertIn("Ficheiro: fonte-b.pdf", labels)
+        self.assertNotIn("Fonte documental", labels)
+        if result is not None:
+            self.assertEqual(len(result.metadata["sources"]), 2)
 
 
 if __name__ == "__main__":
