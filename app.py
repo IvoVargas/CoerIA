@@ -88,6 +88,23 @@ _history_choices = history_choices  # compatibilidade para consulta programátic
 USER_ERRORS = (ValueError, SourceIngestionError, AgentGenerationError)
 LOGGER = logging.getLogger(__name__)
 UNRESTRICTED_PAGE_ROUTES = {"/favicon.ico", "/login"}
+ERROR_NOTIFICATION_TIMEOUT_SECONDS = 12
+
+
+def _replace_error_notification(current: Any | None, message: str) -> Any:
+    """Mostra um único erro descartável, removendo a notificação anterior."""
+
+    if current is not None:
+        current.dismiss()
+        current.delete()
+    return ui.notification(
+        message,
+        type="negative",
+        multi_line=True,
+        position="top",
+        close_button="Fechar",
+        timeout=ERROR_NOTIFICATION_TIMEOUT_SECONDS,
+    )
 
 
 def _format_elapsed_duration(elapsed_seconds: float) -> str:
@@ -142,7 +159,6 @@ APP_CSS = """
   --agir-ink: #14282d;
   --agir-muted: #60767a;
   --agir-primary: #0d766e;
-  --agir-primary-dark: #075a55;
   --agir-secondary: #1f5966;
   --agir-accent: #e8a23a;
   --agir-bg: #f3f7f6;
@@ -197,7 +213,6 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .stage-number { font-size: .72rem; font-weight: 800; opacity: .72; }
 .stage-label { font-size: .78rem; line-height: 1.25; font-weight: 700; margin-top: 5px; }
 .stage-state { font-size: .67rem; line-height: 1.2; margin-top: 6px; opacity: .78; }
-.workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 22px; align-items: start; }
 .artifact-card { min-width: 0; padding: 26px 30px; overflow-x: auto; }
 .artifact-markdown { color: var(--agir-ink); line-height: 1.65; width: 100%; }
 .artifact-markdown h1 { font-size: 1.65rem; margin: 0 0 .35rem; letter-spacing: -.025em; }
@@ -215,9 +230,10 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table .manual-cell-number { min-width: 72px; }
 .manual-table .q-field__control { min-height: 40px; }
 .manual-table .q-field__native { line-height: 1.35; padding-top: 7px; padding-bottom: 7px; }
-.decision-card { padding: 22px; position: sticky; top: 84px; }
+.decision-card { padding: 22px; }
 .consultation-card { padding: 20px 22px; }
-.info-chip { background: #edf5f3 !important; color: #24575d !important; font-weight: 650; }
+.info-chip { background: #edf5f3 !important; color: #064e4a !important; font-weight: 700; }
+.info-chip * { color: inherit !important; }
 .status-banner { border-left: 4px solid var(--agir-primary); }
 .final-hero { padding: 28px; color: white; background: linear-gradient(130deg, #0d766e, #184f60); border-radius: 22px; }
 .complete-hero { padding: 34px; text-align: center; background: linear-gradient(145deg, #e8f6ef, #f7fbfa); }
@@ -233,8 +249,6 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .q-table th { background: #eaf3f1; color: #244a50; font-weight: 750; }
 
 @media (max-width: 1050px) {
-  .workspace-grid { grid-template-columns: 1fr; }
-  .decision-card { position: static; }
   .agir-main { padding: 22px 18px 64px; }
 }
 @media (max-width: 640px) {
@@ -288,17 +302,23 @@ class AGIRSoloInterface:
         self.fields: dict[str, Any] = {}
         self.resource_inputs: dict[str, Any] = {}
         self.export_document_format = "word"
+        self.error_notification: Any | None = None
         self.busy_started_at: float | None = None
         self.busy_phase_started_at: float | None = None
         self.busy_phase_text = ""
         self.busy_updates: SimpleQueue[str] | None = None
         self._build()
 
+    def _show_error(self, error: BaseException | str) -> None:
+        self.error_notification = _replace_error_notification(
+            self.error_notification,
+            str(error),
+        )
+
     def _build(self) -> None:
         ui.page_title(f"{APP_NAME} — {APP_TAGLINE}")
         ui.colors(primary="#0d766e", secondary="#1f5966", accent="#e8a23a")
         ui.add_css(APP_CSS)
-        self.dark_mode = ui.dark_mode()
 
         self._build_logout_dialog()
         self._build_busy_dialog()
@@ -318,10 +338,6 @@ class AGIRSoloInterface:
             ui.label(self.identity.display_name).classes(
                 "hidden lg:block text-sm font-semibold muted"
             )
-            ui.button(
-                icon="dark_mode",
-                on_click=self.dark_mode.toggle,
-            ).props("flat round aria-label='Alternar tema'")
             ui.button(
                 icon="logout",
                 on_click=self.logout_dialog.open,
@@ -684,7 +700,7 @@ class AGIRSoloInterface:
             self.assistance_status.set_visibility(True)
             ui.notify("Proposta inicial preenchida.", type="positive")
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
         finally:
             self._hide_busy()
 
@@ -718,7 +734,7 @@ class AGIRSoloInterface:
             self.refresh_sessions()
             ui.notify("Sessão iniciada e guardada.", type="positive")
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
         finally:
             self._hide_busy()
 
@@ -892,7 +908,7 @@ class AGIRSoloInterface:
             self.refresh_sessions()
             ui.notify("Sessão eliminada definitivamente.", type="positive")
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
 
     async def handle_load_session(self, session_id: str) -> None:
         self._show_busy("A retomar a sessão guardada…")
@@ -914,7 +930,7 @@ class AGIRSoloInterface:
             self.drawer.hide()
             ui.notify("Sessão retomada com sucesso.", type="positive")
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
         finally:
             self._hide_busy()
 
@@ -1066,7 +1082,7 @@ class AGIRSoloInterface:
             editor_layout(stage)
             self.manual_edit_artifact = active_stage_artifact(self.state, stage)
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
             return
         self.manual_edit_stage = stage
         self._render_workspace(
@@ -1083,7 +1099,7 @@ class AGIRSoloInterface:
         try:
             impact = self.service.revision_impact(self.state, target_stage)
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
             return
 
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6 gap-4"):
@@ -1310,9 +1326,11 @@ class AGIRSoloInterface:
         )
         with ui.column().classes("w-full gap-4"):
             if editing:
-                with ui.card().classes("surface artifact-card w-full"):
-                    self._render_inline_manual_editor(stage)
                 self._render_manual_edit_actions(state, stage)
+                with ui.card().classes("surface artifact-card w-full").mark(
+                    "artifact-content"
+                ):
+                    self._render_inline_manual_editor(stage)
                 return
 
             # Em consulta, os controlos ficam imediatamente sob o percurso de etapas
@@ -1350,7 +1368,9 @@ class AGIRSoloInterface:
                         "min-width: 210px; flex: 1 1 210px;"
                     )
 
-            with ui.card().classes("surface artifact-card w-full"):
+            with ui.card().classes("surface artifact-card w-full").mark(
+                "artifact-content"
+            ):
                 ui.markdown(
                     render_stage_artifact(state, stage),
                     extras=["tables"],
@@ -1505,7 +1525,9 @@ class AGIRSoloInterface:
         stage: str,
     ) -> None:
         impact = self.service.revision_impact(state, stage)
-        with ui.card().classes("surface decision-card w-full"):
+        with ui.card().classes("surface decision-card w-full").mark(
+            "stage-actions"
+        ):
             ui.label("EDIÇÃO MANUAL").classes("eyebrow")
             ui.label("Guardar alterações").classes("section-title")
             ui.label(
@@ -1548,8 +1570,14 @@ class AGIRSoloInterface:
         editing = (
             self.manual_edit_stage == stage and self.manual_edit_artifact is not None
         )
-        with ui.element("div").classes("workspace-grid"):
-            with ui.card().classes("surface artifact-card"):
+        with ui.column().classes("w-full gap-5"):
+            if editing:
+                self._render_manual_edit_actions(state, stage)
+            else:
+                self._render_decision_card(state)
+            with ui.card().classes("surface artifact-card w-full").mark(
+                "artifact-content"
+            ):
                 if editing:
                     self._render_inline_manual_editor(stage)
                 else:
@@ -1558,10 +1586,6 @@ class AGIRSoloInterface:
                     ).classes("artifact-markdown")
                     if stage == "resources":
                         self._render_selected_image_previews(state)
-            if editing:
-                self._render_manual_edit_actions(state, stage)
-            else:
-                self._render_decision_card(state)
 
     def _render_final_validation_view(self, state: dict[str, Any]) -> None:
         with ui.column().classes("w-full gap-5"):
@@ -1573,12 +1597,13 @@ class AGIRSoloInterface:
                 ui.label(
                     "Este ecrã é independente das etapas de autoria. A conclusão continua a depender da sua aprovação."
                 ).classes("mt-2 opacity-85")
-            with ui.element("div").classes("workspace-grid"):
-                with ui.card().classes("surface artifact-card"):
-                    ui.markdown(render_current_artifact(state), extras=["tables"]).classes(
-                        "artifact-markdown"
-                    )
-                self._render_decision_card(state, final=True)
+            self._render_decision_card(state, final=True)
+            with ui.card().classes("surface artifact-card w-full").mark(
+                "artifact-content"
+            ):
+                ui.markdown(render_current_artifact(state), extras=["tables"]).classes(
+                    "artifact-markdown"
+                )
 
     def _render_completed_view(self, state: dict[str, Any]) -> None:
         with ui.card().classes("surface complete-hero w-full items-center gap-3"):
@@ -1621,7 +1646,9 @@ class AGIRSoloInterface:
             )
 
     def _render_decision_card(self, state: dict[str, Any], final: bool = False) -> None:
-        with ui.card().classes("surface decision-card w-full"):
+        with ui.card().classes("surface decision-card w-full").mark(
+            "teacher-decision"
+        ):
             ui.label("DECISÃO DO DOCENTE").classes("eyebrow")
             ui.label(
                 "Validação final" if final else "Rever a proposta"
@@ -1766,7 +1793,7 @@ class AGIRSoloInterface:
             self.refresh_sessions()
             ui.notify(message, type="positive")
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
         finally:
             self._hide_busy()
 
@@ -1793,7 +1820,7 @@ class AGIRSoloInterface:
             self.refresh_sessions()
             ui.notify(message, type="positive", multi_line=True)
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
         finally:
             self._hide_busy()
 
@@ -1821,7 +1848,7 @@ class AGIRSoloInterface:
             ui.notify(message, type="positive", multi_line=True)
             return True
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
             return False
         finally:
             self._hide_busy()
@@ -1879,7 +1906,7 @@ class AGIRSoloInterface:
             )
             ui.notify("Pacote de recursos preparado.", type="positive")
         except USER_ERRORS as error:
-            ui.notify(str(error), type="negative", multi_line=True, timeout=0)
+            self._show_error(error)
         finally:
             self._hide_busy()
 
@@ -1904,6 +1931,14 @@ def login_page(redirect_to: str = "/") -> RedirectResponse | None:
     ui.page_title(f"Acesso — {APP_NAME}")
     ui.colors(primary="#0d766e", secondary="#1f5966", accent="#e8a23a")
     ui.add_css(APP_CSS)
+    login_error_notification: Any | None = None
+
+    def show_login_error(message: str) -> None:
+        nonlocal login_error_notification
+        login_error_notification = _replace_error_notification(
+            login_error_notification,
+            message,
+        )
 
     async def try_login() -> None:
         user_id = str(identifier.value or "")
@@ -1923,10 +1958,9 @@ def login_page(redirect_to: str = "/") -> RedirectResponse | None:
             )
         except CredentialConfigurationError:
             LOGGER.exception("Configuração de autenticação inválida")
-            ui.notify(
-                "A autenticação está temporariamente indisponível. Contacte o responsável.",
-                type="negative",
-                timeout=0,
+            show_login_error(
+                "A autenticação está temporariamente indisponível. "
+                "Contacte o responsável."
             )
             return
 
@@ -1936,7 +1970,7 @@ def login_page(redirect_to: str = "/") -> RedirectResponse | None:
             message = "Identificador ou código de acesso inválido."
             if lock_seconds:
                 message += f" Aguarde {lock_seconds} segundos antes de tentar novamente."
-            ui.notify(message, type="negative")
+            show_login_error(message)
             return
 
         LOGIN_THROTTLE.clear(user_id)

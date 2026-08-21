@@ -6,6 +6,7 @@ import base64
 import csv
 import io
 import json
+import logging
 import os
 import re
 import shutil
@@ -37,6 +38,7 @@ from .models import (
 )
 
 
+LOGGER = logging.getLogger(__name__)
 DOCUMENT_FORMAT_WORD = "word"
 DOCUMENT_FORMAT_LATEX = "latex"
 SUPPORTED_DOCUMENT_FORMATS = (
@@ -358,6 +360,11 @@ _LATEX_REPLACEMENTS = {
     "_": r"\_",
     "~": r"\textasciitilde{}",
     "^": r"\textasciicircum{}",
+    '"': r"\textquotedbl{}",
+    "<": r"\textless{}",
+    ">": r"\textgreater{}",
+    "[": "{[}",
+    "]": "{]}",
     "°": r"\textdegree{}",
     "≤": r"$\leq$",
     "≥": r"$\geq$",
@@ -379,9 +386,12 @@ def _latex_escape(value: Any) -> str:
 
 
 def _latex_itemize(items: list[Any], *, ordered: bool = False) -> str:
+    populated_items = [item for item in items if str(item or "").strip()]
+    if not populated_items:
+        return r"\emph{A confirmar pelo docente.}"
     environment = "enumerate" if ordered else "itemize"
     lines = [f"\\begin{{{environment}}}"]
-    lines.extend(f"\\item {_latex_escape(item)}" for item in items)
+    lines.extend(f"\\item{{}} {_latex_escape(item)}" for item in populated_items)
     lines.append(f"\\end{{{environment}}}")
     return "\n".join(lines)
 
@@ -469,6 +479,27 @@ def _write_latex_document(
     return str(destination)
 
 
+def _latex_compiler_log_excerpt(
+    output: bytes | str | None,
+    working_directory: Path,
+    *,
+    maximum_characters: int = 12_000,
+) -> str:
+    """Prepara uma saída limitada do compilador para o diário técnico."""
+
+    if isinstance(output, bytes):
+        text = output.decode("utf-8", errors="replace")
+    else:
+        text = str(output or "")
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    text = text.replace(str(working_directory), "<diretório-temporário>").strip()
+    if not text:
+        return "(sem saída do compilador)"
+    if len(text) > maximum_characters:
+        return "[… saída anterior omitida …]\n" + text[-maximum_characters:]
+    return text
+
+
 def compile_latex_pdf(source_path: Path | str) -> str | None:
     """Compila um `.tex` controlado pela aplicação, quando ativado no servidor."""
 
@@ -495,32 +526,64 @@ def compile_latex_pdf(source_path: Path | str) -> str | None:
             "openout_any": "p",
         }
     )
-    try:
-        result = subprocess.run(
-            command,
-            cwd=source.parent,
-            env=environment,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=_latex_compile_timeout_seconds(),
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise ValueError(
-            "A compilação PDF excedeu o tempo máximo permitido. O pacote não foi criado."
-        ) from error
+    last_output: bytes | str | None = None
+    for pass_number in (1, 2):
+        try:
+            result = subprocess.run(
+                command,
+                cwd=source.parent,
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=_latex_compile_timeout_seconds(),
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            last_output = error.stdout
+            LOGGER.error(
+                "Timeout na passagem %s/2 da compilação LaTeX de %s. Saída do "
+                "compilador:\n%s",
+                pass_number,
+                source.name,
+                _latex_compiler_log_excerpt(last_output, source.parent),
+            )
+            raise ValueError(
+                "A compilação PDF excedeu o tempo máximo permitido. "
+                "O pacote não foi criado."
+            ) from error
+        last_output = result.stdout
+        if result.returncode != 0:
+            LOGGER.error(
+                "Falha na passagem %s/2 da compilação LaTeX de %s "
+                "(código %s). Saída do compilador:\n%s",
+                pass_number,
+                source.name,
+                result.returncode,
+                _latex_compiler_log_excerpt(last_output, source.parent),
+            )
+            raise ValueError(
+                "Não foi possível compilar o documento LaTeX para PDF. "
+                "O pacote não foi criado; escolha Word ou contacte o responsável "
+                "técnico."
+            )
     destination = source.with_suffix(".pdf")
     pdf_data = destination.read_bytes() if destination.is_file() else b""
     if (
-        result.returncode != 0
-        or not pdf_data.startswith(b"%PDF-")
+        not pdf_data.startswith(b"%PDF-")
         or b"%%EOF" not in pdf_data[-2048:]
     ):
+        LOGGER.error(
+            "A compilação LaTeX de %s terminou sem produzir um PDF válido. "
+            "Última saída do compilador:\n%s",
+            source.name,
+            _latex_compiler_log_excerpt(last_output, source.parent),
+        )
         raise ValueError(
             "Não foi possível compilar o documento LaTeX para PDF. "
             "O pacote não foi criado; escolha Word ou contacte o responsável técnico."
         )
+    LOGGER.info("PDF LaTeX compilado em duas passagens: %s", source.name)
     return str(destination)
 
 

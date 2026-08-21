@@ -1,6 +1,7 @@
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import pytest
 from nicegui import ui
@@ -93,6 +94,88 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("SOLO")
     await user.should_see("Bloom")
     await user.should_see("CoerIA v0.2.8 · SQLite")
+
+
+def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
+    class ExistingNotification:
+        def __init__(self) -> None:
+            self.dismissed = False
+            self.deleted = False
+
+        def dismiss(self) -> None:
+            self.dismissed = True
+
+        def delete(self) -> None:
+            self.deleted = True
+
+    previous = ExistingNotification()
+    replacement = object()
+    with patch.object(app.ui, "notification", return_value=replacement) as create:
+        result = app._replace_error_notification(previous, "Erro de validação")
+
+    assert previous.dismissed
+    assert previous.deleted
+    assert result is replacement
+    create.assert_called_once_with(
+        "Erro de validação",
+        type="negative",
+        multi_line=True,
+        position="top",
+        close_button="Fechar",
+        timeout=app.ERROR_NOTIFICATION_TIMEOUT_SECONDS,
+    )
+
+
+@pytest.mark.asyncio
+async def test_teacher_decision_is_above_the_current_artifact_in_light_theme(
+    user: User,
+) -> None:
+    course = CourseInput.create(
+        unit_name="Programação",
+        source_text="Algoritmos, estruturas de dados, funções e testes.",
+        audience="Licenciatura",
+        duration_hours=12,
+    )
+    state = create_session(course, agent=create_test_agent())
+    final_state = deepcopy(state)
+    while final_state["current_stage"] != "final_validation":
+        final_state = review_current_stage(
+            final_state,
+            "approve",
+            agent=create_test_agent(),
+        )
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_decision_position")
+    def decision_position_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_decision_position")
+
+    decision_elements = user.find(marker="teacher-decision").elements
+    artifact_elements = user.find(marker="artifact-content").elements
+    assert len(decision_elements) == 1
+    assert len(artifact_elements) == 1
+    decision = next(iter(decision_elements))
+    artifact = next(iter(artifact_elements))
+    assert decision.id < artifact.id
+    assert not hasattr(interfaces[-1], "dark_mode")
+    assert "workspace-grid" not in app.APP_CSS
+    assert "background: #edf5f3 !important;" in app.APP_CSS
+    assert "color: #064e4a !important;" in app.APP_CSS
+    assert ".info-chip * { color: inherit !important; }" in app.APP_CSS
+
+    with user:
+        interfaces[-1].state = final_state
+        interfaces[-1].show_workspace()
+    final_decisions = user.find(marker="teacher-decision").elements
+    final_artifacts = user.find(marker="artifact-content").elements
+    assert len(final_decisions) == 1
+    assert len(final_artifacts) == 1
+    assert next(iter(final_decisions)).id < next(iter(final_artifacts)).id
 
 
 def test_export_format_choice_maps_to_requested_document_formats() -> None:

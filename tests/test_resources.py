@@ -18,6 +18,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from prism.agents import AgentGenerationError, GenerationResult
 from prism.application_service import ApplicationService
 from prism.exporter import (
+    _latex_itemize,
     compile_latex_pdf,
     export_presentation,
     export_program_latex,
@@ -584,6 +585,20 @@ class ResourceGenerationTests(unittest.TestCase):
             finally:
                 package_path.unlink(missing_ok=True)
 
+    def test_latex_lists_use_a_teacher_fallback_when_empty(self) -> None:
+        fallback = r"\emph{A confirmar pelo docente.}"
+        self.assertEqual(_latex_itemize([]), fallback)
+        self.assertEqual(_latex_itemize([], ordered=True), fallback)
+        self.assertEqual(_latex_itemize(["", "  "]), fallback)
+
+    def test_latex_list_items_escape_ambiguous_characters(self) -> None:
+        document = _latex_itemize(['[Guia] <teste> "seguro"'])
+        self.assertIn(
+            r"\item{} {[}Guia{]} \textless{}teste\textgreater{} "
+            r"\textquotedbl{}seguro\textquotedbl{}",
+            document,
+        )
+
     def test_latex_pdf_compiler_is_invoked_without_shell_escape(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             source = Path(temporary_directory) / "documento.tex"
@@ -595,7 +610,7 @@ class ResourceGenerationTests(unittest.TestCase):
             def fake_run(command, **kwargs):
                 source.with_suffix(".pdf").write_bytes(b"%PDF-1.7\n%%EOF\n")
                 self.assertNotIn("shell", kwargs)
-                return type("Result", (), {"returncode": 0})()
+                return type("Result", (), {"returncode": 0, "stdout": b"OK"})()
 
             with (
                 patch.dict(
@@ -611,11 +626,48 @@ class ResourceGenerationTests(unittest.TestCase):
             ):
                 destination = Path(compile_latex_pdf(source) or "")
 
-            command = compiler.call_args.args[0]
-            self.assertIn("-no-shell-escape", command)
-            self.assertIn("-halt-on-error", command)
-            self.assertEqual(command[-1], source.name)
+            self.assertEqual(compiler.call_count, 2)
+            for call in compiler.call_args_list:
+                command = call.args[0]
+                self.assertIn("-no-shell-escape", command)
+                self.assertIn("-halt-on-error", command)
+                self.assertEqual(command[-1], source.name)
             self.assertTrue(destination.samefile(source.with_suffix(".pdf")))
+
+    def test_latex_compiler_failure_is_written_to_the_server_log(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "documento.tex"
+            source.write_text(
+                "\\documentclass{article}\\begin{document}Teste\\end{document}",
+                encoding="utf-8",
+            )
+            failed = type(
+                "Result",
+                (),
+                {
+                    "returncode": 1,
+                    "stdout": b"! Undefined control sequence.\nline 12",
+                },
+            )()
+            with (
+                patch.dict(
+                    environ,
+                    {
+                        "COERIA_LATEX_PDF_ENABLED": "true",
+                        "COERIA_LATEX_COMPILER": "pdflatex",
+                    },
+                    clear=False,
+                ),
+                patch("prism.exporter.shutil.which", return_value="/usr/bin/pdflatex"),
+                patch("prism.exporter.subprocess.run", return_value=failed),
+                self.assertLogs("prism.exporter", level="ERROR") as captured,
+            ):
+                with self.assertRaisesRegex(ValueError, "Não foi possível compilar"):
+                    compile_latex_pdf(source)
+
+            log = "\n".join(captured.output)
+            self.assertIn("passagem 1/2", log)
+            self.assertIn("Undefined control sequence", log)
 
     def test_enabled_latex_pdf_compilation_requires_the_compiler(self) -> None:
         with TemporaryDirectory() as temporary_directory:
