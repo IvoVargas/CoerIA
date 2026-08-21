@@ -65,6 +65,22 @@ log "Versão atual"
 CURRENT_VERSION="$(git -C "$APP_DIR" describe --tags --always 2>/dev/null || true)"
 printf 'Atual: %s\nAlvo:  %s\n' "${CURRENT_VERSION:-desconhecida}" "$TAG"
 
+LATEX_PDF_SETTING="$(
+  sudo sed -n 's/^COERIA_LATEX_PDF_ENABLED=//p' "$ENV_FILE" \
+    | tail -n 1 \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -d '[:space:]'
+)"
+if [[ "$LATEX_PDF_SETTING" =~ ^(1|true|yes|on)$ ]]; then
+  LATEX_COMPILER_SETTING="$(
+    sudo sed -n 's/^COERIA_LATEX_COMPILER=//p' "$ENV_FILE" | tail -n 1
+  )"
+  LATEX_COMPILER_SETTING="${LATEX_COMPILER_SETTING:-pdflatex}"
+  command -v "$LATEX_COMPILER_SETTING" >/dev/null 2>&1 \
+    || fail "A compilação LaTeX/PDF está ativa, mas '$LATEX_COMPILER_SETTING' não existe."
+  printf 'Compilador LaTeX: %s\n' "$(command -v "$LATEX_COMPILER_SETTING")"
+fi
+
 log "Verificar checkout"
 OWNER="$(stat -c '%U' "$APP_DIR")"
 CURRENT_USER="$(id -un)"

@@ -95,6 +95,44 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("CoerIA v0.2.8 · SQLite")
 
 
+def test_export_format_choice_maps_to_requested_document_formats() -> None:
+    assert app._document_formats_for_export_choice("word") == ("word",)
+    assert app._document_formats_for_export_choice("latex") == ("latex",)
+    assert app._document_formats_for_export_choice("both") == ("word", "latex")
+
+
+@pytest.mark.asyncio
+async def test_completed_view_offers_word_latex_or_both(
+    user: User,
+) -> None:
+    course = CourseInput.create(
+        unit_name="Programação",
+        source_text="Algoritmos, estruturas de dados, funções e testes automatizados.",
+        audience="Licenciatura",
+        duration_hours=12,
+    )
+    agent = create_test_agent()
+    state = create_session(course, resource_types=[RESOURCE_TEST], agent=agent)
+    while state.get("status") != "completed":
+        state = review_current_stage(state, "approve", agent=agent)
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_export_formats")
+    def export_formats_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_export_formats")
+
+    await user.should_see("Formato dos documentos editáveis")
+    await user.should_see(app.EXPORT_DOCUMENT_FORMAT_CHOICES["word"])
+    await user.should_see(app.EXPORT_DOCUMENT_FORMAT_CHOICES["latex"])
+    await user.should_see(app.EXPORT_DOCUMENT_FORMAT_CHOICES["both"])
+    assert interfaces[-1].export_document_format == "word"
+
+
 @pytest.mark.asyncio
 async def test_manual_table_editor_renders_for_the_current_stage(
     user: User,

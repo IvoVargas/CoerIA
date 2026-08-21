@@ -1,5 +1,6 @@
 import base64
 import json
+import shutil
 import unittest
 import zipfile
 from copy import deepcopy
@@ -16,7 +17,12 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from prism.agents import AgentGenerationError, GenerationResult
 from prism.application_service import ApplicationService
-from prism.exporter import export_presentation, export_resource_package
+from prism.exporter import (
+    compile_latex_pdf,
+    export_presentation,
+    export_program_latex,
+    export_resource_package,
+)
 from prism.models import (
     CourseInput,
     RESOURCE_PRACTICAL,
@@ -446,7 +452,9 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertIn("programas de unidades curriculares", manifest["application_name"])
                 self.assertEqual(manifest["ai_provider"], "OpenAI")
                 self.assertEqual(set(manifest["selected_resources"]), set(SUPPORTED_RESOURCE_TYPES))
+                self.assertEqual(manifest["document_formats"], ["word"])
                 self.assertEqual(manifest["primary_product"], program_name)
+                self.assertEqual(manifest["primary_products"], [program_name])
                 self.assertIn("visual_assets", manifest)
                 self.assertIn("document_images", manifest["visual_assets"])
                 self.assertIn("ai_generated_images", manifest["visual_assets"])
@@ -476,6 +484,207 @@ class ResourceGenerationTests(unittest.TestCase):
                     self.assertTrue(any(description.strip() for description in descriptions))
         finally:
             package_path.unlink(missing_ok=True)
+
+    def test_zip_package_respects_word_latex_or_both_document_formats(self) -> None:
+        state = review_current_stage(self._resource_state(), "approve", agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        cases = (
+            (("word",), True, False),
+            (("latex",), False, True),
+            (("word", "latex"), True, True),
+        )
+        for formats, expects_word, expects_latex in cases:
+            with self.subTest(formats=formats):
+                package_path = Path(export_resource_package(state, formats))
+                try:
+                    with zipfile.ZipFile(package_path) as package:
+                        names = set(package.namelist())
+                        word_names = {
+                            name for name in names if name.endswith(".docx")
+                        }
+                        latex_names = {
+                            name for name in names if name.endswith(".tex")
+                        }
+                        self.assertEqual(bool(word_names), expects_word)
+                        self.assertEqual(bool(latex_names), expects_latex)
+                        if expects_word:
+                            self.assertEqual(len(word_names), 4)
+                        if expects_latex:
+                            self.assertEqual(len(latex_names), 4)
+                            program_name = next(
+                                name
+                                for name in latex_names
+                                if name.endswith("_programa_uc.tex")
+                            )
+                            program = package.read(program_name).decode("utf-8")
+                            normalized_program = program.replace("\r\n", "\n")
+                            self.assertIn(r"\begin{document}", program)
+                            self.assertIn(r"\section{Matriz de alinhamento}", program)
+                            self.assertIn(
+                                r"\clearpage" "\n" r"\section{Matriz de alinhamento}",
+                                normalized_program,
+                            )
+                            self.assertIn(r"Biggs, J., \& Tang", program)
+                            self.assertIn(r"\end{document}", program)
+                            test_name = next(
+                                name
+                                for name in latex_names
+                                if name.endswith("_teste.tex")
+                            )
+                            test_document = package.read(test_name).decode("utf-8")
+                            self.assertIn(
+                                r"\textbf{Tipo:} Resposta estruturada\par",
+                                test_document,
+                            )
+                            self.assertIn(
+                                r"\textbf{Resultado associado:}",
+                                test_document,
+                            )
+                        self.assertTrue(
+                            any(name.endswith("_apresentacao.pptx") for name in names)
+                        )
+                        manifest = json.loads(package.read("manifesto.json"))
+                        self.assertEqual(manifest["document_formats"], list(formats))
+                        self.assertEqual(
+                            len(manifest["primary_products"]), len(formats)
+                        )
+                        self.assertEqual(
+                            manifest["primary_product"],
+                            manifest["primary_products"][0],
+                        )
+                finally:
+                    package_path.unlink(missing_ok=True)
+
+    def test_application_service_persists_export_format_choice_in_audit(self) -> None:
+        state = review_current_stage(self._resource_state(), "approve", agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(
+                Path(temporary_directory) / "coeria-export-formats.db"
+            )
+            service = ApplicationService(store)
+            session_id = store.save(state)
+            stored_state = service.load_session(session_id)
+            package_path_text, updated = service.export_session(
+                stored_state,
+                ("latex",),
+            )
+            package_path = Path(package_path_text)
+            try:
+                self.assertEqual(updated["last_export_document_formats"], ["latex"])
+                self.assertEqual(
+                    updated["audit"][-1]["feedback"],
+                    "Formatos documentais: LaTeX.",
+                )
+                restored = service.load_session(session_id)
+                self.assertEqual(
+                    restored["last_export_document_formats"],
+                    ["latex"],
+                )
+            finally:
+                package_path.unlink(missing_ok=True)
+
+    def test_latex_pdf_compiler_is_invoked_without_shell_escape(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "documento.tex"
+            source.write_text(
+                "\\documentclass{article}\\begin{document}Teste\\end{document}",
+                encoding="utf-8",
+            )
+
+            def fake_run(command, **kwargs):
+                source.with_suffix(".pdf").write_bytes(b"%PDF-1.7\n%%EOF\n")
+                self.assertNotIn("shell", kwargs)
+                return type("Result", (), {"returncode": 0})()
+
+            with (
+                patch.dict(
+                    environ,
+                    {
+                        "COERIA_LATEX_PDF_ENABLED": "true",
+                        "COERIA_LATEX_COMPILER": "pdflatex",
+                    },
+                    clear=False,
+                ),
+                patch("prism.exporter.shutil.which", return_value="/usr/bin/pdflatex"),
+                patch("prism.exporter.subprocess.run", side_effect=fake_run) as compiler,
+            ):
+                destination = Path(compile_latex_pdf(source) or "")
+
+            command = compiler.call_args.args[0]
+            self.assertIn("-no-shell-escape", command)
+            self.assertIn("-halt-on-error", command)
+            self.assertEqual(command[-1], source.name)
+            self.assertTrue(destination.samefile(source.with_suffix(".pdf")))
+
+    def test_enabled_latex_pdf_compilation_requires_the_compiler(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "documento.tex"
+            source.write_text(
+                "\\documentclass{article}\\begin{document}Teste\\end{document}",
+                encoding="utf-8",
+            )
+            with (
+                patch.dict(
+                    environ,
+                    {"COERIA_LATEX_PDF_ENABLED": "true"},
+                    clear=False,
+                ),
+                patch("prism.exporter.shutil.which", return_value=None),
+            ):
+                with self.assertRaisesRegex(ValueError, "não está disponível"):
+                    compile_latex_pdf(source)
+
+    def test_enabled_latex_pdf_compilation_adds_pdf_companions(self) -> None:
+        state = review_current_stage(self._resource_state(), "approve", agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+
+        def fake_compile(source_path):
+            destination = Path(source_path).with_suffix(".pdf")
+            destination.write_bytes(b"%PDF-1.7\n%%EOF\n")
+            return str(destination)
+
+        with (
+            patch.dict(
+                environ,
+                {"COERIA_LATEX_PDF_ENABLED": "true"},
+                clear=False,
+            ),
+            patch("prism.exporter._latex_compiler_path", return_value="/usr/bin/pdflatex"),
+            patch("prism.exporter.compile_latex_pdf", side_effect=fake_compile),
+        ):
+            package_path = Path(export_resource_package(state, ("latex",)))
+        try:
+            with zipfile.ZipFile(package_path) as package:
+                names = set(package.namelist())
+                pdf_names = {name for name in names if name.endswith(".pdf")}
+                self.assertEqual(len(pdf_names), 4)
+                manifest = json.loads(package.read("manifesto.json"))
+                self.assertTrue(manifest["latex_pdf_compilation"]["enabled"])
+                self.assertEqual(
+                    set(manifest["latex_pdf_compilation"]["generated_files"]),
+                    pdf_names,
+                )
+        finally:
+            package_path.unlink(missing_ok=True)
+
+    @unittest.skipUnless(
+        shutil.which("pdflatex"),
+        "pdflatex não está instalado neste ambiente",
+    )
+    def test_generated_program_latex_compiles_with_installed_pdflatex(self) -> None:
+        state = self._resource_state()
+        with TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "programa_uc.tex"
+            export_program_latex(state, source)
+            with patch.dict(
+                environ,
+                {"COERIA_LATEX_PDF_ENABLED": "true"},
+                clear=False,
+            ):
+                destination = Path(compile_latex_pdf(source) or "")
+            self.assertTrue(destination.is_file())
+            self.assertTrue(destination.read_bytes().startswith(b"%PDF-"))
 
 
 if __name__ == "__main__":

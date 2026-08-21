@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 from .assistance import build_initial_form_assistant, validate_initial_fields
 from .auth import normalize_user_id
-from .exporter import export_resource_package
+from .exporter import export_resource_package, normalize_document_formats
 from .ingestion import (
     build_raw_source_text,
     extract_source_images,
@@ -335,19 +335,28 @@ class ApplicationService:
     def export_session(
         self,
         state: dict[str, Any] | None,
+        document_formats: list[str] | tuple[str, ...] | str | None = None,
     ) -> tuple[str, dict[str, Any]]:
         if not state:
             raise ValueError("Inicie ou retome uma sessão antes de exportar.")
+        formats = normalize_document_formats(document_formats)
+        format_labels = {
+            "word": "Word",
+            "latex": "LaTeX",
+        }
         updated = deepcopy(state)
+        updated["last_export_document_formats"] = list(formats)
         updated.setdefault("audit", []).append(
             {
                 "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "stage": "Exportação",
                 "event": "Pacote final exportado e rastreabilidade finalizada.",
-                "feedback": "—",
+                "feedback": "Formatos documentais: "
+                + ", ".join(format_labels[item] for item in formats)
+                + ".",
             }
         )
-        package_path = export_resource_package(updated)
+        package_path = export_resource_package(updated, formats)
         return package_path, self._persist(updated)
 
     @staticmethod

@@ -6,7 +6,10 @@ import base64
 import csv
 import io
 import json
+import os
 import re
+import shutil
+import subprocess
 import zipfile
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -32,6 +35,67 @@ from .models import (
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
 )
+
+
+DOCUMENT_FORMAT_WORD = "word"
+DOCUMENT_FORMAT_LATEX = "latex"
+SUPPORTED_DOCUMENT_FORMATS = (
+    DOCUMENT_FORMAT_WORD,
+    DOCUMENT_FORMAT_LATEX,
+)
+
+
+def latex_pdf_compilation_enabled() -> bool:
+    return str(os.getenv("COERIA_LATEX_PDF_ENABLED", "false")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _latex_compiler_path() -> str:
+    configured = str(os.getenv("COERIA_LATEX_COMPILER", "pdflatex")).strip()
+    compiler = shutil.which(configured) if configured else None
+    if not compiler:
+        raise ValueError(
+            "A compilação PDF de LaTeX está ativa, mas o compilador configurado "
+            "não está disponível no servidor."
+        )
+    return compiler
+
+
+def _latex_compile_timeout_seconds() -> int:
+    try:
+        configured = int(os.getenv("COERIA_LATEX_TIMEOUT_SECONDS", "45"))
+    except ValueError:
+        configured = 45
+    return min(120, max(5, configured))
+
+
+def normalize_document_formats(
+    document_formats: list[str] | tuple[str, ...] | str | None,
+) -> tuple[str, ...]:
+    """Valida os formatos dos documentos textuais incluídos no pacote final."""
+
+    if document_formats is None:
+        requested = [DOCUMENT_FORMAT_WORD]
+    elif isinstance(document_formats, str):
+        requested = [document_formats]
+    else:
+        requested = list(document_formats)
+    normalized = [str(item or "").strip().lower() for item in requested]
+    invalid = [item for item in normalized if item not in SUPPORTED_DOCUMENT_FORMATS]
+    if invalid:
+        raise ValueError(
+            "Formato documental inválido. Escolha Word, LaTeX ou ambos."
+        )
+    selected = tuple(
+        item for item in SUPPORTED_DOCUMENT_FORMATS if item in normalized
+    )
+    if not selected:
+        raise ValueError("Escolha pelo menos um formato documental para exportação.")
+    return selected
 
 
 def _safe_stem(value: str) -> str:
@@ -265,11 +329,7 @@ def _bibliography_entries(value: Any) -> list[str]:
     ]
 
 
-def export_program_document(
-    state: dict[str, Any], output_path: Path | str | None = None
-) -> str:
-    """Constrói o programa editável da UC a partir de artefactos já aprovados."""
-
+def _validate_program_export_state(state: dict[str, Any]) -> None:
     required = (
         "curriculum_analysis",
         "learning_outcomes",
@@ -285,6 +345,191 @@ def export_program_document(
             + ", ".join(missing)
             + "."
         )
+
+
+_LATEX_REPLACEMENTS = {
+    "\\": r"\textbackslash{}",
+    "{": r"\{",
+    "}": r"\}",
+    "$": r"\$",
+    "&": r"\&",
+    "%": r"\%",
+    "#": r"\#",
+    "_": r"\_",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+    "°": r"\textdegree{}",
+    "≤": r"$\leq$",
+    "≥": r"$\geq$",
+    "→": r"$\rightarrow$",
+    "×": r"$\times$",
+    "±": r"$\pm$",
+    "—": "---",
+    "–": "--",
+    "\u00a0": " ",
+}
+
+
+def _latex_escape(value: Any) -> str:
+    """Escapa texto livre para que não altere a estrutura do documento LaTeX."""
+
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    escaped = "".join(_LATEX_REPLACEMENTS.get(character, character) for character in text)
+    return escaped.replace("\n", r"\newline{}" + "\n")
+
+
+def _latex_itemize(items: list[Any], *, ordered: bool = False) -> str:
+    environment = "enumerate" if ordered else "itemize"
+    lines = [f"\\begin{{{environment}}}"]
+    lines.extend(f"\\item {_latex_escape(item)}" for item in items)
+    lines.append(f"\\end{{{environment}}}")
+    return "\n".join(lines)
+
+
+def _latex_table(
+    headers: list[str],
+    rows: list[list[Any]],
+    widths: list[float],
+) -> str:
+    if len(headers) != len(widths):
+        raise ValueError("A tabela LaTeX necessita de uma largura por coluna.")
+    column_spec = "@{}" + "".join(
+        r">{\raggedright\arraybackslash}p{" + f"{width:.3f}" + r"\textwidth}"
+        for width in widths
+    ) + "@{}"
+    header = " & ".join(
+        rf"\textbf{{{_latex_escape(value)}}}" for value in headers
+    ) + r" \\"
+    body = [
+        " & ".join(_latex_escape(value) for value in row) + r" \\"
+        for row in rows
+    ]
+    return "\n".join(
+        [
+            r"{\footnotesize",
+            rf"\begin{{longtable}}{{{column_spec}}}",
+            r"\toprule",
+            header,
+            r"\midrule",
+            r"\endfirsthead",
+            r"\toprule",
+            header,
+            r"\midrule",
+            r"\endhead",
+            r"\bottomrule",
+            r"\endfoot",
+            *body,
+            r"\end{longtable}",
+            "}",
+        ]
+    )
+
+
+def _latex_document(title: str, subtitle: str, body: list[str]) -> str:
+    return "\n".join(
+        [
+            r"\documentclass[11pt,a4paper]{article}",
+            r"\usepackage[T1]{fontenc}",
+            r"\usepackage[utf8]{inputenc}",
+            r"\usepackage[portuguese]{babel}",
+            r"\usepackage[a4paper,margin=2cm]{geometry}",
+            r"\usepackage{array}",
+            r"\usepackage{booktabs}",
+            r"\usepackage{longtable}",
+            r"\usepackage{textcomp}",
+            r"\usepackage[hidelinks]{hyperref}",
+            r"\setlength{\parindent}{0pt}",
+            r"\setlength{\parskip}{0.55em}",
+            r"\setlength{\tabcolsep}{3pt}",
+            r"\sloppy",
+            rf"\title{{{_latex_escape(title)}}}",
+            rf"\author{{{_latex_escape(subtitle)}}}",
+            r"\date{}",
+            r"\begin{document}",
+            r"\maketitle",
+            *body,
+            r"\end{document}",
+            "",
+        ]
+    )
+
+
+def _write_latex_document(
+    content: str,
+    output_path: Path | str | None,
+    *,
+    prefix: str,
+) -> str:
+    if output_path is None:
+        with NamedTemporaryFile(prefix=prefix, suffix=".tex", delete=False) as temp_file:
+            destination = Path(temp_file.name)
+    else:
+        destination = Path(output_path)
+    destination.write_text(content, encoding="utf-8")
+    return str(destination)
+
+
+def compile_latex_pdf(source_path: Path | str) -> str | None:
+    """Compila um `.tex` controlado pela aplicação, quando ativado no servidor."""
+
+    if not latex_pdf_compilation_enabled():
+        return None
+    source = Path(source_path).resolve()
+    if source.suffix.lower() != ".tex" or not source.is_file():
+        raise ValueError("O ficheiro LaTeX a compilar não está disponível.")
+    compiler = _latex_compiler_path()
+    command = [
+        compiler,
+        "-interaction=nonstopmode",
+        "-halt-on-error",
+        "-file-line-error",
+        "-no-shell-escape",
+        "-output-directory",
+        str(source.parent),
+        source.name,
+    ]
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "openin_any": "p",
+            "openout_any": "p",
+        }
+    )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=source.parent,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=_latex_compile_timeout_seconds(),
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise ValueError(
+            "A compilação PDF excedeu o tempo máximo permitido. O pacote não foi criado."
+        ) from error
+    destination = source.with_suffix(".pdf")
+    pdf_data = destination.read_bytes() if destination.is_file() else b""
+    if (
+        result.returncode != 0
+        or not pdf_data.startswith(b"%PDF-")
+        or b"%%EOF" not in pdf_data[-2048:]
+    ):
+        raise ValueError(
+            "Não foi possível compilar o documento LaTeX para PDF. "
+            "O pacote não foi criado; escolha Word ou contacte o responsável técnico."
+        )
+    return str(destination)
+
+
+def export_program_document(
+    state: dict[str, Any], output_path: Path | str | None = None
+) -> str:
+    """Constrói o programa editável da UC a partir de artefactos já aprovados."""
+
+    _validate_program_export_state(state)
 
     course = state.get("course", {})
     analysis = state.get("curriculum_analysis", {})
@@ -404,6 +649,163 @@ def export_program_document(
         destination = Path(output_path)
     document.save(destination)
     return str(destination)
+
+
+def export_program_latex(
+    state: dict[str, Any], output_path: Path | str | None = None
+) -> str:
+    """Constrói em LaTeX o mesmo programa da UC disponibilizado em Word."""
+
+    _validate_program_export_state(state)
+    course = state.get("course", {})
+    analysis = state.get("curriculum_analysis", {})
+    taxonomy = {
+        str(item.get("outcome_id", "")): item
+        for item in state.get("outcome_taxonomy", [])
+    }
+    total_hours = float(course.get("contact_hours", 0) or 0) + float(
+        course.get("autonomous_hours", 0) or 0
+    )
+    metadata_rows = [
+        ["Unidade curricular", _display(course.get("unit_name"))],
+        ["Curso / formação", _display(course.get("program_name"))],
+        ["Tipo de formação", _display(course.get("program_type"))],
+        ["Ano curricular", _display(course.get("academic_year"))],
+        ["Semestre", _display(course.get("semester"))],
+        [
+            "CNAEF",
+            " --- ".join(
+                item
+                for item in (
+                    str(course.get("cnaef_code", "")).strip(),
+                    str(course.get("cnaef_name", "")).strip(),
+                )
+                if item
+            )
+            or "A confirmar pelo docente",
+        ],
+        ["ECTS", _display(course.get("ects_credits") or "")],
+        ["Horas de contacto", _display(course.get("contact_hours") or "")],
+        ["Trabalho autónomo", _display(course.get("autonomous_hours") or "")],
+        [
+            "Carga de trabalho total",
+            f"{total_hours:g} horas" if total_hours else "A confirmar pelo docente",
+        ],
+        ["Público-alvo", _display(course.get("audience"))],
+        ["Taxonomia selecionada", _display(course.get("taxonomy_type"))],
+    ]
+    body = [
+        r"\section{Identificação e carga de trabalho}",
+        _latex_table(["Campo", "Valor"], metadata_rows, [0.24, 0.66]),
+        r"\section{Finalidades e objetivos gerais}",
+    ]
+    general_aims = str(course.get("general_aims", "")).strip()
+    if general_aims:
+        body.append(_latex_escape(general_aims))
+    body.append(
+        _latex_itemize(
+            [
+                f"{objective.get('id', '')} --- {objective.get('statement', '')}"
+                for objective in analysis.get("objectives", [])
+            ]
+        )
+    )
+    body.extend(
+        [
+            r"\section{Conteúdos programáticos}",
+            _latex_table(
+                ["ID", "Conteúdo", "Descrição"],
+                [
+                    [item.get("id", ""), item.get("title", ""), item.get("description", "")]
+                    for item in analysis.get("contents", [])
+                ],
+                [0.07, 0.22, 0.59],
+            ),
+            r"\section{Resultados de aprendizagem}",
+            _latex_table(
+                ["ID", "Resultado de aprendizagem", "Taxonomia", "Nível", "Verbo"],
+                [
+                    [
+                        outcome.get("id", ""),
+                        outcome.get("statement", ""),
+                        taxonomy.get(str(outcome.get("id", "")), {}).get(
+                            "taxonomy", course.get("taxonomy_type", "")
+                        ),
+                        taxonomy.get(str(outcome.get("id", "")), {}).get("level", ""),
+                        outcome.get("action_verb", ""),
+                    ]
+                    for outcome in state.get("learning_outcomes", [])
+                ],
+                [0.06, 0.35, 0.11, 0.18, 0.12],
+            ),
+            r"\section{Atividades de ensino-aprendizagem}",
+            _latex_table(
+                ["ID", "Atividade", "Método", "Feedback", "Resultados"],
+                [
+                    [
+                        activity.get("id", ""),
+                        activity.get("activity", ""),
+                        activity.get("method", ""),
+                        activity.get("feedback_strategy", ""),
+                        ", ".join(activity.get("outcome_ids", [])),
+                    ]
+                    for activity in state.get("teaching_activities", [])
+                ],
+                [0.06, 0.24, 0.19, 0.20, 0.13],
+            ),
+            r"\section{Atividades de avaliação}",
+            _latex_table(
+                ["ID", "Finalidade", "Modalidade", "Atividade", "Critério", "Resultados"],
+                [
+                    [
+                        assessment.get("id", ""),
+                        assessment.get("assessment_purpose", ""),
+                        assessment.get("work_type", ""),
+                        assessment.get("activity", ""),
+                        assessment.get("criterion", ""),
+                        ", ".join(assessment.get("outcome_ids", [])),
+                    ]
+                    for assessment in state.get("assessment_activities", [])
+                ],
+                [0.05, 0.10, 0.12, 0.17, 0.20, 0.14],
+            ),
+            r"\clearpage",
+            r"\section{Matriz de alinhamento}",
+            _latex_table(
+                ["RA", "Conteúdos", "Ensino-aprendizagem", "Avaliação", "Estado", "Fundamentação"],
+                [
+                    [
+                        row.get("outcome_id", ""),
+                        ", ".join(row.get("content_ids", [])),
+                        ", ".join(row.get("teaching_activity_ids", [])),
+                        ", ".join(row.get("assessment_ids", [])),
+                        row.get("status", ""),
+                        row.get("rationale", ""),
+                    ]
+                    for row in state.get("alignment_matrix", [])
+                ],
+                [0.05, 0.12, 0.17, 0.12, 0.10, 0.29],
+            ),
+            r"\section{Bibliografia}",
+        ]
+    )
+    bibliography = _bibliography_entries(course.get("bibliography"))
+    if bibliography:
+        body.append(_latex_itemize(bibliography))
+    else:
+        body.append(
+            r"\emph{Bibliografia a fornecer ou validar pelo docente antes da utilização institucional.}"
+        )
+    content = _latex_document(
+        "Programa da Unidade Curricular",
+        _display(course.get("unit_name")),
+        body,
+    )
+    return _write_latex_document(
+        content,
+        output_path,
+        prefix="coeria_programa_",
+    )
 
 
 PPT_NAVY = PptxRGBColor(11, 37, 69)
@@ -959,6 +1361,114 @@ def _export_practical_activity(state: dict[str, Any], output_path: Path) -> None
     document.save(output_path)
 
 
+def _export_worksheet_latex(state: dict[str, Any], output_path: Path) -> None:
+    data = state["resources"]["lesson_worksheet"]
+    body = [
+        _latex_escape(data.get("overview", "")),
+        r"\section{Instruções}",
+        _latex_escape(data.get("instructions", "")),
+    ]
+    for section in data.get("sections", []):
+        body.extend(
+            [
+                rf"\section{{{_latex_escape(section.get('heading', ''))}}}",
+                _latex_escape(section.get("content", "")),
+            ]
+        )
+        outcomes = ", ".join(section.get("outcome_ids", []))
+        if outcomes:
+            body.append(rf"\textbf{{Resultados associados:}} {_latex_escape(outcomes)}")
+        if section.get("activity"):
+            body.extend(
+                [
+                    r"\subsection{Atividade}",
+                    _latex_escape(section.get("activity", "")),
+                ]
+            )
+    content = _latex_document(
+        str(data.get("title", "Ficha de aula")),
+        str(state.get("course", {}).get("unit_name", "")),
+        body,
+    )
+    _write_latex_document(content, output_path, prefix="coeria_ficha_")
+
+
+def _export_test_latex(state: dict[str, Any], output_path: Path) -> None:
+    data = state["resources"]["test"]
+    body = [
+        _latex_escape(data.get("instructions", "")),
+        rf"\textbf{{Cotação total:}} {_latex_escape(data.get('total_points', 0))} pontos",
+        r"\section{Questões}",
+    ]
+    questions = data.get("questions", [])
+    for question in questions:
+        body.extend(
+            [
+                rf"\subsection{{{_latex_escape(question.get('id', ''))} --- {_latex_escape(question.get('points', 0))} pontos}}",
+                _latex_escape(question.get("prompt", "")) + r"\par",
+                rf"\textbf{{Tipo:}} {_latex_escape(question.get('question_type', ''))}\par",
+                rf"\textbf{{Resultado associado:}} {_latex_escape(question.get('outcome_id', ''))}",
+                r"\vspace{3\baselineskip}",
+            ]
+        )
+    body.extend([r"\newpage", r"\section{Chave de correção}"])
+    for question in questions:
+        body.extend(
+            [
+                rf"\subsection{{{_latex_escape(question.get('id', ''))}}}",
+                _latex_escape(question.get("answer_key", "")),
+            ]
+        )
+    content = _latex_document(
+        str(data.get("title", "Teste")),
+        str(state.get("course", {}).get("unit_name", "")),
+        body,
+    )
+    _write_latex_document(content, output_path, prefix="coeria_teste_")
+
+
+def _export_practical_activity_latex(state: dict[str, Any], output_path: Path) -> None:
+    data = state["resources"]["practical_activity"]
+    body = [
+        _latex_escape(data.get("context", "")),
+        rf"\textbf{{Duração prevista:}} {_latex_escape(data.get('duration_minutes', 0))} minutos",
+        r"\section{Materiais}",
+        _latex_itemize(list(data.get("materials", []))),
+        r"\section{Etapas}",
+        _latex_itemize(
+            [
+                (
+                    f"{step.get('instruction', '')} "
+                    f"({', '.join(step.get('outcome_ids', []))})"
+                )
+                for step in sorted(
+                    data.get("steps", []), key=lambda item: item.get("order", 0)
+                )
+            ],
+            ordered=True,
+        ),
+        r"\section{Entregáveis}",
+        _latex_itemize(list(data.get("deliverables", []))),
+        r"\section{Critérios}",
+        _latex_itemize(
+            [
+                (
+                    f"{criterion.get('criterion', '')} "
+                    f"({criterion.get('weight', 0)}%): "
+                    f"{criterion.get('description', '')}"
+                )
+                for criterion in data.get("criteria", [])
+            ]
+        ),
+    ]
+    content = _latex_document(
+        str(data.get("title", "Atividade prática")),
+        str(state.get("course", {}).get("unit_name", "")),
+        body,
+    )
+    _write_latex_document(content, output_path, prefix="coeria_atividade_")
+
+
 def _csv_bytes(headers: list[str], rows: list[list[Any]]) -> bytes:
     stream = io.StringIO(newline="")
     writer = csv.writer(stream)
@@ -967,7 +1477,23 @@ def _csv_bytes(headers: list[str], rows: list[list[Any]]) -> bytes:
     return stream.getvalue().encode("utf-8-sig")
 
 
-def export_resource_package(state: dict[str, Any]) -> str:
+def _register_latex_document(
+    generated: list[tuple[Path, str]],
+    source: Path,
+    compiled_pdfs: list[str],
+) -> None:
+    generated.append((source, source.name))
+    pdf_path_text = compile_latex_pdf(source)
+    if pdf_path_text:
+        pdf_path = Path(pdf_path_text)
+        generated.append((pdf_path, pdf_path.name))
+        compiled_pdfs.append(pdf_path.name)
+
+
+def export_resource_package(
+    state: dict[str, Any],
+    document_formats: list[str] | tuple[str, ...] | str | None = None,
+) -> str:
     """Cria um ZIP com os recursos selecionados e os elementos de auditoria."""
 
     if state.get("status") != "completed":
@@ -977,37 +1503,68 @@ def export_resource_package(state: dict[str, Any]) -> str:
     if not quality.get("passed"):
         raise ValueError("A validação automática detetou erros bloqueantes nos recursos.")
 
+    formats = normalize_document_formats(document_formats)
+    pdf_compilation_enabled = (
+        DOCUMENT_FORMAT_LATEX in formats and latex_pdf_compilation_enabled()
+    )
+    latex_compiler_name: str | None = None
+    if pdf_compilation_enabled:
+        latex_compiler_name = Path(_latex_compiler_path()).name
     selected = set(resources.get("selected_types", []))
     course_stem = _safe_stem(state["course"]["unit_name"])
-    with NamedTemporaryFile(
-        prefix=f"coeria_{course_stem}_", suffix=".zip", delete=False
-    ) as temp_file:
-        package_path = Path(temp_file.name)
 
     with TemporaryDirectory(prefix="coeria_export_") as temporary_directory:
         temporary_path = Path(temporary_directory)
         generated: list[tuple[Path, str]] = []
+        primary_products: list[str] = []
+        compiled_pdfs: list[str] = []
 
-        program_path = temporary_path / f"{course_stem}_programa_uc.docx"
-        export_program_document(state, program_path)
-        generated.append((program_path, program_path.name))
+        if DOCUMENT_FORMAT_WORD in formats:
+            program_path = temporary_path / f"{course_stem}_programa_uc.docx"
+            export_program_document(state, program_path)
+            generated.append((program_path, program_path.name))
+            primary_products.append(program_path.name)
+        if DOCUMENT_FORMAT_LATEX in formats:
+            program_latex_path = temporary_path / f"{course_stem}_programa_uc.tex"
+            export_program_latex(state, program_latex_path)
+            _register_latex_document(
+                generated,
+                program_latex_path,
+                compiled_pdfs,
+            )
+            primary_products.append(program_latex_path.name)
 
         if RESOURCE_PRESENTATION in selected:
             path = temporary_path / f"{course_stem}_apresentacao.pptx"
             export_presentation(state, path)
             generated.append((path, path.name))
         if RESOURCE_WORKSHEET in selected:
-            path = temporary_path / f"{course_stem}_ficha_aula.docx"
-            _export_worksheet(state, path)
-            generated.append((path, path.name))
+            if DOCUMENT_FORMAT_WORD in formats:
+                path = temporary_path / f"{course_stem}_ficha_aula.docx"
+                _export_worksheet(state, path)
+                generated.append((path, path.name))
+            if DOCUMENT_FORMAT_LATEX in formats:
+                path = temporary_path / f"{course_stem}_ficha_aula.tex"
+                _export_worksheet_latex(state, path)
+                _register_latex_document(generated, path, compiled_pdfs)
         if RESOURCE_TEST in selected:
-            path = temporary_path / f"{course_stem}_teste.docx"
-            _export_test(state, path)
-            generated.append((path, path.name))
+            if DOCUMENT_FORMAT_WORD in formats:
+                path = temporary_path / f"{course_stem}_teste.docx"
+                _export_test(state, path)
+                generated.append((path, path.name))
+            if DOCUMENT_FORMAT_LATEX in formats:
+                path = temporary_path / f"{course_stem}_teste.tex"
+                _export_test_latex(state, path)
+                _register_latex_document(generated, path, compiled_pdfs)
         if RESOURCE_PRACTICAL in selected:
-            path = temporary_path / f"{course_stem}_atividade_pratica.docx"
-            _export_practical_activity(state, path)
-            generated.append((path, path.name))
+            if DOCUMENT_FORMAT_WORD in formats:
+                path = temporary_path / f"{course_stem}_atividade_pratica.docx"
+                _export_practical_activity(state, path)
+                generated.append((path, path.name))
+            if DOCUMENT_FORMAT_LATEX in formats:
+                path = temporary_path / f"{course_stem}_atividade_pratica.tex"
+                _export_practical_activity_latex(state, path)
+                _register_latex_document(generated, path, compiled_pdfs)
 
         alignment_rows = [
             [
@@ -1038,8 +1595,15 @@ def export_resource_package(state: dict[str, Any]) -> str:
             "course": state.get("course", {}),
             "taxonomy": state.get("course", {}).get("taxonomy_type", "SOLO"),
             "selected_resources": list(resources.get("selected_types", [])),
+            "document_formats": list(formats),
+            "latex_pdf_compilation": {
+                "enabled": pdf_compilation_enabled,
+                "compiler": latex_compiler_name,
+                "generated_files": compiled_pdfs,
+            },
             "quality": quality,
-            "primary_product": program_path.name,
+            "primary_product": primary_products[0],
+            "primary_products": primary_products,
             "files": [archive_name for _path, archive_name in generated],
             "visual_assets": {
                 "document_images": [
@@ -1076,6 +1640,10 @@ def export_resource_package(state: dict[str, Any]) -> str:
             },
         }
 
+        with NamedTemporaryFile(
+            prefix=f"coeria_{course_stem}_", suffix=".zip", delete=False
+        ) as temp_file:
+            package_path = Path(temp_file.name)
         with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for path, archive_name in generated:
                 archive.write(path, archive_name)

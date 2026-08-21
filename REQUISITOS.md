@@ -226,7 +226,21 @@ ficheiros após a exportação.
   conteúdos, resultados de aprendizagem e classificação taxonómica, atividades
   de ensino-aprendizagem, avaliação, matriz de alinhamento e bibliografia
   fornecida ou validada pelo docente.
-- Incluir apenas os recursos selecionados, nos formatos `.pptx` e `.docx`.
+- Antes de preparar o ZIP, permitir ao docente escolher Word (`.docx`), LaTeX
+  (`.tex`) ou ambos para todos os documentos textuais exportáveis: programa da
+  UC, ficha de aula, teste com chave de correção e atividade prática.
+- Manter a apresentação no formato PowerPoint (`.pptx`), independentemente da
+  escolha dos formatos documentais.
+- Produzir ficheiros LaTeX autónomos em UTF-8, com texto livre devidamente
+  escapado e conteúdo equivalente ao documento Word correspondente.
+- Quando a compilação PDF estiver configurada no servidor, compilar cada `.tex`
+  com um template controlado, sem `shell-escape`, sem shell intermédio e com
+  timeout; validar a assinatura do PDF antes de o incluir no ZIP.
+- Não entregar silenciosamente um pacote parcial quando a compilação PDF estiver
+  ativa mas o compilador não existir, exceder o timeout ou devolver um ficheiro
+  inválido.
+- Incluir apenas os recursos selecionados e registar no manifesto e na auditoria
+  os formatos documentais escolhidos.
 - Incluir matriz de alinhamento, rasto de auditoria, manifesto e estado JSON.
 - Produzir nomes de ficheiro seguros e independentes do sistema operativo.
 - Registar a exportação e a finalização da rastreabilidade na sessão.
@@ -323,6 +337,8 @@ ficheiros após a exportação.
 - A aplicação funciona nos testes sem chaves de API e falha explicitamente
   quando se tenta usar OpenAI ou IAedu sem a respetiva chave.
 - O pacote exportado contém recursos, matriz, auditoria e manifesto coerentes.
+- A escolha Word, LaTeX ou ambos é respeitada para o programa da UC, ficha de
+  aula, teste e atividade prática, sem alterar a exportação da apresentação.
 - O pacote exportado contém o programa da UC em português e apresentações com
   elementos visuais pedagogicamente relevantes.
 - Uma apresentação pode utilizar imagens extraídas das fontes documentais ou

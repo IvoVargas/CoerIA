@@ -59,7 +59,15 @@ aula, teste com chave de correção e atividade prática. As apresentações dev
 integrar imagens, diagramas, tabelas, gráficos ou outros elementos visuais com
 finalidade pedagógica. Depois da aprovação final, a aplicação exporta um ZIP com
 o programa da UC, os ficheiros selecionados, matriz de alinhamento, auditoria,
-manifesto e estado completo da sessão.
+manifesto e estado completo da sessão. Antes de preparar o pacote, o docente
+escolhe se os documentos editáveis — programa da UC, ficha de aula, teste e
+atividade prática — são incluídos em Word (`.docx`), LaTeX (`.tex`) ou em ambos
+os formatos. A apresentação mantém sempre o formato PowerPoint (`.pptx`). Os
+ficheiros LaTeX são documentos autónomos em UTF-8 e escapam o texto gerado ou
+introduzido pelo docente para preservar uma estrutura compilável. Na instalação
+da VPS, a compilação PDF pode ser ativada; nesse caso, cada `.tex` é acompanhado
+pelo respetivo `.pdf`, produzido por `pdflatex` sem `shell-escape` e com limite
+de tempo.
 
 As versões, decisões e métricas de geração são guardadas em SQLite, por
 predefinição em `data/prism.db`. Na instalação pública, cada sessão fica
@@ -274,7 +282,7 @@ cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado
 - `prism/source_reduction.py`: redução automática e auditável de fontes extensas;
 - `prism/persistence.py`: sessões, versões e auditoria em SQLite;
 - `prism/auth.py`: autenticação por código, sessão assinada e limitação de tentativas;
-- `prism/exporter.py`: PowerPoint, documentos Word e pacote ZIP;
+- `prism/exporter.py`: PowerPoint, documentos Word/LaTeX e pacote ZIP;
 - `tests/`: testes do fluxo, histórico, ingestão, persistência e recursos.
 
 ## Limitações assumidas

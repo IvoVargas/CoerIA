@@ -28,6 +28,11 @@ from prism.auth import (
 )
 from prism.branding import APP_FULL_NAME, APP_NAME, APP_TAGLINE, APP_VERSION
 from prism.curriculum import TAXONOMY_CHOICES
+from prism.exporter import (
+    DOCUMENT_FORMAT_LATEX,
+    DOCUMENT_FORMAT_WORD,
+    latex_pdf_compilation_enabled,
+)
 from prism.ingestion import (
     DEFAULT_MAX_FILE_BYTES,
     SUPPORTED_SOURCE_SUFFIXES,
@@ -64,6 +69,20 @@ SESSION_STORE = SQLiteSessionStore()
 SERVICE = ApplicationService(SESSION_STORE)
 LOGIN_THROTTLE = LoginThrottle()
 RESOURCE_TYPES = list(SUPPORTED_RESOURCE_TYPES)
+LATEX_PDF_ENABLED = latex_pdf_compilation_enabled()
+EXPORT_DOCUMENT_FORMAT_CHOICES = (
+    {
+        "word": "Word (.docx)",
+        "latex": "LaTeX (.tex + .pdf)",
+        "both": "Word e LaTeX/PDF",
+    }
+    if LATEX_PDF_ENABLED
+    else {
+        "word": "Word (.docx)",
+        "latex": "LaTeX (.tex)",
+        "both": "Word e LaTeX",
+    }
+)
 _history_choices = history_choices  # compatibilidade para consulta programática
 
 USER_ERRORS = (ValueError, SourceIngestionError, AgentGenerationError)
@@ -234,6 +253,23 @@ def _session_label(item: dict[str, str]) -> str:
     return f"{item.get('unit_name', 'Sessão')} · {item.get('ai_provider', 'OpenAI')} · {stage}"
 
 
+def _document_formats_for_export_choice(choice: str) -> tuple[str, ...]:
+    if choice == "latex":
+        return (DOCUMENT_FORMAT_LATEX,)
+    if choice == "both":
+        return (DOCUMENT_FORMAT_WORD, DOCUMENT_FORMAT_LATEX)
+    return (DOCUMENT_FORMAT_WORD,)
+
+
+def _export_choice_for_document_formats(value: Any) -> str:
+    formats = {str(item) for item in (value or [])}
+    if formats == {DOCUMENT_FORMAT_LATEX}:
+        return "latex"
+    if formats == {DOCUMENT_FORMAT_WORD, DOCUMENT_FORMAT_LATEX}:
+        return "both"
+    return "word"
+
+
 class AGIRSoloInterface:
     """Interface de uma única ligação de utilizador."""
 
@@ -251,6 +287,7 @@ class AGIRSoloInterface:
         self.uploaded_files: dict[str, bytes] = {}
         self.fields: dict[str, Any] = {}
         self.resource_inputs: dict[str, Any] = {}
+        self.export_document_format = "word"
         self.busy_started_at: float | None = None
         self.busy_phase_started_at: float | None = None
         self.busy_phase_text = ""
@@ -741,6 +778,7 @@ class AGIRSoloInterface:
         self.viewed_stage = None
         self.manual_edit_stage = None
         self.manual_edit_artifact = None
+        self.export_document_format = "word"
         self._set_form_data(
             {
                 "unit_name": "",
@@ -863,6 +901,9 @@ class AGIRSoloInterface:
             self.viewed_stage = None
             self.manual_edit_stage = None
             self.manual_edit_artifact = None
+            self.export_document_format = _export_choice_for_document_formats(
+                self.state.get("last_export_document_formats")
+            )
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.uploaded_files.clear()
             self.uploader.reset()
@@ -1546,6 +1587,29 @@ class AGIRSoloInterface:
             ui.label(
                 "A estrutura foi validada. Pode agora exportar os recursos e a rastreabilidade."
             ).classes("muted text-base")
+            ui.label("Formato dos documentos editáveis").classes(
+                "text-sm font-semibold mt-3"
+            )
+            format_control = ui.toggle(
+                EXPORT_DOCUMENT_FORMAT_CHOICES,
+                value=self.export_document_format,
+            ).props("spread no-caps").classes("full-control max-w-2xl")
+            format_control.on_value_change(
+                lambda event: setattr(
+                    self,
+                    "export_document_format",
+                    str(event.value or "word"),
+                )
+            )
+            ui.label(
+                "A escolha aplica-se ao programa da UC, ficha de aula, teste e "
+                "atividade prática. A apresentação mantém o formato PowerPoint. "
+                + (
+                    "Nesta instalação, cada ficheiro LaTeX é também compilado para PDF."
+                    if LATEX_PDF_ENABLED
+                    else "A compilação automática para PDF não está ativa nesta instalação."
+                )
+            ).classes("muted text-xs max-w-2xl text-center")
             ui.button(
                 "Exportar pacote de recursos",
                 icon="download",
@@ -1805,6 +1869,9 @@ class AGIRSoloInterface:
             package_path, self.state = await run.io_bound(
                 self.service.export_session,
                 self.state,
+                _document_formats_for_export_choice(
+                    self.export_document_format
+                ),
             )
             ui.download(package_path, filename=Path(package_path).name)
             self._render_workspace(

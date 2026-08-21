@@ -182,7 +182,36 @@ COERIA_OPENAI_IMAGE_MAX_PER_PRESENTATION=2
 
 A mesma `OPENAI_API_KEY` é usada pelas chamadas OpenAI de texto e de imagem. Nunca guardar a chave real no Git.
 
-### 2.6 Executar a suíte antes de reiniciar produção
+### 2.6 Configurar a compilação LaTeX para PDF
+
+Quando `COERIA_LATEX_PDF_ENABLED=true`, a aplicação inclui no ZIP um PDF para
+cada documento `.tex`. No Ubuntu 26.04, instalar apenas os componentes TeX Live
+usados pelo template controlado da aplicação:
+
+```bash
+sudo apt update
+sudo apt install --no-install-recommends -y \
+  texlive-latex-base \
+  texlive-latex-recommended \
+  texlive-lang-portuguese \
+  poppler-utils
+command -v pdflatex
+pdflatex --version | head -n 1
+```
+
+Confirmar em `/etc/coeria/coeria.env`, sem imprimir o restante conteúdo:
+
+```bash
+sudo grep -E '^COERIA_LATEX_(PDF_ENABLED|COMPILER|TIMEOUT_SECONDS)=' \
+  /etc/coeria/coeria.env
+```
+
+A compilação é executada sem `shell-escape`, sem shell intermédio, numa pasta
+temporária privada e com timeout entre 5 e 120 segundos. Se a funcionalidade
+estiver ativa mas o compilador não existir ou o PDF for inválido, a exportação
+termina com uma mensagem explícita e não entrega um pacote parcial.
+
+### 2.7 Executar a suíte antes de reiniciar produção
 
 É importante iniciar o `pytest` num diretório ao qual o utilizador `coeria` tenha acesso. A forma mais robusta é executar todo o teste dentro de um `sh -c` que primeiro muda para `/opt/coeria/app`:
 
@@ -208,7 +237,7 @@ Depois de um teste aprovado:
 sudo rm -f /var/lib/coeria/test-update.db
 ```
 
-### 2.7 Reiniciar o serviço
+### 2.8 Reiniciar o serviço
 
 ```bash
 sudo systemctl restart coeria
@@ -216,7 +245,7 @@ sudo systemctl status coeria --no-pager
 sudo journalctl -u coeria -n 50 --no-pager
 ```
 
-### 2.8 Verificar a aplicação local e externamente
+### 2.9 Verificar a aplicação local e externamente
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:7860/login
@@ -406,6 +435,9 @@ A referência atual usa Ubuntu, Python, Nginx, Certbot, SQLite e UFW. Instalar o
 ```bash
 sudo apt update
 sudo apt install -y git python3 python3-venv nginx certbot sqlite3 gzip ufw
+sudo apt install --no-install-recommends -y \
+  texlive-latex-base texlive-latex-recommended texlive-lang-portuguese \
+  poppler-utils
 sudo adduser --system --group --home /nonexistent --no-create-home coeria
 sudo install -d -o root -g root -m 0755 /opt/coeria
 sudo install -d -o root -g coeria -m 0750 /etc/coeria
