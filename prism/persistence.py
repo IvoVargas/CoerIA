@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from .auth import normalize_user_id
 from .providers import AI_PROVIDER_OPENAI, validate_ai_provider
+from .relationships import content_ids_for_outcome, objective_ids_for_outcome
 
 
 DEFAULT_DATABASE_PATH = Path(__file__).resolve().parents[1] / "data" / "prism.db"
@@ -21,9 +22,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 11:
+    if previous_version < 12:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 11
+    state["schema_version"] = 12
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -116,14 +117,76 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             "outcome_type",
             ("Conhecimento teórico", "Aptidão prática ou técnica", "Competência social")[index % 3],
         )
-        objective_ids = [
-            objective.get("id", "")
-            for objective in (
-                analysis.get("objectives", []) if isinstance(analysis, dict) else []
+        if previous_version < 12:
+            objective_ids = [
+                objective.get("id", "")
+                for objective in (
+                    analysis.get("objectives", []) if isinstance(analysis, dict) else []
+                )
+                if objective.get("id")
+            ]
+            item.setdefault("objective_ids", objective_ids[:1] or ["OG1"])
+            item.setdefault(
+                "content_links",
+                [{
+                    "content_id": content_by_theme.get(
+                        str(item.get("theme", "")).casefold(), f"C{index + 1}"
+                    ),
+                    "importance": "Principal",
+                }],
             )
-            if objective.get("id")
+
+    def migrate_curriculum_relations(curriculum: Any) -> None:
+        if not isinstance(curriculum, dict):
+            return
+        outcomes = [
+            item
+            for item in state.get("learning_outcomes", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
         ]
-        item.setdefault("objective_ids", objective_ids[:1] or ["OG1"])
+        for index, content in enumerate(curriculum.get("contents", [])):
+            if not isinstance(content, dict):
+                continue
+            content_id = str(content.get("id", ""))
+            linked = [
+                str(outcome["id"])
+                for outcome in outcomes
+                if content_id in {
+                    str(link.get("content_id", ""))
+                    for link in outcome.get("content_links", [])
+                    if isinstance(link, dict)
+                }
+            ]
+            if not linked and outcomes:
+                linked = [str(outcomes[index % len(outcomes)]["id"])]
+            content.setdefault("outcome_ids", linked)
+        for index, objective in enumerate(curriculum.get("objectives", [])):
+            if not isinstance(objective, dict):
+                continue
+            objective_id = str(objective.get("id", ""))
+            linked = [
+                str(outcome["id"])
+                for outcome in outcomes
+                if objective_id in {
+                    str(identifier)
+                    for identifier in outcome.get("objective_ids", [])
+                }
+            ]
+            if not linked and outcomes:
+                linked = [str(outcomes[index % len(outcomes)]["id"])]
+            objective.setdefault("outcome_ids", linked)
+
+    migrate_curriculum_relations(analysis)
+    if isinstance(version_map, dict):
+        for curriculum_version in version_map.get("curriculum_analysis", []):
+            migrate_curriculum_relations(curriculum_version)
+    for snapshot in state.get("revision_snapshots", []):
+        if isinstance(snapshot, dict):
+            migrate_curriculum_relations(
+                snapshot.get("artifacts", {}).get("curriculum_analysis")
+                if isinstance(snapshot.get("artifacts"), dict)
+                else None
+            )
 
     if "outcome_taxonomy" not in state and state.get("learning_outcomes"):
         state["outcome_taxonomy"] = [
@@ -135,15 +198,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             }
             for index, item in enumerate(state.get("learning_outcomes", []))
         ]
-        item.setdefault(
-            "content_links",
-            [{
-                "content_id": content_by_theme.get(
-                    str(item.get("theme", "")).casefold(), f"C{index + 1}"
-                ),
-                "importance": "Principal",
-            }],
-        )
 
     assessments = state.get("assessment_activities", [])
     for index, item in enumerate(assessments):
@@ -168,9 +222,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         item.setdefault("support", "Acompanhamento do docente.")
         item.setdefault("feedback_strategy", "Feedback formativo.")
 
-    outcome_by_id = {
-        str(item.get("id", "")): item for item in state.get("learning_outcomes", [])
-    }
     taxonomy_by_outcome = {
         str(item.get("outcome_id", "")): item
         for item in state.get("outcome_taxonomy", [])
@@ -179,14 +230,11 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         outcome_id = str(row.get("outcome_id", ""))
         row.setdefault(
             "objective_ids",
-            list(outcome_by_id.get(outcome_id, {}).get("objective_ids", [])),
+            objective_ids_for_outcome(state, outcome_id),
         )
         row.setdefault(
             "content_ids",
-            [
-                link.get("content_id", "")
-                for link in outcome_by_id.get(outcome_id, {}).get("content_links", [])
-            ],
+            content_ids_for_outcome(state, outcome_id),
         )
         row.setdefault(
             "assessment_ids",
@@ -229,7 +277,42 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     versions = state.setdefault("versions", {})
     if state.get("outcome_taxonomy") and "outcome_taxonomy" not in versions:
         versions["outcome_taxonomy"] = [state["outcome_taxonomy"]]
-    from .workflow import STAGE_ORDER
+    from .workflow import STAGE_ORDER, formulate_learning_outcomes
+
+    if (
+        previous_version < 12
+        and state.get("current_stage") == "curriculum_analysis"
+        and not state.get("learning_outcomes")
+        and str(course.get("source_text", "")).strip()
+    ):
+        migrated_outcomes = formulate_learning_outcomes(state)
+        state["learning_outcomes"] = migrated_outcomes["learning_outcomes"]
+        state["audit"] = migrated_outcomes.get("audit", state.get("audit", []))
+        versions.setdefault("learning_outcomes", []).append(
+            state["learning_outcomes"]
+        )
+        state.setdefault("generation_metadata", {}).setdefault(
+            "learning_outcomes", []
+        ).append(
+            {
+                "provider": "CoerIA",
+                "model": "Migração do fluxo Biggs",
+                "duration_ms": 0,
+                "total_tokens": 0,
+                "validation_attempts": 1,
+                "migration": True,
+            }
+        )
+        state["current_stage"] = "learning_outcomes"
+        state["status"] = "awaiting_review"
+        state["review"] = {
+            "stage": "learning_outcomes",
+            "label": "Formulação dos resultados de aprendizagem",
+            "message": (
+                "Sessão atualizada para a sequência de alinhamento construtivo. "
+                "Valide primeiro os resultados de aprendizagem."
+            ),
+        }
 
     current_stage = state.get("current_stage", STAGE_ORDER[0])
     current_index = (
@@ -237,7 +320,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         if current_stage in STAGE_ORDER
         else 0
     )
-    stage_statuses = state.setdefault("stage_statuses", {})
+    stage_statuses = (
+        {} if previous_version < 12 else state.setdefault("stage_statuses", {})
+    )
     for index, stage in enumerate(STAGE_ORDER):
         if stage in stage_statuses:
             continue
@@ -247,14 +332,25 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             stage_statuses[stage] = "awaiting_review"
         elif index < current_index and stage in state:
             stage_statuses[stage] = "approved"
+        elif stage in state:
+            stage_statuses[stage] = "stale"
         else:
             stage_statuses[stage] = "pending"
+    state["stage_statuses"] = stage_statuses
 
     active_versions = state.setdefault("active_versions", {})
+    if previous_version < 12:
+        for stage in STAGE_ORDER[current_index + 1 :]:
+            if stage_statuses.get(stage) == "stale":
+                active_versions.pop(stage, None)
     version_dependencies = state.setdefault("version_dependencies", {})
     for stage in STAGE_ORDER:
         stage_versions = versions.get(stage, [])
-        if stage in state and stage_versions:
+        if (
+            stage in state
+            and stage_versions
+            and stage_statuses.get(stage) != "stale"
+        ):
             active_versions.setdefault(stage, len(stage_versions))
         dependencies = version_dependencies.setdefault(stage, [])
         while len(dependencies) < len(stage_versions):

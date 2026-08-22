@@ -74,6 +74,7 @@ class WorkflowTests(unittest.TestCase):
             agent=self.agent,
             source_reduction=reduction,
         )
+        state = review_current_stage(state, "approve", agent=self.agent)
         coverage = state["curriculum_analysis"]["source_coverage"]
         self.assertEqual(
             {item["source"] for item in coverage},
@@ -99,6 +100,9 @@ class WorkflowTests(unittest.TestCase):
             agent=self.agent,
             source_reduction=reduction,
         )
+        expected_state = review_current_stage(
+            expected_state, "approve", agent=self.agent
+        )
         artifact = deepcopy(expected_state["curriculum_analysis"])
 
         class FakeResponses:
@@ -119,6 +123,7 @@ class WorkflowTests(unittest.TestCase):
         )
         state = {
             "course": self.course.to_dict(),
+            "learning_outcomes": expected_state["learning_outcomes"],
             "source_reduction": reduction,
             "feedback": {},
             "resource_types": list(SUPPORTED_RESOURCE_TYPES),
@@ -138,12 +143,16 @@ class WorkflowTests(unittest.TestCase):
         )
 
     def test_workflow_stops_at_each_human_review(self) -> None:
+        self.assertEqual(
+            STAGE_ORDER[:2],
+            ("learning_outcomes", "curriculum_analysis"),
+        )
         state = create_session(self.course, agent=self.agent)
-        self.assertEqual(state["current_stage"], "curriculum_analysis")
+        self.assertEqual(state["current_stage"], "learning_outcomes")
         self.assertEqual(state["status"], "awaiting_review")
 
         for expected_stage in (
-            "learning_outcomes",
+            "curriculum_analysis",
             "outcome_taxonomy",
             "assessment_activities",
             "pedagogical_design",
@@ -168,6 +177,34 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(repeated["status"], "completed")
         self.assertEqual(len(repeated["audit"]), audit_count)
 
+    def test_curriculum_is_explicitly_linked_to_the_approved_outcomes(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        approved_outcome_ids = {item["id"] for item in state["learning_outcomes"]}
+
+        state = review_current_stage(state, "approve", agent=self.agent)
+
+        content_outcome_ids = {
+            identifier
+            for content in state["curriculum_analysis"]["contents"]
+            for identifier in content["outcome_ids"]
+        }
+        objective_outcome_ids = {
+            identifier
+            for objective in state["curriculum_analysis"]["objectives"]
+            for identifier in objective["outcome_ids"]
+        }
+        self.assertEqual(content_outcome_ids, approved_outcome_ids)
+        self.assertEqual(objective_outcome_ids, approved_outcome_ids)
+        self.assertTrue(
+            all(
+                item["outcome_ids"]
+                for item in [
+                    *state["curriculum_analysis"]["contents"],
+                    *state["curriculum_analysis"]["objectives"],
+                ]
+            )
+        )
+
     def test_workflow_reports_real_generation_phases(self) -> None:
         updates: list[str] = []
         state = create_session(
@@ -176,7 +213,7 @@ class WorkflowTests(unittest.TestCase):
             progress_callback=updates.append,
         )
 
-        self.assertIn("Conteúdos e objetivos curriculares", updates[0])
+        self.assertIn("Formulação dos resultados de aprendizagem", updates[0])
         self.assertEqual(
             updates[-1],
             "A preparar a proposta para revisão do docente…",
@@ -190,7 +227,7 @@ class WorkflowTests(unittest.TestCase):
             progress_callback=updates.append,
         )
 
-        self.assertIn("Formulação dos resultados de aprendizagem", updates[0])
+        self.assertIn("Conteúdos e objetivos curriculares", updates[0])
         self.assertEqual(
             updates[-1],
             "A preparar a proposta para revisão do docente…",
@@ -198,7 +235,6 @@ class WorkflowTests(unittest.TestCase):
 
     def test_feedback_is_recorded_in_the_audit_trail(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        state = review_current_stage(state, "approve", agent=self.agent)
         state = review_current_stage(
             state,
             "revise",
@@ -270,7 +306,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(updated["versions"]["learning_outcomes"]), 2)
         self.assertEqual(
             updated["version_dependencies"]["learning_outcomes"][-1],
-            {"curriculum_analysis": 1},
+            {},
         )
         snapshot = updated["revision_snapshots"][-1]
         self.assertEqual(snapshot["previous_status"], "completed")
@@ -299,8 +335,9 @@ class WorkflowTests(unittest.TestCase):
             updated["curriculum_analysis"]["contents"][0]["title"],
             "Conteúdo revisto manualmente",
         )
-        self.assertNotIn("learning_outcomes", updated)
-        self.assertEqual(updated["stage_statuses"]["learning_outcomes"], "stale")
+        self.assertIn("learning_outcomes", updated)
+        self.assertEqual(updated["stage_statuses"]["learning_outcomes"], "approved")
+        self.assertNotIn("outcome_taxonomy", updated)
         self.assertTrue(
             updated["generation_metadata"]["curriculum_analysis"][-1][
                 "manual_edit"
@@ -309,6 +346,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_invalid_manual_edit_does_not_change_the_session(self) -> None:
         state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
         original = deepcopy(state)
         edited = deepcopy(state["curriculum_analysis"])
         edited["contents"] = []
@@ -344,6 +382,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_loading_a_legacy_session_adds_the_new_curricular_structure(self) -> None:
         state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
         state.pop("schema_version", None)
         state.pop("orchestration", None)
         for key in (
@@ -360,16 +399,50 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 11)
+        self.assertEqual(restored["schema_version"], 12)
         self.assertEqual(restored["migrated_from_schema_version"], 1)
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
         self.assertTrue(restored["curriculum_analysis"]["objectives"])
+        self.assertTrue(
+            restored["curriculum_analysis"]["contents"][0]["outcome_ids"]
+        )
         self.assertIn("program_name", restored["course"])
         self.assertIn("stage_statuses", restored)
         self.assertIn("active_versions", restored)
         self.assertIn("revision_snapshots", restored)
         self.assertEqual(restored["selected_source_image_ids"], [])
+
+    def test_legacy_session_at_the_old_first_stage_moves_to_outcomes(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        legacy = deepcopy(state)
+        legacy["schema_version"] = 11
+        legacy.pop("learning_outcomes", None)
+        legacy["versions"].pop("learning_outcomes", None)
+        legacy["generation_metadata"].pop("learning_outcomes", None)
+        legacy["active_versions"].pop("learning_outcomes", None)
+        legacy["current_stage"] = "curriculum_analysis"
+        legacy["status"] = "awaiting_review"
+        for item in [
+            *legacy["curriculum_analysis"]["contents"],
+            *legacy["curriculum_analysis"]["objectives"],
+        ]:
+            item.pop("outcome_ids", None)
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(legacy)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], 12)
+        self.assertEqual(restored["current_stage"], "learning_outcomes")
+        self.assertEqual(restored["status"], "awaiting_review")
+        self.assertTrue(restored["learning_outcomes"])
+        self.assertEqual(
+            restored["stage_statuses"]["curriculum_analysis"], "stale"
+        )
+        self.assertNotIn("curriculum_analysis", restored["active_versions"])
 
     def test_session_id_survives_a_langgraph_transition(self) -> None:
         state = create_session(self.course, agent=self.agent)
@@ -1224,39 +1297,39 @@ class WorkflowTests(unittest.TestCase):
             )
         )
 
-    def test_learning_outcome_validation_reports_missing_content_ids(self) -> None:
+    def test_curriculum_validation_rejects_missing_outcome_links(self) -> None:
         state = create_session(self.course, agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)
-        outcomes = deepcopy(state["learning_outcomes"])
-        missing_content = state["curriculum_analysis"]["contents"][-1]["id"]
-        for outcome in outcomes:
-            outcome["content_links"] = [
-                link
-                for link in outcome.get("content_links", [])
-                if link["content_id"] != missing_content
+        curriculum = deepcopy(state["curriculum_analysis"])
+        missing_outcome = state["learning_outcomes"][-1]["id"]
+        for content in curriculum["contents"]:
+            content["outcome_ids"] = [
+                identifier
+                for identifier in content.get("outcome_ids", [])
+                if identifier != missing_outcome
             ]
 
-        with self.assertRaisesRegex(AgentGenerationError, missing_content):
-            _validate_artifact("learning_outcomes", outcomes, state)
+        with self.assertRaisesRegex(AgentGenerationError, "resultados de aprendizagem"):
+            _validate_artifact("curriculum_analysis", curriculum, state)
 
-    def test_learning_outcome_schema_restricts_verbs_and_curricular_ids(self) -> None:
+    def test_schemas_follow_the_outcomes_first_sequence(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        state = review_current_stage(state, "approve", agent=self.agent)
         schema = _schema_for("learning_outcomes", state)
         properties = schema["properties"]["artifact"]["items"]["properties"]
 
-        allowed_contents = {
-            item["id"] for item in state["curriculum_analysis"]["contents"]
-        }
-        allowed_objectives = {
-            item["id"] for item in state["curriculum_analysis"]["objectives"]
-        }
-        self.assertEqual(
-            set(properties["content_links"]["items"]["properties"]["content_id"]["enum"]),
-            allowed_contents,
-        )
-        self.assertEqual(set(properties["objective_ids"]["items"]["enum"]), allowed_objectives)
         self.assertIn("analisar", properties["action_verb"]["enum"])
+        self.assertNotIn("content_links", properties)
+        self.assertNotIn("objective_ids", properties)
+
+        state = review_current_stage(state, "approve", agent=self.agent)
+        curriculum_schema = _schema_for("curriculum_analysis", state)
+        allowed_outcomes = {item["id"] for item in state["learning_outcomes"]}
+        curriculum_properties = curriculum_schema["properties"]["artifact"]["properties"]
+        for collection in ("contents", "objectives"):
+            outcome_items = curriculum_properties[collection]["items"]["properties"][
+                "outcome_ids"
+            ]["items"]
+            self.assertEqual(set(outcome_items["enum"]), allowed_outcomes)
 
     def test_agentic_team_revises_once_and_preserves_human_control(self) -> None:
         class FakeGenerator:

@@ -23,7 +23,6 @@ from .agents import (
 from .branding import config_value
 from .curriculum import (
     ASSESSMENT_PURPOSES,
-    CONTENT_IMPORTANCE,
     LEARNING_CONTEXTS,
     OUTCOME_TYPES,
     TAXONOMY_LEVELS,
@@ -42,6 +41,7 @@ from .models import (
 from .quality import attach_quality_report
 from .providers import configured_ai_provider, validate_ai_provider
 from .image_generation import enrich_presentation_with_ai_images
+from .relationships import content_ids_for_outcome, objective_ids_for_outcome
 
 
 class PrismState(TypedDict, total=False):
@@ -95,8 +95,8 @@ STAGE_LABELS = {
 }
 
 STAGE_ORDER = (
-    "curriculum_analysis",
     "learning_outcomes",
+    "curriculum_analysis",
     "outcome_taxonomy",
     "assessment_activities",
     "pedagogical_design",
@@ -125,7 +125,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 # Uma etapa pode reabrir qualquer etapa já alcançada. A validação dinâmica
 # abaixo exclui artefactos que ainda nunca foram gerados para a sessão.
@@ -195,17 +195,40 @@ def _general_objectives(course: dict[str, Any], topics: list[str]) -> list[dict[
 
 def analyse_curriculum(state: PrismState) -> dict[str, Any]:
     course = state["course"]
-    topics = _topics(str(course["source_text"]))
+    outcomes = state.get("learning_outcomes", [])
+    topics = [
+        str(outcome.get("theme", "")).strip()
+        or str(outcome.get("statement", "")).strip()
+        for outcome in outcomes
+    ] or _topics(str(course["source_text"]))
     feedback = _feedback(state, "curriculum_analysis")
+    objectives = _general_objectives(course, topics)
+    outcome_ids = [str(outcome.get("id", "")) for outcome in outcomes if outcome.get("id")]
+    objective_links = [
+        [outcome_ids[index % len(outcome_ids)]] if outcome_ids else []
+        for index in range(len(objectives))
+    ]
+    for index, outcome_id in enumerate(outcome_ids):
+        target = objective_links[index % len(objectives)]
+        if outcome_id not in target:
+            target.append(outcome_id)
     result = {
         "summary": (
             f"Unidade curricular orientada para {course['audience']}, com "
             f"{course['duration_hours']} horas de trabalho previsto."
         ),
         "themes": topics,
-        "objectives": _general_objectives(course, topics),
+        "objectives": [
+            {**objective, "outcome_ids": objective_links[index]}
+            for index, objective in enumerate(objectives)
+        ],
         "contents": [
-            {"id": f"C{index + 1}", "title": topic, "description": topic}
+            {
+                "id": f"C{index + 1}",
+                "title": topic,
+                "description": topic,
+                "outcome_ids": [outcome_ids[index]] if index < len(outcome_ids) else [],
+            }
             for index, topic in enumerate(topics)
         ],
         "assumptions": [
@@ -241,43 +264,19 @@ def formulate_learning_outcomes(state: PrismState) -> dict[str, Any]:
     taxonomy_type = validate_taxonomy_choice(state["course"].get("taxonomy_type", "SOLO"))
     levels = TAXONOMY_LEVELS[taxonomy_type]
     verbs = TAXONOMY_VERBS[taxonomy_type]
-    contents = state["curriculum_analysis"]["contents"]
-    objectives = state["curriculum_analysis"]["objectives"]
-    objective_ids_by_outcome = [
-        [objectives[index % len(objectives)]["id"]]
-        for index in range(len(contents))
-    ]
-    for objective_index, objective in enumerate(objectives):
-        target = objective_index % len(contents)
-        if objective["id"] not in objective_ids_by_outcome[target]:
-            objective_ids_by_outcome[target].append(objective["id"])
+    topics = _topics(str(state["course"]["source_text"]))
     outcomes = [
         {
             "id": f"RA{index + 1}",
-            "theme": content["title"],
+            "theme": topic,
             "statement": (
                 f"{verbs[levels[index % len(levels)]][0].capitalize()} "
-                f"{content['title'].lower()}."
+                f"{topic.lower()}."
             ),
             "action_verb": verbs[levels[index % len(levels)]][0],
             "outcome_type": OUTCOME_TYPES[index % len(OUTCOME_TYPES)],
-            "content_links": [
-                {
-                    "content_id": content["id"],
-                    "importance": CONTENT_IMPORTANCE[0],
-                },
-                *(
-                    [{
-                        "content_id": contents[index - 1]["id"],
-                        "importance": CONTENT_IMPORTANCE[1],
-                    }]
-                    if index > 0
-                    else []
-                ),
-            ],
-            "objective_ids": objective_ids_by_outcome[index],
         }
-        for index, content in enumerate(contents)
+        for index, topic in enumerate(topics)
     ]
     return {
         "learning_outcomes": outcomes,
@@ -455,8 +454,8 @@ def validate_alignment(state: PrismState) -> dict[str, Any]:
         {
             "outcome_id": outcome["id"],
             "result": outcome["statement"],
-            "objective_ids": list(outcome.get("objective_ids", [])),
-            "content_ids": [link["content_id"] for link in outcome.get("content_links", [])],
+            "objective_ids": objective_ids_for_outcome(state, outcome["id"]),
+            "content_ids": content_ids_for_outcome(state, outcome["id"]),
             "taxonomy": classification_by_outcome[outcome["id"]]["taxonomy"],
             "taxonomy_level": classification_by_outcome[outcome["id"]]["level"],
             "assessment_ids": assessments_by_outcome[outcome["id"]],

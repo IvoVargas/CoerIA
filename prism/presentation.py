@@ -173,11 +173,20 @@ def render_artifact(
             for index, theme in enumerate(artifact["themes"])
         ]
         content_rows = [
-            [item["id"], item["title"], item.get("description", "")]
+            [
+                item["id"],
+                ", ".join(item.get("outcome_ids", [])),
+                item["title"],
+                item.get("description", ""),
+            ]
             for item in contents
         ]
         objective_rows = [
-            [item.get("id", "—"), item.get("statement", "")]
+            [
+                item.get("id", "—"),
+                ", ".join(item.get("outcome_ids", [])),
+                item.get("statement", ""),
+            ]
             for item in artifact.get("objectives", [])
         ]
         assumptions = "\n".join(
@@ -205,9 +214,9 @@ def render_artifact(
         return (
             header
             + f"{artifact['summary']}\n\n## Objetivos gerais\n\n"
-            + _table(["ID", "Objetivo"], objective_rows)
+            + _table(["ID", "Resultados", "Objetivo"], objective_rows)
             + "\n\n## Conteúdos identificados\n\n"
-            + _table(["ID", "Conteúdo", "Descrição"], content_rows)
+            + _table(["ID", "Resultados", "Conteúdo", "Descrição"], content_rows)
             + source_section
             + f"\n\n## Pressupostos\n{assumptions}"
         )
@@ -217,18 +226,14 @@ def render_artifact(
             [
                 item["id"],
                 item.get("outcome_type", "—"),
-                ", ".join(
-                    link.get("content_id", "")
-                    for link in item.get("content_links", [])
-                ),
-                ", ".join(item.get("objective_ids", [])),
+                item.get("theme", "—"),
                 item["action_verb"],
                 item["statement"],
             ]
             for item in artifact
         ]
         return header + _table(
-            ["ID", "Tipo", "Conteúdos", "Objetivos", "Verbo", "Resultado de aprendizagem"],
+            ["ID", "Tipo", "Tema ou objeto", "Verbo", "Resultado de aprendizagem"],
             rows,
         )
 

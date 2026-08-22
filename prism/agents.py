@@ -20,7 +20,6 @@ from .branding import config_value
 from .curriculum import (
     ASSESSMENT_PURPOSES,
     BLOOM_LEVELS,
-    CONTENT_IMPORTANCE,
     has_single_action_verb,
     LEARNING_CONTEXTS,
     MAX_OUTCOMES,
@@ -46,6 +45,7 @@ from .providers import (
     IAeduResponsesAdapter,
     validate_ai_provider,
 )
+from .relationships import content_ids_for_outcome, objective_ids_for_outcome
 
 
 DEFAULT_MODEL = "gpt-4o-mini"
@@ -108,15 +108,16 @@ STAGE_ROLES = {
 STAGE_REQUIREMENTS = {
     "curriculum_analysis": (
         "Objeto com summary, themes, contents, objectives e assumptions. contents contém "
-        "4 a 10 objetos {id, title, description}, com IDs C1, C2, ...; objectives contém "
-        "objetos {id, statement}, com IDs OG1, OG2, ... estáveis."
+        "4 a 10 objetos {id, title, description, outcome_ids}, com IDs C1, C2, ...; "
+        "objectives contém objetos {id, statement, outcome_ids}, com IDs OG1, OG2, ... "
+        "estáveis. Cada outcome_ids usa exclusivamente resultados aprovados na etapa anterior."
     ),
     "learning_outcomes": (
-        "Lista de 4 a 10 objetos {id, theme, statement, action_verb, outcome_type, "
-        "content_links, objective_ids}. Cada resultado contém exatamente um verbo de ação "
-        "principal observável, começa por esse verbo e liga-se a conteúdos e objetivos "
-        "existentes. Infinitivos subordinados podem surgir em complementos, mas não como "
-        "ações principais coordenadas."
+        "Lista de 4 a 10 objetos {id, theme, statement, action_verb, outcome_type}. "
+        "Cada resultado contém exatamente um verbo de ação principal observável e começa "
+        "por esse verbo. O objeto da ação explicita o conhecimento ou competência em causa. "
+        "Infinitivos subordinados podem surgir em complementos, mas não como ações "
+        "principais coordenadas."
     ),
     "outcome_taxonomy": (
         "Lista de objetos {outcome_id, taxonomy, level, action_verb}. taxonomy deve ser "
@@ -225,15 +226,6 @@ def _schema_for(
 
     string = {"type": "string"}
     target_levels = list((*SOLO_LEVELS, *BLOOM_LEVELS))
-    content_link = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "content_id": string,
-            "importance": {"type": "string", "enum": list(CONTENT_IMPORTANCE)},
-        },
-        "required": ["content_id", "importance"],
-    }
     artifact_schemas: dict[str, dict[str, Any]] = {
         "curriculum_analysis": {
             "type": "object",
@@ -246,8 +238,12 @@ def _schema_for(
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
-                        "properties": {"id": string, "statement": string},
-                        "required": ["id", "statement"],
+                        "properties": {
+                            "id": string,
+                            "statement": string,
+                            "outcome_ids": {"type": "array", "items": string},
+                        },
+                        "required": ["id", "statement", "outcome_ids"],
                     },
                 },
                 "contents": {
@@ -255,8 +251,13 @@ def _schema_for(
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
-                        "properties": {"id": string, "title": string, "description": string},
-                        "required": ["id", "title", "description"],
+                        "properties": {
+                            "id": string,
+                            "title": string,
+                            "description": string,
+                            "outcome_ids": {"type": "array", "items": string},
+                        },
+                        "required": ["id", "title", "description", "outcome_ids"],
                     },
                 },
                 "assumptions": {"type": "array", "items": string},
@@ -293,12 +294,10 @@ def _schema_for(
                     "statement": string,
                     "action_verb": string,
                     "outcome_type": {"type": "string", "enum": list(OUTCOME_TYPES)},
-                    "content_links": {"type": "array", "items": content_link},
-                    "objective_ids": {"type": "array", "items": string},
                 },
                 "required": [
                     "id", "theme", "statement", "action_verb",
-                    "outcome_type", "content_links", "objective_ids"
+                    "outcome_type"
                 ],
             },
         },
@@ -559,6 +558,17 @@ def _schema_for(
     }
     artifact_schema = artifact_schemas[stage]
     if stage == "curriculum_analysis" and state:
+        artifact_schema = deepcopy(artifact_schema)
+        outcome_ids = [
+            str(item.get("id", ""))
+            for item in state.get("learning_outcomes", [])
+            if str(item.get("id", "")).strip()
+        ]
+        if outcome_ids:
+            for collection in ("contents", "objectives"):
+                artifact_schema["properties"][collection]["items"]["properties"][
+                    "outcome_ids"
+                ]["items"] = {"type": "string", "enum": outcome_ids}
         reduction = state.get("source_reduction", {})
         source_names = [
             str(item.get("source", "")).strip()
@@ -566,7 +576,6 @@ def _schema_for(
             if str(item.get("source", "")).strip()
         ]
         if reduction.get("applied") and source_names:
-            artifact_schema = deepcopy(artifact_schema)
             artifact_schema["properties"]["source_coverage"] = {
                 "type": "array",
                 "items": {
@@ -597,31 +606,11 @@ def _schema_for(
             for verbs in TAXONOMY_VERBS[selected_taxonomy].values()
             for verb in verbs
         ]
-        content_ids = [
-            str(item.get("id", ""))
-            for item in state.get("curriculum_analysis", {}).get("contents", [])
-            if str(item.get("id", "")).strip()
-        ]
-        objective_ids = [
-            str(item.get("id", ""))
-            for item in state.get("curriculum_analysis", {}).get("objectives", [])
-            if str(item.get("id", "")).strip()
-        ]
         item_schema = artifact_schema["items"]["properties"]
         item_schema["action_verb"] = {
             "type": "string",
             "enum": allowed_verbs,
         }
-        if content_ids:
-            item_schema["content_links"]["items"]["properties"]["content_id"] = {
-                "type": "string",
-                "enum": content_ids,
-            }
-        if objective_ids:
-            item_schema["objective_ids"]["items"] = {
-                "type": "string",
-                "enum": objective_ids,
-            }
     scoped_resource_type = (
         _scoped_resource_type(state) if stage == "resources" else None
     )
@@ -668,8 +657,8 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     """Inclui apenas os dados pedagógicos relevantes na chamada ao modelo."""
 
     stage_order = (
-        "curriculum_analysis",
         "learning_outcomes",
+        "curriculum_analysis",
         "outcome_taxonomy",
         "assessment_activities",
         "pedagogical_design",
@@ -687,6 +676,21 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         if artifact_stage in state:
             context[artifact_stage] = state[artifact_stage]
     if stage == "curriculum_analysis":
+        outcome_ids = [
+            str(item.get("id", ""))
+            for item in state.get("learning_outcomes", [])
+            if str(item.get("id", "")).strip()
+        ]
+        if outcome_ids:
+            context["curriculum_alignment_rules"] = {
+                "required_outcome_ids": outcome_ids,
+                "rule": (
+                    "Cada conteúdo e objetivo indica os resultados que suporta. A união "
+                    "dos outcome_ids dos conteúdos e, separadamente, a união dos "
+                    "outcome_ids dos objetivos devem corresponder exatamente aos "
+                    "resultados aprovados, sem IDs desconhecidos."
+                ),
+            }
         reduction = state.get("source_reduction", {})
         source_stats = [
             {
@@ -706,21 +710,6 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                     "em source_coverage e ligar cada fonte a pelo menos um conteúdo C*."
                 ),
             }
-    if stage == "learning_outcomes":
-        curriculum = state.get("curriculum_analysis", {})
-        context["learning_outcome_coverage_rules"] = {
-            "required_content_ids": [
-                item["id"] for item in curriculum.get("contents", [])
-            ],
-            "required_objective_ids": [
-                item["id"] for item in curriculum.get("objectives", [])
-            ],
-            "rule": (
-                "A união de content_links.content_id deve ser exatamente a lista de "
-                "required_content_ids e a união de objective_ids deve ser exatamente a "
-                "lista de required_objective_ids. Não omitir nem inventar IDs."
-            ),
-        }
     if stage == "outcome_taxonomy":
         selected_taxonomy = validate_taxonomy_choice(
             state["course"].get("taxonomy_type", "SOLO")
@@ -910,10 +899,8 @@ def _expected_alignment_rows(
         rows[outcome_id] = {
             "outcome_id": outcome_id,
             "result": outcome["statement"],
-            "objective_ids": list(outcome.get("objective_ids", [])),
-            "content_ids": [
-                link["content_id"] for link in outcome.get("content_links", [])
-            ],
+            "objective_ids": objective_ids_for_outcome(state, outcome_id),
+            "content_ids": content_ids_for_outcome(state, outcome_id),
             "taxonomy": classification.get("taxonomy", ""),
             "taxonomy_level": classification.get("level", ""),
             "assessment_ids": assessment_ids,
@@ -1624,6 +1611,39 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 "A análise curricular deve conter conteúdos e objetivos com IDs únicos."
             )
 
+        expected_outcomes = {
+            str(item.get("id", ""))
+            for item in state.get("learning_outcomes", [])
+            if str(item.get("id", "")).strip()
+        }
+        if expected_outcomes:
+            content_outcomes = {
+                str(identifier)
+                for item in contents
+                for identifier in item.get("outcome_ids", [])
+                if str(identifier).strip()
+            }
+            objective_outcomes = {
+                str(identifier)
+                for item in objectives
+                for identifier in item.get("outcome_ids", [])
+                if str(identifier).strip()
+            }
+            rows_without_links = [
+                str(item.get("id", "?"))
+                for item in [*contents, *objectives]
+                if not item.get("outcome_ids")
+            ]
+            if (
+                content_outcomes != expected_outcomes
+                or objective_outcomes != expected_outcomes
+                or rows_without_links
+            ):
+                raise AgentGenerationError(
+                    "Os conteúdos e os objetivos devem estar associados exatamente aos "
+                    "resultados de aprendizagem aprovados, sem linhas ou IDs desligados."
+                )
+
         reduction = state.get("source_reduction", {})
         expected_sources = [
             str(item.get("source", "")).strip()
@@ -1723,46 +1743,6 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         if len(outcome_ids) != len(set(outcome_ids)):
             raise AgentGenerationError("Os resultados de aprendizagem contêm IDs duplicados.")
 
-        expected_contents = {
-            item["id"] for item in state["curriculum_analysis"]["contents"]
-        }
-        linked_contents = {
-            link["content_id"] for item in artifact for link in item.get("content_links", [])
-        }
-        if linked_contents != expected_contents:
-            missing = sorted(expected_contents - linked_contents)
-            unknown = sorted(linked_contents - expected_contents)
-            details = []
-            if missing:
-                details.append("em falta: " + ", ".join(missing))
-            if unknown:
-                details.append("IDs desconhecidos: " + ", ".join(unknown))
-            raise AgentGenerationError(
-                "Os resultados devem cobrir todos e apenas os conteúdos curriculares"
-                + (" (" + "; ".join(details) + ")" if details else "")
-                + "."
-            )
-        expected_objectives = {
-            item["id"] for item in state["curriculum_analysis"]["objectives"]
-        }
-        linked_objectives = {
-            identifier
-            for item in artifact
-            for identifier in item.get("objective_ids", [])
-        }
-        if linked_objectives != expected_objectives:
-            missing = sorted(expected_objectives - linked_objectives)
-            unknown = sorted(linked_objectives - expected_objectives)
-            details = []
-            if missing:
-                details.append("em falta: " + ", ".join(missing))
-            if unknown:
-                details.append("IDs desconhecidos: " + ", ".join(unknown))
-            raise AgentGenerationError(
-                "Os resultados devem cobrir todos e apenas os objetivos gerais"
-                + (" (" + "; ".join(details) + ")" if details else "")
-                + "."
-            )
         taxonomy_type = validate_taxonomy_choice(
             state["course"].get("taxonomy_type", "SOLO")
         )
@@ -1856,7 +1836,6 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 "A matriz contém estados incompatíveis com as evidências de alinhamento: "
                 + ", ".join(inconsistent)
             )
-        outcome_by_id = {item["id"]: item for item in state["learning_outcomes"]}
         taxonomy_by_outcome = {
             item["outcome_id"]: item for item in state["outcome_taxonomy"]
         }
@@ -1877,10 +1856,9 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         divergent = [
             row["outcome_id"] for row in artifact
             if sorted(row["objective_ids"])
-            != sorted(outcome_by_id[row["outcome_id"]].get("objective_ids", []))
-            or sorted(row["content_ids"]) != sorted(
-                link["content_id"] for link in outcome_by_id[row["outcome_id"]]["content_links"]
-            )
+            != sorted(objective_ids_for_outcome(state, row["outcome_id"]))
+            or sorted(row["content_ids"])
+            != sorted(content_ids_for_outcome(state, row["outcome_id"]))
             or row["taxonomy"]
             != taxonomy_by_outcome[row["outcome_id"]]["taxonomy"]
             or row["taxonomy_level"]
@@ -2076,11 +2054,6 @@ def _learning_outcome_retry_instructions(
     para reduzir a probabilidade de o modelo repetir coordenações já rejeitadas.
     """
 
-    curriculum = state.get("curriculum_analysis", {})
-    objectives = [
-        {"id": item.get("id", ""), "statement": item.get("statement", "")}
-        for item in curriculum.get("objectives", [])
-    ]
     return (
         "\n\nREPARAÇÃO OBRIGATÓRIA DA TENTATIVA ANTERIOR. "
         "A resposta anterior foi rejeitada pelo validador e não pode ser repetida. "
@@ -2090,12 +2063,9 @@ def _learning_outcome_retry_instructions(
         "principal. Se existir uma construção 'verbo 1 ... e/ou verbo 2 ...', tens de: "
         "(a) reformular o resultado para conservar apenas uma ação principal; ou "
         "(b) separar as ações em dois resultados distintos, cada um iniciado por um verbo "
-        "do catálogo controlado. Um mesmo objective_id pode aparecer em mais de um resultado. "
-        "Não copies literalmente objetivos gerais coordenados. Depois da reparação, confirma "
-        "novamente a cobertura exata de todos os content_ids e objective_ids. "
-        "Objetivos gerais de referência: "
-        + json.dumps(objectives, ensure_ascii=False)
-        + "."
+        "do catálogo controlado. Não copies literalmente intenções gerais coordenadas. "
+        "Depois da reparação, confirma novamente que existem entre 4 e 10 resultados, "
+        "com IDs únicos e um único verbo de ação principal em cada enunciado."
     )
 
 
@@ -2270,6 +2240,18 @@ class OpenAIPedagogicalAgent:
                 + "."
             )
         if stage == "curriculum_analysis":
+            required_outcomes = [
+                item["id"] for item in state.get("learning_outcomes", [])
+            ]
+            if required_outcomes:
+                instructions += (
+                    " Os resultados de aprendizagem já foram aprovados pelo docente e "
+                    "constituem a referência desta etapa. Em cada conteúdo e objetivo, "
+                    "outcome_ids nunca pode estar vazio e usa apenas IDs desta lista: "
+                    f"{required_outcomes}. A união dos outcome_ids dos conteúdos e, "
+                    "separadamente, a união dos outcome_ids dos objetivos deve ser "
+                    "exatamente essa lista. Não alteres nem reformules os resultados."
+                )
             reduction = state.get("source_reduction", {})
             source_names = [
                 str(item.get("source", "")).strip()
@@ -2291,21 +2273,16 @@ class OpenAIPedagogicalAgent:
                     "de responder, confirma que nenhuma fonte ficou sem representação. "
                 )
         if stage == "learning_outcomes":
-            curriculum = state.get("curriculum_analysis", {})
-            required_contents = [item["id"] for item in curriculum.get("contents", [])]
-            required_objectives = [item["id"] for item in curriculum.get("objectives", [])]
             instructions += (
                 " Em cada resultado, statement começa exatamente pelo action_verb declarado. "
                 "Esse é o único verbo de ação principal. Podes usar infinitivos subordinados "
                 "quando forem necessários para completar o sentido (por exemplo, 'explicar como "
                 "configurar'), mas evita coordenar duas ações principais com 'e + infinitivo' "
-                "ou 'ou + infinitivo'. Se um objetivo geral contiver várias ações coordenadas, "
-                "não o copies literalmente: distribui essas ações por resultados diferentes, "
-                "podendo repetir o mesmo objective_id em mais de um resultado. Antes de responder, "
-                "faz uma verificação "
-                "de cobertura: a união de todos os content_links.content_id tem de ser exatamente "
-                f"{required_contents} e a união de todos os objective_ids tem de ser exatamente "
-                f"{required_objectives}. Não omitas nem inventes identificadores."
+                "ou 'ou + infinitivo'. Se uma intenção geral contiver várias ações coordenadas, "
+                "não a copies literalmente: distribui essas ações por resultados diferentes. "
+                "Usa os conteúdos e objetivos introduzidos pelo docente "
+                "apenas como contexto para definir o que o estudante deverá demonstrar; a "
+                "estrutura curricular detalhada será produzida e associada na etapa seguinte."
             )
         if stage == "outcome_taxonomy":
             instructions += (

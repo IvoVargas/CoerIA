@@ -229,6 +229,7 @@ async def test_manual_table_editor_renders_for_the_current_stage(
     agent = create_test_agent()
     state = create_session(course, agent=agent)
     state = review_current_stage(state, "approve", agent=agent)
+    state = review_current_stage(state, "approve", agent=agent)
     original = deepcopy(state)
     interfaces: list[app.AGIRSoloInterface] = []
 
@@ -328,6 +329,7 @@ def test_opening_a_previous_stage_is_read_only() -> None:
     )
     agent = create_test_agent()
     state = create_session(course, agent=agent)
+    state = review_current_stage(state, "approve", agent=agent)
     state = review_current_stage(state, "approve", agent=agent)
     original = deepcopy(state)
     messages: list[str] = []

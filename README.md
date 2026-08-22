@@ -16,8 +16,8 @@ docente continua a ser obrigatória e soberana.
 
 ## Fluxo
 
-1. conteúdos e objetivos gerais com IDs;
-2. resultados de aprendizagem com um único verbo de ação principal;
+1. resultados de aprendizagem com um único verbo de ação principal;
+2. conteúdos e objetivos gerais com IDs, associados aos resultados aprovados;
 3. classificação exclusiva por SOLO ou Bloom;
 4. avaliação formativa ou sumativa;
 5. design pedagógico por *backward design*;
@@ -26,10 +26,16 @@ docente continua a ser obrigatória e soberana.
 8. recursos educativos e validação automática;
 9. validação final da estrutura e do alinhamento.
 
-O modelo curricular segue a orientação da `minutaProgramasUCs.xls`: conteúdos
+Seguindo o alinhamento construtivo de Biggs e Tang, os resultados de aprendizagem
+constituem a primeira decisão pedagógica formal. Os conteúdos, documentos e
+objetivos introduzidos pelo docente continuam a delimitar o contexto inicial;
+depois de os resultados serem aprovados, são estruturados e associados a esses
+resultados na etapa seguinte.
+
+O modelo curricular segue também a orientação da `minutaProgramasUCs.xls`: conteúdos
 com IDs estáveis, 4 a 10 resultados de aprendizagem (preferencialmente 5 a 7),
 tipos de resultado, verbos taxonómicos controlados e relações muitos-para-muitos entre
-conteúdos, resultados, avaliação e atividades. A matriz acrescenta os recursos
+resultados, conteúdos, avaliação e atividades. A matriz acrescenta os recursos
 selecionados a essa cadeia de alinhamento.
 
 O docente escolhe SOLO ou Bloom no início da sessão; as duas taxonomias nunca

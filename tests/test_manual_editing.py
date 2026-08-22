@@ -75,12 +75,20 @@ def test_learning_outcome_editor_matches_the_visible_table() -> None:
     assert [field.label for field in table.fields] == [
         "ID",
         "Tipo",
-        "Conteúdos",
-        "Objetivos",
+        "Tema ou objeto",
         "Verbo",
         "Resultado de aprendizagem",
     ]
-    assert all(field.key != "theme" for field in table.fields)
+    assert any(field.key == "theme" for field in table.fields)
+
+
+def test_curriculum_editor_links_contents_and_objectives_to_outcomes() -> None:
+    layout = editor_layout("curriculum_analysis")
+
+    for table in layout.tables:
+        assert "Resultados" in [field.label for field in table.fields]
+        outcome_field = next(field for field in table.fields if field.key == "outcome_ids")
+        assert outcome_field.kind == "linked_outcomes"
 
 
 def test_compact_relationship_fields_preserve_the_internal_model() -> None:

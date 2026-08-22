@@ -52,18 +52,23 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
             TableSpec(
                 "Objetivos gerais",
                 ("objectives",),
-                (_field("id", "ID"), _field("statement", "Objetivo", "long")),
-                {"id": "", "statement": ""},
+                (
+                    _field("id", "ID"),
+                    _field("outcome_ids", "Resultados", "linked_outcomes"),
+                    _field("statement", "Objetivo", "long"),
+                ),
+                {"id": "", "statement": "", "outcome_ids": []},
             ),
             TableSpec(
                 "Conteúdos identificados",
                 ("contents",),
                 (
                     _field("id", "ID"),
+                    _field("outcome_ids", "Resultados", "linked_outcomes"),
                     _field("title", "Conteúdo"),
                     _field("description", "Descrição", "long"),
                 ),
-                {"id": "", "title": "", "description": ""},
+                {"id": "", "title": "", "description": "", "outcome_ids": []},
             ),
         ),
     ),
@@ -75,8 +80,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (
                     _field("id", "ID"),
                     _field("outcome_type", "Tipo"),
-                    _field("content_links", "Conteúdos", "content_ids"),
-                    _field("objective_ids", "Objetivos", "csv"),
+                    _field("theme", "Tema ou objeto"),
                     _field("action_verb", "Verbo"),
                     _field("statement", "Resultado de aprendizagem", "long"),
                 ),
@@ -86,8 +90,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "statement": "",
                     "action_verb": "",
                     "outcome_type": "Conhecimento",
-                    "content_links": [],
-                    "objective_ids": [],
                 },
             ),
         )

@@ -21,6 +21,7 @@ from .models import (
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
 )
+from .relationships import content_ids_for_outcome, objective_ids_for_outcome
 
 
 def _normalise(value: str) -> str:
@@ -184,7 +185,9 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
     linked_objectives = {
         str(identifier)
         for outcome in outcomes
-        for identifier in outcome.get("objective_ids", [])
+        for identifier in objective_ids_for_outcome(
+            state, str(outcome.get("id", ""))
+        )
     }
     checks.append(
         _check(
@@ -297,7 +300,6 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         )
         for outcome_id in expected_ids
     }
-    outcome_by_id = {str(item.get("id", "")): item for item in outcomes}
     classification_by_outcome = {
         str(item.get("outcome_id", "")): item
         for item in state.get("outcome_taxonomy", [])
@@ -317,18 +319,9 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         str(row.get("outcome_id", "?"))
         for row in state.get("alignment_matrix", [])
         if sorted(row.get("objective_ids", []))
-        != sorted(
-            outcome_by_id.get(str(row.get("outcome_id", "")), {}).get(
-                "objective_ids", []
-            )
-        )
+        != sorted(objective_ids_for_outcome(state, str(row.get("outcome_id", ""))))
         or sorted(row.get("content_ids", []))
-        != sorted(
-            str(link.get("content_id", ""))
-            for link in outcome_by_id.get(str(row.get("outcome_id", "")), {}).get(
-                "content_links", []
-            )
-        )
+        != sorted(content_ids_for_outcome(state, str(row.get("outcome_id", ""))))
         or sorted(row.get("assessment_ids", []))
         != assessment_by_outcome.get(str(row.get("outcome_id", "")), [])
         or sorted(row.get("assessment_purposes", []))

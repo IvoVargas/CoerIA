@@ -20,6 +20,7 @@ class HistoryViewTests(unittest.TestCase):
         agent = create_test_agent()
         state = create_session(course, agent=agent)
         state = review_current_stage(state, "approve", agent=agent)
+        state = review_current_stage(state, "approve", agent=agent)
         approved_state = deepcopy(state)
         state = review_current_stage(
             state,
@@ -35,7 +36,8 @@ class HistoryViewTests(unittest.TestCase):
         self.assertIn("curriculum_analysis::1", choices)
         labels = {value: label for label, value in labelled_choices}
         self.assertIn("(ativa)", labels["curriculum_analysis::1"])
-        self.assertIn("(desatualizada)", labels["learning_outcomes::0"])
+        self.assertIn("(ativa)", labels["learning_outcomes::0"])
+        self.assertIn("(desatualizada)", labels["outcome_taxonomy::0"])
         self.assertIn("versão 1", app.render_history_artifact("curriculum_analysis::0", state))
         self.assertIn("versão 2", app.render_history_artifact("curriculum_analysis::1", state))
         self.assertIn(

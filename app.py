@@ -427,7 +427,7 @@ class AGIRSoloInterface:
                 "hero-title"
             )
             ui.label(
-                "Estruture conteúdos, resultados de aprendizagem, avaliação, "
+                "Estruture resultados de aprendizagem, conteúdos, avaliação, "
                 "atividades e recursos numa sequência alinhada pela Taxonomia SOLO ou Bloom."
             ).classes("hero-copy")
 

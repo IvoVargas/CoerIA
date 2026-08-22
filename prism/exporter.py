@@ -333,8 +333,8 @@ def _bibliography_entries(value: Any) -> list[str]:
 
 def _validate_program_export_state(state: dict[str, Any]) -> None:
     required = (
-        "curriculum_analysis",
         "learning_outcomes",
+        "curriculum_analysis",
         "outcome_taxonomy",
         "assessment_activities",
         "teaching_activities",
