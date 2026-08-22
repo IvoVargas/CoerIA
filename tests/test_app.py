@@ -126,6 +126,24 @@ def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> Non
     )
 
 
+def test_error_notification_is_replaced_after_the_previous_one_was_closed() -> None:
+    class ClosedNotification:
+        def dismiss(self) -> None:
+            raise RuntimeError("already dismissed")
+
+        def delete(self) -> None:
+            raise RuntimeError("already deleted")
+
+    replacement = object()
+    with patch.object(app.ui, "notification", return_value=replacement) as create:
+        result = app._replace_error_notification(
+            ClosedNotification(), "Novo erro de validação"
+        )
+
+    assert result is replacement
+    create.assert_called_once()
+
+
 @pytest.mark.asyncio
 async def test_teacher_decision_is_above_the_current_artifact_in_light_theme(
     user: User,

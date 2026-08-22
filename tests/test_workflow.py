@@ -444,6 +444,66 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("curriculum_analysis", restored["active_versions"])
 
+    def test_legacy_session_at_the_old_second_stage_keeps_outcomes_current(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        legacy = deepcopy(state)
+        legacy["schema_version"] = 11
+        legacy["current_stage"] = "learning_outcomes"
+        legacy["status"] = "awaiting_review"
+        legacy["review"] = {
+            "stage": "learning_outcomes",
+            "label": "Formulação dos resultados de aprendizagem",
+            "message": "A aguardar validação do docente.",
+        }
+        legacy["stage_statuses"]["curriculum_analysis"] = "approved"
+        legacy["stage_statuses"]["learning_outcomes"] = "awaiting_review"
+        for item in [
+            *legacy["curriculum_analysis"]["contents"],
+            *legacy["curriculum_analysis"]["objectives"],
+        ]:
+            item.pop("outcome_ids", None)
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(legacy)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], 12)
+        self.assertEqual(restored["current_stage"], "learning_outcomes")
+        self.assertEqual(restored["status"], "awaiting_review")
+        self.assertEqual(
+            restored["stage_statuses"]["learning_outcomes"], "awaiting_review"
+        )
+        self.assertEqual(
+            restored["stage_statuses"]["curriculum_analysis"], "stale"
+        )
+        self.assertNotIn("curriculum_analysis", restored["active_versions"])
+        self.assertTrue(restored["versions"]["curriculum_analysis"])
+
+        regenerated = review_current_stage(restored, "approve", agent=self.agent)
+        self.assertEqual(regenerated["current_stage"], "curriculum_analysis")
+        self.assertEqual(regenerated["status"], "awaiting_review")
+        expected_outcomes = {
+            item["id"] for item in regenerated["learning_outcomes"]
+        }
+        self.assertEqual(
+            {
+                outcome_id
+                for item in regenerated["curriculum_analysis"]["contents"]
+                for outcome_id in item["outcome_ids"]
+            },
+            expected_outcomes,
+        )
+        self.assertEqual(
+            {
+                outcome_id
+                for item in regenerated["curriculum_analysis"]["objectives"]
+                for outcome_id in item["outcome_ids"]
+            },
+            expected_outcomes,
+        )
+
     def test_session_id_survives_a_langgraph_transition(self) -> None:
         state = create_session(self.course, agent=self.agent)
         with TemporaryDirectory() as temporary_directory:

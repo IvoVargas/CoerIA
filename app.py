@@ -95,8 +95,15 @@ def _replace_error_notification(current: Any | None, message: str) -> Any:
     """Mostra um único erro descartável, removendo a notificação anterior."""
 
     if current is not None:
-        current.dismiss()
-        current.delete()
+        for method_name in ("dismiss", "delete"):
+            try:
+                getattr(current, method_name)()
+            except Exception:  # A notificação pode já ter sido fechada pelo utilizador.
+                LOGGER.debug(
+                    "Não foi possível executar %s na notificação anterior.",
+                    method_name,
+                    exc_info=True,
+                )
     return ui.notification(
         message,
         type="negative",

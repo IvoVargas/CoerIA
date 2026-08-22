@@ -140,7 +140,6 @@ OUTCOME_TYPES = (
     "Competência social",
 )
 
-CONTENT_IMPORTANCE = ("Principal", "Secundária")
 ASSESSMENT_PURPOSES = ("Formativa", "Sumativa")
 
 LEARNING_CONTEXTS = (
