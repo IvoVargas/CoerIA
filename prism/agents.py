@@ -45,7 +45,7 @@ from .providers import (
     IAeduResponsesAdapter,
     validate_ai_provider,
 )
-from .relationships import content_ids_for_outcome, objective_ids_for_outcome
+from .relationships import content_ids_for_outcome
 
 
 DEFAULT_MODEL = "gpt-4o-mini"
@@ -109,8 +109,9 @@ STAGE_REQUIREMENTS = {
     "curriculum_analysis": (
         "Objeto com summary, themes, contents, objectives e assumptions. contents contém "
         "4 a 10 objetos {id, title, description, outcome_ids}, com IDs C1, C2, ...; "
-        "objectives contém objetos {id, statement, outcome_ids}, com IDs OG1, OG2, ... "
-        "estáveis. Cada outcome_ids usa exclusivamente resultados aprovados na etapa anterior."
+        "objectives é um texto livre com as finalidades e objetivos gerais, sem IDs nem "
+        "ligações estruturais. Cada outcome_ids dos conteúdos usa exclusivamente "
+        "resultados aprovados na etapa anterior."
     ),
     "learning_outcomes": (
         "Lista de 4 a 10 objetos {id, theme, statement, action_verb, outcome_type}. "
@@ -139,7 +140,7 @@ STAGE_REQUIREMENTS = {
         "todos os resultados e explicitar prática, acompanhamento e feedback."
     ),
     "alignment_matrix": (
-        "Lista de objetos {outcome_id, result, objective_ids, content_ids, taxonomy, "
+        "Lista de objetos {outcome_id, result, content_ids, taxonomy, "
         "taxonomy_level, assessment_ids, assessment_purposes, teaching_activity_ids, "
         "resource_types, assessment, teaching_activity, status, rationale}. "
         "assessment e teaching_activity devem ser Sim ou Não; status deve indicar "
@@ -233,19 +234,7 @@ def _schema_for(
             "properties": {
                 "summary": string,
                 "themes": {"type": "array", "items": string},
-                "objectives": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "id": string,
-                            "statement": string,
-                            "outcome_ids": {"type": "array", "items": string},
-                        },
-                        "required": ["id", "statement", "outcome_ids"],
-                    },
-                },
+                "objectives": string,
                 "contents": {
                     "type": "array",
                     "items": {
@@ -379,7 +368,6 @@ def _schema_for(
                 "properties": {
                     "outcome_id": string,
                     "result": string,
-                    "objective_ids": {"type": "array", "items": string},
                     "content_ids": {"type": "array", "items": string},
                     "taxonomy": {
                         "type": "string",
@@ -407,7 +395,6 @@ def _schema_for(
                 "required": [
                     "outcome_id",
                     "result",
-                    "objective_ids",
                     "content_ids",
                     "taxonomy",
                     "taxonomy_level",
@@ -565,10 +552,9 @@ def _schema_for(
             if str(item.get("id", "")).strip()
         ]
         if outcome_ids:
-            for collection in ("contents", "objectives"):
-                artifact_schema["properties"][collection]["items"]["properties"][
-                    "outcome_ids"
-                ]["items"] = {"type": "string", "enum": outcome_ids}
+            artifact_schema["properties"]["contents"]["items"]["properties"][
+                "outcome_ids"
+            ]["items"] = {"type": "string", "enum": outcome_ids}
         reduction = state.get("source_reduction", {})
         source_names = [
             str(item.get("source", "")).strip()
@@ -685,10 +671,10 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
             context["curriculum_alignment_rules"] = {
                 "required_outcome_ids": outcome_ids,
                 "rule": (
-                    "Cada conteúdo e objetivo indica os resultados que suporta. A união "
-                    "dos outcome_ids dos conteúdos e, separadamente, a união dos "
-                    "outcome_ids dos objetivos devem corresponder exatamente aos "
-                    "resultados aprovados, sem IDs desconhecidos."
+                    "Cada conteúdo indica os resultados que suporta. A união dos "
+                    "outcome_ids dos conteúdos deve corresponder exatamente aos "
+                    "resultados aprovados, sem IDs desconhecidos. Os objetivos gerais "
+                    "são texto livre e não participam nesta relação."
                 ),
             }
         reduction = state.get("source_reduction", {})
@@ -899,7 +885,6 @@ def _expected_alignment_rows(
         rows[outcome_id] = {
             "outcome_id": outcome_id,
             "result": outcome["statement"],
-            "objective_ids": objective_ids_for_outcome(state, outcome_id),
             "content_ids": content_ids_for_outcome(state, outcome_id),
             "taxonomy": classification.get("taxonomy", ""),
             "taxonomy_level": classification.get("level", ""),
@@ -1592,23 +1577,21 @@ def _flattened_ids(artifact: list[dict[str, Any]], plural_key: str, legacy_key: 
 def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None:
     if stage == "curriculum_analysis":
         contents = artifact.get("contents", []) if isinstance(artifact, dict) else []
-        objectives = artifact.get("objectives", []) if isinstance(artifact, dict) else []
+        objectives = (
+            str(artifact.get("objectives", "")).strip()
+            if isinstance(artifact, dict)
+            else ""
+        )
         content_ids = [item.get("id") for item in contents]
-        objective_ids = [item.get("id") for item in objectives]
         if (
             not MIN_OUTCOMES <= len(contents) <= MAX_OUTCOMES
             or len(content_ids) != len(set(content_ids))
             or any(not item.get("title") for item in contents)
             or not objectives
-            or len(objective_ids) != len(set(objective_ids))
-            or any(not item.get("statement") for item in objectives)
-            or any(
-                not re.fullmatch(r"OG[1-9]\d*", str(identifier or ""))
-                for identifier in objective_ids
-            )
         ):
             raise AgentGenerationError(
-                "A análise curricular deve conter conteúdos e objetivos com IDs únicos."
+                "A análise curricular deve conter objetivos gerais em texto livre e "
+                "conteúdos com IDs únicos."
             )
 
         expected_outcomes = {
@@ -1623,25 +1606,18 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 for identifier in item.get("outcome_ids", [])
                 if str(identifier).strip()
             }
-            objective_outcomes = {
-                str(identifier)
-                for item in objectives
-                for identifier in item.get("outcome_ids", [])
-                if str(identifier).strip()
-            }
             rows_without_links = [
                 str(item.get("id", "?"))
-                for item in [*contents, *objectives]
+                for item in contents
                 if not item.get("outcome_ids")
             ]
             if (
                 content_outcomes != expected_outcomes
-                or objective_outcomes != expected_outcomes
                 or rows_without_links
             ):
                 raise AgentGenerationError(
-                    "Os conteúdos e os objetivos devem estar associados exatamente aos "
-                    "resultados de aprendizagem aprovados, sem linhas ou IDs desligados."
+                    "Os conteúdos devem estar associados exatamente aos resultados de "
+                    "aprendizagem aprovados, sem linhas ou IDs desligados."
                 )
 
         reduction = state.get("source_reduction", {})
@@ -1855,9 +1831,7 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         }
         divergent = [
             row["outcome_id"] for row in artifact
-            if sorted(row["objective_ids"])
-            != sorted(objective_ids_for_outcome(state, row["outcome_id"]))
-            or sorted(row["content_ids"])
+            if sorted(row["content_ids"])
             != sorted(content_ids_for_outcome(state, row["outcome_id"]))
             or row["taxonomy"]
             != taxonomy_by_outcome[row["outcome_id"]]["taxonomy"]
@@ -2246,11 +2220,12 @@ class OpenAIPedagogicalAgent:
             if required_outcomes:
                 instructions += (
                     " Os resultados de aprendizagem já foram aprovados pelo docente e "
-                    "constituem a referência desta etapa. Em cada conteúdo e objetivo, "
+                    "constituem a referência desta etapa. Em cada conteúdo, "
                     "outcome_ids nunca pode estar vazio e usa apenas IDs desta lista: "
-                    f"{required_outcomes}. A união dos outcome_ids dos conteúdos e, "
-                    "separadamente, a união dos outcome_ids dos objetivos deve ser "
-                    "exatamente essa lista. Não alteres nem reformules os resultados."
+                    f"{required_outcomes}. A união dos outcome_ids dos conteúdos deve "
+                    "ser exatamente essa lista. Escreve objectives como texto livre, sem "
+                    "IDs, listas estruturadas ou ligações aos resultados. Não alteres "
+                    "nem reformules os resultados."
                 )
             reduction = state.get("source_reduction", {})
             source_names = [

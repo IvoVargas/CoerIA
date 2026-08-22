@@ -21,7 +21,7 @@ from .models import (
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
 )
-from .relationships import content_ids_for_outcome, objective_ids_for_outcome
+from .relationships import content_ids_for_outcome
 
 
 def _normalise(value: str) -> str:
@@ -177,31 +177,6 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         )
     )
 
-    expected_objectives = {
-        str(item.get("id", ""))
-        for item in state.get("curriculum_analysis", {}).get("objectives", [])
-        if item.get("id")
-    }
-    linked_objectives = {
-        str(identifier)
-        for outcome in outcomes
-        for identifier in objective_ids_for_outcome(
-            state, str(outcome.get("id", ""))
-        )
-    }
-    checks.append(
-        _check(
-            "objective_coverage",
-            "Cobertura dos objetivos gerais",
-            "pass" if linked_objectives == expected_objectives else "error",
-            (
-                "Todos os objetivos possuem resultados associados."
-                if linked_objectives == expected_objectives
-                else "Os resultados não cobrem exatamente os objetivos gerais."
-            ),
-        )
-    )
-
     checks.append(
         _many_to_many_coverage_check(
             "assessment_coverage",
@@ -318,9 +293,7 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
     divergent_links = [
         str(row.get("outcome_id", "?"))
         for row in state.get("alignment_matrix", [])
-        if sorted(row.get("objective_ids", []))
-        != sorted(objective_ids_for_outcome(state, str(row.get("outcome_id", ""))))
-        or sorted(row.get("content_ids", []))
+        if sorted(row.get("content_ids", []))
         != sorted(content_ids_for_outcome(state, str(row.get("outcome_id", ""))))
         or sorted(row.get("assessment_ids", []))
         != assessment_by_outcome.get(str(row.get("outcome_id", "")), [])

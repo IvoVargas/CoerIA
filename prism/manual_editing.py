@@ -46,19 +46,10 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
     "curriculum_analysis": EditorLayout(
         fields=(
             ScalarSpec(("summary",), "Síntese", "long"),
+            ScalarSpec(("objectives",), "Objetivos gerais", "long"),
             ScalarSpec(("assumptions",), "Pressupostos — um por linha", "lines"),
         ),
         tables=(
-            TableSpec(
-                "Objetivos gerais",
-                ("objectives",),
-                (
-                    _field("id", "ID"),
-                    _field("outcome_ids", "Resultados", "linked_outcomes"),
-                    _field("statement", "Objetivo", "long"),
-                ),
-                {"id": "", "statement": "", "outcome_ids": []},
-            ),
             TableSpec(
                 "Conteúdos identificados",
                 ("contents",),
@@ -187,7 +178,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (),
                 (
                     _field("outcome_id", "Resultado"),
-                    _field("objective_ids", "Objetivos", "csv"),
                     _field("content_ids", "Conteúdos", "csv"),
                     _field("taxonomy_level", "Nível", "taxonomy_level"),
                     _field("assessment_ids", "Avaliações", "csv"),
@@ -200,7 +190,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 {
                     "outcome_id": "",
                     "result": "",
-                    "objective_ids": [],
                     "content_ids": [],
                     "taxonomy": "",
                     "taxonomy_level": "",
@@ -398,7 +387,6 @@ def editor_field_value(target: dict[str, Any], field: FieldSpec) -> Any:
 REFERENCE_FIELDS = {
     "content_links": ("curriculum_analysis", "contents", "title"),
     "content_ids": ("curriculum_analysis", "contents", "title"),
-    "objective_ids": ("curriculum_analysis", "objectives", "statement"),
     "outcome_id": ("learning_outcomes", None, "statement"),
     "outcome_ids": ("learning_outcomes", None, "statement"),
     "assessment_ids": ("assessment_activities", None, "activity"),

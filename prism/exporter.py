@@ -611,14 +611,10 @@ def export_program_document(
     _add_program_metadata(document, course)
 
     document.add_heading("2. Finalidades e objetivos gerais", level=1)
-    general_aims = str(course.get("general_aims", "")).strip()
-    if general_aims:
-        document.add_paragraph(general_aims)
-    for objective in analysis.get("objectives", []):
-        document.add_paragraph(
-            f"{objective.get('id', '')} — {objective.get('statement', '')}",
-            style="List Bullet",
-        )
+    general_aims = str(
+        analysis.get("objectives") or course.get("general_aims", "")
+    ).strip()
+    document.add_paragraph(general_aims or "A confirmar pelo docente.")
 
     document.add_heading("3. Conteúdos programáticos", level=1)
     contents = analysis.get("contents", [])
@@ -762,17 +758,10 @@ def export_program_latex(
         _latex_table(["Campo", "Valor"], metadata_rows, [0.24, 0.66]),
         r"\section{Finalidades e objetivos gerais}",
     ]
-    general_aims = str(course.get("general_aims", "")).strip()
-    if general_aims:
-        body.append(_latex_escape(general_aims))
-    body.append(
-        _latex_itemize(
-            [
-                f"{objective.get('id', '')} --- {objective.get('statement', '')}"
-                for objective in analysis.get("objectives", [])
-            ]
-        )
-    )
+    general_aims = str(
+        analysis.get("objectives") or course.get("general_aims", "")
+    ).strip()
+    body.append(_latex_escape(general_aims or "A confirmar pelo docente."))
     body.extend(
         [
             r"\section{Conteúdos programáticos}",
@@ -1633,7 +1622,6 @@ def export_resource_package(
             [
                 row.get("outcome_id", ""),
                 row.get("result", ""),
-                ", ".join(row.get("objective_ids", [])),
                 ", ".join(row.get("content_ids", [])),
                 row.get("taxonomy", ""),
                 row.get("taxonomy_level", ""),
@@ -1714,7 +1702,7 @@ def export_resource_package(
                 "matriz_alinhamento.csv",
                 _csv_bytes(
                     [
-                        "Resultado", "Descrição", "Objetivos", "Conteúdos",
+                        "Resultado", "Descrição", "Conteúdos",
                         "Taxonomia", "Nível", "Avaliações", "Finalidade",
                         "Atividades formativas", "Recursos", "Estado",
                         "Justificação"

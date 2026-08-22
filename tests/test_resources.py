@@ -469,6 +469,11 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertIn("Matriz de alinhamento", program_text)
                 self.assertIn("Teaching for Quality Learning", program_text)
                 self.assertNotIn("Learning outcomes", program_text)
+                alignment_header = package.read("matriz_alinhamento.csv").decode(
+                    "utf-8-sig"
+                ).splitlines()[0]
+                self.assertIn("Conteúdos", alignment_header)
+                self.assertNotIn("Objetivos", alignment_header)
                 presentation = Presentation(BytesIO(package.read(presentation_name)))
                 self.assertGreaterEqual(len(presentation.slides), 3)
                 for slide in presentation.slides:

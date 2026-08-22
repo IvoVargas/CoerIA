@@ -177,7 +177,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(repeated["status"], "completed")
         self.assertEqual(len(repeated["audit"]), audit_count)
 
-    def test_curriculum_is_explicitly_linked_to_the_approved_outcomes(self) -> None:
+    def test_curriculum_contents_are_linked_and_objectives_are_free_text(self) -> None:
         state = create_session(self.course, agent=self.agent)
         approved_outcome_ids = {item["id"] for item in state["learning_outcomes"]}
 
@@ -188,20 +188,13 @@ class WorkflowTests(unittest.TestCase):
             for content in state["curriculum_analysis"]["contents"]
             for identifier in content["outcome_ids"]
         }
-        objective_outcome_ids = {
-            identifier
-            for objective in state["curriculum_analysis"]["objectives"]
-            for identifier in objective["outcome_ids"]
-        }
         self.assertEqual(content_outcome_ids, approved_outcome_ids)
-        self.assertEqual(objective_outcome_ids, approved_outcome_ids)
+        self.assertIsInstance(state["curriculum_analysis"]["objectives"], str)
+        self.assertTrue(state["curriculum_analysis"]["objectives"].strip())
         self.assertTrue(
             all(
                 item["outcome_ids"]
-                for item in [
-                    *state["curriculum_analysis"]["contents"],
-                    *state["curriculum_analysis"]["objectives"],
-                ]
+                for item in state["curriculum_analysis"]["contents"]
             )
         )
 
@@ -319,6 +312,7 @@ class WorkflowTests(unittest.TestCase):
         original = deepcopy(state)
         edited = deepcopy(state["curriculum_analysis"])
         edited["contents"][0]["title"] = "Conteúdo revisto manualmente"
+        edited["objectives"] = "Consolidar conhecimentos e promover a sua aplicação."
 
         updated = apply_manual_edit(
             state,
@@ -334,6 +328,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(
             updated["curriculum_analysis"]["contents"][0]["title"],
             "Conteúdo revisto manualmente",
+        )
+        self.assertEqual(
+            updated["curriculum_analysis"]["objectives"],
+            "Consolidar conhecimentos e promover a sua aplicação.",
         )
         self.assertIn("learning_outcomes", updated)
         self.assertEqual(updated["stage_statuses"]["learning_outcomes"], "approved")
@@ -351,7 +349,7 @@ class WorkflowTests(unittest.TestCase):
         edited = deepcopy(state["curriculum_analysis"])
         edited["contents"] = []
 
-        with self.assertRaisesRegex(AgentGenerationError, "conteúdos e objetivos"):
+        with self.assertRaisesRegex(AgentGenerationError, "objetivos gerais.*conteúdos"):
             apply_manual_edit(state, "curriculum_analysis", edited)
 
         self.assertEqual(state, original)
@@ -399,10 +397,11 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 12)
+        self.assertEqual(restored["schema_version"], 13)
         self.assertEqual(restored["migrated_from_schema_version"], 1)
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
+        self.assertIsInstance(restored["curriculum_analysis"]["objectives"], str)
         self.assertTrue(restored["curriculum_analysis"]["objectives"])
         self.assertTrue(
             restored["curriculum_analysis"]["contents"][0]["outcome_ids"]
@@ -424,10 +423,10 @@ class WorkflowTests(unittest.TestCase):
         legacy["active_versions"].pop("learning_outcomes", None)
         legacy["current_stage"] = "curriculum_analysis"
         legacy["status"] = "awaiting_review"
-        for item in [
-            *legacy["curriculum_analysis"]["contents"],
-            *legacy["curriculum_analysis"]["objectives"],
-        ]:
+        legacy["curriculum_analysis"]["objectives"] = [
+            {"id": "OG1", "statement": "Desenvolver conhecimentos fundamentais."}
+        ]
+        for item in legacy["curriculum_analysis"]["contents"]:
             item.pop("outcome_ids", None)
 
         with TemporaryDirectory() as temporary_directory:
@@ -435,7 +434,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 12)
+        self.assertEqual(restored["schema_version"], 13)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(restored["status"], "awaiting_review")
         self.assertTrue(restored["learning_outcomes"])
@@ -458,10 +457,14 @@ class WorkflowTests(unittest.TestCase):
         }
         legacy["stage_statuses"]["curriculum_analysis"] = "approved"
         legacy["stage_statuses"]["learning_outcomes"] = "awaiting_review"
-        for item in [
-            *legacy["curriculum_analysis"]["contents"],
-            *legacy["curriculum_analysis"]["objectives"],
-        ]:
+        legacy["curriculum_analysis"]["objectives"] = [
+            {
+                "id": "OG1",
+                "statement": "Desenvolver conhecimentos fundamentais.",
+                "outcome_ids": [item["id"] for item in legacy["learning_outcomes"]],
+            }
+        ]
+        for item in legacy["curriculum_analysis"]["contents"]:
             item.pop("outcome_ids", None)
 
         with TemporaryDirectory() as temporary_directory:
@@ -469,7 +472,11 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 12)
+        self.assertEqual(restored["schema_version"], 13)
+        self.assertEqual(
+            restored["curriculum_analysis"]["objectives"],
+            "Desenvolver conhecimentos fundamentais.",
+        )
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(restored["status"], "awaiting_review")
         self.assertEqual(
@@ -495,13 +502,53 @@ class WorkflowTests(unittest.TestCase):
             },
             expected_outcomes,
         )
-        self.assertEqual(
+        self.assertIsInstance(regenerated["curriculum_analysis"]["objectives"], str)
+        self.assertTrue(regenerated["curriculum_analysis"]["objectives"].strip())
+
+    def test_schema_12_session_converts_objective_list_without_reopening_flow(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        while state["current_stage"] != "alignment_matrix":
+            state = review_current_stage(state, "approve", agent=self.agent)
+        legacy = deepcopy(state)
+        legacy["schema_version"] = 12
+        legacy_objectives = [
             {
-                outcome_id
-                for item in regenerated["curriculum_analysis"]["objectives"]
-                for outcome_id in item["outcome_ids"]
+                "id": "OG1",
+                "statement": "Compreender os fundamentos da programação.",
+                "outcome_ids": ["RA1", "RA2"],
             },
-            expected_outcomes,
+            {
+                "id": "OG2",
+                "statement": "Aplicar os conhecimentos em problemas concretos.",
+                "outcome_ids": ["RA3", "RA4"],
+            },
+        ]
+        legacy["curriculum_analysis"]["objectives"] = deepcopy(legacy_objectives)
+        legacy["versions"]["curriculum_analysis"][-1]["objectives"] = deepcopy(
+            legacy_objectives
+        )
+        for row in legacy["alignment_matrix"]:
+            row["objective_ids"] = ["OG1"]
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(legacy)
+            restored = store.load(session_id)
+
+        expected_text = (
+            "Compreender os fundamentos da programação.\n"
+            "Aplicar os conhecimentos em problemas concretos."
+        )
+        self.assertEqual(restored["schema_version"], 13)
+        self.assertEqual(restored["current_stage"], "alignment_matrix")
+        self.assertEqual(restored["status"], "awaiting_review")
+        self.assertEqual(restored["curriculum_analysis"]["objectives"], expected_text)
+        self.assertEqual(
+            restored["versions"]["curriculum_analysis"][-1]["objectives"],
+            expected_text,
+        )
+        self.assertTrue(
+            all("objective_ids" not in row for row in restored["alignment_matrix"])
         )
 
     def test_session_id_survives_a_langgraph_transition(self) -> None:
@@ -1216,7 +1263,7 @@ class WorkflowTests(unittest.TestCase):
             result = critic.review(
                 "curriculum_analysis",
                 state,
-                {"contents": [], "objectives": []},
+                {"contents": [], "objectives": "Objetivos gerais."},
             )
 
         self.assertTrue(result.passed)
@@ -1385,11 +1432,11 @@ class WorkflowTests(unittest.TestCase):
         curriculum_schema = _schema_for("curriculum_analysis", state)
         allowed_outcomes = {item["id"] for item in state["learning_outcomes"]}
         curriculum_properties = curriculum_schema["properties"]["artifact"]["properties"]
-        for collection in ("contents", "objectives"):
-            outcome_items = curriculum_properties[collection]["items"]["properties"][
-                "outcome_ids"
-            ]["items"]
-            self.assertEqual(set(outcome_items["enum"]), allowed_outcomes)
+        outcome_items = curriculum_properties["contents"]["items"]["properties"][
+            "outcome_ids"
+        ]["items"]
+        self.assertEqual(set(outcome_items["enum"]), allowed_outcomes)
+        self.assertEqual(curriculum_properties["objectives"]["type"], "string")
 
     def test_agentic_team_revises_once_and_preserves_human_control(self) -> None:
         class FakeGenerator:

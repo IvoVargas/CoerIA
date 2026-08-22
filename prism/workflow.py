@@ -41,7 +41,7 @@ from .models import (
 from .quality import attach_quality_report
 from .providers import configured_ai_provider, validate_ai_provider
 from .image_generation import enrich_presentation_with_ai_images
-from .relationships import content_ids_for_outcome, objective_ids_for_outcome
+from .relationships import content_ids_for_outcome
 
 
 class PrismState(TypedDict, total=False):
@@ -125,7 +125,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 # Uma etapa pode reabrir qualquer etapa já alcançada. A validação dinâmica
 # abaixo exclui artefactos que ainda nunca foram gerados para a sessão.
@@ -174,7 +174,7 @@ def _topics(text: str) -> list[str]:
     return topics
 
 
-def _general_objectives(course: dict[str, Any], topics: list[str]) -> list[dict[str, str]]:
+def _general_objectives_text(course: dict[str, Any], topics: list[str]) -> str:
     source = str(course.get("general_aims", "") or "")
     fragments = [
         re.sub(r"\s+", " ", item).strip(" -•\t")
@@ -187,10 +187,7 @@ def _general_objectives(course: dict[str, Any], topics: list[str]) -> list[dict[
             "Aplicar os conteúdos da unidade curricular em contextos relevantes.",
             "Promover análise crítica, autonomia e integração dos conhecimentos.",
         ]
-    return [
-        {"id": f"OG{index + 1}", "statement": statement}
-        for index, statement in enumerate(fragments[:6])
-    ]
+    return "\n".join(fragments[:6])
 
 
 def analyse_curriculum(state: PrismState) -> dict[str, Any]:
@@ -202,26 +199,15 @@ def analyse_curriculum(state: PrismState) -> dict[str, Any]:
         for outcome in outcomes
     ] or _topics(str(course["source_text"]))
     feedback = _feedback(state, "curriculum_analysis")
-    objectives = _general_objectives(course, topics)
+    objectives = _general_objectives_text(course, topics)
     outcome_ids = [str(outcome.get("id", "")) for outcome in outcomes if outcome.get("id")]
-    objective_links = [
-        [outcome_ids[index % len(outcome_ids)]] if outcome_ids else []
-        for index in range(len(objectives))
-    ]
-    for index, outcome_id in enumerate(outcome_ids):
-        target = objective_links[index % len(objectives)]
-        if outcome_id not in target:
-            target.append(outcome_id)
     result = {
         "summary": (
             f"Unidade curricular orientada para {course['audience']}, com "
             f"{course['duration_hours']} horas de trabalho previsto."
         ),
         "themes": topics,
-        "objectives": [
-            {**objective, "outcome_ids": objective_links[index]}
-            for index, objective in enumerate(objectives)
-        ],
+        "objectives": objectives,
         "contents": [
             {
                 "id": f"C{index + 1}",
@@ -454,7 +440,6 @@ def validate_alignment(state: PrismState) -> dict[str, Any]:
         {
             "outcome_id": outcome["id"],
             "result": outcome["statement"],
-            "objective_ids": objective_ids_for_outcome(state, outcome["id"]),
             "content_ids": content_ids_for_outcome(state, outcome["id"]),
             "taxonomy": classification_by_outcome[outcome["id"]]["taxonomy"],
             "taxonomy_level": classification_by_outcome[outcome["id"]]["level"],

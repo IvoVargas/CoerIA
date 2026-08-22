@@ -181,14 +181,7 @@ def render_artifact(
             ]
             for item in contents
         ]
-        objective_rows = [
-            [
-                item.get("id", "—"),
-                ", ".join(item.get("outcome_ids", [])),
-                item.get("statement", ""),
-            ]
-            for item in artifact.get("objectives", [])
-        ]
+        objectives = str(artifact.get("objectives", "")).strip()
         assumptions = "\n".join(
             f"- {item}" for item in artifact.get("assumptions", [])
         )
@@ -214,7 +207,7 @@ def render_artifact(
         return (
             header
             + f"{artifact['summary']}\n\n## Objetivos gerais\n\n"
-            + _table(["ID", "Resultados", "Objetivo"], objective_rows)
+            + (objectives or "A confirmar pelo docente.")
             + "\n\n## Conteúdos identificados\n\n"
             + _table(["ID", "Resultados", "Conteúdo", "Descrição"], content_rows)
             + source_section
@@ -303,7 +296,6 @@ def render_artifact(
         rows = [
             [
                 item["outcome_id"],
-                ", ".join(item.get("objective_ids", [])),
                 ", ".join(item.get("content_ids", [])),
                 taxonomy_level_label(
                     item.get("taxonomy", "SOLO"),
@@ -320,7 +312,7 @@ def render_artifact(
         ]
         return header + _table(
             [
-                "Resultado", "Objetivos", "Conteúdos", "Nível",
+                "Resultado", "Conteúdos", "Nível",
                 "Avaliações", "Finalidade", "Atividades formativas",
                 "Recursos", "Alinhamento", "Justificação",
             ],

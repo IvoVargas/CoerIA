@@ -82,13 +82,17 @@ def test_learning_outcome_editor_matches_the_visible_table() -> None:
     assert any(field.key == "theme" for field in table.fields)
 
 
-def test_curriculum_editor_links_contents_and_objectives_to_outcomes() -> None:
+def test_curriculum_editor_uses_free_text_objectives_and_links_contents() -> None:
     layout = editor_layout("curriculum_analysis")
 
-    for table in layout.tables:
-        assert "Resultados" in [field.label for field in table.fields]
-        outcome_field = next(field for field in table.fields if field.key == "outcome_ids")
-        assert outcome_field.kind == "linked_outcomes"
+    objectives = next(field for field in layout.fields if field.path == ("objectives",))
+    assert objectives.label == "Objetivos gerais"
+    assert objectives.kind == "long"
+    assert [table.title for table in layout.tables] == ["Conteúdos identificados"]
+    outcome_field = next(
+        field for field in layout.tables[0].fields if field.key == "outcome_ids"
+    )
+    assert outcome_field.kind == "linked_outcomes"
 
 
 def test_compact_relationship_fields_preserve_the_internal_model() -> None:
@@ -135,17 +139,13 @@ def test_reference_select_values_are_applied_without_free_text_parsing() -> None
     row = {
         "outcome_id": "RA1",
         "outcome_ids": ["RA1"],
-        "objective_ids": ["OG1"],
     }
     outcomes = FieldSpec("outcome_ids", "Resultados", "linked_outcomes")
-    objectives = FieldSpec("objective_ids", "Objetivos", "csv")
 
     apply_editor_field_value(row, outcomes, ["RA2", "RA3"])
-    apply_editor_field_value(row, objectives, ["OG2", "OG3"])
 
     assert row["outcome_ids"] == ["RA2", "RA3"]
     assert row["outcome_id"] == "RA2"
-    assert row["objective_ids"] == ["OG2", "OG3"]
 
 
 def test_taxonomy_editor_omits_redundant_taxonomy_and_numbers_levels() -> None:
@@ -193,7 +193,7 @@ def test_alignment_editor_omits_redundant_taxonomy_and_numbers_levels() -> None:
         first_row["taxonomy"], first_row["taxonomy_level"]
     )
     rendered = render_stage_artifact(state, "alignment_matrix")
-    assert "| Resultado | Objetivos | Conteúdos | Nível |" in rendered
+    assert "| Resultado | Conteúdos | Nível |" in rendered
     assert "| Taxonomia |" not in rendered
     assert expected_level in rendered
 

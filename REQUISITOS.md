@@ -53,8 +53,8 @@ materiais produzidos.
 Executar, por ordem, as seguintes etapas:
 
 1. formulação de resultados de aprendizagem com um único verbo de ação principal;
-2. estruturação e validação de conteúdos e objetivos gerais, associados
-   aos resultados aprovados;
+2. estruturação e validação de conteúdos associados aos resultados aprovados
+   e registo dos objetivos gerais em texto livre;
 3. classificação dos resultados exclusivamente por SOLO ou Bloom;
 4. proposta de avaliações formativas ou sumativas;
 5. design pedagógico por *backward design*;
@@ -67,14 +67,15 @@ Cada artefacto deve possuir um formato estruturado e identificadores estáveis
 que permitam ligar temas, resultados, atividades, avaliação e recursos.
 
 - Numerar os conteúdos com IDs estáveis.
-- Numerar os objetivos gerais com IDs estáveis `OG1`, `OG2`, ...
 - Formular entre 4 e 10 resultados de aprendizagem, preferencialmente 5 a 7.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
   etapa curricular formal.
-- Na segunda etapa, associar cada conteúdo e cada objetivo geral a um ou mais
-  resultados aprovados; as duas coleções de associações devem cobrir exatamente
-  todos os resultados, sem linhas desligadas nem IDs desconhecidos.
+- Na segunda etapa, associar cada conteúdo a um ou mais resultados aprovados; o
+  conjunto das associações deve cobrir exatamente todos os resultados, sem linhas
+  desligadas nem IDs desconhecidos.
+- Registar os objetivos gerais num único campo de texto livre, sem IDs e sem os
+  incluir como relação estrutural da matriz de alinhamento.
 - Classificar o tipo de cada resultado de aprendizagem.
 - Usar um único verbo de ação principal pertencente ao vocabulário controlado do nível declarado; infinitivos subordinados podem ser usados em complementos, mas não como ações principais coordenadas.
 - Na opção SOLO, não usar o nível pré-estrutural para formular resultados.

@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from .auth import normalize_user_id
 from .providers import AI_PROVIDER_OPENAI, validate_ai_provider
-from .relationships import content_ids_for_outcome, objective_ids_for_outcome
+from .relationships import content_ids_for_outcome
 
 
 DEFAULT_DATABASE_PATH = Path(__file__).resolve().parents[1] / "data" / "prism.db"
@@ -22,9 +22,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 12:
+    if previous_version < 13:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 12
+    state["schema_version"] = 13
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -82,16 +82,41 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         course.setdefault(key, default)
 
     analysis = state.get("curriculum_analysis")
-    if isinstance(analysis, dict):
-        legacy_aims = (
-            analysis.get("aims")
+
+    def migrate_curriculum_objectives(curriculum: Any) -> None:
+        if not isinstance(curriculum, dict):
+            return
+        value = curriculum.get("objectives", "")
+        if isinstance(value, list):
+            statements = [
+                str(item.get("statement", "")).strip()
+                for item in value
+                if isinstance(item, dict) and str(item.get("statement", "")).strip()
+            ]
+            text = "\n".join(statements)
+        elif isinstance(value, dict):
+            text = str(value.get("statement", "")).strip()
+        else:
+            text = str(value or "").strip()
+        curriculum["objectives"] = text or str(
+            curriculum.get("aims")
             or course.get("general_aims")
             or "Desenvolver os conhecimentos e competências previstos."
-        )
-        analysis.setdefault(
-            "objectives",
-            [{"id": "OG1", "statement": str(legacy_aims)}],
-        )
+        ).strip()
+
+    migrate_curriculum_objectives(analysis)
+    if isinstance(version_map, dict):
+        for curriculum_version in version_map.get("curriculum_analysis", []):
+            migrate_curriculum_objectives(curriculum_version)
+    for snapshot in state.get("revision_snapshots", []):
+        if isinstance(snapshot, dict):
+            migrate_curriculum_objectives(
+                snapshot.get("artifacts", {}).get("curriculum_analysis")
+                if isinstance(snapshot.get("artifacts"), dict)
+                else None
+            )
+
+    if isinstance(analysis, dict):
         analysis.setdefault(
             "contents",
             [
@@ -118,14 +143,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             ("Conhecimento teórico", "Aptidão prática ou técnica", "Competência social")[index % 3],
         )
         if previous_version < 12:
-            objective_ids = [
-                objective.get("id", "")
-                for objective in (
-                    analysis.get("objectives", []) if isinstance(analysis, dict) else []
-                )
-                if objective.get("id")
-            ]
-            item.setdefault("objective_ids", objective_ids[:1] or ["OG1"])
             item.setdefault(
                 "content_links",
                 [{
@@ -160,22 +177,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             if not linked and outcomes:
                 linked = [str(outcomes[index % len(outcomes)]["id"])]
             content.setdefault("outcome_ids", linked)
-        for index, objective in enumerate(curriculum.get("objectives", [])):
-            if not isinstance(objective, dict):
-                continue
-            objective_id = str(objective.get("id", ""))
-            linked = [
-                str(outcome["id"])
-                for outcome in outcomes
-                if objective_id in {
-                    str(identifier)
-                    for identifier in outcome.get("objective_ids", [])
-                }
-            ]
-            if not linked and outcomes:
-                linked = [str(outcomes[index % len(outcomes)]["id"])]
-            objective.setdefault("outcome_ids", linked)
-
     migrate_curriculum_relations(analysis)
     if isinstance(version_map, dict):
         for curriculum_version in version_map.get("curriculum_analysis", []):
@@ -228,10 +229,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     }
     for row in state.get("alignment_matrix", []):
         outcome_id = str(row.get("outcome_id", ""))
-        row.setdefault(
-            "objective_ids",
-            objective_ids_for_outcome(state, outcome_id),
-        )
+        row.pop("objective_ids", None)
         row.setdefault(
             "content_ids",
             content_ids_for_outcome(state, outcome_id),
