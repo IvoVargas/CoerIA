@@ -16,15 +16,14 @@ docente continua a ser obrigatória e soberana.
 
 ## Fluxo
 
-1. resultados de aprendizagem com um único verbo de ação principal;
+1. resultados de aprendizagem com nível SOLO ou Bloom e um único verbo de ação principal;
 2. conteúdos com IDs associados aos resultados aprovados e objetivos gerais em texto livre;
-3. classificação exclusiva por SOLO ou Bloom;
-4. avaliação formativa ou sumativa;
-5. design pedagógico por *backward design*;
-6. atividades formativas com prática, acompanhamento e feedback;
-7. matriz de alinhamento;
-8. recursos educativos e validação automática;
-9. validação final da estrutura e do alinhamento.
+3. avaliação formativa ou sumativa;
+4. design pedagógico por *backward design*;
+5. atividades formativas com prática, acompanhamento e feedback;
+6. matriz de alinhamento;
+7. recursos educativos e validação automática;
+8. validação final da estrutura e do alinhamento.
 
 Seguindo o alinhamento construtivo de Biggs e Tang, os resultados de aprendizagem
 constituem a primeira decisão pedagógica formal. Os conteúdos, documentos e
@@ -52,10 +51,12 @@ resposta demorar, a interface indica explicitamente que continua a aguardar o
 fornecedor; nos recursos educativos, assinala que esta é normalmente a etapa
 mais demorada.
 
-Na classificação taxonómica e na matriz de alinhamento, a taxonomia escolhida
-não é repetida como coluna. O nível é apresentado e editado através de um
-seletor numerado: `SOLO 2` a `SOLO 5` ou `Bloom 1` a `Bloom 6`. O valor canónico
-continua guardado no modelo para validação e exportação.
+Na tabela dos resultados de aprendizagem e na matriz de alinhamento, a taxonomia
+escolhida não é repetida como coluna. O nível é apresentado e editado através de
+um seletor numerado: `SOLO 2` a `SOLO 5` ou `Bloom 1` a `Bloom 6`. Assim, a
+classificação é validada logo na primeira etapa e não necessita de um ecrã
+autónomo. O valor canónico continua guardado no modelo para validação e
+exportação.
 
 A seleção inicial dos recursos é provisória: fica bloqueada durante a construção
 da estrutura e pode ser confirmada ou alterada na matriz de alinhamento.

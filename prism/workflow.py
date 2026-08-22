@@ -27,7 +27,7 @@ from .curriculum import (
     OUTCOME_TYPES,
     TAXONOMY_LEVELS,
     TAXONOMY_VERBS,
-    taxonomy_level_for_verb,
+    taxonomy_verb_allowed,
     validate_taxonomy_choice,
 )
 from .models import (
@@ -61,7 +61,6 @@ class PrismState(TypedDict, total=False):
     curriculum_analysis: dict[str, Any]
     solo_taxonomy: list[dict[str, Any]]
     learning_outcomes: list[dict[str, Any]]
-    outcome_taxonomy: list[dict[str, Any]]
     assessment_activities: list[dict[str, Any]]
     pedagogical_design: dict[str, Any]
     teaching_activities: list[dict[str, Any]]
@@ -85,7 +84,6 @@ class PrismState(TypedDict, total=False):
 STAGE_LABELS = {
     "curriculum_analysis": "Conteúdos e objetivos curriculares",
     "learning_outcomes": "Formulação dos resultados de aprendizagem",
-    "outcome_taxonomy": "Classificação taxonómica dos resultados",
     "assessment_activities": "Avaliação formativa e sumativa",
     "pedagogical_design": "Design pedagógico",
     "teaching_activities": "Atividades formativas de aprendizagem",
@@ -97,7 +95,6 @@ STAGE_LABELS = {
 STAGE_ORDER = (
     "learning_outcomes",
     "curriculum_analysis",
-    "outcome_taxonomy",
     "assessment_activities",
     "pedagogical_design",
     "teaching_activities",
@@ -125,7 +122,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 # Uma etapa pode reabrir qualquer etapa já alcançada. A validação dinâmica
 # abaixo exclui artefactos que ainda nunca foram gerados para a sessão.
@@ -260,6 +257,7 @@ def formulate_learning_outcomes(state: PrismState) -> dict[str, Any]:
                 f"{topic.lower()}."
             ),
             "action_verb": verbs[levels[index % len(levels)]][0],
+            "taxonomy_level": levels[index % len(levels)],
             "outcome_type": OUTCOME_TYPES[index % len(OUTCOME_TYPES)],
         }
         for index, topic in enumerate(topics)
@@ -275,39 +273,11 @@ def formulate_learning_outcomes(state: PrismState) -> dict[str, Any]:
     }
 
 
-def classify_learning_outcomes(state: PrismState) -> dict[str, Any]:
-    taxonomy_type = validate_taxonomy_choice(state["course"].get("taxonomy_type", "SOLO"))
-    feedback = _feedback(state, "outcome_taxonomy")
-    classifications: list[dict[str, Any]] = []
-    for outcome in state["learning_outcomes"]:
-        level = (
-            taxonomy_level_for_verb(taxonomy_type, outcome["action_verb"])
-            or TAXONOMY_LEVELS[taxonomy_type][0]
-        )
-        classifications.append(
-            {
-                "outcome_id": outcome["id"],
-                "taxonomy": taxonomy_type,
-                "level": level,
-                "action_verb": outcome["action_verb"],
-            }
-        )
-    return {
-        "outcome_taxonomy": classifications,
-        **_audit_update(
-            state,
-            "outcome_taxonomy",
-            f"Resultados classificados exclusivamente pela Taxonomia {taxonomy_type}.",
-            feedback,
-        ),
-    }
-
-
 def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
     feedback = _feedback(state, "assessment_activities")
-    classification_by_outcome = {
-        item["outcome_id"]: item for item in state["outcome_taxonomy"]
-    }
+    taxonomy_type = validate_taxonomy_choice(
+        state["course"].get("taxonomy_type", "SOLO")
+    )
     assessments = [
         {
             "id": f"AV{index + 1}",
@@ -326,8 +296,7 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
             "evidence": "Resposta fundamentada com critérios explícitos.",
             "criterion": (
                 "Domínio demonstrado ao nível "
-                f"{classification_by_outcome[outcome['id']]['level']} da Taxonomia "
-                f"{classification_by_outcome[outcome['id']]['taxonomy']}."
+                f"{outcome['taxonomy_level']} da Taxonomia {taxonomy_type}."
             ),
         }
         for index, outcome in enumerate(state["learning_outcomes"])
@@ -423,9 +392,9 @@ def validate_alignment(state: PrismState) -> dict[str, Any]:
         ]
         for outcome in state["learning_outcomes"]
     }
-    classification_by_outcome = {
-        item["outcome_id"]: item for item in state["outcome_taxonomy"]
-    }
+    taxonomy_type = validate_taxonomy_choice(
+        state["course"].get("taxonomy_type", "SOLO")
+    )
     assessment_purposes_by_outcome = {
         outcome["id"]: sorted(
             {
@@ -441,8 +410,8 @@ def validate_alignment(state: PrismState) -> dict[str, Any]:
             "outcome_id": outcome["id"],
             "result": outcome["statement"],
             "content_ids": content_ids_for_outcome(state, outcome["id"]),
-            "taxonomy": classification_by_outcome[outcome["id"]]["taxonomy"],
-            "taxonomy_level": classification_by_outcome[outcome["id"]]["level"],
+            "taxonomy": taxonomy_type,
+            "taxonomy_level": outcome["taxonomy_level"],
             "assessment_ids": assessments_by_outcome[outcome["id"]],
             "assessment_purposes": assessment_purposes_by_outcome[outcome["id"]],
             "teaching_activity_ids": teaching_by_outcome[outcome["id"]],
@@ -659,9 +628,13 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
     selected_taxonomy = validate_taxonomy_choice(
         state.get("course", {}).get("taxonomy_type", "SOLO")
     )
-    taxonomy_ok = bool(state.get("outcome_taxonomy")) and all(
-        item.get("taxonomy") == selected_taxonomy
-        for item in state["outcome_taxonomy"]
+    taxonomy_ok = bool(state.get("learning_outcomes")) and all(
+        taxonomy_verb_allowed(
+            selected_taxonomy,
+            str(item.get("taxonomy_level", "")),
+            str(item.get("action_verb", "")),
+        )
+        for item in state["learning_outcomes"]
     )
     checks = [
         {
@@ -697,9 +670,6 @@ def _route_current_stage(state: PrismState) -> str:
 DETERMINISTIC_GENERATORS = {
     "curriculum_analysis": lambda state: analyse_curriculum(state)["curriculum_analysis"],
     "learning_outcomes": lambda state: formulate_learning_outcomes(state)["learning_outcomes"],
-    "outcome_taxonomy": lambda state: classify_learning_outcomes(state)[
-        "outcome_taxonomy"
-    ],
     "assessment_activities": lambda state: propose_assessment_activities(state)[
         "assessment_activities"
     ],
@@ -715,7 +685,6 @@ DETERMINISTIC_GENERATORS = {
 GENERATION_EVENTS = {
     "curriculum_analysis": "Conteúdos e objetivos curriculares estruturados.",
     "learning_outcomes": "Resultados de aprendizagem formulados.",
-    "outcome_taxonomy": "Resultados classificados pela taxonomia escolhida.",
     "assessment_activities": "Avaliações formativas ou sumativas propostas.",
     "pedagogical_design": "Estrutura pedagógica criada.",
     "teaching_activities": "Atividades formativas de aprendizagem propostas.",
@@ -1161,7 +1130,6 @@ def build_stage_executor(agent: PedagogicalAgent):
     node_by_stage = {
         "curriculum_analysis": "analyse_curriculum",
         "learning_outcomes": "formulate_learning_outcomes",
-        "outcome_taxonomy": "classify_learning_outcomes",
         "assessment_activities": "propose_assessment_activities",
         "pedagogical_design": "create_pedagogical_design",
         "teaching_activities": "propose_teaching_activities",

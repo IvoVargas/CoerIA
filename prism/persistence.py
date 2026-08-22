@@ -11,6 +11,11 @@ from typing import Any
 from uuid import uuid4
 
 from .auth import normalize_user_id
+from .curriculum import (
+    TAXONOMY_LEVELS,
+    taxonomy_level_for_verb,
+    validate_taxonomy_choice,
+)
 from .providers import AI_PROVIDER_OPENAI, validate_ai_provider
 from .relationships import content_ids_for_outcome
 
@@ -22,9 +27,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 13:
+    if previous_version < 14:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 13
+    state["schema_version"] = 14
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -80,6 +85,79 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         "taxonomy_type": "SOLO",
     }.items():
         course.setdefault(key, default)
+
+    selected_taxonomy = validate_taxonomy_choice(course.get("taxonomy_type", "SOLO"))
+    current_classifications = {
+        str(item.get("outcome_id", "")): item
+        for item in state.get("outcome_taxonomy", [])
+        if isinstance(item, dict)
+    }
+
+    def migrate_outcome_levels(
+        outcomes: Any,
+        classifications: dict[str, Any] | None = None,
+    ) -> None:
+        if not isinstance(outcomes, list):
+            return
+        taxonomy_rows = (
+            current_classifications if classifications is None else classifications
+        )
+        for item in outcomes:
+            if not isinstance(item, dict):
+                continue
+            existing_level = str(item.get("taxonomy_level", "")).strip()
+            classification = taxonomy_rows.get(str(item.get("id", "")), {})
+            classified_level = str(classification.get("level", "")).strip()
+            classified_taxonomy = str(classification.get("taxonomy", "")).strip()
+            if existing_level in TAXONOMY_LEVELS[selected_taxonomy]:
+                level = existing_level
+            elif (
+                classified_taxonomy == selected_taxonomy
+                and classified_level in TAXONOMY_LEVELS[selected_taxonomy]
+            ):
+                level = classified_level
+            else:
+                level = (
+                    taxonomy_level_for_verb(
+                        selected_taxonomy, str(item.get("action_verb", ""))
+                    )
+                    or TAXONOMY_LEVELS[selected_taxonomy][0]
+                )
+            item["taxonomy_level"] = level
+
+    migrate_outcome_levels(state.get("learning_outcomes"))
+    if isinstance(version_map, dict):
+        classification_versions = version_map.get("outcome_taxonomy", [])
+        for index, outcome_version in enumerate(
+            version_map.get("learning_outcomes", [])
+        ):
+            version_classifications = (
+                classification_versions[index]
+                if index < len(classification_versions)
+                and isinstance(classification_versions[index], list)
+                else []
+            )
+            migrate_outcome_levels(
+                outcome_version,
+                {
+                    str(item.get("outcome_id", "")): item
+                    for item in version_classifications
+                    if isinstance(item, dict)
+                },
+            )
+    for snapshot in state.get("revision_snapshots", []):
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("artifacts"), dict):
+            continue
+        artifacts = snapshot["artifacts"]
+        snapshot_classifications = {
+            str(item.get("outcome_id", "")): item
+            for item in artifacts.get("outcome_taxonomy", [])
+            if isinstance(item, dict)
+        }
+        migrate_outcome_levels(
+            artifacts.get("learning_outcomes"),
+            snapshot_classifications,
+        )
 
     analysis = state.get("curriculum_analysis")
 
@@ -189,17 +267,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 else None
             )
 
-    if "outcome_taxonomy" not in state and state.get("learning_outcomes"):
-        state["outcome_taxonomy"] = [
-            {
-                "outcome_id": item.get("id", f"RA{index + 1}"),
-                "taxonomy": "SOLO",
-                "level": item.get("solo_level", "Uni-estrutural"),
-                "action_verb": item.get("action_verb", "identificar"),
-            }
-            for index, item in enumerate(state.get("learning_outcomes", []))
-        ]
-
     assessments = state.get("assessment_activities", [])
     for index, item in enumerate(assessments):
         item.setdefault("id", f"AV{index + 1}")
@@ -223,9 +290,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         item.setdefault("support", "Acompanhamento do docente.")
         item.setdefault("feedback_strategy", "Feedback formativo.")
 
-    taxonomy_by_outcome = {
-        str(item.get("outcome_id", "")): item
-        for item in state.get("outcome_taxonomy", [])
+    outcome_by_id = {
+        str(item.get("id", "")): item
+        for item in state.get("learning_outcomes", [])
     }
     for row in state.get("alignment_matrix", []):
         outcome_id = str(row.get("outcome_id", ""))
@@ -253,12 +320,12 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         )
         row.setdefault(
             "taxonomy",
-            taxonomy_by_outcome.get(outcome_id, {}).get("taxonomy", "SOLO"),
+            selected_taxonomy,
         )
         row.setdefault(
             "taxonomy_level",
-            taxonomy_by_outcome.get(outcome_id, {}).get(
-                "level", "Uni-estrutural"
+            outcome_by_id.get(outcome_id, {}).get(
+                "taxonomy_level", TAXONOMY_LEVELS[selected_taxonomy][0]
             ),
         )
         row.setdefault(
@@ -273,9 +340,25 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     if state.get("current_stage") == "solo_taxonomy":
         state["current_stage"] = "learning_outcomes"
     versions = state.setdefault("versions", {})
-    if state.get("outcome_taxonomy") and "outcome_taxonomy" not in versions:
-        versions["outcome_taxonomy"] = [state["outcome_taxonomy"]]
     from .workflow import STAGE_ORDER, formulate_learning_outcomes
+
+    removed_stage_was_current = (
+        previous_version < 14 and state.get("current_stage") == "outcome_taxonomy"
+    )
+    if removed_stage_was_current:
+        state["current_stage"] = "learning_outcomes"
+        state["status"] = "awaiting_review"
+        state["review"] = {
+            "stage": "learning_outcomes",
+            "label": "Formulação dos resultados de aprendizagem",
+            "message": (
+                "A classificação taxonómica foi integrada nos resultados. "
+                "Valide os resultados e os respetivos níveis antes de continuar."
+            ),
+        }
+
+    state.pop("outcome_taxonomy", None)
+    state.setdefault("feedback", {}).pop("outcome_taxonomy", None)
 
     if (
         previous_version < 12
@@ -318,8 +401,12 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         if current_stage in STAGE_ORDER
         else 0
     )
+    existing_stage_statuses = state.setdefault("stage_statuses", {})
+    existing_stage_statuses.pop("outcome_taxonomy", None)
     stage_statuses = (
-        {} if previous_version < 12 else state.setdefault("stage_statuses", {})
+        {}
+        if previous_version < 12 or removed_stage_was_current
+        else existing_stage_statuses
     )
     for index, stage in enumerate(STAGE_ORDER):
         if stage in stage_statuses:
@@ -337,11 +424,18 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     state["stage_statuses"] = stage_statuses
 
     active_versions = state.setdefault("active_versions", {})
-    if previous_version < 12:
+    active_versions.pop("outcome_taxonomy", None)
+    if previous_version < 12 or removed_stage_was_current:
         for stage in STAGE_ORDER[current_index + 1 :]:
             if stage_statuses.get(stage) == "stale":
                 active_versions.pop(stage, None)
     version_dependencies = state.setdefault("version_dependencies", {})
+    version_dependencies.pop("outcome_taxonomy", None)
+    for dependencies in version_dependencies.values():
+        if isinstance(dependencies, list):
+            for dependency in dependencies:
+                if isinstance(dependency, dict):
+                    dependency.pop("outcome_taxonomy", None)
     for stage in STAGE_ORDER:
         stage_versions = versions.get(stage, [])
         if (

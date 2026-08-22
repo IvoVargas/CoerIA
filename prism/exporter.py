@@ -335,7 +335,6 @@ def _validate_program_export_state(state: dict[str, Any]) -> None:
     required = (
         "learning_outcomes",
         "curriculum_analysis",
-        "outcome_taxonomy",
         "assessment_activities",
         "teaching_activities",
         "alignment_matrix",
@@ -596,10 +595,6 @@ def export_program_document(
 
     course = state.get("course", {})
     analysis = state.get("curriculum_analysis", {})
-    taxonomy = {
-        str(item.get("outcome_id", "")): item
-        for item in state.get("outcome_taxonomy", [])
-    }
     document = Document()
     _configure_program_document(document)
     title = document.add_paragraph(style="Title")
@@ -629,12 +624,11 @@ def export_program_document(
     document.add_heading("4. Resultados de aprendizagem", level=1)
     table = document.add_table(rows=1, cols=5)
     for outcome in state.get("learning_outcomes", []):
-        classification = taxonomy.get(str(outcome.get("id", "")), {})
         cells = table.add_row().cells
         cells[0].text = str(outcome.get("id", ""))
         cells[1].text = str(outcome.get("statement", ""))
-        cells[2].text = str(classification.get("taxonomy", course.get("taxonomy_type", "")))
-        cells[3].text = str(classification.get("level", ""))
+        cells[2].text = str(course.get("taxonomy_type", ""))
+        cells[3].text = str(outcome.get("taxonomy_level", ""))
         cells[4].text = str(outcome.get("action_verb", ""))
     _format_table(
         table,
@@ -718,10 +712,6 @@ def export_program_latex(
     _validate_program_export_state(state)
     course = state.get("course", {})
     analysis = state.get("curriculum_analysis", {})
-    taxonomy = {
-        str(item.get("outcome_id", "")): item
-        for item in state.get("outcome_taxonomy", [])
-    }
     total_hours = float(course.get("contact_hours", 0) or 0) + float(
         course.get("autonomous_hours", 0) or 0
     )
@@ -780,10 +770,8 @@ def export_program_latex(
                     [
                         outcome.get("id", ""),
                         outcome.get("statement", ""),
-                        taxonomy.get(str(outcome.get("id", "")), {}).get(
-                            "taxonomy", course.get("taxonomy_type", "")
-                        ),
-                        taxonomy.get(str(outcome.get("id", "")), {}).get("level", ""),
+                        course.get("taxonomy_type", ""),
+                        outcome.get("taxonomy_level", ""),
                         outcome.get("action_verb", ""),
                     ]
                     for outcome in state.get("learning_outcomes", [])

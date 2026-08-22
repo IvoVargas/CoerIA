@@ -27,9 +27,9 @@ from .curriculum import (
     OUTCOME_TYPES,
     SOLO_LEVELS,
     TAXONOMY_CHOICES,
+    TAXONOMY_LEVELS,
     TAXONOMY_VERBS,
     taxonomy_catalogue_for_prompt,
-    taxonomy_level_for_verb,
     taxonomy_verb_allowed,
     validate_taxonomy_choice,
 )
@@ -96,7 +96,6 @@ class PedagogicalCritic(Protocol):
 STAGE_ROLES = {
     "curriculum_analysis": "especialista em análise curricular",
     "learning_outcomes": "especialista em resultados de aprendizagem",
-    "outcome_taxonomy": "especialista na classificação taxonómica de resultados",
     "assessment_activities": "especialista em avaliação formativa e sumativa",
     "pedagogical_design": "agente de Design Pedagógico",
     "teaching_activities": "especialista em atividades formativas de aprendizagem",
@@ -114,16 +113,13 @@ STAGE_REQUIREMENTS = {
         "resultados aprovados na etapa anterior."
     ),
     "learning_outcomes": (
-        "Lista de 4 a 10 objetos {id, theme, statement, action_verb, outcome_type}. "
+        "Lista de 4 a 10 objetos {id, theme, statement, action_verb, taxonomy_level, "
+        "outcome_type}. "
         "Cada resultado contém exatamente um verbo de ação principal observável e começa "
-        "por esse verbo. O objeto da ação explicita o conhecimento ou competência em causa. "
+        "por esse verbo. taxonomy_level pertence à taxonomia selecionada e é compatível "
+        "com action_verb. O objeto da ação explicita o conhecimento ou competência em causa. "
         "Infinitivos subordinados podem surgir em complementos, mas não como ações "
         "principais coordenadas."
-    ),
-    "outcome_taxonomy": (
-        "Lista de objetos {outcome_id, taxonomy, level, action_verb}. taxonomy deve ser "
-        "exatamente a taxonomia escolhida para a sessão (SOLO ou Bloom), nunca ambas; "
-        "level e action_verb devem pertencer ao respetivo catálogo controlado."
     ),
     "assessment_activities": (
         "Lista de objetos {id, outcome_id, outcome_ids, work_type, assessment_purpose, "
@@ -255,23 +251,6 @@ def _schema_for(
                 "summary", "themes", "objectives", "contents", "assumptions"
             ],
         },
-        "outcome_taxonomy": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "outcome_id": string,
-                    "taxonomy": {
-                        "type": "string",
-                        "enum": list(TAXONOMY_CHOICES),
-                    },
-                    "level": {"type": "string", "enum": target_levels},
-                    "action_verb": string,
-                },
-                "required": ["outcome_id", "taxonomy", "level", "action_verb"],
-            },
-        },
         "learning_outcomes": {
             "type": "array",
             "items": {
@@ -282,11 +261,12 @@ def _schema_for(
                     "theme": string,
                     "statement": string,
                     "action_verb": string,
+                    "taxonomy_level": {"type": "string", "enum": target_levels},
                     "outcome_type": {"type": "string", "enum": list(OUTCOME_TYPES)},
                 },
                 "required": [
                     "id", "theme", "statement", "action_verb",
-                    "outcome_type"
+                    "taxonomy_level", "outcome_type"
                 ],
             },
         },
@@ -597,6 +577,10 @@ def _schema_for(
             "type": "string",
             "enum": allowed_verbs,
         }
+        item_schema["taxonomy_level"] = {
+            "type": "string",
+            "enum": list(TAXONOMY_LEVELS[selected_taxonomy]),
+        }
     scoped_resource_type = (
         _scoped_resource_type(state) if stage == "resources" else None
     )
@@ -645,7 +629,6 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     stage_order = (
         "learning_outcomes",
         "curriculum_analysis",
-        "outcome_taxonomy",
         "assessment_activities",
         "pedagogical_design",
         "teaching_activities",
@@ -696,21 +679,6 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                     "em source_coverage e ligar cada fonte a pelo menos um conteúdo C*."
                 ),
             }
-    if stage == "outcome_taxonomy":
-        selected_taxonomy = validate_taxonomy_choice(
-            state["course"].get("taxonomy_type", "SOLO")
-        )
-        context["required_taxonomy_mapping"] = [
-            {
-                "outcome_id": outcome["id"],
-                "taxonomy": selected_taxonomy,
-                "level": taxonomy_level_for_verb(
-                    selected_taxonomy, outcome["action_verb"]
-                ),
-                "action_verb": outcome["action_verb"],
-            }
-            for outcome in state.get("learning_outcomes", [])
-        ]
     if stage == "assessment_activities":
         context["assessment_link_rules"] = {
             "allowed_outcome_ids": [
@@ -762,49 +730,6 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
             ),
         }
     return context
-
-
-def _canonicalize_outcome_taxonomy(
-    artifact: Any, state: dict[str, Any]
-) -> tuple[Any, list[dict[str, Any]]]:
-    """Aplica a correspondência canónica entre verbo, nível e taxonomia.
-
-    A cobertura dos resultados continua a ser validada separadamente. Esta
-    proteção corrige apenas campos que são totalmente determinados pelo verbo
-    já aprovado pelo docente na etapa anterior.
-    """
-
-    if not isinstance(artifact, list):
-        return artifact, []
-    selected_taxonomy = validate_taxonomy_choice(
-        state["course"].get("taxonomy_type", "SOLO")
-    )
-    outcomes = {item["id"]: item for item in state.get("learning_outcomes", [])}
-    normalized: list[Any] = []
-    corrections: list[dict[str, Any]] = []
-    for item in artifact:
-        if not isinstance(item, dict) or item.get("outcome_id") not in outcomes:
-            normalized.append(item)
-            continue
-        outcome = outcomes[item["outcome_id"]]
-        canonical = {
-            "taxonomy": selected_taxonomy,
-            "level": taxonomy_level_for_verb(
-                selected_taxonomy, outcome["action_verb"]
-            ),
-            "action_verb": outcome["action_verb"],
-        }
-        changes = {
-            field: {"received": item.get(field), "used": value}
-            for field, value in canonical.items()
-            if item.get(field) != value
-        }
-        normalized.append({**item, **canonical})
-        if changes:
-            corrections.append(
-                {"outcome_id": item["outcome_id"], "changes": changes}
-            )
-    return normalized, corrections
 
 
 def _canonicalize_assessment_activities(
@@ -862,9 +787,9 @@ def _expected_alignment_rows(
     outcomes = {
         item["id"]: item for item in state.get("learning_outcomes", [])
     }
-    taxonomy = {
-        item["outcome_id"]: item for item in state.get("outcome_taxonomy", [])
-    }
+    selected_taxonomy = validate_taxonomy_choice(
+        state.get("course", {}).get("taxonomy_type", "SOLO")
+    )
     rows: dict[str, dict[str, Any]] = {}
     for outcome_id, outcome in outcomes.items():
         assessment_items = [
@@ -881,13 +806,12 @@ def _expected_alignment_rows(
         teaching_ids = sorted(item["id"] for item in teaching_items)
         has_assessment = bool(assessment_ids)
         has_teaching = bool(teaching_ids)
-        classification = taxonomy.get(outcome_id, {})
         rows[outcome_id] = {
             "outcome_id": outcome_id,
             "result": outcome["statement"],
             "content_ids": content_ids_for_outcome(state, outcome_id),
-            "taxonomy": classification.get("taxonomy", ""),
-            "taxonomy_level": classification.get("level", ""),
+            "taxonomy": selected_taxonomy,
+            "taxonomy_level": outcome.get("taxonomy_level", ""),
             "assessment_ids": assessment_ids,
             "assessment_purposes": sorted(
                 {item["assessment_purpose"] for item in assessment_items}
@@ -1667,50 +1591,12 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
 
     if stage in {
         "learning_outcomes",
-        "outcome_taxonomy",
         "assessment_activities",
         "teaching_activities",
         "alignment_matrix",
     }:
         if not isinstance(artifact, list) or not artifact:
             raise AgentGenerationError("O agente devolveu uma lista vazia para esta etapa.")
-
-    if stage == "outcome_taxonomy":
-        expected_outcome_ids = {item["id"] for item in state["learning_outcomes"]}
-        _require_exact_coverage(
-            artifact,
-            expected_outcome_ids,
-            "outcome_id",
-            "A classificação taxonómica não cobre exatamente os resultados.",
-        )
-        selected_taxonomy = validate_taxonomy_choice(
-            state["course"].get("taxonomy_type", "SOLO")
-        )
-        outcome_by_id = {item["id"]: item for item in state["learning_outcomes"]}
-        invalid_details = []
-        for item in artifact:
-            outcome = outcome_by_id[item["outcome_id"]]
-            expected_verb = outcome["action_verb"]
-            expected_level = taxonomy_level_for_verb(
-                selected_taxonomy, expected_verb
-            )
-            if (
-                item["taxonomy"] != selected_taxonomy
-                or item["level"] != expected_level
-                or item["action_verb"] != expected_verb
-                or not taxonomy_verb_allowed(
-                    selected_taxonomy, item["level"], item["action_verb"]
-                )
-            ):
-                invalid_details.append(
-                    f"{item['outcome_id']} deve usar {selected_taxonomy} / "
-                    f"{expected_level} / {expected_verb}"
-                )
-        if invalid_details:
-            raise AgentGenerationError(
-                "A classificação usa outra taxonomia ou verbos incompatíveis: "
-                + "; ".join(invalid_details)
-            )
 
     if stage == "learning_outcomes":
         if not MIN_OUTCOMES <= len(artifact) <= MAX_OUTCOMES:
@@ -1724,20 +1610,29 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         )
         invalid = [
             item["id"] for item in artifact
-            if not has_single_action_verb(
-                item["statement"], item["action_verb"], taxonomy_type
+            if not taxonomy_verb_allowed(
+                taxonomy_type,
+                str(item.get("taxonomy_level", "")),
+                str(item.get("action_verb", "")),
+            )
+            or not has_single_action_verb(
+                str(item.get("statement", "")),
+                str(item.get("action_verb", "")),
+                taxonomy_type,
             )
         ]
         if invalid:
             invalid_by_id = {item["id"]: item for item in artifact if item["id"] in invalid}
             details = "; ".join(
                 f"{identifier}: verbo='{invalid_by_id[identifier].get('action_verb', '')}', "
+                f"nível='{invalid_by_id[identifier].get('taxonomy_level', '')}', "
                 f"enunciado='{invalid_by_id[identifier].get('statement', '')}'"
                 for identifier in invalid
             )
             raise AgentGenerationError(
-                "Cada resultado deve começar pelo action_verb declarado e conter um "
-                "único verbo de ação principal. São permitidos infinitivos subordinados "
+                "Cada resultado deve usar um nível e verbo compatíveis, começar pelo "
+                "action_verb declarado e conter um único verbo de ação principal. "
+                "São permitidos infinitivos subordinados "
                 "em complementos (por exemplo, 'explicar como configurar'), mas não "
                 "coordenações de duas ações principais do tipo 'e/ou + infinitivo'. "
                 "Se o objetivo geral de origem tiver várias ações coordenadas, distribui-as "
@@ -1812,9 +1707,10 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 "A matriz contém estados incompatíveis com as evidências de alinhamento: "
                 + ", ".join(inconsistent)
             )
-        taxonomy_by_outcome = {
-            item["outcome_id"]: item for item in state["outcome_taxonomy"]
-        }
+        selected_taxonomy = validate_taxonomy_choice(
+            state["course"].get("taxonomy_type", "SOLO")
+        )
+        outcome_by_id = {item["id"]: item for item in state["learning_outcomes"]}
         assessment_by_outcome = {
             outcome_id: sorted(
                 item["id"] for item in state["assessment_activities"]
@@ -1833,10 +1729,9 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             row["outcome_id"] for row in artifact
             if sorted(row["content_ids"])
             != sorted(content_ids_for_outcome(state, row["outcome_id"]))
-            or row["taxonomy"]
-            != taxonomy_by_outcome[row["outcome_id"]]["taxonomy"]
+            or row["taxonomy"] != selected_taxonomy
             or row["taxonomy_level"]
-            != taxonomy_by_outcome[row["outcome_id"]]["level"]
+            != outcome_by_id[row["outcome_id"]]["taxonomy_level"]
             or sorted(row["assessment_ids"]) != assessment_by_outcome[row["outcome_id"]]
             or sorted(row["assessment_purposes"])
             != sorted(
@@ -2204,7 +2099,7 @@ class OpenAIPedagogicalAgent:
             f"Formato obrigatório do campo artifact: {artifact_requirement} "
             "Devolve o resultado no objeto raiz {\"artifact\": ...}."
         )
-        if stage in {"outcome_taxonomy", "learning_outcomes"}:
+        if stage == "learning_outcomes":
             instructions += (
                 f" Usa exclusivamente este catálogo controlado de verbos {selected_taxonomy}: "
                 + json.dumps(
@@ -2250,7 +2145,9 @@ class OpenAIPedagogicalAgent:
         if stage == "learning_outcomes":
             instructions += (
                 " Em cada resultado, statement começa exatamente pelo action_verb declarado. "
-                "Esse é o único verbo de ação principal. Podes usar infinitivos subordinados "
+                "taxonomy_level pertence à taxonomia selecionada e action_verb pertence ao "
+                "catálogo desse nível. Esse é o único verbo de ação principal. Podes usar "
+                "infinitivos subordinados "
                 "quando forem necessários para completar o sentido (por exemplo, 'explicar como "
                 "configurar'), mas evita coordenar duas ações principais com 'e + infinitivo' "
                 "ou 'ou + infinitivo'. Se uma intenção geral contiver várias ações coordenadas, "
@@ -2258,12 +2155,6 @@ class OpenAIPedagogicalAgent:
                 "Usa os conteúdos e objetivos introduzidos pelo docente "
                 "apenas como contexto para definir o que o estudante deverá demonstrar; a "
                 "estrutura curricular detalhada será produzida e associada na etapa seguinte."
-            )
-        if stage == "outcome_taxonomy":
-            instructions += (
-                " A correspondência entre outcome_id, taxonomy, level e action_verb "
-                "já está calculada em required_taxonomy_mapping. Copia-a exatamente; "
-                "não escolhas um nível diferente com base numa interpretação semântica."
             )
         if stage == "assessment_activities":
             instructions += (
@@ -2426,11 +2317,7 @@ class OpenAIPedagogicalAgent:
                     if stage == "resources"
                     else raw_artifact
                 )
-                if stage == "outcome_taxonomy":
-                    artifact, guardrail_corrections = (
-                        _canonicalize_outcome_taxonomy(artifact, state)
-                    )
-                elif stage == "assessment_activities":
+                if stage == "assessment_activities":
                     artifact, guardrail_corrections = (
                         _canonicalize_assessment_activities(artifact, state)
                     )
@@ -2466,9 +2353,7 @@ class OpenAIPedagogicalAgent:
                     if (
                         stage == "learning_outcomes"
                         and isinstance(error, AgentGenerationError)
-                        and validation_message.startswith(
-                            "Cada resultado deve começar pelo action_verb declarado"
-                        )
+                        and validation_message.startswith("Cada resultado deve usar")
                     ):
                         repaired_artifact, fallback_corrections = (
                             _fallback_repair_learning_outcome_coordination(
@@ -2706,7 +2591,6 @@ class AgenticPedagogicalTeam:
 
     DEFAULT_CRITIC_STAGES = (
         "learning_outcomes",
-        "outcome_taxonomy",
         "assessment_activities",
         "teaching_activities",
         "alignment_matrix",

@@ -76,6 +76,7 @@ def test_learning_outcome_editor_matches_the_visible_table() -> None:
         "ID",
         "Tipo",
         "Tema ou objeto",
+        "Nível",
         "Verbo",
         "Resultado de aprendizagem",
     ]
@@ -148,23 +149,28 @@ def test_reference_select_values_are_applied_without_free_text_parsing() -> None
     assert row["outcome_id"] == "RA2"
 
 
-def test_taxonomy_editor_omits_redundant_taxonomy_and_numbers_levels() -> None:
+def test_learning_outcome_editor_omits_taxonomy_and_numbers_levels() -> None:
     state = _completed_state()
-    table = editor_layout("outcome_taxonomy").tables[0]
-    level_field = next(field for field in table.fields if field.key == "level")
+    table = editor_layout("learning_outcomes").tables[0]
+    level_field = next(
+        field for field in table.fields if field.key == "taxonomy_level"
+    )
 
     assert [field.label for field in table.fields] == [
-        "Resultado",
+        "ID",
+        "Tipo",
+        "Tema ou objeto",
         "Nível",
-        "Verbo de ação",
+        "Verbo",
+        "Resultado de aprendizagem",
     ]
     options = editor_taxonomy_level_options(state, level_field)
     assert options is not None
     assert options["Uni-estrutural"] == "Uni-estrutural — SOLO 2"
     assert options["Abstrato expandido"] == "Abstrato expandido — SOLO 5"
 
-    rendered = render_stage_artifact(state, "outcome_taxonomy")
-    assert "| Resultado | Nível | Verbo de ação |" in rendered
+    rendered = render_stage_artifact(state, "learning_outcomes")
+    assert "| ID | Tipo | Tema ou objeto | Nível | Verbo |" in rendered
     assert "| Taxonomia |" not in rendered
     assert "Uni-estrutural — SOLO 2" in rendered
 
@@ -198,10 +204,10 @@ def test_alignment_editor_omits_redundant_taxonomy_and_numbers_levels() -> None:
     assert expected_level in rendered
 
 
-def test_new_taxonomy_row_inherits_the_session_taxonomy() -> None:
+def test_new_learning_outcome_row_inherits_the_first_allowed_level() -> None:
     state = _completed_state()
-    table = editor_layout("outcome_taxonomy").tables[0]
+    table = editor_layout("learning_outcomes").tables[0]
 
     row = new_table_row(table, state)
 
-    assert row["taxonomy"] == "SOLO"
+    assert row["taxonomy_level"] == "Uni-estrutural"

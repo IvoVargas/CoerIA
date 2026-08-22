@@ -60,7 +60,7 @@ class ResourceGenerationTests(unittest.TestCase):
             resource_types=list(SUPPORTED_RESOURCE_TYPES),
             agent=self.agent,
         )
-        for _ in range(7):
+        for _ in range(6):
             state = review_current_stage(state, "approve", agent=self.agent)
         self.assertEqual(state["current_stage"], "resources")
         return state
@@ -249,7 +249,7 @@ class ResourceGenerationTests(unittest.TestCase):
             resource_types=[RESOURCE_PRESENTATION, RESOURCE_TEST],
             agent=self.agent,
         )
-        for _ in range(6):
+        for _ in range(5):
             alignment_state = review_current_stage(
                 alignment_state, "approve", agent=self.agent
             )
@@ -340,7 +340,7 @@ class ResourceGenerationTests(unittest.TestCase):
             resource_types=list(SUPPORTED_RESOURCE_TYPES),
             agent=self.agent,
         )
-        for _ in range(6):
+        for _ in range(5):
             alignment_state = review_current_stage(
                 alignment_state,
                 "approve",

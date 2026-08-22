@@ -52,16 +52,16 @@ materiais produzidos.
 
 Executar, por ordem, as seguintes etapas:
 
-1. formulação de resultados de aprendizagem com um único verbo de ação principal;
+1. formulação de resultados de aprendizagem com nível SOLO ou Bloom e um único
+   verbo de ação principal;
 2. estruturação e validação de conteúdos associados aos resultados aprovados
    e registo dos objetivos gerais em texto livre;
-3. classificação dos resultados exclusivamente por SOLO ou Bloom;
-4. proposta de avaliações formativas ou sumativas;
-5. design pedagógico por *backward design*;
-6. proposta de atividades formativas com prática, acompanhamento e feedback;
-7. validação da matriz de alinhamento;
-8. geração e aprovação dos recursos educativos selecionados;
-9. validação final da estrutura e do alinhamento.
+3. proposta de avaliações formativas ou sumativas;
+4. design pedagógico por *backward design*;
+5. proposta de atividades formativas com prática, acompanhamento e feedback;
+6. validação da matriz de alinhamento;
+7. geração e aprovação dos recursos educativos selecionados;
+8. validação final da estrutura e do alinhamento.
 
 Cada artefacto deve possuir um formato estruturado e identificadores estáveis
 que permitam ligar temas, resultados, atividades, avaliação e recursos.
@@ -79,8 +79,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Classificar o tipo de cada resultado de aprendizagem.
 - Usar um único verbo de ação principal pertencente ao vocabulário controlado do nível declarado; infinitivos subordinados podem ser usados em complementos, mas não como ações principais coordenadas.
 - Na opção SOLO, não usar o nível pré-estrutural para formular resultados.
-- Nas etapas de classificação e matriz de alinhamento, omitir a coluna redundante
-  da taxonomia e mostrar o nível num seletor com designação e número:
+- Integrar a classificação taxonómica na primeira etapa, como atributo de cada
+  resultado, sem criar um ecrã autónomo para a classificação.
+- Nas tabelas de resultados de aprendizagem e da matriz de alinhamento, omitir a
+  coluna redundante da taxonomia e mostrar o nível num seletor com designação e número:
   `SOLO 2`–`SOLO 5` ou `Bloom 1`–`Bloom 6`.
 - Não estabelecer uma equivalência rígida entre níveis SOLO e Bloom.
 - Permitir relações muitos-para-muitos entre conteúdos, resultados, avaliações
@@ -126,8 +128,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Confirmar cobertura exata e sem duplicados dos resultados de aprendizagem.
 - Confirmar coerência entre a taxonomia escolhida, nível, verbo, atividades e avaliação.
 - Detetar resultados com mais de um verbo de ação.
-- Derivar deterministicamente o nível taxonómico do verbo aprovado e corrigir
-  classificações geradas que divirjam do catálogo SOLO ou Bloom selecionado.
+- Confirmar deterministicamente a compatibilidade entre o nível e o verbo
+  aprovados segundo o catálogo SOLO ou Bloom selecionado.
 - Verificar a finalidade formativa ou sumativa de cada avaliação.
 - Normalizar as ligações de cada avaliação, garantindo que `outcome_id` coincide
   com o primeiro elemento não vazio de `outcome_ids`.
@@ -324,7 +326,7 @@ ficheiros após a exportação.
 
 ## Critérios mínimos de aceitação
 
-- O fluxo completo termina apenas após nove aprovações humanas.
+- O fluxo completo termina apenas após oito aprovações humanas.
 - Uma etapa anterior pode ser consultada sem modificar a sessão; uma revisão só
   começa depois da ação explícita **Reformular**, apresenta previamente o
   impacto, invalida o estado ativo a jusante e preserva versões antigas.

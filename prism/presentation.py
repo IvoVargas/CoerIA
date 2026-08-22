@@ -220,27 +220,21 @@ def render_artifact(
                 item["id"],
                 item.get("outcome_type", "—"),
                 item.get("theme", "—"),
+                taxonomy_level_label(
+                    state.get("course", {}).get("taxonomy_type", "SOLO"),
+                    item.get("taxonomy_level", "—"),
+                ),
                 item["action_verb"],
                 item["statement"],
             ]
             for item in artifact
         ]
         return header + _table(
-            ["ID", "Tipo", "Tema ou objeto", "Verbo", "Resultado de aprendizagem"],
-            rows,
-        )
-
-    if stage == "outcome_taxonomy":
-        rows = [
             [
-                item.get("outcome_id", "—"),
-                taxonomy_level_label(item["taxonomy"], item["level"]),
-                item["action_verb"],
-            ]
-            for item in artifact
-        ]
-        return header + _table(
-            ["Resultado", "Nível", "Verbo de ação"], rows
+                "ID", "Tipo", "Tema ou objeto", "Nível", "Verbo",
+                "Resultado de aprendizagem",
+            ],
+            rows,
         )
 
     if stage == "assessment_activities":

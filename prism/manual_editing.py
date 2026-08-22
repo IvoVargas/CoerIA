@@ -72,6 +72,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     _field("id", "ID"),
                     _field("outcome_type", "Tipo"),
                     _field("theme", "Tema ou objeto"),
+                    _field("taxonomy_level", "Nível", "taxonomy_level"),
                     _field("action_verb", "Verbo"),
                     _field("statement", "Resultado de aprendizagem", "long"),
                 ),
@@ -80,22 +81,9 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "theme": "",
                     "statement": "",
                     "action_verb": "",
+                    "taxonomy_level": "",
                     "outcome_type": "Conhecimento",
                 },
-            ),
-        )
-    ),
-    "outcome_taxonomy": EditorLayout(
-        tables=(
-            TableSpec(
-                "Classificação taxonómica",
-                (),
-                (
-                    _field("outcome_id", "Resultado"),
-                    _field("level", "Nível", "taxonomy_level"),
-                    _field("action_verb", "Verbo de ação"),
-                ),
-                {"outcome_id": "", "taxonomy": "", "level": "", "action_verb": ""},
             ),
         )
     ),
@@ -564,4 +552,9 @@ def new_table_row(
         row["taxonomy"] = validate_taxonomy_choice(
             str(state.get("course", {}).get("taxonomy_type", "SOLO"))
         )
+    if state is not None and "taxonomy_level" in row and not row["taxonomy_level"]:
+        taxonomy = validate_taxonomy_choice(
+            str(state.get("course", {}).get("taxonomy_type", "SOLO"))
+        )
+        row["taxonomy_level"] = next(iter(taxonomy_level_options(taxonomy)))
     return row

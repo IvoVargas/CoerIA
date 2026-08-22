@@ -130,28 +130,12 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
     selected_taxonomy = validate_taxonomy_choice(
         state.get("course", {}).get("taxonomy_type", "SOLO")
     )
-    taxonomy_by_outcome = {
-        str(item.get("outcome_id", "")): item
-        for item in state.get("outcome_taxonomy", [])
-    }
     taxonomy_issues: list[str] = []
     for outcome in outcomes:
-        taxonomy = taxonomy_by_outcome.get(str(outcome.get("id", "")))
-        if not taxonomy:
-            taxonomy_issues.append(
-                f"{outcome.get('id', '?')}: classificação em falta"
-            )
-            continue
-        if taxonomy.get("taxonomy") != selected_taxonomy:
-            taxonomy_issues.append(
-                f"{outcome.get('id', '?')}: mistura de taxonomias"
-            )
-        if taxonomy.get("action_verb") != outcome.get("action_verb") or not (
-            taxonomy_verb_allowed(
-                selected_taxonomy,
-                str(taxonomy.get("level", "")),
-                str(outcome.get("action_verb", "")),
-            )
+        if not taxonomy_verb_allowed(
+            selected_taxonomy,
+            str(outcome.get("taxonomy_level", "")),
+            str(outcome.get("action_verb", "")),
         ):
             taxonomy_issues.append(
                 f"{outcome.get('id', '?')}: verbo incompatível com o nível"
@@ -276,8 +260,11 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         for outcome_id in expected_ids
     }
     classification_by_outcome = {
-        str(item.get("outcome_id", "")): item
-        for item in state.get("outcome_taxonomy", [])
+        str(item.get("id", "")): {
+            "taxonomy": selected_taxonomy,
+            "level": item.get("taxonomy_level", ""),
+        }
+        for item in outcomes
     }
     purposes_by_outcome = {
         outcome_id: sorted(

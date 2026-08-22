@@ -23,7 +23,6 @@ from prism.agents import (
 from prism.curriculum import (
     ASSESSMENT_PURPOSES,
     has_single_action_verb,
-    taxonomy_level_for_verb,
     taxonomy_verb_allowed,
 )
 from prism.branding import APP_NAME, config_value
@@ -153,7 +152,6 @@ class WorkflowTests(unittest.TestCase):
 
         for expected_stage in (
             "curriculum_analysis",
-            "outcome_taxonomy",
             "assessment_activities",
             "pedagogical_design",
             "teaching_activities",
@@ -247,7 +245,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_alignment_feedback_returns_to_selected_component(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        for _ in range(6):
+        for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
         self.assertEqual(state["current_stage"], "alignment_matrix")
 
@@ -335,7 +333,7 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertIn("learning_outcomes", updated)
         self.assertEqual(updated["stage_statuses"]["learning_outcomes"], "approved")
-        self.assertNotIn("outcome_taxonomy", updated)
+        self.assertNotIn("assessment_activities", updated)
         self.assertTrue(
             updated["generation_metadata"]["curriculum_analysis"][-1][
                 "manual_edit"
@@ -397,7 +395,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 13)
+        self.assertEqual(restored["schema_version"], 14)
         self.assertEqual(restored["migrated_from_schema_version"], 1)
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
@@ -434,7 +432,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 13)
+        self.assertEqual(restored["schema_version"], 14)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(restored["status"], "awaiting_review")
         self.assertTrue(restored["learning_outcomes"])
@@ -472,7 +470,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 13)
+        self.assertEqual(restored["schema_version"], 14)
         self.assertEqual(
             restored["curriculum_analysis"]["objectives"],
             "Desenvolver conhecimentos fundamentais.",
@@ -539,7 +537,7 @@ class WorkflowTests(unittest.TestCase):
             "Compreender os fundamentos da programação.\n"
             "Aplicar os conhecimentos em problemas concretos."
         )
-        self.assertEqual(restored["schema_version"], 13)
+        self.assertEqual(restored["schema_version"], 14)
         self.assertEqual(restored["current_stage"], "alignment_matrix")
         self.assertEqual(restored["status"], "awaiting_review")
         self.assertEqual(restored["curriculum_analysis"]["objectives"], expected_text)
@@ -549,6 +547,90 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertTrue(
             all("objective_ids" not in row for row in restored["alignment_matrix"])
+        )
+
+    def test_schema_13_session_at_removed_taxonomy_stage_reopens_outcomes(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        legacy = deepcopy(state)
+        legacy["schema_version"] = 13
+        classifications = [
+            {
+                "outcome_id": item["id"],
+                "taxonomy": "SOLO",
+                "level": item["taxonomy_level"],
+                "action_verb": item["action_verb"],
+            }
+            for item in legacy["learning_outcomes"]
+        ]
+        for item in legacy["learning_outcomes"]:
+            item.pop("taxonomy_level")
+        for version in legacy["versions"]["learning_outcomes"]:
+            for item in version:
+                item.pop("taxonomy_level", None)
+        legacy["outcome_taxonomy"] = classifications
+        legacy["versions"]["outcome_taxonomy"] = [deepcopy(classifications)]
+        legacy["active_versions"]["outcome_taxonomy"] = 1
+        legacy["stage_statuses"]["learning_outcomes"] = "approved"
+        legacy["stage_statuses"]["curriculum_analysis"] = "approved"
+        legacy["stage_statuses"]["outcome_taxonomy"] = "awaiting_review"
+        legacy["current_stage"] = "outcome_taxonomy"
+        legacy["status"] = "awaiting_review"
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(legacy)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], 14)
+        self.assertEqual(restored["current_stage"], "learning_outcomes")
+        self.assertEqual(
+            restored["stage_statuses"]["learning_outcomes"], "awaiting_review"
+        )
+        self.assertEqual(restored["stage_statuses"]["curriculum_analysis"], "stale")
+        self.assertNotIn("curriculum_analysis", restored["active_versions"])
+        self.assertNotIn("outcome_taxonomy", restored)
+        self.assertNotIn("outcome_taxonomy", restored["stage_statuses"])
+        self.assertTrue(
+            all(item.get("taxonomy_level") for item in restored["learning_outcomes"])
+        )
+
+        continued = review_current_stage(restored, "approve", agent=self.agent)
+        self.assertEqual(continued["current_stage"], "curriculum_analysis")
+
+    def test_schema_13_session_after_removed_stage_keeps_its_current_stage(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        while state["current_stage"] != "alignment_matrix":
+            state = review_current_stage(state, "approve", agent=self.agent)
+        legacy = deepcopy(state)
+        legacy["schema_version"] = 13
+        classifications = [
+            {
+                "outcome_id": item["id"],
+                "taxonomy": "SOLO",
+                "level": item["taxonomy_level"],
+                "action_verb": item["action_verb"],
+            }
+            for item in legacy["learning_outcomes"]
+        ]
+        for item in legacy["learning_outcomes"]:
+            item.pop("taxonomy_level")
+        legacy["outcome_taxonomy"] = classifications
+        legacy["versions"]["outcome_taxonomy"] = [deepcopy(classifications)]
+        legacy["active_versions"]["outcome_taxonomy"] = 1
+        legacy["stage_statuses"]["outcome_taxonomy"] = "approved"
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(legacy)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["current_stage"], "alignment_matrix")
+        self.assertEqual(restored["status"], "awaiting_review")
+        self.assertNotIn("outcome_taxonomy", restored)
+        self.assertNotIn("outcome_taxonomy", restored["active_versions"])
+        self.assertTrue(
+            all(item.get("taxonomy_level") for item in restored["learning_outcomes"])
         )
 
     def test_session_id_survives_a_langgraph_transition(self) -> None:
@@ -655,7 +737,7 @@ class WorkflowTests(unittest.TestCase):
             resource_types=list(SUPPORTED_RESOURCE_TYPES),
             agent=self.agent,
         )
-        for _ in range(6):
+        for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
 
         valid_state = review_current_stage(deepcopy(state), "approve", agent=self.agent)
@@ -712,7 +794,7 @@ class WorkflowTests(unittest.TestCase):
             resource_types=list(SUPPORTED_RESOURCE_TYPES),
             agent=self.agent,
         )
-        for _ in range(6):
+        for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
 
         valid_state = review_current_stage(deepcopy(state), "approve", agent=self.agent)
@@ -773,7 +855,7 @@ class WorkflowTests(unittest.TestCase):
             resource_types=list(SUPPORTED_RESOURCE_TYPES),
             agent=self.agent,
         )
-        for _ in range(6):
+        for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
 
         resource_fields = {
@@ -852,7 +934,7 @@ class WorkflowTests(unittest.TestCase):
             resource_types=[RESOURCE_TEST],
             agent=self.agent,
         )
-        for _ in range(6):
+        for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
         state["resource_generation_scope"] = RESOURCE_TEST
         legacy_response = self.agent.generate("resources", state).artifact
@@ -892,7 +974,7 @@ class WorkflowTests(unittest.TestCase):
             resource_types=[RESOURCE_TEST],
             agent=self.agent,
         )
-        for _ in range(6):
+        for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
         state["resource_generation_scope"] = RESOURCE_TEST
         valid_test = deepcopy(
@@ -975,7 +1057,7 @@ class WorkflowTests(unittest.TestCase):
             resource_types=[RESOURCE_PRACTICAL],
             agent=self.agent,
         )
-        for _ in range(6):
+        for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
         state["resource_generation_scope"] = RESOURCE_PRACTICAL
         practical = deepcopy(
@@ -1064,50 +1146,21 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(result.metadata["guardrail_corrections"])
         _validate_artifact("resources", result.artifact, state)
 
-    def test_taxonomy_guardrail_canonicalizes_level_from_approved_verb(self) -> None:
+    def test_learning_outcome_level_must_match_its_verb(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        state = review_current_stage(state, "approve", agent=self.agent)
-        invalid_artifact = [
-            {
-                "outcome_id": outcome["id"],
-                "taxonomy": "Bloom",
-                "level": "Recordar",
-                "action_verb": "listar",
-            }
-            for outcome in state["learning_outcomes"]
-        ]
+        invalid_artifact = deepcopy(state["learning_outcomes"])
+        invalid_artifact[0]["action_verb"] = "identificar"
+        invalid_artifact[0]["statement"] = "Identificar conceitos fundamentais."
+        invalid_artifact[0]["taxonomy_level"] = "Abstrato expandido"
 
-        fake_responses = SimpleNamespace(
-            create=lambda **_kwargs: SimpleNamespace(
-                output_text=json.dumps({"artifact": invalid_artifact}),
-                id="taxonomy-response",
-                usage=SimpleNamespace(
-                    input_tokens=10,
-                    output_tokens=20,
-                    total_tokens=30,
-                ),
-            )
-        )
-        fake_module = SimpleNamespace(
-            OpenAI=lambda **_kwargs: SimpleNamespace(responses=fake_responses)
-        )
-        with patch.dict(environ, {"OPENAI_API_KEY": "test-key"}), patch.dict(
-            sys.modules, {"openai": fake_module}
-        ):
-            result = OpenAIPedagogicalAgent().generate("outcome_taxonomy", state)
+        with self.assertRaisesRegex(AgentGenerationError, "nível e verbo compatíveis"):
+            _validate_artifact("learning_outcomes", invalid_artifact, state)
 
-        outcome_by_id = {item["id"]: item for item in state["learning_outcomes"]}
-        for classification in result.artifact:
-            expected_verb = outcome_by_id[classification["outcome_id"]]["action_verb"]
-            self.assertEqual(classification["taxonomy"], "SOLO")
-            self.assertEqual(classification["action_verb"], expected_verb)
-            self.assertEqual(
-                classification["level"],
-                taxonomy_level_for_verb("SOLO", expected_verb),
-            )
+        schema = _schema_for("learning_outcomes", state)
+        item_properties = schema["properties"]["artifact"]["items"]["properties"]
         self.assertEqual(
-            len(result.metadata["guardrail_corrections"]),
-            len(state["learning_outcomes"]),
+            item_properties["taxonomy_level"]["enum"],
+            ["Uni-estrutural", "Multi-estrutural", "Relacional", "Abstrato expandido"],
         )
 
     def test_assessment_guardrail_normalizes_primary_outcome_links(self) -> None:
@@ -1304,18 +1357,16 @@ class WorkflowTests(unittest.TestCase):
 
     def test_curricular_relations_are_explicit_and_many_to_many(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        for _ in range(6):
+        for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
 
         self.assertGreaterEqual(len(state["learning_outcomes"]), 4)
-        taxonomy_by_outcome = {
-            item["outcome_id"]: item for item in state["outcome_taxonomy"]
-        }
+        selected_taxonomy = state["course"]["taxonomy_type"]
         self.assertTrue(
             all(
                 taxonomy_verb_allowed(
-                    taxonomy_by_outcome[item["id"]]["taxonomy"],
-                    taxonomy_by_outcome[item["id"]]["level"],
+                    selected_taxonomy,
+                    item["taxonomy_level"],
                     item["action_verb"],
                 )
                 for item in state["learning_outcomes"]
@@ -1341,8 +1392,14 @@ class WorkflowTests(unittest.TestCase):
         for _ in range(4):
             state = review_current_stage(state, "approve", agent=self.agent)
 
+        self.assertTrue(all("taxonomy" not in item for item in state["learning_outcomes"]))
         self.assertTrue(
-            all(item["taxonomy"] == "Bloom" for item in state["outcome_taxonomy"])
+            all(
+                taxonomy_verb_allowed(
+                    "Bloom", item["taxonomy_level"], item["action_verb"]
+                )
+                for item in state["learning_outcomes"]
+            )
         )
         self.assertTrue(
             all(
