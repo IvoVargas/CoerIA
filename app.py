@@ -322,7 +322,6 @@ class AGIRSoloInterface:
         self.manual_edit_artifact: Any = None
         self.uploaded_files: dict[str, bytes] = {}
         self.fields: dict[str, Any] = {}
-        self.resource_inputs: dict[str, Any] = {}
         self.export_document_format = "word"
         self.error_notification: Any | None = None
         self.busy_started_at: float | None = None
@@ -530,15 +529,6 @@ class AGIRSoloInterface:
                     icon="auto_awesome",
                     on_click=self.handle_generate_initial,
                 ).props("unelevated no-caps").classes("secondary-action")
-                ui.space()
-                create_session_button = ui.button(
-                    "Iniciar desenho curricular alinhado",
-                    icon="play_arrow",
-                    on_click=self.handle_start_session,
-                ).props("unelevated no-caps size=lg icon-right").classes(
-                    "primary-action px-6"
-                )
-                create_session_button.mark("create-pedagogical-session")
             self.assistance_status = ui.markdown().classes(
                 "soft-surface w-full p-4 mt-3"
             )
@@ -571,7 +561,21 @@ class AGIRSoloInterface:
                 with ui.step("caracterizacao", "Caracterização", icon="tune"):
                     self._build_characterization_step()
                     with ui.stepper_navigation():
-                        ui.button("Voltar", on_click=self.form_stepper.previous).props("flat no-caps")
+                        with ui.row().classes("w-full items-center"):
+                            ui.button("Voltar", on_click=self.form_stepper.previous).props(
+                                "flat no-caps"
+                            )
+                            ui.space()
+                            create_session_button = ui.button(
+                                "Iniciar desenho curricular alinhado",
+                                icon="play_arrow",
+                                on_click=self.handle_start_session,
+                            ).props(
+                                "unelevated no-caps size=lg icon-right"
+                            ).classes("primary-action px-6")
+                            create_session_button.mark(
+                                "create-pedagogical-session"
+                            )
 
     def _build_context_step(self) -> None:
         ui.label("Identificação e opções pedagógicas").classes("section-title mb-3")
@@ -639,7 +643,7 @@ class AGIRSoloInterface:
         ).classes("text-xs muted")
 
     def _build_characterization_step(self) -> None:
-        ui.label("Caracterização e recursos pretendidos").classes("section-title mb-3")
+        ui.label("Caracterização da unidade curricular").classes("section-title mb-3")
         with ui.grid(columns=4).classes("w-full gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1"):
             self.fields["program_name"] = ui.input("Curso / formação").classes("full-control")
             self.fields["program_type"] = ui.select(
@@ -679,28 +683,6 @@ class AGIRSoloInterface:
                 "bibliográficas para o programa da UC."
             ),
         ).props("outlined autogrow").classes("full-control mt-3")
-        ui.separator().classes("my-4")
-        ui.label("Recursos a produzir").classes("text-base font-semibold")
-        ui.label(
-            "Seleção provisória; poderá confirmá-la ou alterá-la na matriz de alinhamento."
-        ).classes("text-sm muted")
-        with ui.grid(columns=2).classes("w-full gap-x-6 max-sm:grid-cols-1"):
-            for resource_type in RESOURCE_TYPES:
-                self.resource_inputs[resource_type] = ui.checkbox(
-                    resource_type,
-                    value=resource_type == RESOURCE_PRESENTATION,
-                )
-        self.fields["ai_image_generation_enabled"] = ui.checkbox(
-            "Permitir geração de imagens por IA na apresentação",
-            value=False,
-        ).classes("mt-3")
-        ui.label(
-            "Opcional. A geração visual usa sempre a OpenAI Image API e a mesma "
-            "OPENAI_API_KEY configurada para a OpenAI, mesmo quando o fornecedor "
-            "pedagógico selecionado é IAedu. Pode implicar custo adicional. A aplicação "
-            "gera no máximo o número configurado de imagens e todas ficam sujeitas à "
-            "aprovação do docente antes da exportação."
-        ).classes("text-xs muted")
 
     async def handle_upload(self, event: events.UploadEventArguments) -> None:
         self.uploaded_files[event.file.name] = await event.file.read()
@@ -730,11 +712,8 @@ class AGIRSoloInterface:
         data["duration_hours"] = int(data.get("duration_hours", 0) or 0)
         for key in ("ects_credits", "contact_hours", "autonomous_hours"):
             data[key] = float(data.get(key, 0) or 0)
-        data["resource_types"] = [
-            resource
-            for resource, checkbox in self.resource_inputs.items()
-            if checkbox.value
-        ]
+        data["resource_types"] = [RESOURCE_PRESENTATION]
+        data["ai_image_generation_enabled"] = True
         return data
 
     def _set_form_data(self, data: dict[str, Any]) -> None:
@@ -744,10 +723,6 @@ class AGIRSoloInterface:
                 if name == "semester" and value not in (*SEMESTER_OPTIONS, "", None):
                     value = None
                 element.set_value(value)
-        if "resource_types" in data:
-            selected_resources = set(data.get("resource_types", []))
-            for resource, checkbox in self.resource_inputs.items():
-                checkbox.set_value(resource in selected_resources)
 
     def _assistance_markdown(self, result: dict[str, Any]) -> str:
         status = (
@@ -913,8 +888,6 @@ class AGIRSoloInterface:
                 "autonomous_hours": 0,
                 "general_aims": "",
                 "bibliography": "",
-                "resource_types": [RESOURCE_PRESENTATION],
-                "ai_image_generation_enabled": False,
             }
         )
         self.uploaded_files.clear()

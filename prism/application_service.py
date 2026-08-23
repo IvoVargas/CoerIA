@@ -118,7 +118,9 @@ class ApplicationService:
         )
         consolidated_source = reduction.text
         source_images = extract_source_images(source_files)
-        ai_image_generation_enabled = bool(form.get("ai_image_generation_enabled"))
+        ai_image_generation_enabled = bool(
+            form.get("ai_image_generation_enabled", True)
+        )
         course = CourseInput.create(
             str(form.get("unit_name", "") or ""),
             consolidated_source,

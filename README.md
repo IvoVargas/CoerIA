@@ -68,8 +68,8 @@ controlado antes da validação, evitando repetir a chamada apenas por essa
 divergência. Na edição manual, o seletor de verbos mostra exclusivamente os
 verbos do nível escolhido na mesma linha.
 
-A seleção inicial dos recursos é provisória: fica bloqueada durante a construção
-da estrutura e pode ser confirmada ou alterada na matriz de alinhamento.
+A seleção dos recursos é feita na matriz de alinhamento, imediatamente antes da
+etapa de produção, evitando repetir a mesma decisão no formulário inicial.
 
 Podem ser produzidos quatro tipos de recurso: apresentação PowerPoint, ficha de
 aula, teste com chave de correção e atividade prática. As apresentações devem
@@ -157,8 +157,9 @@ escolhe explicitamente quais imagens documentais devem ser usadas na apresentaç
 Quando o fornecedor é OpenAI, as miniaturas selecionadas são enviadas como entrada
 visual para permitir a associação semântica ao slide mais adequado; um guardrail
 determinístico garante que cada imagem escolhida é usada pelo menos uma vez num
-slide de conteúdo. A apresentação também pode recorrer a imagens geradas por IA mediante
-consentimento explícito; os bytes gerados são validados pelo Pillow e qualquer
+slide de conteúdo. A possibilidade de gerar imagens por IA fica ativa por defeito
+nas novas sessões; cada imagem gerada continua identificada e sujeita à revisão e
+aprovação do docente. Os bytes gerados são validados pelo Pillow e qualquer
 fallback para diagrama é apresentado como aviso explícito.
 A entrada direta de ficheiros de imagem isolados não faz parte do âmbito do
 protótipo; essas imagens podem ser acrescentadas posteriormente ao PowerPoint
@@ -211,7 +212,7 @@ recurso corrente; a seleção e as estruturas vazias dos restantes recursos são
 acrescentadas deterministicamente pela aplicação. Isto impede o modelo de
 alterar a seleção do docente e reduz os tokens de saída. A geração de imagens
 constitui uma operação posterior e separada da geração textual e estrutural da
-apresentação. É opcional e exige consentimento explícito no formulário. As imagens
+apresentação. Esta possibilidade fica ativa por defeito nas novas sessões. As imagens
 podem ser extraídas de documentos de referência ou geradas pela OpenAI Image API;
 antes da exportação, o docente vê as imagens selecionadas e aprova o recurso. A
 geração por IA usa `OPENAI_API_KEY` independentemente de o fornecedor pedagógico
@@ -324,7 +325,7 @@ cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado
 - A entrada direta de ficheiros de imagem isolados não faz parte do âmbito do
   protótipo; o docente pode acrescentá-los posteriormente ao PowerPoint editável.
   O CoerIA extrai imagens de documentos de referência e pode gerar imagens por IA
-  com consentimento explícito, mantendo proveniência e aprovação humana. Quando
+  por predefinição, mantendo proveniência e aprovação humana. Quando
   não existe uma imagem de origem controlada ou a geração falha, a apresentação
   recorre a diagramas e elementos gráficos nativos, sem inventar proveniência.
 

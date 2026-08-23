@@ -9,7 +9,12 @@ from nicegui.testing import User
 
 import app
 from prism.application_service import ApplicationService
-from prism.models import CourseInput, RESOURCE_PRACTICAL, RESOURCE_TEST
+from prism.models import (
+    CourseInput,
+    RESOURCE_PRACTICAL,
+    RESOURCE_PRESENTATION,
+    RESOURCE_TEST,
+)
 from prism.persistence import SQLiteSessionStore
 from prism.workflow import (
     create_session,
@@ -98,7 +103,6 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     user.find("Iniciar nova sessão").click()
     await user.should_see("Configure o ponto de partida")
     await user.should_see("Preenchimento manual orientado")
-    await user.should_see("Iniciar desenho curricular alinhado")
     await user.should_see("OpenAI")
     await user.should_see("IAedu")
     await user.should_see("SOLO")
@@ -176,6 +180,19 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Identificação e opções pedagógicas")
     assert not interfaces[-1].home_view.visible
     assert interfaces[-1].initial_view.visible
+    assert interfaces[-1].form_stepper.value == "contexto"
+    form_data = interfaces[-1]._form_data()
+    assert form_data["resource_types"] == [RESOURCE_PRESENTATION]
+    assert form_data["ai_image_generation_enabled"] is True
+
+    user.find("Continuar para os conteúdos").click()
+    await user.should_see("Conteúdos programáticos e fontes")
+    user.find("Continuar para a caracterização").click()
+
+    await user.should_see("Caracterização da unidade curricular")
+    await user.should_see("Iniciar desenho curricular alinhado")
+    await user.should_not_see("Recursos a produzir")
+    await user.should_not_see("Permitir geração de imagens por IA")
     assistance = next(
         iter(user.find(marker="new-session-assistance").elements)
     )
@@ -184,7 +201,7 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     )
     form = next(iter(user.find(marker="new-session-form").elements))
     assert assistance.id < form.id
-    assert create_button.id < form.id
+    assert form.id < create_button.id
 
 
 @pytest.mark.asyncio

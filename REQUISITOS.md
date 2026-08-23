@@ -187,9 +187,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir avaliações formativas e sumativas, mas nunca uma finalidade mista.
 - Não obrigar à existência de avaliação formativa.
 - Estruturar atividades formativas com prática, acompanhamento e estratégia de feedback.
-- Permitir uma seleção inicial provisória dos tipos de recursos.
-- Bloquear temporariamente a seleção durante o desenvolvimento da estrutura.
-- Permitir confirmar ou alterar a seleção na matriz de alinhamento, antes da sua aprovação.
+- Apresentar a seleção dos tipos de recursos na matriz de alinhamento, antes da
+  sua aprovação, sem repetir essa decisão no formulário inicial.
 
 Gerar efetivamente cada tipo selecionado pelo docente:
 
@@ -214,7 +213,8 @@ storyboards não fazem parte do âmbito.
 As imagens raster tratadas pelo protótipo podem ter uma das seguintes origens:
 
 - imagem extraída de um documento carregado como fonte de referência;
-- imagem gerada por IA para o slide, mediante consentimento explícito.
+- imagem gerada por IA para o slide, possibilidade ativa por defeito nas novas
+  sessões e sempre sujeita à revisão e aprovação do docente.
 
 Para cada imagem, o estado deve guardar o tipo de origem, o identificador da
 fonte e o texto alternativo. Uma imagem extraída deve conservar o nome do
