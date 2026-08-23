@@ -7,7 +7,11 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from .curriculum import taxonomy_level_options, validate_taxonomy_choice
+from .curriculum import (
+    TAXONOMY_VERBS,
+    taxonomy_level_options,
+    validate_taxonomy_choice,
+)
 
 
 @dataclass(frozen=True)
@@ -73,7 +77,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     _field("outcome_type", "Tipo"),
                     _field("theme", "Tema ou objeto"),
                     _field("taxonomy_level", "Nível", "taxonomy_level"),
-                    _field("action_verb", "Verbo"),
+                    _field("action_verb", "Verbo", "taxonomy_verb"),
                     _field("statement", "Resultado de aprendizagem", "long"),
                 ),
                 {
@@ -467,6 +471,25 @@ def editor_taxonomy_level_options(
         str(state.get("course", {}).get("taxonomy_type", "SOLO"))
     )
     return taxonomy_level_options(taxonomy)
+
+
+def editor_taxonomy_verb_options(
+    state: dict[str, Any],
+    target: dict[str, Any],
+    field: FieldSpec,
+) -> dict[str, str] | None:
+    """Limita o verbo aos valores do nível selecionado na mesma linha."""
+
+    if field.kind != "taxonomy_verb":
+        return None
+    taxonomy = validate_taxonomy_choice(
+        str(state.get("course", {}).get("taxonomy_type", "SOLO"))
+    )
+    level = str(target.get("taxonomy_level", "")).strip()
+    return {
+        verb: verb
+        for verb in TAXONOMY_VERBS[taxonomy].get(level, ())
+    }
 
 
 def editor_reference_value(target: dict[str, Any], field: FieldSpec) -> Any:

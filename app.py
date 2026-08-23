@@ -46,6 +46,7 @@ from prism.manual_editing import (
     editor_reference_options,
     editor_reference_value,
     editor_taxonomy_level_options,
+    editor_taxonomy_verb_options,
     editor_layout,
     new_table_row,
     value_at_path,
@@ -1391,12 +1392,23 @@ class AGIRSoloInterface:
         field: FieldSpec,
         *,
         compact: bool = False,
+        refresh_after_change: Any = None,
     ) -> None:
         value = editor_field_value(target, field)
 
         def update_value(event: Any) -> None:
             try:
                 apply_editor_field_value(target, field, event.value)
+                if field.key == "taxonomy_level" and "action_verb" in target:
+                    allowed_verbs = editor_taxonomy_verb_options(
+                        self.state or {},
+                        target,
+                        FieldSpec("action_verb", "Verbo", "taxonomy_verb"),
+                    ) or {}
+                    if target.get("action_verb") not in allowed_verbs:
+                        target["action_verb"] = ""
+                if refresh_after_change is not None:
+                    refresh_after_change()
             except (TypeError, ValueError):
                 ui.notify(
                     f"O valor de «{field.label}» não é válido.",
@@ -1408,6 +1420,10 @@ class AGIRSoloInterface:
         if selection_options is None:
             selection_options = editor_taxonomy_level_options(
                 self.state or {}, field
+            )
+        if selection_options is None:
+            selection_options = editor_taxonomy_verb_options(
+                self.state or {}, target, field
             )
         if selection_options is not None:
             multiple = field.kind in {"csv", "content_ids", "linked_outcomes"}
@@ -1472,7 +1488,15 @@ class AGIRSoloInterface:
                                 for field in table.fields:
                                     with ui.element("td"):
                                         self._render_manual_field(
-                                            row, field, compact=True
+                                            row,
+                                            field,
+                                            compact=True,
+                                            refresh_after_change=(
+                                                render_rows.refresh
+                                                if field.key == "taxonomy_level"
+                                                and "action_verb" in row
+                                                else None
+                                            ),
                                         )
 
                                 def remove_row(row_index: int = index) -> None:

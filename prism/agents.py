@@ -30,6 +30,7 @@ from .curriculum import (
     TAXONOMY_LEVELS,
     TAXONOMY_VERBS,
     taxonomy_catalogue_for_prompt,
+    taxonomy_level_for_verb,
     taxonomy_verb_allowed,
     validate_taxonomy_choice,
 )
@@ -777,6 +778,45 @@ def _canonicalize_assessment_activities(
         if changes:
             corrections.append(
                 {"assessment_id": item.get("id", ""), "changes": changes}
+            )
+    return normalized, corrections
+
+
+def _canonicalize_learning_outcomes(
+    artifact: Any, state: dict[str, Any]
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Deriva o nível do verbo gerado sem alterar a formulação do resultado."""
+
+    if not isinstance(artifact, list):
+        return artifact, []
+    selected_taxonomy = validate_taxonomy_choice(
+        state.get("course", {}).get("taxonomy_type", "SOLO")
+    )
+    normalized: list[Any] = []
+    corrections: list[dict[str, Any]] = []
+    for item in artifact:
+        if not isinstance(item, dict):
+            normalized.append(item)
+            continue
+        canonical_level = taxonomy_level_for_verb(
+            selected_taxonomy, str(item.get("action_verb", ""))
+        )
+        if canonical_level is None:
+            normalized.append(item)
+            continue
+        corrected = {**item, "taxonomy_level": canonical_level}
+        normalized.append(corrected)
+        if item.get("taxonomy_level") != canonical_level:
+            corrections.append(
+                {
+                    "outcome_id": item.get("id", ""),
+                    "changes": {
+                        "taxonomy_level": {
+                            "received": item.get("taxonomy_level"),
+                            "used": canonical_level,
+                        }
+                    },
+                }
             )
     return normalized, corrections
 
@@ -2317,7 +2357,11 @@ class OpenAIPedagogicalAgent:
                     if stage == "resources"
                     else raw_artifact
                 )
-                if stage == "assessment_activities":
+                if stage == "learning_outcomes":
+                    artifact, guardrail_corrections = (
+                        _canonicalize_learning_outcomes(artifact, state)
+                    )
+                elif stage == "assessment_activities":
                     artifact, guardrail_corrections = (
                         _canonicalize_assessment_activities(artifact, state)
                     )

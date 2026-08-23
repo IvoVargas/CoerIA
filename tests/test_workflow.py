@@ -23,6 +23,7 @@ from prism.agents import (
 from prism.curriculum import (
     ASSESSMENT_PURPOSES,
     has_single_action_verb,
+    taxonomy_level_for_verb,
     taxonomy_verb_allowed,
 )
 from prism.branding import APP_NAME, config_value
@@ -1161,6 +1162,50 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(
             item_properties["taxonomy_level"]["enum"],
             ["Uni-estrutural", "Multi-estrutural", "Relacional", "Abstrato expandido"],
+        )
+
+    def test_learning_outcome_generation_canonicalizes_level_from_verb(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        generated = deepcopy(state["learning_outcomes"])
+        generated[0]["action_verb"] = "analisar"
+        generated[0]["statement"] = "Analisar conceitos fundamentais."
+        generated[0]["taxonomy_level"] = "Uni-estrutural"
+
+        class FakeResponses:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(
+                    output_text=json.dumps({"artifact": generated}),
+                    id="response-outcomes",
+                    usage=SimpleNamespace(
+                        input_tokens=10,
+                        output_tokens=20,
+                        total_tokens=30,
+                    ),
+                )
+
+        responses = FakeResponses()
+        agent = OpenAIPedagogicalAgent(
+            client_factory=lambda: SimpleNamespace(responses=responses)
+        )
+        with patch.dict(environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+            result = agent.generate("learning_outcomes", state)
+
+        self.assertEqual(len(responses.calls), 1)
+        self.assertEqual(result.artifact[0]["taxonomy_level"], "Relacional")
+        self.assertEqual(
+            result.artifact[0]["taxonomy_level"],
+            taxonomy_level_for_verb("SOLO", result.artifact[0]["action_verb"]),
+        )
+        self.assertEqual(len(result.metadata["guardrail_corrections"]), 1)
+        correction = result.metadata["guardrail_corrections"][0]
+        self.assertEqual(correction["outcome_id"], generated[0]["id"])
+        self.assertEqual(
+            correction["changes"]["taxonomy_level"],
+            {"received": "Uni-estrutural", "used": "Relacional"},
         )
 
     def test_assessment_guardrail_normalizes_primary_outcome_links(self) -> None:

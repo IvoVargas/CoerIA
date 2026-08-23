@@ -5,6 +5,7 @@ from prism.manual_editing import (
     editor_reference_options,
     editor_reference_value,
     editor_taxonomy_level_options,
+    editor_taxonomy_verb_options,
     editor_layout,
     format_editor_value,
     new_table_row,
@@ -81,6 +82,9 @@ def test_learning_outcome_editor_matches_the_visible_table() -> None:
         "Resultado de aprendizagem",
     ]
     assert any(field.key == "theme" for field in table.fields)
+    assert next(field for field in table.fields if field.key == "action_verb").kind == (
+        "taxonomy_verb"
+    )
 
 
 def test_curriculum_editor_uses_free_text_objectives_and_links_contents() -> None:
@@ -179,6 +183,35 @@ def test_taxonomy_level_labels_follow_the_selected_taxonomy() -> None:
     assert taxonomy_level_label("SOLO", "Relacional") == "Relacional — SOLO 4"
     assert taxonomy_level_label("Bloom", "Recordar") == "Recordar — Bloom 1"
     assert taxonomy_level_label("Bloom", "Criar") == "Criar — Bloom 6"
+
+
+def test_learning_outcome_verb_options_follow_the_level_in_the_same_row() -> None:
+    state = _completed_state()
+    verb_field = next(
+        field
+        for field in editor_layout("learning_outcomes").tables[0].fields
+        if field.key == "action_verb"
+    )
+    row = {"taxonomy_level": "Relacional"}
+
+    options = editor_taxonomy_verb_options(state, row, verb_field)
+
+    assert options is not None
+    assert "analisar" in options
+    assert "identificar" not in options
+
+    row["taxonomy_level"] = "Uni-estrutural"
+    options = editor_taxonomy_verb_options(state, row, verb_field)
+    assert options is not None
+    assert "identificar" in options
+    assert "analisar" not in options
+
+    bloom_state = {"course": {"taxonomy_type": "Bloom"}}
+    row["taxonomy_level"] = "Analisar"
+    options = editor_taxonomy_verb_options(bloom_state, row, verb_field)
+    assert options is not None
+    assert "analisar" in options
+    assert "aplicar" not in options
 
 
 def test_alignment_editor_omits_redundant_taxonomy_and_numbers_levels() -> None:

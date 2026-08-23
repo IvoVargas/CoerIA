@@ -130,6 +130,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Detetar resultados com mais de um verbo de ação.
 - Confirmar deterministicamente a compatibilidade entre o nível e o verbo
   aprovados segundo o catálogo SOLO ou Bloom selecionado.
+- Nas propostas geradas pela IA, canonicalizar o nível a partir do verbo
+  controlado antes de repetir a chamada e registar a correção nos metadados.
+- Na edição manual dos resultados, filtrar o seletor de verbo pelo nível
+  escolhido na mesma linha e continuar a rejeitar pares incompatíveis.
 - Verificar a finalidade formativa ou sumativa de cada avaliação.
 - Normalizar as ligações de cada avaliação, garantindo que `outcome_id` coincide
   com o primeiro elemento não vazio de `outcome_ids`.

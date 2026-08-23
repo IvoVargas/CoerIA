@@ -56,7 +56,10 @@ escolhida não é repetida como coluna. O nível é apresentado e editado atrav�
 um seletor numerado: `SOLO 2` a `SOLO 5` ou `Bloom 1` a `Bloom 6`. Assim, a
 classificação é validada logo na primeira etapa e não necessita de um ecrã
 autónomo. O valor canónico continua guardado no modelo para validação e
-exportação.
+exportação. Nas propostas da IA, o nível é canonicalizado a partir do verbo
+controlado antes da validação, evitando repetir a chamada apenas por essa
+divergência. Na edição manual, o seletor de verbos mostra exclusivamente os
+verbos do nível escolhido na mesma linha.
 
 A seleção inicial dos recursos é provisória: fica bloqueada durante a construção
 da estrutura e pode ser confirmada ou alterada na matriz de alinhamento.
