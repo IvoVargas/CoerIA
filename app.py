@@ -1088,6 +1088,7 @@ class AGIRSoloInterface:
             "pending": "Por verificar",
         }
         stored_statuses = state.get("stage_statuses", {})
+        completed = state.get("status") == "completed"
         with ui.element("div").classes("stage-track"):
             for index, stage in enumerate(STAGE_ORDER):
                 stored_status = stored_statuses.get(stage, "empty")
@@ -1101,11 +1102,12 @@ class AGIRSoloInterface:
                     if stored_status == "needs_review"
                     else "pending"
                 )
-                item = ui.element("div" if current else "button").classes(
-                    f"stage-item {visual_status}" + (" selectable" if not current else "")
+                selectable = not current and not completed
+                item = ui.element("button" if selectable else "div").classes(
+                    f"stage-item {visual_status}" + (" selectable" if selectable else "")
                 )
                 item.mark(f"manual-stage-{stage}")
-                if not current:
+                if selectable:
                     item.props("type=button")
                     item.on(
                         "click",
@@ -1117,7 +1119,11 @@ class AGIRSoloInterface:
                     ui.label(f"{index + 1:02d}").classes("stage-number")
                     ui.label(STAGE_LABELS[stage]).classes("stage-label")
                     ui.label(
-                        "Ponto atual" if current else status_labels.get(stored_status, stored_status)
+                        "Sessão concluída"
+                        if completed
+                        else "Ponto atual"
+                        if current
+                        else status_labels.get(stored_status, stored_status)
                     ).classes("stage-state")
 
     async def _navigate_manual_stage(self, target_stage: str) -> None:
@@ -1967,7 +1973,8 @@ class AGIRSoloInterface:
                     "text-3xl font-extrabold mt-2"
                 )
                 ui.label(
-                    "Este ecrã é independente das etapas de autoria. A conclusão continua a depender da sua aprovação."
+                    "Este ecrã é independente das etapas de autoria e apresenta os "
+                    "controlos determinísticos que têm de passar antes da conclusão."
                 ).classes("mt-2 opacity-85")
             self._render_decision_card(state, final=True)
             with ui.card().classes("surface artifact-card w-full").mark(
@@ -2012,10 +2019,58 @@ class AGIRSoloInterface:
                 icon="download",
                 on_click=self.handle_export,
             ).props("unelevated no-caps size=lg").classes("primary-action px-6 mt-2")
+            if is_manual_first(state):
+                ui.button(
+                    "Reabrir explicitamente para edição",
+                    icon="edit_note",
+                    on_click=self._open_completed_reopen_dialog,
+                ).props("outline no-caps").classes("secondary-action").mark(
+                    "reopen-completed-session"
+                )
         with ui.card().classes("surface artifact-card w-full"):
             ui.markdown(render_current_artifact(state), extras=["tables"]).classes(
                 "artifact-markdown"
             )
+
+    def _open_completed_reopen_dialog(self) -> None:
+        if not self.state or self.state.get("status") != "completed":
+            self._show_error(ValueError("A sessão já não está concluída."))
+            return
+        options = {stage: STAGE_LABELS[stage] for stage in STAGE_ORDER[:-1]}
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6 gap-4"):
+            ui.label("REABERTURA EXPLÍCITA").classes("eyebrow")
+            ui.label("Voltar à autoria manual").classes("section-title")
+            ui.label(
+                "A barra permanece em modo de consulta para evitar cliques acidentais. "
+                "Ao confirmar, a exportação ficará temporariamente indisponível até uma "
+                "nova verificação global."
+            ).classes("text-sm muted")
+            stage_select = ui.select(
+                options,
+                value=STAGE_ORDER[0],
+                label="Etapa a editar",
+            ).props("outlined options-dense").classes("w-full")
+            reason = ui.textarea(
+                "Motivo da reabertura",
+                placeholder="Descreva a alteração que pretende efetuar.",
+            ).props("outlined autogrow").classes("w-full")
+
+            async def confirm() -> None:
+                clean_reason = str(reason.value or "").strip()
+                if not clean_reason:
+                    ui.notify("Indique o motivo da reabertura.", type="warning")
+                    return
+                dialog.close()
+                await self.handle_reopen_stage(str(stage_select.value), clean_reason)
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat no-caps")
+                ui.button(
+                    "Confirmar reabertura",
+                    icon="edit_note",
+                    on_click=confirm,
+                ).props("unelevated no-caps").classes("primary-action")
+        dialog.open()
 
     def _render_decision_card(self, state: dict[str, Any], final: bool = False) -> None:
         manual = is_manual_first(state)
@@ -2186,8 +2241,13 @@ class AGIRSoloInterface:
 
     async def handle_reopen_stage(self, target_stage: str, feedback: str) -> None:
         progress_updates: SimpleQueue[str] = SimpleQueue()
+        manual = bool(self.state and is_manual_first(self.state))
         self._show_busy(
-            f"A criar uma nova versão de «{STAGE_LABELS[target_stage]}»…",
+            (
+                f"A reabrir «{STAGE_LABELS[target_stage]}» para edição…"
+                if manual
+                else f"A criar uma nova versão de «{STAGE_LABELS[target_stage]}»…"
+            ),
             progress_updates,
             "A operação foi iniciada…",
         )

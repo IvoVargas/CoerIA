@@ -79,6 +79,19 @@ class PedagogicalAgent(Protocol):
         """Produz o artefacto de uma única etapa do fluxo."""
 
 
+class LocalizedAssistanceAgent(Protocol):
+    def propose(
+        self,
+        stage: str,
+        state: dict[str, Any],
+        scope_path: list[str | int],
+        scope_label: str,
+        instruction: str,
+        current_value: Any,
+    ) -> GenerationResult:
+        """Propõe apenas o fragmento selecionado, nunca o artefacto completo."""
+
+
 @dataclass(frozen=True)
 class CritiqueResult:
     passed: bool
@@ -621,6 +634,36 @@ def _schema_for(
         "additionalProperties": False,
         "properties": {"artifact": artifact_schema},
         "required": ["artifact"],
+    }
+
+
+def _schema_for_scope(
+    stage: str,
+    state: dict[str, Any],
+    scope_path: list[str | int],
+) -> dict[str, Any]:
+    """Deriva do esquema da etapa o contrato exato de uma célula, linha ou tabela."""
+
+    scoped_schema = deepcopy(_schema_for(stage, state)["properties"]["artifact"])
+    for part in scope_path:
+        if isinstance(part, int):
+            if scoped_schema.get("type") != "array" or "items" not in scoped_schema:
+                raise AgentGenerationError(
+                    "O âmbito selecionado não corresponde a uma linha editável."
+                )
+            scoped_schema = deepcopy(scoped_schema["items"])
+            continue
+        properties = scoped_schema.get("properties", {})
+        if part not in properties:
+            raise AgentGenerationError(
+                "O âmbito selecionado não corresponde a um campo editável."
+            )
+        scoped_schema = deepcopy(properties[part])
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"proposal": scoped_schema},
+        "required": ["proposal"],
     }
 
 
@@ -2461,6 +2504,148 @@ class OpenAIPedagogicalAgent:
         raise AgentGenerationError("A geração terminou sem produzir uma proposta válida.")
 
 
+class OpenAILocalizedAssistanceAgent:
+    """Pede ao fornecedor apenas o fragmento explicitamente escolhido pelo docente."""
+
+    def __init__(
+        self,
+        model: str | None = None,
+        *,
+        client_factory: Callable[[], Any] | None = None,
+        provider_name: str = "OpenAI Responses API",
+        api_key_env: str = "OPENAI_API_KEY",
+    ) -> None:
+        self.model = model or config_value("OPENAI_MODEL", DEFAULT_MODEL)
+        self.timeout_seconds = float(config_value("OPENAI_TIMEOUT_SECONDS", "120"))
+        self.max_retries = int(config_value("OPENAI_MAX_RETRIES", "2"))
+        self.max_output_tokens = int(
+            config_value("OPENAI_ASSISTANCE_MAX_OUTPUT_TOKENS", "4000")
+        )
+        self.reasoning_effort = config_value("OPENAI_REASONING_EFFORT", "minimal")
+        self.client_factory = client_factory
+        self.provider_name = provider_name
+        self.api_key_env = api_key_env
+
+    def propose(
+        self,
+        stage: str,
+        state: dict[str, Any],
+        scope_path: list[str | int],
+        scope_label: str,
+        instruction: str,
+        current_value: Any,
+    ) -> GenerationResult:
+        if not scope_path:
+            raise AgentGenerationError(
+                "O assistente localizado requer uma célula, linha ou tabela concreta."
+            )
+        if not os.getenv(self.api_key_env):
+            raise AgentGenerationError(
+                f"A assistência localizada requer {self.api_key_env}."
+            )
+        OpenAI = None
+        if self.client_factory is None:
+            try:
+                from openai import OpenAI
+            except ImportError as error:
+                raise AgentGenerationError(
+                    "A biblioteca OpenAI não está instalada."
+                ) from error
+
+        selected_taxonomy = validate_taxonomy_choice(
+            state.get("course", {}).get("taxonomy_type", "SOLO")
+        )
+        schema = _schema_for_scope(stage, state, scope_path)
+        instructions = (
+            "És um assistente de autoria pedagógica. Responde em português europeu. "
+            "Propõe exclusivamente um valor de substituição para o âmbito indicado pelo "
+            "docente. Não devolvas o artefacto completo, campos irmãos, índices, alternativas "
+            "ou explicações fora do objeto estruturado. Conserva IDs e relações existentes "
+            "salvo quando o âmbito escolhido os inclua explicitamente. Usa apenas os dados "
+            "fornecidos e respeita exclusivamente a Taxonomia "
+            f"{selected_taxonomy}. O campo proposal tem de corresponder exatamente ao "
+            "esquema do fragmento selecionado."
+        )
+        context = {
+            "stage": stage,
+            "scope": {"label": scope_label, "path": scope_path},
+            "teacher_instruction": instruction,
+            "current_value": current_value,
+            "current_stage_artifact_read_only": state.get(stage),
+            "pedagogical_context": _upstream_context(state, stage),
+            "taxonomy_verb_catalogue": taxonomy_catalogue_for_prompt(
+                selected_taxonomy
+            ),
+        }
+        started_at = perf_counter()
+        try:
+            client = (
+                self.client_factory()
+                if self.client_factory is not None
+                else OpenAI(
+                    timeout=self.timeout_seconds,
+                    max_retries=self.max_retries,
+                )
+            )
+            request_options: dict[str, Any] = {
+                "model": self.model,
+                "instructions": instructions,
+                "input": json.dumps(context, ensure_ascii=False),
+                "max_output_tokens": self.max_output_tokens,
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": f"coeria_assistance_{stage}",
+                        "strict": True,
+                        "schema": schema,
+                    }
+                },
+            }
+            if supports_reasoning_effort(self.model):
+                request_options["reasoning"] = {"effort": self.reasoning_effort}
+            response = client.responses.create(**request_options)
+            payload = json.loads(response.output_text)
+            proposal = payload["proposal"]
+        except (json.JSONDecodeError, KeyError, TypeError) as error:
+            raise AgentGenerationError(
+                "A IA não devolveu um fragmento compatível com o âmbito escolhido."
+            ) from error
+        except AgentGenerationError:
+            raise
+        except Exception as error:
+            raise AgentGenerationError(
+                f"A assistência localizada não ficou disponível. {error}"
+            ) from error
+
+        usage = getattr(response, "usage", None)
+        return GenerationResult(
+            artifact=proposal,
+            metadata={
+                "provider": self.provider_name,
+                "role": "assistente localizado",
+                "model": self.model,
+                "response_id": getattr(response, "id", "não disponível"),
+                "duration_ms": round((perf_counter() - started_at) * 1000),
+                "input_tokens": getattr(usage, "input_tokens", 0) if usage else 0,
+                "output_tokens": getattr(usage, "output_tokens", 0) if usage else 0,
+                "total_tokens": getattr(usage, "total_tokens", 0) if usage else 0,
+                "scope_path": list(scope_path),
+            },
+        )
+
+
+class IAeduLocalizedAssistanceAgent(OpenAILocalizedAssistanceAgent):
+    """Assistência localizada através do fornecedor IAedu selecionado."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            model=config_value("IAEDU_AGENT_NAME", "Agente IAedu"),
+            client_factory=IAeduResponsesAdapter,
+            provider_name="IAedu Agent Chat API",
+            api_key_env="IAEDU_API_KEY",
+        )
+
+
 class IAeduPedagogicalAgent(OpenAIPedagogicalAgent):
     """Usa o agente configurado no IAedu com as mesmas validações pedagógicas."""
 
@@ -2725,6 +2910,19 @@ def build_pedagogical_team(provider: str | None) -> AgenticPedagogicalTeam:
             OpenAIPedagogicalAgent(),
             critic=OpenAIPedagogicalCritic(),
         )
+    raise AgentGenerationError("Fornecedor de IA não suportado.")
+
+
+def build_localized_assistance_agent(
+    provider: str | None,
+) -> LocalizedAssistanceAgent:
+    """Constrói o assistente que só pode devolver o fragmento selecionado."""
+
+    selected = validate_ai_provider(provider)
+    if selected == AI_PROVIDER_IAEDU:
+        return IAeduLocalizedAssistanceAgent()
+    if selected == AI_PROVIDER_OPENAI:
+        return OpenAILocalizedAssistanceAgent()
     raise AgentGenerationError("Fornecedor de IA não suportado.")
 
 

@@ -11,7 +11,12 @@ import app
 from prism.application_service import ApplicationService
 from prism.models import CourseInput, RESOURCE_PRACTICAL, RESOURCE_TEST
 from prism.persistence import SQLiteSessionStore
-from prism.workflow import create_session, create_test_agent, review_current_stage
+from prism.workflow import (
+    create_session,
+    create_test_agent,
+    navigate_to_stage,
+    review_current_stage,
+)
 
 
 @pytest.mark.parametrize(
@@ -308,6 +313,33 @@ async def test_completed_view_offers_word_latex_or_both(
     await user.should_see(app.EXPORT_DOCUMENT_FORMAT_CHOICES["latex"])
     await user.should_see(app.EXPORT_DOCUMENT_FORMAT_CHOICES["both"])
     assert interfaces[-1].export_document_format == "word"
+
+
+@pytest.mark.asyncio
+async def test_completed_manual_session_requires_explicit_reopen_dialog(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, estruturas de dados, funções e testes automatizados.",
+        )
+    )
+    state = navigate_to_stage(state, "final_validation")
+    state["status"] = "completed"
+
+    @ui.page("/_test_manual_completed_reopen")
+    def manual_completed_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_manual_completed_reopen")
+
+    await user.should_see("Sessão concluída")
+    user.find(marker="reopen-completed-session").click()
+    await user.should_see("REABERTURA EXPLÍCITA")
+    await user.should_see("Motivo da reabertura")
 
 
 @pytest.mark.asyncio

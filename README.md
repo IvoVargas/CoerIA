@@ -98,9 +98,14 @@ assinalados como **Rever após alterações anteriores**.
 
 **Verificar esta etapa com IA** guarda um parecer facultativo que nunca impede
 avançar. **Pedir proposta à IA** exige a escolha prévia do âmbito e uma instrução;
-o resultado fica pendente até o docente comparar o antes/depois e escolher
+para uma célula, linha ou tabela, o fornecedor recebe um esquema de resposta
+limitado exatamente a esse fragmento, sem gerar primeiro a etapa inteira. O
+resultado fica pendente até o docente comparar o antes/depois e escolher
 **Aceitar** ou **Rejeitar**. Aceitar cria uma nova versão; rejeitar conserva o
 rascunho sem alterações.
+
+Numa sessão concluída, a barra de etapas fica em modo de consulta. A reabertura
+exige o botão próprio, a seleção da etapa, um motivo e uma confirmação explícita.
 
 As tabelas editáveis não acrescentam uma coluna de numeração. Os campos que
 referenciam conteúdos, resultados, avaliações ou atividades de
@@ -121,6 +126,10 @@ da sessão conserva o texto extraído e não o envia a um fornecedor, mesmo acim
 orçamento normal de 120 000 caracteres; nesse caso, o estado regista que uma
 redução de contexto foi adiada. PDFs constituídos apenas por imagem necessitam
 de OCR externo.
+
+Se o docente pedir posteriormente assistência ou verificação por IA, a redução
+adiada é executada antes dessa chamada. O texto original permanece preservado na
+sessão e o modelo recebe a versão reduzida.
 
 O CoerIA extrai o conteúdo textual destes documentos e, quando aplicável,
 imagens internas de `.pdf`, `.docx` e `.pptx`, conservando a proveniência

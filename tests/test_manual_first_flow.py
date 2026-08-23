@@ -6,13 +6,16 @@ from unittest.mock import patch
 import pytest
 
 from prism.agents import CritiqueResult, GenerationResult
+from prism.application_service import ApplicationService
 from prism.models import CourseInput, RESOURCE_TEST
-from prism.source_reduction import reduce_source_text
+from prism.persistence import SQLiteSessionStore
+from prism.source_reduction import SourceReductionResult, reduce_source_text
 from prism.workflow import (
     STAGE_ORDER,
     create_session,
     decide_ai_proposal,
     navigate_to_stage,
+    reopen_completed_manual_session,
     request_ai_assistance,
     review_current_stage,
     save_manual_draft,
@@ -23,7 +26,7 @@ from prism.workflow import (
 
 def _course() -> CourseInput:
     return CourseInput.create(
-        "Programção",
+        "Programação",
         "Fundamentos de programação, algoritmos, estruturas de controlo e testes.",
         taxonomy_type="SOLO",
     )
@@ -44,6 +47,37 @@ class OutcomeProposalAgent:
                 }
             ],
             metadata={"provider": "Teste", "model": "fake", "total_tokens": 3},
+        )
+
+
+class LocalizedOutcomeAgent:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def generate(self, stage: str, state: dict) -> GenerationResult:
+        raise AssertionError("A geração da etapa inteira não pode ser executada.")
+
+    def propose(
+        self,
+        stage: str,
+        state: dict,
+        scope_path: list[str | int],
+        scope_label: str,
+        instruction: str,
+        current_value: object,
+    ) -> GenerationResult:
+        self.calls.append(
+            {
+                "stage": stage,
+                "scope_path": scope_path,
+                "scope_label": scope_label,
+                "instruction": instruction,
+                "current_value": current_value,
+            }
+        )
+        return GenerationResult(
+            artifact="Analisar algoritmos através de exemplos concretos.",
+            metadata={"provider": "Teste", "model": "fragment-fake"},
         )
 
 
@@ -130,6 +164,47 @@ def test_ai_assistance_requires_an_explicit_acceptance() -> None:
     assert accepted["generation_metadata"]["learning_outcomes"][-1]["human_approved"]
 
 
+def test_localized_assistance_generates_only_the_selected_fragment() -> None:
+    state = create_session(_course())
+    state["learning_outcomes"] = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Variáveis",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar variáveis num programa.",
+        },
+        {
+            "id": "RA2",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Relacional",
+            "action_verb": "Analisar",
+            "statement": "Analisar algoritmos.",
+        },
+    ]
+    agent = LocalizedOutcomeAgent()
+
+    proposed = request_ai_assistance(
+        state,
+        "learning_outcomes",
+        [1, "statement"],
+        "Linha 2 — campo Resultado de aprendizagem",
+        "Clarificar o enunciado.",
+        agent=agent,
+    )
+
+    assert len(agent.calls) == 1
+    assert agent.calls[0]["current_value"] == "Analisar algoritmos."
+    assert proposed["ai_proposals"][-1]["after"] == (
+        "Analisar algoritmos através de exemplos concretos."
+    )
+    accepted = decide_ai_proposal(proposed, proposed["ai_proposals"][-1]["id"], True)
+    assert accepted["learning_outcomes"][0] == state["learning_outcomes"][0]
+    assert accepted["learning_outcomes"][1]["statement"].endswith("concretos.")
+
+
 def test_rejected_ai_assistance_does_not_change_the_draft() -> None:
     state = create_session(_course())
     proposed = request_ai_assistance(
@@ -188,6 +263,33 @@ def test_final_deterministic_validation_is_mandatory() -> None:
         review_current_stage(state, "approve")
 
 
+def test_reopening_unchanged_final_validation_does_not_create_a_version() -> None:
+    state = navigate_to_stage(create_session(_course()), "final_validation")
+    initial_versions = len(state["versions"]["final_validation"])
+    state = navigate_to_stage(state, "learning_outcomes")
+    state = navigate_to_stage(state, "final_validation")
+
+    assert len(state["versions"]["final_validation"]) == initial_versions
+
+
+def test_completed_manual_session_cannot_be_reopened_by_navigation_click() -> None:
+    state = create_session(_course())
+    state["status"] = "completed"
+    state["current_stage"] = "final_validation"
+
+    with pytest.raises(ValueError, match="modo de consulta"):
+        navigate_to_stage(state, "learning_outcomes")
+
+    reopened = reopen_completed_manual_session(
+        state,
+        "learning_outcomes",
+        "Corrigir um resultado após revisão.",
+    )
+    assert reopened["status"] == "drafting"
+    assert reopened["current_stage"] == "learning_outcomes"
+    assert reopened["stage_statuses"]["final_validation"] == "pending"
+
+
 def test_long_sources_can_start_manual_authoring_without_ai_reduction() -> None:
     source = "Conteúdo curricular. " * 8_000
     with patch("prism.source_reduction._provider_client") as provider:
@@ -196,3 +298,26 @@ def test_long_sources_can_start_manual_authoring_without_ai_reduction() -> None:
     provider.assert_not_called()
     assert result.text == source.strip()
     assert result.metadata["deferred"] is True
+
+
+def test_deferred_source_reduction_runs_before_first_ai_request(
+    tmp_path,
+) -> None:
+    state = create_session(_course())
+    state["source_original_text"] = "Fonte extensa original."
+    state["source_reduction"] = {"deferred": True}
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "reduction.db"))
+    state = service._persist(state)
+    reduced = SourceReductionResult(
+        "Fonte reduzida.",
+        {"applied": True, "deferred": False, "original_chars": 23},
+    )
+
+    with patch("prism.application_service.reduce_source_text", return_value=reduced) as reducer:
+        prepared = service._prepare_source_for_ai(state)
+
+    assert reducer.call_count == 1
+    assert reducer.call_args.kwargs["allow_ai"] is True
+    assert prepared["course"]["source_text"] == "Fonte reduzida."
+    assert prepared["source_original_text"] == "Fonte extensa original."
+    assert service.load_session(state["session_id"])["source_reduction"]["deferred"] is True

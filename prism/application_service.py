@@ -25,6 +25,7 @@ from .workflow import (
     create_session,
     decide_ai_proposal,
     navigate_to_stage,
+    reopen_completed_manual_session,
     reopen_stage,
     request_ai_assistance,
     review_current_stage,
@@ -59,6 +60,36 @@ class ApplicationService:
                 "A sessão selecionada já não está disponível."
             ) from error
         return state
+
+    def _prepare_source_for_ai(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Executa uma única vez a redução adiada, imediatamente antes de usar IA."""
+
+        reduction = state.get("source_reduction", {})
+        if not reduction.get("deferred"):
+            return state
+        original = str(
+            state.get("source_original_text")
+            or state.get("course", {}).get("source_text", "")
+            or ""
+        ).strip()
+        result = reduce_source_text(
+            original,
+            provider=str(state.get("ai_provider") or configured_ai_provider()),
+            allow_ai=True,
+        )
+        updated = deepcopy(state)
+        updated["source_original_text"] = original
+        updated.setdefault("course", {})["source_text"] = result.text
+        updated["source_reduction"] = result.metadata
+        updated.setdefault("audit", []).append(
+            {
+                "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "stage": "Fontes documentais",
+                "event": "Redução adiada executada antes do primeiro pedido à IA.",
+                "feedback": "O texto original foi preservado fora do contexto enviado ao modelo.",
+            }
+        )
+        return updated
 
     def list_sessions(self) -> list[dict[str, str]]:
         return self.store.list_sessions(owner_id=self.owner_id)
@@ -113,6 +144,7 @@ class ApplicationService:
             progress_callback=progress_callback,
         )
         state["source_input_text"] = source_text.strip()
+        state["source_original_text"] = raw_source
         state["source_images"] = source_images
         state["source_reduction"] = reduction.metadata
         if progress_callback is not None:
@@ -139,8 +171,9 @@ class ApplicationService:
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        prepared = self._prepare_source_for_ai(state)
         updated = request_ai_assistance(
-            state,
+            prepared,
             target_stage,
             scope_path,
             scope_label,
@@ -172,7 +205,8 @@ class ApplicationService:
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
-        updated = self._persist(verify_stage_with_ai(state, target_stage))
+        prepared = self._prepare_source_for_ai(state)
+        updated = self._persist(verify_stage_with_ai(prepared, target_stage))
         return updated, "Verificação facultativa da IA guardada; pode continuar."
 
     def update_resource_settings(
@@ -365,15 +399,25 @@ class ApplicationService:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
         if progress_callback is not None:
             progress_callback("A validar o impacto da reformulação…")
-        updated = reopen_stage(
-            state,
-            target_stage,
-            feedback,
-            progress_callback=progress_callback,
-        )
+        manual = state.get("orchestration", {}).get("mode") == "manual-first"
+        if manual:
+            updated = reopen_completed_manual_session(state, target_stage, feedback)
+        else:
+            updated = reopen_stage(
+                state,
+                target_stage,
+                feedback,
+                progress_callback=progress_callback,
+            )
         if progress_callback is not None:
             progress_callback("A guardar a nova versão e as dependências…")
         updated = self._persist(updated)
+        if manual:
+            return (
+                updated,
+                f"Sessão reaberta em {STAGE_LABELS[target_stage]}. "
+                "A exportação volta a ficar disponível após nova verificação global.",
+            )
         return (
             updated,
             "Nova versão criada em "

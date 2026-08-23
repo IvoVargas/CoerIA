@@ -15,10 +15,12 @@ from .agents import (
     AgentGenerationError,
     CritiqueResult,
     GenerationResult,
+    LocalizedAssistanceAgent,
     PedagogicalAgent,
     PedagogicalCritic,
     RESOURCE_ARTIFACT_FIELDS,
     RuleBasedPedagogicalAgent,
+    build_localized_assistance_agent,
     build_pedagogical_team,
     validate_artifact,
 )
@@ -51,6 +53,7 @@ class PrismState(TypedDict, total=False):
     orchestration: dict[str, Any]
     session_id: str
     source_input_text: str
+    source_original_text: str
     source_images: list[dict[str, Any]]
     selected_source_image_ids: list[str]
     source_reduction: dict[str, Any]
@@ -126,7 +129,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -845,22 +848,33 @@ def navigate_to_stage(state: PrismState, target_stage: str) -> PrismState:
 
     if target_stage not in STAGE_ORDER:
         raise ValueError("A etapa selecionada não está disponível.")
+    if state.get("status") == "completed" and target_stage != state.get("current_stage"):
+        raise ValueError(
+            "A sessão concluída está em modo de consulta. Inicie uma revisão explícita "
+            "para voltar à autoria."
+        )
     updated = ensure_manual_artifacts(deepcopy(state))
     updated["current_stage"] = target_stage
     if target_stage == "final_validation":
-        updated["final_validation"] = build_final_validation(updated)
-        _append_version(
-            updated,
-            target_stage,
-            updated["final_validation"],
-            {
-                "provider": "CoerIA",
-                "model": "Verificação determinística",
-                "duration_ms": 0,
-                "total_tokens": 0,
-                "validation_attempts": 1,
-            },
-        )
+        previous_validation = deepcopy(updated.get("final_validation"))
+        current_validation = build_final_validation(updated)
+        updated["final_validation"] = current_validation
+        if (
+            previous_validation != current_validation
+            or target_stage not in updated.get("active_versions", {})
+        ):
+            _append_version(
+                updated,
+                target_stage,
+                current_validation,
+                {
+                    "provider": "CoerIA",
+                    "model": "Verificação determinística",
+                    "duration_ms": 0,
+                    "total_tokens": 0,
+                    "validation_attempts": 1,
+                },
+            )
         updated["stage_statuses"][target_stage] = "checked"
         updated["status"] = "awaiting_review"
     else:
@@ -874,6 +888,41 @@ def navigate_to_stage(state: PrismState, target_stage: str) -> PrismState:
             else "Etapa aberta para autoria manual."
         ),
     }
+    return updated
+
+
+def reopen_completed_manual_session(
+    state: PrismState,
+    target_stage: str,
+    reason: str,
+) -> PrismState:
+    """Reabre explicitamente uma sessão concluída sem alterar os artefactos."""
+
+    if not is_manual_first(state) or state.get("status") != "completed":
+        raise ValueError("A sessão não está concluída no modo de autoria manual.")
+    if target_stage not in AUTHORING_STAGES:
+        raise ValueError("Escolha uma etapa de autoria para reabrir a sessão.")
+    clean_reason = reason.strip()
+    if not clean_reason:
+        raise ValueError("Indique o motivo da reabertura.")
+    updated = ensure_manual_artifacts(deepcopy(state))
+    _snapshot_without_invalidation(updated, target_stage, clean_reason)
+    updated["current_stage"] = target_stage
+    updated["status"] = "drafting"
+    updated.setdefault("stage_statuses", {})["final_validation"] = "pending"
+    updated.pop("final_validation", None)
+    updated.get("active_versions", {}).pop("final_validation", None)
+    updated["review"] = {
+        "stage": target_stage,
+        "label": STAGE_LABELS[target_stage],
+        "message": "Sessão reaberta explicitamente para edição manual.",
+    }
+    _record_decision(
+        updated,
+        target_stage,
+        f"Docente reabriu explicitamente {STAGE_LABELS[target_stage]}.",
+        clean_reason,
+    )
     return updated
 
 
@@ -969,7 +1018,7 @@ def request_ai_assistance(
     scope_path: list[str | int],
     scope_label: str,
     instruction: str,
-    agent: PedagogicalAgent | None = None,
+    agent: PedagogicalAgent | LocalizedAssistanceAgent | None = None,
 ) -> PrismState:
     """Produz uma proposta localizada; nunca altera o artefacto ativo."""
 
@@ -999,32 +1048,43 @@ def request_ai_assistance(
             "practical_activity": RESOURCE_PRACTICAL,
         }
         scoped_resource = resource_by_field.get(str(scope_path[0]))
-        if scoped_resource:
-            if scoped_resource not in updated.get("resource_types", []):
-                raise ValueError(
-                    "O âmbito pertence a um recurso que não está selecionado."
-                )
-            working["resource_types"] = [scoped_resource]
-            for row in working.get("alignment_matrix", []):
-                if isinstance(row, dict):
-                    row["resource_types"] = [scoped_resource]
-    active_agent = agent or build_pedagogical_team(
-        updated.get("ai_provider", configured_ai_provider())
-    ).generator
-    execution_agent: PedagogicalAgent = active_agent
-    if target_stage == "resources":
-        execution_agent = _SeparateResourceAgent(active_agent, None)
-    result = execution_agent.generate(target_stage, working)
-    proposed_artifact = deepcopy(result.artifact)
+        if scoped_resource and scoped_resource not in updated.get("resource_types", []):
+            raise ValueError("O âmbito pertence a um recurso que não está selecionado.")
     proposed_images: list[dict[str, Any]] = []
-    if target_stage == "resources" and isinstance(proposed_artifact, dict):
-        proposed_images = proposed_artifact.pop("_generated_images", [])
-    try:
-        after = deepcopy(_value_at_scope(proposed_artifact, scope_path))
-    except (KeyError, IndexError, TypeError) as error:
-        raise AgentGenerationError(
-            "A IA não devolveu uma proposta compatível com o âmbito escolhido."
-        ) from error
+    if scope_path:
+        localized_agent = agent or build_localized_assistance_agent(
+            updated.get("ai_provider", configured_ai_provider())
+        )
+        propose = getattr(localized_agent, "propose", None)
+        if not callable(propose):
+            raise AgentGenerationError(
+                "A assistência de teste para um âmbito localizado deve implementar propose()."
+            )
+        result = propose(
+            target_stage,
+            working,
+            list(scope_path),
+            scope_label,
+            clean_instruction,
+            deepcopy(before),
+        )
+        after = deepcopy(result.artifact)
+    else:
+        active_agent = agent or build_pedagogical_team(
+            updated.get("ai_provider", configured_ai_provider())
+        ).generator
+        generate = getattr(active_agent, "generate", None)
+        if not callable(generate):
+            raise AgentGenerationError(
+                "A assistência para toda a etapa deve implementar generate()."
+            )
+        execution_agent: PedagogicalAgent = active_agent
+        if target_stage == "resources":
+            execution_agent = _SeparateResourceAgent(active_agent, None)
+        result = execution_agent.generate(target_stage, working)
+        after = deepcopy(result.artifact)
+        if target_stage == "resources" and isinstance(after, dict):
+            proposed_images = after.pop("_generated_images", [])
     if before == after:
         raise AgentGenerationError("A IA não propôs qualquer alteração nesse âmbito.")
 
@@ -1117,7 +1177,7 @@ def decide_ai_proposal(
             "human_approved": True,
         },
     )
-    # save_manual_draft faz uma cópia; replica a decisão que acabá de ser tomada.
+    # save_manual_draft faz uma cópia; replica a decisão que acabou de ser tomada.
     accepted["ai_proposals"] = proposals
     return accepted
 
@@ -1127,7 +1187,7 @@ def verify_stage_with_ai(
     target_stage: str,
     critic: PedagogicalCritic | None = None,
 ) -> PrismState:
-    """Regista uma crítica facultativa e não bloqueante, sem modificar conteýo."""
+    """Regista uma crítica facultativa e não bloqueante, sem modificar conteúdo."""
 
     if target_stage not in AUTHORING_STAGES:
         raise ValueError("A verificação por IA só se aplica às etapas de autoria.")

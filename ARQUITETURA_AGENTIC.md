@@ -61,8 +61,11 @@ uma decisão anterior muda.
 Antes da chamada, a interface deriva uma lista de âmbitos a partir do editor da
 etapa: etapa completa, tabela, linha, campo escalar ou célula de uma linha. O
 docente escolhe um desses âmbitos e escreve a instrução. Embora o agente possa
-produzir internamente um artefacto completo para cumprir o esquema da etapa, o
-workflow extrai exclusivamente o valor do caminho escolhido.
+receber o artefacto ativo como contexto de leitura, a resposta fica limitada por
+um esquema JSON derivado exatamente do caminho escolhido. Uma célula devolve um
+valor, uma linha devolve um único objeto e uma tabela devolve apenas a respetiva
+lista. Só o âmbito «etapa completa» usa o gerador integral; nunca se seleciona o
+mesmo índice numa nova lista produzida pelo modelo.
 
 Cada proposta persistida contém:
 
@@ -91,14 +94,19 @@ matriz e a qualidade dos recursos. O relatório identifica cada controlo e só
 permite concluir quando todos passam. Pedir ou não uma segunda opinião a um LLM
 não altera este resultado.
 
+O relatório só cria uma versão quando o seu conteúdo muda ou quando ainda não
+existe uma versão ativa. Abrir, sair e regressar sem alterações não acrescenta
+ruído ao histórico. Depois da conclusão, a barra é apenas informativa; reabrir a
+autoria requer uma ação separada, etapa, motivo e confirmação explícita.
+
 ## Recursos e imagens
 
-Quando a assistência abrange os recursos, cada tipo selecionado continua a ser
-gerado e validado separadamente. Se o âmbito pertence apenas à apresentação,
-ficha, teste ou atividade prática, o workflow limita a execução a esse tipo. As
-imagens geradas permanecem fora da chamada estrutural e só são associadas ao
-estado se a proposta correspondente for aceite. A geração de imagens exige
-consentimento explícito e `OPENAI_API_KEY`.
+Quando a assistência abrange toda a etapa de recursos, cada tipo selecionado
+continua a ser gerado e validado separadamente. Num âmbito inferior, a IA devolve
+somente a tabela, linha ou campo escolhido e não dispara geração de imagens. As
+imagens geradas numa proposta integral permanecem fora da chamada estrutural e
+só são associadas ao estado se a proposta correspondente for aceite. A geração
+de imagens exige consentimento explícito e `OPENAI_API_KEY`.
 
 ## Fontes extensas
 
@@ -106,6 +114,11 @@ A ingestão e extração documental são locais. Acima do orçamento normal de
 contexto, a criação da sessão conserva o texto e regista a redução como adiada,
 em vez de fazer uma chamada implícita. Assim, a independência de LLM abrange
 também a fase anterior à primeira etapa.
+
+Quando o docente pede a primeira assistência ou crítica, a redução adiada é
+executada antes da operação, o texto original continua preservado e apenas a
+versão reduzida entra no contexto do modelo. A redução e a operação pedida são
+persistidas em conjunto quando terminam com sucesso.
 
 ## Abstração do fornecedor
 
@@ -117,7 +130,7 @@ interna e entrega os resultados aos mesmos esquemas e guardrails.
 
 ## Migração e rastreabilidade
 
-Sessões anteriores são migradas para o esquema 15 sem apagar artefactos ou
+Sessões anteriores são migradas para o esquema 16 sem apagar artefactos ou
 versões. O ponto corrente é preservado, as estruturas ausentes são inicializadas
 vazias e estados antigos como `stale` passam a `needs_review`. As propostas e
 pareceres futuros ficam separados em `ai_proposals` e `ai_reviews`.

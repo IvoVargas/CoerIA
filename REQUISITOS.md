@@ -110,11 +110,15 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   navegação.
 - Permitir pedir assistência de IA apenas depois de o docente escolher o âmbito
   exato — etapa, tabela, linha ou campo — e escrever uma instrução.
+- Para um âmbito inferior à etapa, pedir ao fornecedor apenas um fragmento com o
+  esquema exato da célula, linha ou tabela selecionada; não gerar a etapa inteira
+  para depois extrair um índice.
 - Apresentar a assistência como proposta pendente com comparação entre o valor
   anterior e o valor sugerido. Não aplicar qualquer alteração automaticamente.
 - Exigir uma decisão humana explícita de aceitar ou rejeitar cada proposta;
   aceitar cria uma nova versão e rejeitar preserva o rascunho.
-- Não alterar o estado persistido se a chamada à IA falhar.
+- Não alterar o artefacto ativo nem persistir uma proposta parcial se a chamada à
+  IA falhar.
 - Apresentar a verificação global determinística num ecrã separado e torná-la a
   única barreira obrigatória à conclusão.
 
@@ -344,7 +348,8 @@ ficheiros após a exportação.
 - O fluxo completo termina apenas depois de a verificação global determinística
   confirmar a estrutura, as relações, a taxonomia e os recursos.
 - Uma sessão concluída pode ser reaberta; qualquer alteração posterior exige
-  repetir a verificação global antes de nova conclusão.
+  repetir a verificação global antes de nova conclusão. A barra de etapas é só de
+  leitura nesse estado e a reabertura exige uma ação e confirmação próprias.
 - Todos os resultados têm classificação na taxonomia exclusiva escolhida, avaliação
   e atividade formativa.
 - Cada resultado contém um único verbo de ação principal; infinitivos subordinados em complementos são permitidos, mas ações principais coordenadas são rejeitadas.

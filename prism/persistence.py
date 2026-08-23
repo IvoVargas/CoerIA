@@ -27,9 +27,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 15:
+    if previous_version < 16:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 15
+    state["schema_version"] = 16
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -40,6 +40,10 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     state.setdefault("source_images", [])
     state.setdefault("selected_source_image_ids", [])
     state.setdefault("source_reduction", {})
+    state.setdefault(
+        "source_original_text",
+        str(state.get("course", {}).get("source_text", "") or ""),
+    )
     state.setdefault("generated_images", [])
     state.setdefault("ai_image_generation_enabled", False)
 

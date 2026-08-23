@@ -15,6 +15,7 @@ from prism.agents import (
     AgenticPedagogicalTeam,
     CritiqueResult,
     GenerationResult,
+    OpenAILocalizedAssistanceAgent,
     OpenAIPedagogicalAgent,
     OpenAIPedagogicalCritic,
     _validate_artifact,
@@ -141,6 +142,55 @@ class WorkflowTests(unittest.TestCase):
             len(request_context["source_coverage_rules"]["sources"]),
             3,
         )
+
+    def test_openai_localized_assistance_uses_the_exact_cell_schema(self) -> None:
+        class FakeResponses:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(
+                    output_text=json.dumps({"proposal": "Enunciado clarificado."}),
+                    id="response-fragment",
+                    usage=SimpleNamespace(input_tokens=4, output_tokens=3, total_tokens=7),
+                )
+
+        responses = FakeResponses()
+        agent = OpenAILocalizedAssistanceAgent(
+            client_factory=lambda: SimpleNamespace(responses=responses)
+        )
+        state = {
+            "course": self.course.to_dict(),
+            "learning_outcomes": [
+                {
+                    "id": "RA1",
+                    "theme": "Algoritmos",
+                    "statement": "Analisar algoritmos.",
+                    "action_verb": "Analisar",
+                    "taxonomy_level": "Relacional",
+                    "outcome_type": "Conhecimento teórico",
+                }
+            ],
+            "feedback": {},
+            "resource_types": [],
+        }
+        with patch.dict(environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+            result = agent.propose(
+                "learning_outcomes",
+                state,
+                [0, "statement"],
+                "Linha 1 — campo Resultado de aprendizagem",
+                "Clarificar o enunciado.",
+                "Analisar algoritmos.",
+            )
+
+        self.assertEqual(result.artifact, "Enunciado clarificado.")
+        call = responses.calls[0]
+        proposal_schema = call["text"]["format"]["schema"]["properties"]["proposal"]
+        self.assertEqual(proposal_schema, {"type": "string"})
+        request_context = json.loads(call["input"])
+        self.assertEqual(request_context["scope"]["path"], [0, "statement"])
 
     def test_workflow_stops_at_each_human_review(self) -> None:
         self.assertEqual(
@@ -396,7 +446,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 15)
+        self.assertEqual(restored["schema_version"], 16)
         self.assertEqual(restored["migrated_from_schema_version"], 1)
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
@@ -433,7 +483,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 15)
+        self.assertEqual(restored["schema_version"], 16)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(restored["status"], "drafting")
         self.assertTrue(restored["learning_outcomes"])
@@ -471,7 +521,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 15)
+        self.assertEqual(restored["schema_version"], 16)
         self.assertEqual(
             restored["curriculum_analysis"]["objectives"],
             "Desenvolver conhecimentos fundamentais.",
@@ -538,7 +588,7 @@ class WorkflowTests(unittest.TestCase):
             "Compreender os fundamentos da programação.\n"
             "Aplicar os conhecimentos em problemas concretos."
         )
-        self.assertEqual(restored["schema_version"], 15)
+        self.assertEqual(restored["schema_version"], 16)
         self.assertEqual(restored["current_stage"], "alignment_matrix")
         self.assertEqual(restored["status"], "drafting")
         self.assertEqual(restored["curriculum_analysis"]["objectives"], expected_text)
@@ -583,7 +633,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 15)
+        self.assertEqual(restored["schema_version"], 16)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(
             restored["stage_statuses"]["learning_outcomes"], "draft"
