@@ -884,65 +884,71 @@ def version_restore_impact(
         "version_number": index + 1,
         "active_version": active_version,
         "is_active": active_version == index + 1,
-        "same_content": deepcopy(versions[index]) == state.get(stage),
         "was_completed": state.get("status") == "completed",
         "affected_stages": affected_stages,
         "affected_labels": [STAGE_LABELS[item] for item in affected_stages],
-        "next_version": len(versions) + 1,
     }
 
 
 def restore_stage_version(
     state: PrismState,
     selected_version: str,
-    reason: str,
 ) -> PrismState:
-    """Copia uma versão histórica para uma nova versão ativa e auditável."""
+    """Volta a tornar ativa uma versão histórica, sem criar uma nova versão."""
 
     impact = version_restore_impact(state, selected_version)
     if impact["is_active"]:
         raise ValueError("A versão selecionada já é a versão ativa desta etapa.")
-    if impact["same_content"]:
-        raise ValueError("O conteúdo dessa versão já coincide com o rascunho ativo.")
-    clean_reason = reason.strip()
-    if not clean_reason:
-        raise ValueError("Indique o motivo do restauro.")
     stage = str(impact["stage"])
     artifact = deepcopy(
         state["versions"][stage][int(impact["version_index"])]
     )
-    restored = save_manual_draft(
-        state,
-        stage,
-        artifact,
-        clean_reason,
-        metadata={
-            "provider": "Docente",
-            "model": "Restauro do histórico",
-            "duration_ms": 0,
-            "total_tokens": 0,
-            "validation_attempts": 0,
-            "manual_edit": True,
-            "history_restore": True,
-            "restored_from_version": int(impact["version_number"]),
-        },
+    restored = ensure_manual_artifacts(deepcopy(state))
+    previous_resource_types = list(restored.get("resource_types", []))
+    if stage == "resources":
+        selected_types = validate_resource_types(
+            list(artifact.get("selected_types", previous_resource_types))
+        )
+        restored["resource_types"] = selected_types
+        artifact["selected_types"] = list(selected_types)
+        artifact = attach_quality_report(restored, artifact)
+    restored[stage] = artifact
+    restored.setdefault("active_versions", {})[stage] = int(
+        impact["version_number"]
     )
+    target_index = STAGE_ORDER.index(stage)
+    statuses = dict(restored.get("stage_statuses", {}))
+    statuses[stage] = "draft"
+    for downstream in AUTHORING_STAGES[target_index + 1 :]:
+        statuses[downstream] = (
+            "needs_review"
+            if _artifact_has_content(restored.get(downstream))
+            else "empty"
+        )
+    if (
+        stage == "resources"
+        and previous_resource_types != restored.get("resource_types", [])
+        and _artifact_has_content(restored.get("alignment_matrix"))
+    ):
+        statuses["alignment_matrix"] = "needs_review"
+    statuses["final_validation"] = "pending"
+    restored["stage_statuses"] = statuses
+    restored.pop("final_validation", None)
+    restored.get("active_versions", {}).pop("final_validation", None)
+    restored["current_stage"] = stage
+    restored["status"] = "drafting"
     restored["review"] = {
         "stage": stage,
         "label": STAGE_LABELS[stage],
-        "message": (
-            f"A versão {impact['version_number']} foi copiada para a nova versão "
-            f"{impact['next_version']}."
-        ),
+        "message": f"A versão {impact['version_number']} voltou a ser a versão ativa.",
     }
     _record_decision(
         restored,
         stage,
         (
-            f"Docente restaurou a versão {impact['version_number']} de "
-            f"{STAGE_LABELS[stage]} como versão {impact['next_version']}."
+            f"Docente tornou novamente ativa a versão {impact['version_number']} de "
+            f"{STAGE_LABELS[stage]}."
         ),
-        clean_reason,
     )
     return restored
 

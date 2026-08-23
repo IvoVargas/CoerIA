@@ -9,6 +9,7 @@ from prism.agents import CritiqueResult, GenerationResult
 from prism.application_service import ApplicationService
 from prism.models import CourseInput, RESOURCE_TEST
 from prism.persistence import SQLiteSessionStore
+from prism.presentation import render_current_artifact
 from prism.source_reduction import SourceReductionResult, reduce_source_text
 from prism.workflow import (
     STAGE_ORDER,
@@ -146,7 +147,7 @@ def test_earlier_edit_preserves_later_work_and_marks_it_for_review() -> None:
     assert state["stage_statuses"]["alignment_matrix"] == "needs_review"
 
 
-def test_historical_version_is_restored_as_a_new_auditable_version() -> None:
+def test_historical_version_becomes_active_without_creating_a_new_version() -> None:
     state = create_session(_course())
     version_one = [
         {
@@ -175,24 +176,21 @@ def test_historical_version_is_restored_as_a_new_auditable_version() -> None:
     restored = restore_stage_version(
         state,
         "learning_outcomes::0",
-        "Recuperar a formulação inicial validada pelo docente.",
     )
 
     assert impact["version_number"] == 1
-    assert impact["next_version"] == 3
     assert impact["was_completed"] is True
     assert "curriculum_analysis" in impact["affected_stages"]
     assert restored["learning_outcomes"] == version_one
     assert restored["versions"]["learning_outcomes"][1] == version_two
-    assert restored["versions"]["learning_outcomes"][2] == version_one
-    assert restored["active_versions"]["learning_outcomes"] == 3
-    assert restored["generation_metadata"]["learning_outcomes"][-1][
-        "restored_from_version"
-    ] == 1
+    assert len(restored["versions"]["learning_outcomes"]) == 2
+    assert len(restored["generation_metadata"]["learning_outcomes"]) == 2
+    assert restored["active_versions"]["learning_outcomes"] == 1
     assert restored["stage_statuses"]["curriculum_analysis"] == "needs_review"
     assert restored["status"] == "drafting"
     assert "final_validation" not in restored
-    assert any("restaurou a versão 1" in item["event"] for item in restored["audit"])
+    assert any("novamente ativa a versão 1" in item["event"] for item in restored["audit"])
+    assert "versão 1" in render_current_artifact(restored)
 
 
 def test_active_and_derived_versions_cannot_be_restored() -> None:
@@ -204,7 +202,6 @@ def test_active_and_derived_versions_cannot_be_restored() -> None:
         restore_stage_version(
             state,
             "learning_outcomes::0",
-            "Tentativa sem efeito.",
         )
     with pytest.raises(ValueError, match="recalculada"):
         version_restore_impact(state, "final_validation::0")

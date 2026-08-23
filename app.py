@@ -2323,7 +2323,7 @@ class AGIRSoloInterface:
                     if is_manual_first(state) and choices:
                         ui.label(
                             "Selecione uma versão não ativa de uma etapa de autoria para "
-                            "a recuperar como nova versão."
+                            "a voltar a tornar ativa."
                         ).classes("text-xs muted mt-3")
                         restore_button = ui.button(
                             "Restaurar versão selecionada",
@@ -2345,7 +2345,7 @@ class AGIRSoloInterface:
                             impact = self.service.version_restore_impact(
                                 state, str(event.value or "")
                             )
-                            enabled = not impact["is_active"] and not impact["same_content"]
+                            enabled = not impact["is_active"]
                         except ValueError:
                             enabled = False
                         restore_button.set_enabled(enabled)
@@ -2356,10 +2356,7 @@ class AGIRSoloInterface:
                             initial_impact = self.service.version_restore_impact(
                                 state, str(selected or "")
                             )
-                            initial_enabled = (
-                                not initial_impact["is_active"]
-                                and not initial_impact["same_content"]
-                            )
+                            initial_enabled = not initial_impact["is_active"]
                         except ValueError:
                             initial_enabled = False
                         restore_button.set_enabled(initial_enabled)
@@ -2384,8 +2381,6 @@ class AGIRSoloInterface:
             )
             if impact["is_active"]:
                 raise ValueError("A versão selecionada já está ativa.")
-            if impact["same_content"]:
-                raise ValueError("O conteúdo dessa versão já coincide com o rascunho ativo.")
         except USER_ERRORS as error:
             self._show_error(error)
             return
@@ -2396,9 +2391,8 @@ class AGIRSoloInterface:
                 f"{impact['stage_label']} — versão {impact['version_number']}"
             ).classes("section-title")
             ui.label(
-                f"O conteúdo escolhido será copiado para a nova versão "
-                f"{impact['next_version']}. A versão ativa atual continuará disponível "
-                "no histórico."
+                "A versão escolhida voltará a ser a versão ativa. Não será criada uma "
+                "nova versão e a versão atualmente ativa continuará disponível no histórico."
             ).classes("text-sm")
             if impact["affected_labels"]:
                 ui.label("Etapas posteriores que ficarão para revisão:").classes(
@@ -2411,18 +2405,9 @@ class AGIRSoloInterface:
                     "A sessão deixará o estado Concluído e a exportação ficará "
                     "indisponível até uma nova verificação global."
                 ).classes("soft-surface p-3 text-sm font-medium")
-            reason = ui.textarea(
-                "Motivo do restauro",
-                placeholder="Explique por que pretende recuperar esta versão.",
-            ).props("outlined autogrow").classes("w-full")
-
             async def confirm() -> None:
-                clean_reason = str(reason.value or "").strip()
-                if not clean_reason:
-                    ui.notify("Indique o motivo do restauro.", type="warning")
-                    return
                 dialog.close()
-                await self._handle_restore_version(selected_version, clean_reason)
+                await self._handle_restore_version(selected_version)
 
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button("Cancelar", on_click=dialog.close).props("flat no-caps")
@@ -2436,14 +2421,12 @@ class AGIRSoloInterface:
     async def _handle_restore_version(
         self,
         selected_version: str,
-        reason: str,
     ) -> None:
         try:
             self.state, message = await run.io_bound(
                 self.service.restore_session_version,
                 self.state,
                 selected_version,
-                reason,
             )
             self.viewed_stage = None
             self.manual_edit_stage = None

@@ -273,7 +273,7 @@ async def test_manual_history_offers_explicit_version_restore(
     await user.open("/_test_manual_history_restore")
 
     await user.should_see("Restaurar versão selecionada")
-    await user.should_see("recuperar como nova versão")
+    await user.should_see("voltar a tornar ativa")
 
 
 @pytest.mark.asyncio

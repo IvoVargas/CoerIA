@@ -337,12 +337,19 @@ def render_current_artifact(state: dict[str, Any]) -> str:
     stage = state["current_stage"]
     versions = state.get("versions", {}).get(stage, [])
     metadata = state.get("generation_metadata", {}).get(stage, [])
+    version_number = int(
+        state.get("active_versions", {}).get(stage) or len(versions) or 1
+    )
     return render_artifact(
         state,
         stage,
         state[stage],
-        version_number=len(versions) or 1,
-        metadata=metadata[-1] if metadata else None,
+        version_number=version_number,
+        metadata=(
+            metadata[version_number - 1]
+            if 0 < version_number <= len(metadata)
+            else None
+        ),
         is_current=True,
     )
 

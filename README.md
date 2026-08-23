@@ -108,9 +108,9 @@ Numa sessão concluída, a barra de etapas fica em modo de consulta. A reabertur
 exige o botão próprio, a seleção da etapa, um motivo e uma confirmação explícita.
 
 O separador **Versões** permite consultar e restaurar qualquer versão não ativa
-das sete etapas de autoria. O restauro exige confirmação e motivo, copia o
-conteúdo escolhido para uma nova versão ativa e mantém todas as versões
-anteriores. Os passos posteriores preenchidos ficam assinalados para revisão e a
+das sete etapas de autoria. O restauro exige apenas confirmação e volta a tornar
+ativa a versão escolhida, sem criar uma nova versão nem apagar as restantes. Os
+passos posteriores preenchidos ficam assinalados para revisão e a
 verificação global é recalculada; o relatório final, por ser derivado, não é
 restaurável.
 

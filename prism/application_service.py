@@ -176,15 +176,14 @@ class ApplicationService:
         self,
         state: dict[str, Any] | None,
         selected_version: str,
-        reason: str,
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
-        updated = restore_stage_version(state, selected_version, reason)
+        updated = restore_stage_version(state, selected_version)
         updated = self._persist(updated)
         review = updated.get("review", {})
         return updated, str(
-            review.get("message") or "Versão histórica restaurada como nova versão."
+            review.get("message") or "Versão histórica novamente ativa."
         )
 
     def request_assistance(

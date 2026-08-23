@@ -81,14 +81,14 @@ da proposta.
 
 ## Restauro de versões
 
-O histórico é imutável: restaurar não muda o ponteiro para uma entrada antiga
-nem apaga a versão atual. O docente seleciona uma versão não ativa, consulta o
-impacto, indica um motivo e confirma. O CoerIA copia esse artefacto para uma nova
-versão ativa com metadados `history_restore` e `restored_from_version`, preserva
-as versões intermédias, assinala os artefactos posteriores preenchidos para
-revisão e remove o relatório final derivado. As dependências a montante não são
-revertidas silenciosamente e serão verificadas novamente na validação global.
-`final_validation` não é restaurável porque pode ser recalculada localmente.
+O histórico é imutável: restaurar altera o ponteiro ativo para uma entrada
+existente e não apaga nem duplica versões. O docente seleciona uma versão não
+ativa, consulta o impacto e confirma, sem ter de justificar a operação. O CoerIA
+carrega esse artefacto como versão ativa, assinala os artefactos posteriores
+preenchidos para revisão e remove o relatório final derivado. As dependências a
+montante não são revertidas silenciosamente e serão verificadas novamente na
+validação global. `final_validation` não é restaurável porque pode ser
+recalculada localmente.
 
 ## Verificação facultativa por IA
 
