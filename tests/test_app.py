@@ -188,9 +188,13 @@ async def test_teacher_decision_is_above_the_current_artifact_in_light_theme(
     assert decision.id < artifact.id
     assert not hasattr(interfaces[-1], "dark_mode")
     assert "workspace-grid" not in app.APP_CSS
-    assert "background: #edf5f3 !important;" in app.APP_CSS
-    assert "color: #064e4a !important;" in app.APP_CSS
-    assert ".info-chip * { color: inherit !important; }" in app.APP_CSS
+    assert "background: var(--agir-primary) !important;" in app.APP_CSS
+    assert "color: #ffffff !important;" in app.APP_CSS
+    assert (
+        ".info-chip *, .info-chip .q-icon { color: #ffffff !important; }"
+        in app.APP_CSS
+    )
+    assert "repeat(var(--stage-count), minmax(126px, 1fr))" in app.APP_CSS
 
     with user:
         interfaces[-1].state = final_state
@@ -225,7 +229,6 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
 
     await user.open("/_test_manual_first_workspace")
 
-    await user.should_see("IA facultativa")
     await user.should_see("Autoria manual com IA facultativa")
     await user.should_see("Continuar sem executar a IA")
     await user.should_see("Conteúdos e objetivos curriculares")

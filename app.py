@@ -219,7 +219,9 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .primary-action { border-radius: 12px !important; min-height: 44px; font-weight: 700; }
 .secondary-action { border-radius: 12px !important; min-height: 42px; font-weight: 650; }
 .stage-track {
-  display: grid; grid-template-columns: repeat(9, minmax(126px, 1fr)); gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(var(--stage-count), minmax(126px, 1fr));
+  gap: 8px;
   width: 100%; overflow-x: auto; padding: 4px 2px 12px;
 }
 .stage-item { min-width: 126px; border-radius: 14px; padding: 12px; border: 1px solid var(--agir-border); background: white; color: inherit; text-align: left; }
@@ -251,8 +253,8 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table .q-field__native { line-height: 1.35; padding-top: 7px; padding-bottom: 7px; }
 .decision-card { padding: 22px; }
 .consultation-card { padding: 20px 22px; }
-.info-chip { background: #edf5f3 !important; color: #064e4a !important; font-weight: 700; }
-.info-chip * { color: inherit !important; }
+.info-chip { background: var(--agir-primary) !important; color: #ffffff !important; font-weight: 700; }
+.info-chip *, .info-chip .q-icon { color: #ffffff !important; }
 .status-banner { border-left: 4px solid var(--agir-primary); }
 .final-hero { padding: 28px; color: white; background: linear-gradient(130deg, #0d766e, #184f60); border-radius: 22px; }
 .complete-hero { padding: 34px; text-align: center; background: linear-gradient(145deg, #e8f6ef, #f7fbfa); }
@@ -983,8 +985,6 @@ class AGIRSoloInterface:
                     )
                     with ui.row().classes("gap-2 mt-1"):
                         ui.chip(state.get("ai_provider", "OpenAI"), icon="smart_toy").classes("info-chip")
-                        if is_manual_first(state):
-                            ui.chip("IA facultativa", icon="person_edit").classes("info-chip")
                         ui.chip(
                             state.get("course", {}).get("taxonomy_type", "SOLO"),
                             icon="account_tree",
@@ -1031,7 +1031,9 @@ class AGIRSoloInterface:
             "stale": "Desatualizado · requer nova validação",
             "pending": "Pendente",
         }
-        with ui.element("div").classes("stage-track"):
+        with ui.element("div").classes("stage-track").style(
+            f"--stage-count: {len(STAGE_ORDER)}"
+        ):
             for index, stage in enumerate(STAGE_ORDER):
                 stored_status = stored_statuses.get(stage)
                 if not stored_status:
@@ -1098,7 +1100,9 @@ class AGIRSoloInterface:
         }
         stored_statuses = state.get("stage_statuses", {})
         completed = state.get("status") == "completed"
-        with ui.element("div").classes("stage-track"):
+        with ui.element("div").classes("stage-track").style(
+            f"--stage-count: {len(STAGE_ORDER)}"
+        ):
             for index, stage in enumerate(STAGE_ORDER):
                 stored_status = stored_statuses.get(stage, "empty")
                 current = stage == state.get("current_stage")
