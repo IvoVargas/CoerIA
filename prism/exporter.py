@@ -605,7 +605,7 @@ def export_program_document(
     document.add_heading("1. Identificação e carga de trabalho", level=1)
     _add_program_metadata(document, course)
 
-    document.add_heading("2. Finalidades e objetivos gerais", level=1)
+    document.add_heading("2. Objetivos gerais", level=1)
     general_aims = str(
         analysis.get("objectives") or course.get("general_aims", "")
     ).strip()
@@ -746,7 +746,7 @@ def export_program_latex(
     body = [
         r"\section{Identificação e carga de trabalho}",
         _latex_table(["Campo", "Valor"], metadata_rows, [0.24, 0.66]),
-        r"\section{Finalidades e objetivos gerais}",
+        r"\section{Objetivos gerais}",
     ]
     general_aims = str(
         analysis.get("objectives") or course.get("general_aims", "")

@@ -9,6 +9,7 @@ from typing import Any, Callable
 from .agents import AgentGenerationError, DEFAULT_MODEL, supports_reasoning_effort
 from .branding import config_value
 from .curriculum import validate_taxonomy_choice
+from .models import SEMESTER_OPTIONS, validate_semester
 from .providers import (
     AI_PROVIDER_IAEDU,
     AI_PROVIDER_OPENAI,
@@ -55,6 +56,8 @@ def _proposed_value_is_valid(field: str, value: Any) -> bool:
         return False
     if field == "source_text":
         return len(str(value).strip()) >= 40
+    if field == "semester":
+        return str(value).strip() in SEMESTER_OPTIONS
     return True
 
 
@@ -120,10 +123,14 @@ def validate_initial_fields(data: dict[str, Any]) -> dict[str, Any]:
         validate_taxonomy_choice(str(data.get("taxonomy_type", "")))
     except ValueError as error:
         issues.append(str(error))
+    try:
+        validate_semester(str(data.get("semester", "") or ""))
+    except ValueError as error:
+        issues.append(str(error))
     if not general_aims:
         suggestions.append(
-            "Pode indicar finalidades gerais; a análise curricular irá convertê-las "
-            "numa lista de objetivos com IDs."
+            "Pode indicar os objetivos gerais da unidade curricular num campo de "
+            "texto livre."
         )
     if not bibliography:
         suggestions.append(
@@ -195,7 +202,7 @@ class OpenAIInitialFormAssistant:
                 "program_name": {"type": "string"},
                 "program_type": {"type": "string"},
                 "academic_year": {"type": "string"},
-                "semester": {"type": "string"},
+                "semester": {"type": "string", "enum": list(SEMESTER_OPTIONS)},
                 "cnaef_code": {"type": "string"},
                 "cnaef_name": {"type": "string"},
                 "ects_credits": {"type": "number"},
@@ -233,6 +240,7 @@ class OpenAIInitialFormAssistant:
             "200 caracteres; nunca devolvas apenas um título ou uma frase curta. "
             "Código e designação CNAEF, ECTS e horas podem ser estimativas provisórias, "
             "mas a explanation deve identificá-los claramente como dados a confirmar. "
+            "Para semester, usa exatamente '1.º semestre' ou '2.º semestre'. "
             "A proposta será revista e aprovada pelo docente antes de ser usada. "
             f"A taxonomia escolhida é exclusivamente {taxonomy_type} e não deve ser "
             "alterada."

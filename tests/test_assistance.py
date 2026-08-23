@@ -6,9 +6,39 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from prism.assistance import OpenAIInitialFormAssistant, validate_initial_fields
+from prism.models import CourseInput, SEMESTER_OPTIONS
 
 
 class InitialAssistanceTests(unittest.TestCase):
+    def test_semester_is_limited_to_the_two_supported_options(self) -> None:
+        self.assertEqual(
+            SEMESTER_OPTIONS,
+            ("1.º semestre", "2.º semestre"),
+        )
+        with self.assertRaisesRegex(ValueError, "1.º semestre.*2.º semestre"):
+            CourseInput.create(
+                "Introdução à Programação",
+                "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+                semester="Anual",
+            )
+
+    def test_initial_validation_rejects_an_unknown_semester(self) -> None:
+        result = validate_initial_fields(
+            {
+                "unit_name": "Introdução à Programação",
+                "source_text": (
+                    "Algoritmos, variáveis, estruturas de controlo, funções e testes."
+                ),
+                "audience": "Licenciatura",
+                "duration_hours": 18,
+                "taxonomy_type": "SOLO",
+                "semester": "3.º semestre",
+            }
+        )
+
+        self.assertFalse(result["valid"])
+        self.assertIn("1.º semestre", result["issues"][0])
+
     def test_validation_does_not_require_the_api(self) -> None:
         result = validate_initial_fields(
             {

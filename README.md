@@ -27,7 +27,8 @@ uma decisão declarada pelo modelo.
 7. recursos educativos e validação automática;
 8. validação final da estrutura e do alinhamento.
 
-Seguindo o alinhamento construtivo de Biggs e Tang, os resultados de aprendizagem
+Seguindo o alinhamento construtivo de Biggs e Tang em *Teaching for Quality
+Learning at University*, os resultados de aprendizagem
 constituem a primeira decisão pedagógica formal. Os conteúdos, documentos e
 objetivos introduzidos pelo docente continuam a delimitar o contexto inicial.
 Depois de os resultados serem formulados, os conteúdos podem ser estruturados e
@@ -35,11 +36,15 @@ associados a esses resultados; os objetivos gerais permanecem como texto livre.
 Esta sequência é uma orientação pedagógica, não uma barreira técnica: todas as
 etapas permanecem navegáveis e editáveis desde o início.
 
-O modelo curricular segue também a orientação da `minutaProgramasUCs.xls`: conteúdos
-com IDs estáveis, 4 a 10 resultados de aprendizagem (preferencialmente 5 a 7),
-tipos de resultado, verbos taxonómicos controlados e relações muitos-para-muitos entre
-resultados, conteúdos, avaliação e atividades. A matriz acrescenta os recursos
-selecionados a essa cadeia de alinhamento.
+O alinhamento é verificado pela correspondência entre os resultados de
+aprendizagem, as atividades de ensino-aprendizagem e as tarefas e critérios de
+avaliação. Os verbos dos resultados funcionam como marcadores dessa coerência.
+O protótipo usa conteúdos com IDs estáveis, 4 a 10 resultados de aprendizagem
+(preferencialmente 5 a 7), tipos de resultado, verbos taxonómicos controlados e
+relações muitos-para-muitos. A matriz acrescenta os conteúdos e os recursos
+selecionados a essa cadeia de alinhamento. A `minutaProgramasUCs.xls` não é uma
+referência oficial do alinhamento ou do fluxo; permanece apenas como documento
+histórico ou institucional.
 
 O docente escolhe SOLO ou Bloom no início da sessão; as duas taxonomias nunca
 são combinadas. Cada avaliação é exclusivamente formativa ou sumativa, podendo

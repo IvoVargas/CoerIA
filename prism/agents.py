@@ -122,7 +122,7 @@ STAGE_REQUIREMENTS = {
     "curriculum_analysis": (
         "Objeto com summary, themes, contents, objectives e assumptions. contents contém "
         "4 a 10 objetos {id, title, description, outcome_ids}, com IDs C1, C2, ...; "
-        "objectives é um texto livre com as finalidades e objetivos gerais, sem IDs nem "
+        "objectives é um texto livre com os objetivos gerais, sem IDs nem "
         "ligações estruturais. Cada outcome_ids dos conteúdos usa exclusivamente "
         "resultados aprovados na etapa anterior."
     ),

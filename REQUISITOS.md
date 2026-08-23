@@ -1,8 +1,12 @@
 # Requisitos do protótipo CoerIA
 
 Este documento consolida os requisitos da aplicação a partir dos capítulos 1 e
-2 da dissertação, do diagrama `Fluxo_Aplicacao_SOLO.drawio` e do comportamento
-já implementado. É a referência funcional da versão atual do protótipo.
+2 da dissertação, do alinhamento construtivo descrito por Biggs e Tang em
+*Teaching for Quality Learning at University*, do diagrama
+`Fluxo_Aplicacao_SOLO.drawio` e do comportamento já implementado. É a referência
+funcional da versão atual do protótipo. A `minutaProgramasUCs.xls` pode ser
+consultada como documento histórico ou institucional, mas não constitui uma
+referência oficial para o alinhamento nem para o fluxo do CoerIA.
 
 ## Objetivo e âmbito
 
@@ -24,8 +28,9 @@ materiais produzidos.
 
 - Recolher nome da unidade curricular, público-alvo e duração prevista.
 - Recolher opcionalmente curso e tipo de formação, ano, semestre, CNAEF, ECTS,
-  horas de contacto, trabalho autónomo, finalidades gerais e bibliografia a
+  horas de contacto, trabalho autónomo, objetivos gerais e bibliografia a
   validar pelo docente.
+- Limitar o campo de semestre às opções `1.º semestre` e `2.º semestre`.
 - Aceitar texto introduzido diretamente e um ou mais ficheiros de apoio.
 - Extrair texto de `.txt`, `.md`, `.tex`, `.pdf`, `.docx` e `.pptx`.
 - Rejeitar ficheiros vazios e formatos não suportados com uma mensagem compreensível.
@@ -58,6 +63,12 @@ etapas navegáveis e editáveis:
 6. matriz de alinhamento;
 7. recursos educativos selecionados;
 8. verificação global determinística da estrutura e do alinhamento.
+
+O alinhamento segue Biggs e Tang: os resultados de aprendizagem são o elemento
+central; as atividades de ensino-aprendizagem e as tarefas de avaliação devem
+mobilizar as ações expressas nesses resultados, e os critérios de avaliação
+devem permitir julgar em que medida o desempenho esperado foi atingido. A
+matriz torna explícitas e verificáveis estas relações.
 
 Cada artefacto deve possuir um formato estruturado e identificadores estáveis
 que permitam ligar temas, resultados, atividades, avaliação e recursos.

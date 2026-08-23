@@ -18,6 +18,19 @@ SUPPORTED_RESOURCE_TYPES = (
     RESOURCE_PRACTICAL,
 )
 
+SEMESTER_OPTIONS = ("1.º semestre", "2.º semestre")
+
+
+def validate_semester(value: str | None) -> str:
+    """Aceita um semestre vazio ou uma das duas opções institucionais."""
+
+    semester = (value or "").strip()
+    if semester and semester not in SEMESTER_OPTIONS:
+        raise ValueError(
+            "O semestre deve ser «1.º semestre» ou «2.º semestre»."
+        )
+    return semester
+
 
 @dataclass(frozen=True)
 class CourseInput:
@@ -98,7 +111,7 @@ class CourseInput:
             program_name=(program_name or "").strip(),
             program_type=(program_type or "").strip(),
             academic_year=(academic_year or "").strip(),
-            semester=(semester or "").strip(),
+            semester=validate_semester(semester),
             cnaef_code=(cnaef_code or "").strip(),
             cnaef_name=(cnaef_name or "").strip(),
             ects_credits=non_negative_number(ects_credits, "Os créditos ECTS"),

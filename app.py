@@ -53,7 +53,11 @@ from prism.manual_editing import (
     new_table_row,
     value_at_path,
 )
-from prism.models import RESOURCE_PRESENTATION, SUPPORTED_RESOURCE_TYPES
+from prism.models import (
+    RESOURCE_PRESENTATION,
+    SEMESTER_OPTIONS,
+    SUPPORTED_RESOURCE_TYPES,
+)
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import (
     active_stage_artifact,
@@ -584,8 +588,10 @@ class AGIRSoloInterface:
             self.fields["academic_year"] = ui.input(
                 "Ano curricular", placeholder="Ex.: 1.º ano"
             ).classes("full-control")
-            self.fields["semester"] = ui.input(
-                "Semestre", placeholder="Ex.: 1.º semestre"
+            self.fields["semester"] = ui.select(
+                list(SEMESTER_OPTIONS),
+                label="Semestre",
+                clearable=True,
             ).classes("full-control")
             self.fields["cnaef_code"] = ui.input("Código CNAEF").classes("full-control")
             self.fields["cnaef_name"] = ui.input("Área CNAEF").classes("full-control")
@@ -599,8 +605,8 @@ class AGIRSoloInterface:
                 "Trabalho autónomo", value=0, min=0, precision=1
             ).classes("full-control")
         self.fields["general_aims"] = ui.textarea(
-            "Finalidades gerais da unidade curricular",
-            placeholder="Indique as finalidades gerais, se já estiverem definidas.",
+            "Objetivos gerais da unidade curricular",
+            placeholder="Indique os objetivos gerais, se já estiverem definidos.",
         ).props("outlined autogrow").classes("full-control mt-3")
         self.fields["bibliography"] = ui.textarea(
             "Bibliografia fornecida ou validada pelo docente",
@@ -670,7 +676,10 @@ class AGIRSoloInterface:
     def _set_form_data(self, data: dict[str, Any]) -> None:
         for name, element in self.fields.items():
             if name in data:
-                element.set_value(data[name])
+                value = data[name]
+                if name == "semester" and value not in (*SEMESTER_OPTIONS, "", None):
+                    value = None
+                element.set_value(value)
         if "resource_types" in data:
             selected_resources = set(data.get("resource_types", []))
             for resource, checkbox in self.resource_inputs.items():

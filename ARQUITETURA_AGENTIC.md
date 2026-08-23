@@ -8,6 +8,16 @@ etapas. Criar uma sessão inicializa estruturas editáveis vazias para as sete
 etapas de autoria. O docente pode abrir, preencher e guardar qualquer uma sem
 chave de API.
 
+## Referência pedagógica
+
+O alinhamento e a sequência pedagógica recomendada fundamentam-se em Biggs e
+Tang, *Teaching for Quality Learning at University*. Os resultados de
+aprendizagem constituem o elemento central; as atividades de
+ensino-aprendizagem e as tarefas de avaliação devem mobilizar as ações neles
+expressas, e os critérios devem permitir julgar o desempenho alcançado. A
+`minutaProgramasUCs.xls` não é uma referência oficial do alinhamento nem do
+fluxo do CoerIA.
+
 ```mermaid
 flowchart LR
     D["Docente abre qualquer etapa"] --> M["Edita e guarda um rascunho"]
