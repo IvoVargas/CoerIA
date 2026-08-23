@@ -27,9 +27,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 14:
+    if previous_version < 15:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 14
+    state["schema_version"] = 15
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -340,7 +340,12 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     if state.get("current_stage") == "solo_taxonomy":
         state["current_stage"] = "learning_outcomes"
     versions = state.setdefault("versions", {})
-    from .workflow import STAGE_ORDER, formulate_learning_outcomes
+    from .workflow import (
+        MANUAL_FIRST_MODE,
+        STAGE_ORDER,
+        ensure_manual_artifacts,
+        formulate_learning_outcomes,
+    )
 
     removed_stage_was_current = (
         previous_version < 14 and state.get("current_stage") == "outcome_taxonomy"
@@ -448,6 +453,50 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         while len(dependencies) < len(stage_versions):
             dependencies.append({})
     state.setdefault("revision_snapshots", [])
+    state.setdefault("ai_proposals", [])
+    state.setdefault("ai_reviews", {})
+    if previous_version < 15:
+        state["orchestration"] = {
+            "mode": MANUAL_FIRST_MODE,
+            "human_approval_required": False,
+            "llm_optional": True,
+            "proposal_approval_required": True,
+            "global_deterministic_validation_required": True,
+        }
+        ensure_manual_artifacts(state)
+        migrated_statuses: dict[str, str] = {}
+        for stage in STAGE_ORDER[:-1]:
+            previous_status = str(stage_statuses.get(stage, "pending"))
+            migrated_statuses[stage] = {
+                "stale": "needs_review",
+                "pending": "empty",
+                "generating": "draft",
+                "awaiting_review": "draft",
+                "approved": "draft",
+            }.get(previous_status, previous_status)
+        migrated_statuses["final_validation"] = (
+            "approved"
+            if state.get("status") == "completed"
+            else "checked"
+            if state.get("final_validation")
+            else "pending"
+        )
+        state["stage_statuses"] = migrated_statuses
+        if state.get("status") != "completed":
+            state["status"] = (
+                "awaiting_review"
+                if state.get("current_stage") == "final_validation"
+                else "drafting"
+            )
+            current = state.get("current_stage", STAGE_ORDER[0])
+            state["review"] = {
+                "stage": current,
+                "label": "Etapa de autoria",
+                "message": (
+                    "Sessão atualizada para autoria manual. O conteúdo existente "
+                    "foi preservado e a IA passou a ser facultativa."
+                ),
+            }
     return state
 
 

@@ -317,14 +317,18 @@ def render_artifact(
         return header + _render_resources(artifact)
     if stage == "final_validation":
         rows = [
-            ["✅" if item.get("passed") else "❌", item.get("label", "")]
+            [
+                "✅" if item.get("passed") else "❌",
+                item.get("label", ""),
+                item.get("detail", ""),
+            ]
             for item in artifact.get("checks", [])
         ]
         return (
             header
             + artifact.get("message", "")
             + "\n\n"
-            + _table(["", "Verificação final"], rows)
+            + _table(["", "Verificação final", "Detalhe"], rows)
         )
     return header
 

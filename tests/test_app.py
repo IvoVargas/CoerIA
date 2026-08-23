@@ -196,6 +196,82 @@ async def test_teacher_decision_is_above_the_current_artifact_in_light_theme(
     assert next(iter(final_decisions)).id < next(iter(final_artifacts)).id
 
 
+@pytest.mark.asyncio
+async def test_manual_first_workspace_allows_free_navigation_and_editing(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "manual-ui.db"))
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_manual_first_workspace")
+    def manual_first_page():
+        interface = app.AGIRSoloInterface(service=service)
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_manual_first_workspace")
+
+    await user.should_see("IA facultativa")
+    await user.should_see("Autoria manual com IA facultativa")
+    await user.should_see("Continuar sem executar a IA")
+    await user.should_see("Conteúdos e objetivos curriculares")
+    user.find("Editar campos e tabelas").click()
+    await user.should_see("EDIÇÃO NA TABELA ATUAL")
+    await user.should_see("Adicionar linha")
+    assert interfaces[-1].manual_edit_stage == "learning_outcomes"
+    user.find("Cancelar edição").click()
+    user.find(marker="manual-stage-curriculum_analysis").click()
+    await user.should_see("Objetivos gerais")
+    assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
+
+
+@pytest.mark.asyncio
+async def test_manual_first_workspace_renders_a_pending_ai_proposal(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    state["ai_proposals"] = [
+        {
+            "id": "P1",
+            "stage": "learning_outcomes",
+            "scope_path": [],
+            "scope_label": "Toda a etapa",
+            "instruction": "Propor um resultado.",
+            "before": [],
+            "after": [{"id": "RA1", "statement": "Identificar conceitos."}],
+            "status": "pending",
+            "metadata": {"provider": "Teste"},
+        }
+    ]
+
+    @ui.page("/_test_pending_ai_proposal")
+    def pending_proposal_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_pending_ai_proposal")
+
+    await user.should_see("PROPOSTA PENDENTE")
+    await user.should_see("Antes")
+    await user.should_see("Proposta da IA")
+    await user.should_see("Aceitar e guardar nova versão")
+    await user.should_see("Rejeitar proposta")
+
+
 def test_export_format_choice_maps_to_requested_document_formats() -> None:
     assert app._document_formats_for_export_choice("word") == ("word",)
     assert app._document_formats_for_export_choice("latex") == ("latex",)

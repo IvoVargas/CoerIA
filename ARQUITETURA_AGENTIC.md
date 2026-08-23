@@ -1,191 +1,140 @@
-# Arquitetura agentic controlada do CoerIA
+# Arquitetura de autoria manual com IA controlada do CoerIA
 
 ## Decisão de arquitetura
 
-O CoerIA mantém o macrofluxo pedagógico explícito em LangGraph e introduz um
-microciclo agentic apenas dentro das etapas em que uma segunda apreciação traz
-valor. Esta solução conserva a sequência sustentada pela dissertação, evita que
-o modelo salte etapas e permite auditar cada decisão.
+O CoerIA adota um fluxo **manual-first**. O estado pedagógico, as versões e a
+navegação pertencem à aplicação; um LLM nunca controla a transição entre
+etapas. Criar uma sessão inicializa estruturas editáveis vazias para as sete
+etapas de autoria. O docente pode abrir, preencher e guardar qualquer uma sem
+chave de API.
 
 ```mermaid
 flowchart LR
-    D["Dados e artefactos aprovados"] --> G["Agente especialista gerador"]
-    G --> V["Guardrails determinísticos"]
-    V -->|erro| G
-    V -->|válido| C["Agente crítico pedagógico"]
-    C -->|problema bloqueante e limite disponível| G
-    C -->|aprovado, aviso ou limite atingido| H["Decisão do docente"]
-    H -->|aprovar| N["Etapa seguinte"]
-    H -->|reformular| R["Etapa selecionada e invalidação a jusante"]
-    R --> G
+    D["Docente abre qualquer etapa"] --> M["Edita e guarda um rascunho"]
+    M --> N["Navega livremente"]
+    D --> A["Escolhe um âmbito e pede assistência"]
+    A --> P["IA devolve uma proposta pendente"]
+    P --> C{"Decisão humana"}
+    C -->|Aceitar| V["Nova versão do âmbito escolhido"]
+    C -->|Rejeitar| D
+    D --> R["Pede verificação facultativa da etapa"]
+    R --> O["Parecer não bloqueante, sem mutação"]
+    N --> F["Verificação global determinística"]
+    F -->|Erros| D
+    F -->|Sem erros| X["Conclusão e exportação"]
 ```
 
-## Papéis e autoridade
+## Fronteiras de autoridade
 
-- O **gerador especialista** produz uma proposta estruturada segundo o papel da
-etapa: análise curricular, resultados, classificação SOLO ou Bloom, avaliação,
-design, atividades formativas,
-  alinhamento ou recursos.
-- Os **guardrails determinísticos** verificam IDs, cobertura, cardinalidades,
-  escolha exclusiva e vocabulário da taxonomia, verbo único, finalidade das
-  avaliações, ligações e somas. Uma falha provoca reparação automática e
-  limitada antes de a proposta ser apresentada.
-- O **crítico pedagógico** aprecia coerência, exigência cognitiva, clareza,
-  exequibilidade e fidelidade aos dados. Pode pedir uma reformulação automática,
-  mas não aprova a etapa.
-- O **docente** é a única entidade com autoridade para aprovar, regressar a uma
-  componente ou concluir o processo no ecrã de validação final.
+- O **docente** escolhe a etapa, o âmbito entregue à IA e a decisão de aceitar
+  ou rejeitar cada proposta.
+- A **aplicação** conserva o estado, versões, dependências, auditoria e
+  verificadores determinísticos.
+- O **gerador especialista** só é executado a pedido e apenas fornece uma
+  proposta. Não persiste nem aprova conteúdo.
+- O **crítico pedagógico** só é executado a pedido, devolve avisos ou problemas
+  e não reescreve o artefacto.
+- A **verificação global** é determinística e constitui a única barreira
+  obrigatória à conclusão.
 
-## Limites e falhas
+## Estado e navegação
 
-O número de reparações de esquema e de revisões do crítico é configurável. Ao
-atingir o limite, a aplicação não entra num ciclo infinito: apresenta a melhor
-proposta válida e as observações ao docente. Se o crítico estiver indisponível,
-a geração estruturalmente válida continua para revisão humana e a falha fica
-registada nos metadados. Uma falha do gerador não é substituída por conteúdo
-local silencioso.
+As novas sessões usam `orchestration.mode = "manual-first"` e guardam desde o
+início um artefacto estrutural para cada etapa de autoria. `current_stage` é um
+ponteiro de navegação, não uma autorização para gerar conteúdo. Abrir uma etapa
+não valida completude, não cria uma versão e não chama um fornecedor.
+
+Guardar uma edição manual:
+
+1. confirma apenas o tipo estrutural da raiz;
+2. preserva uma fotografia para rastreabilidade;
+3. cria uma nova versão com autoria `Docente`;
+4. conserva todos os artefactos posteriores;
+5. marca como `needs_review` os artefactos posteriores que já contêm trabalho;
+6. invalida apenas o resultado derivado da verificação final.
+
+Esta estratégia permite rascunhos incompletos e evita perda de trabalho quando
+uma decisão anterior muda.
+
+## Assistência localizada
+
+Antes da chamada, a interface deriva uma lista de âmbitos a partir do editor da
+etapa: etapa completa, tabela, linha, campo escalar ou célula de uma linha. O
+docente escolhe um desses âmbitos e escreve a instrução. Embora o agente possa
+produzir internamente um artefacto completo para cumprir o esquema da etapa, o
+workflow extrai exclusivamente o valor do caminho escolhido.
+
+Cada proposta persistida contém:
+
+- identificador, data, etapa e caminho do âmbito;
+- instrução do docente;
+- valor anterior e valor proposto;
+- fornecedor, modelo e métricas disponíveis;
+- estado `pending`, `accepted` ou `rejected`.
+
+Uma proposta pendente não altera o artefacto ativo. Aceitar substitui apenas o
+caminho autorizado e guarda uma nova versão; rejeitar altera somente o estado
+da proposta.
+
+## Verificação facultativa por IA
+
+O crítico recebe a etapa ativa e os artefactos relevantes, mas não tem uma
+ferramenta de escrita. O parecer estruturado, as instruções de revisão e os
+metadados ficam em `ai_reviews[stage]` com `non_blocking = true`. O docente pode
+continuar independentemente de o parecer conter avisos ou problemas.
+
+## Verificação global obrigatória
+
+Ao abrir a oitava etapa, o CoerIA executa localmente os validadores das sete
+etapas de autoria, a compatibilidade entre taxonomia, nível e verbo, o estado da
+matriz e a qualidade dos recursos. O relatório identifica cada controlo e só
+permite concluir quando todos passam. Pedir ou não uma segunda opinião a um LLM
+não altera este resultado.
+
+## Recursos e imagens
+
+Quando a assistência abrange os recursos, cada tipo selecionado continua a ser
+gerado e validado separadamente. Se o âmbito pertence apenas à apresentação,
+ficha, teste ou atividade prática, o workflow limita a execução a esse tipo. As
+imagens geradas permanecem fora da chamada estrutural e só são associadas ao
+estado se a proposta correspondente for aceite. A geração de imagens exige
+consentimento explícito e `OPENAI_API_KEY`.
+
+## Fontes extensas
+
+A ingestão e extração documental são locais. Acima do orçamento normal de
+contexto, a criação da sessão conserva o texto e regista a redução como adiada,
+em vez de fazer uma chamada implícita. Assim, a independência de LLM abrange
+também a fase anterior à primeira etapa.
 
 ## Abstração do fornecedor
 
-Antes de iniciar uma sessão, o docente escolhe OpenAI ou IAedu. O gerador, o
-crítico e a proposta de preenchimento inicial usam sempre esse mesmo fornecedor.
-A escolha fica no estado persistido e no manifesto de exportação.
+O docente pode associar OpenAI ou IAedu à sessão. Esta escolha não implica uma
+chamada na criação nem exige que a chave exista nessa altura. A chave só é
+consultada quando o docente pede uma operação de IA. A OpenAI usa a Responses
+API com saídas estruturadas; o adaptador IAedu conserva a mesma interface
+interna e entrega os resultados aos mesmos esquemas e guardrails.
 
-A OpenAI fornece diretamente saídas estruturadas pela Responses API. O adaptador
-IAedu conserva a mesma interface interna: envia um pedido multipart para o agente,
-recompõe os eventos de streaming do tipo `token`, extrai o objeto JSON e entrega-o
-aos mesmos esquemas e guardrails determinísticos. Assim, mudar de fornecedor não
-altera o macrofluxo pedagógico nem a autoridade do docente.
+## Migração e rastreabilidade
 
-## Rastreabilidade
+Sessões anteriores são migradas para o esquema 15 sem apagar artefactos ou
+versões. O ponto corrente é preservado, as estruturas ausentes são inicializadas
+vazias e estados antigos como `stale` passam a `needs_review`. As propostas e
+pareceres futuros ficam separados em `ai_proposals` e `ai_reviews`.
 
-Cada etapa conserva versões do artefacto e metadados dos turnos de geração e
-crítica: papel, modelo, identificador de resposta, duração, tokens, observações e
-número de reformulações. O rasto de auditoria regista também as decisões e o
-feedback humano.
+A camada `ApplicationService` coordena navegação, edição, assistência,
+verificação e persistência. A interface NiceGUI não executa regras pedagógicas
+nem chama diretamente fornecedores. Esta separação mantém o domínio testável
+sem navegador e permite substituir a interface sem alterar a autoridade do
+docente.
 
-Cada versão regista ainda as versões ativas dos artefactos anteriores que lhe
-serviram de entrada. Selecionar uma etapa anterior altera apenas o estado
-temporário de navegação da interface; não modifica nem persiste a sessão. Já na
-página da etapa, o docente pode escolher **Reformular**. O sistema apresenta o
-impacto antes de executar a alteração, guarda uma fotografia coerente do estado
-anterior e marca como desatualizadas as etapas dependentes. Estas propostas não
-são apagadas: permanecem consultáveis no histórico, mas deixam de estar ativas
-até serem novamente geradas ou validadas. Uma sessão anteriormente concluída
-regressa assim ao fluxo de autoria e exige uma nova validação final.
+## Configuração relevante
 
-A mesma fronteira transacional aplica-se à edição manual. A área da tabela troca
-da representação de consulta para controlos editáveis no mesmo local, trabalhando
-sobre uma cópia temporária da versão ativa. Os controlos mantêm os campos
-pedagógicos visíveis e a respetiva ordem, enquanto as relações técnicas que não
-são apresentadas permanecem no modelo interno. As referências a artefactos
-anteriores são escolhidas a partir de opções derivadas do estado ativo, em vez
-de serem introduzidas como texto livre, e a tabela não acrescenta numeração
-visual de linhas. É possível alterar células, adicionar linhas e remover linhas.
-Só a ação **Guardar nova versão** executa as validações,
-persiste o artefacto com metadados de autoria humana e invalida a cadeia
-dependente. Uma falha de validação conserva tanto a sessão como o formulário de
-edição inline, e não origina qualquer chamada ao fornecedor de IA.
-
-## Camada de interface
-
-A interface NiceGUI não executa diretamente regras pedagógicas. A camada
-`ApplicationService` coordena os casos de uso e devolve apenas dados Python,
-enquanto o workflow LangGraph permanece como fonte de verdade das transições.
-Esta separação permite testar o domínio sem navegador e substituir futuramente
-a interface sem alterar agentes, persistência ou validações.
-
-O fluxo pode emitir mensagens opcionais de progresso nos limites reais da
-geração, validação de qualidade e preparação para revisão. Como a geração corre
-fora do ciclo da interface, estas mensagens atravessam uma fila segura e são
-consumidas periodicamente pela interface, juntamente com o tempo decorrido e um
-único indicador indeterminado. Não é calculada uma percentagem fictícia.
-Na ausência temporária de uma nova fase reportada, a interface substitui a
-mensagem por um estado de espera explícito, sem confundir tempo decorrido com
-percentagem concluída.
-
-Na etapa de recursos, a unidade de execução é o tipo de recurso selecionado. A
-apresentação, a ficha de aula, o teste e a atividade prática são gerados e
-validados separadamente, pela ordem mostrada ao docente. A interface comunica o
-tipo corrente e a posição `n/N` usando o mesmo indicador indeterminado. Uma falha
-de qualidade repete apenas o recurso afetado; no fim, o conjunto agregado é
-novamente verificado antes da revisão humana. O esquema enviado ao fornecedor
-contém apenas o recurso corrente: `selected_types`, os campos vazios dos outros
-recursos e a agregação final são controlados deterministicamente pela aplicação.
-Assim, o modelo não pode alterar a seleção do docente e a resposta não transporta
-estruturas desnecessárias. A geração de imagens é uma operação distinta da
-geração textual e estrutural da apresentação. Depois de a estrutura indicar um
-visual documental ou uma proposta de imagem por IA, a aplicação resolve o ativo
-fora da chamada estrutural: reutiliza apenas IDs de imagens extraídas das fontes
-ou, quando existe consentimento explícito, chama a OpenAI Image API. O estado
-persiste proveniência, fornecedor, modelo, instrução e parâmetros de geração;
-a interface mostra o resultado ao docente e a exportação só incorpora ativos
-marcados como aprovados. Qualquer falha regressa ao diagrama nativo editável.
-
-Quando uma chamada falha, as propostas dos tipos anteriores que já passaram a
-validação são persistidas como rascunhos técnicos, sem aprovar a etapa nem alterar
-os artefactos pedagógicos ativos. O rascunho inclui uma impressão digital da
-seleção e de todas as entradas relevantes. Na tentativa seguinte, só é
-reutilizado se essa impressão digital continuar igual; caso contrário, é
-ignorado. Depois da geração completa, os rascunhos são removidos. Para o teste,
-a aplicação deriva ainda os IDs técnicos das questões e `total_points`, enquanto
-a cobertura dos resultados e o conteúdo pedagógico continuam sujeitos ao modelo,
-aos guardrails e à revisão humana. Na atividade prática, outro guardrail filtra
-IDs desconhecidos, ordena as etapas, cria uma etapa explícita a partir do
-enunciado aprovado de cada resultado ainda não coberto e normaliza
-proporcionalmente os pesos dos critérios para totalizarem 100%. As correções são
-registadas nos metadados e não dispensam a revisão humana.
-
-Nas etapas de classificação e matriz de alinhamento, a interface deriva a
-taxonomia do estado da sessão, não a repete em cada linha e apresenta o nível
-através de opções numeradas. O seletor mostra `SOLO 2`–`SOLO 5` ou
-`Bloom 1`–`Bloom 6`, mantendo no artefacto o nome canónico do nível e a taxonomia
-escolhida.
-
-## Porque não foi acrescentado outro runtime
-
-A aplicação já controla estado, versões, retoma e transições com LangGraph. As
-APIs dos fornecedores são usadas apenas para gerar e criticar conteúdo dentro
-desse controlo explícito. Introduzir simultaneamente um segundo runtime de
-orquestração criaria duas fontes de verdade para sessão, transições e
-persistência. O Agents SDK
-poderá ser avaliado futuramente se o objetivo passar a ser delegação dinâmica,
-ferramentas externas ou execuções longas geridas pelo próprio runtime.
-
-## Configuração
-
-O perfil OpenAI predefinido usa `gpt-4o-mini` em todas as chamadas textuais da
-aplicação: assistência inicial, gerador pedagógico, crítico e geração de recursos.
-A uniformização aproveita a variante que já era usada nos recursos pela maior
-robustez no cumprimento de esquemas estruturados e substitui `gpt-5-nano` nas
-restantes etapas. `reasoning.effort` só é enviado quando o modelo configurado o
-suporta. A etapa de recursos continua fora do ciclo gerador–crítico por
-predefinição, pois já dispõe de validação determinística separada e aprovação
-humana. As variáveis específicas de crítico e recursos são mantidas como
-mecanismos opcionais de substituição.
-
-- `COERIA_AGENTIC_CRITIC_ENABLED`: ativa ou desativa o crítico;
-- `COERIA_AGENTIC_CRITIC_STAGES`: etapas submetidas ao crítico;
-- `COERIA_AGENTIC_MAX_REVISIONS`: reformulações máximas pedidas pelo crítico;
-- `COERIA_OPENAI_CRITIC_MODEL`: modelo do crítico;
 - `COERIA_OPENAI_MODEL`: modelo do gerador OpenAI;
-- `COERIA_OPENAI_RESOURCE_MODEL`: modelo usado apenas na geração dos recursos;
-- `COERIA_OPENAI_REASONING_EFFORT`: esforço de raciocínio usado pelo gerador e
-  pelo crítico OpenAI;
-- `COERIA_OPENAI_CRITIC_MAX_OUTPUT_TOKENS`: limite da crítica estruturada.
-- `COERIA_RESOURCE_QUALITY_MAX_REVISIONS`: reformulações automáticas dos
-  recursos após falhas de qualidade;
-- `COERIA_OPENAI_ASSISTANT_MAX_OUTPUT_TOKENS`: limite da proposta inicial
-  pedida pelo docente.
-- `COERIA_AI_PROVIDER`: fornecedor inicialmente selecionado na interface;
-- `COERIA_IAEDU_ENDPOINT`: endpoint do agente IAedu;
-- `COERIA_IAEDU_CHANNEL_ID`: canal IAedu;
-- `COERIA_IAEDU_TIMEOUT_SECONDS` e `COERIA_IAEDU_MAX_RETRIES`: limites de
-  comunicação IAedu.
-
-## Referências técnicas oficiais
-
-- [A practical guide to building agents](https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/)
-- [OpenAI Agents SDK: Agents SDK or Responses API?](https://openai.github.io/openai-agents-python/)
-- [Tracing in the OpenAI Agents SDK](https://openai.github.io/openai-agents-python/tracing/)
-- [IAedu: exemplo Python da API](https://docs.iaedu.pt/books/funcionalidade-api/page/exemplo-python)
+- `COERIA_OPENAI_CRITIC_MODEL`: modelo usado na verificação facultativa;
+- `COERIA_OPENAI_RESOURCE_MODEL`: substituição específica para recursos;
+- `COERIA_OPENAI_REASONING_EFFORT`: esforço para modelos compatíveis;
+- `COERIA_RESOURCE_QUALITY_MAX_REVISIONS`: correções internas limitadas de um
+  recurso pedido explicitamente;
+- `COERIA_AI_PROVIDER`: fornecedor inicialmente mostrado na interface;
+- `COERIA_IAEDU_ENDPOINT` e `COERIA_IAEDU_CHANNEL_ID`: configuração IAedu.

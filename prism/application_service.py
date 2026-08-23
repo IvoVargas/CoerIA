@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any, Callable
@@ -24,9 +23,14 @@ from .workflow import (
     STAGE_LABELS,
     apply_manual_edit,
     create_session,
+    decide_ai_proposal,
+    navigate_to_stage,
     reopen_stage,
+    request_ai_assistance,
     review_current_stage,
     revision_impact,
+    update_manual_resource_settings,
+    verify_stage_with_ai,
 )
 
 
@@ -77,19 +81,11 @@ class ApplicationService:
             raw_source,
             provider=selected_provider,
             progress_callback=progress_callback,
+            allow_ai=False,
         )
         consolidated_source = reduction.text
         source_images = extract_source_images(source_files)
         ai_image_generation_enabled = bool(form.get("ai_image_generation_enabled"))
-        if (
-            ai_image_generation_enabled
-            and RESOURCE_PRESENTATION in list(form.get("resource_types", []) or [])
-            and not os.getenv("OPENAI_API_KEY")
-        ):
-            raise ValueError(
-                "A geração de imagens por IA foi autorizada, mas OPENAI_API_KEY não "
-                "está disponível. Configure a chave ou desative esta opção."
-            )
         course = CourseInput.create(
             str(form.get("unit_name", "") or ""),
             consolidated_source,
@@ -120,8 +116,79 @@ class ApplicationService:
         state["source_images"] = source_images
         state["source_reduction"] = reduction.metadata
         if progress_callback is not None:
-            progress_callback("A guardar a sessão e a proposta inicial…")
+            progress_callback("A guardar a sessão e as estruturas de autoria manual…")
         return self._persist(state)
+
+    def navigate_session(
+        self,
+        state: dict[str, Any] | None,
+        target_stage: str,
+    ) -> tuple[dict[str, Any], str]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        updated = self._persist(navigate_to_stage(state, target_stage))
+        return updated, f"Etapa aberta: {STAGE_LABELS[target_stage]}."
+
+    def request_assistance(
+        self,
+        state: dict[str, Any] | None,
+        target_stage: str,
+        scope_path: list[str | int],
+        scope_label: str,
+        instruction: str,
+    ) -> tuple[dict[str, Any], str]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        updated = request_ai_assistance(
+            state,
+            target_stage,
+            scope_path,
+            scope_label,
+            instruction,
+        )
+        updated = self._persist(updated)
+        return updated, "Proposta da IA recebida. Reveja-a antes de decidir."
+
+    def decide_assistance(
+        self,
+        state: dict[str, Any] | None,
+        proposal_id: str,
+        accept: bool,
+    ) -> tuple[dict[str, Any], str]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        updated = self._persist(decide_ai_proposal(state, proposal_id, accept))
+        return (
+            updated,
+            "Proposta aplicada como nova versão."
+            if accept
+            else "Proposta rejeitada; o rascunho permaneceu inalterado.",
+        )
+
+    def verify_stage(
+        self,
+        state: dict[str, Any] | None,
+        target_stage: str,
+    ) -> tuple[dict[str, Any], str]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        updated = self._persist(verify_stage_with_ai(state, target_stage))
+        return updated, "Verificação facultativa da IA guardada; pode continuar."
+
+    def update_resource_settings(
+        self,
+        state: dict[str, Any] | None,
+        resource_types: list[str],
+        selected_source_image_ids: list[str] | None = None,
+    ) -> tuple[dict[str, Any], str]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        updated = update_manual_resource_settings(
+            state,
+            resource_types,
+            selected_source_image_ids,
+        )
+        return self._persist(updated), "Seleção de recursos guardada sem executar a IA."
 
     def load_session(self, session_id: str | None) -> dict[str, Any]:
         if not session_id:

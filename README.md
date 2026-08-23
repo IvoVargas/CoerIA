@@ -3,21 +3,23 @@
 **Sistema de IA com agentes para elaboração de programas de unidades
 curriculares e recursos educativos pedagogicamente alinhados.**
 
-O CoerIA transforma os dados de uma unidade curricular ou ação de formação num
-programa completo e, a partir da estrutura aprovada, num conjunto de recursos
-educativos alinhados com a taxonomia escolhida — SOLO ou Bloom. O protótipo
-mantém o docente no centro do processo: cada etapa gera uma única proposta e
-fica suspensa até ser aprovada ou devolvida com feedback.
+O CoerIA apoia a transformação dos dados de uma unidade curricular ou ação de
+formação num programa completo e num conjunto de recursos educativos alinhados
+com a taxonomia escolhida — SOLO ou Bloom. A autoria é **manual-first**: criar uma
+sessão, abrir qualquer etapa, preencher campos e tabelas, guardar rascunhos e
+avançar não executa um LLM nem exige uma chave de API.
 
-Nas etapas pedagogicamente mais sensíveis, um segundo agente atua como crítico:
-revê a proposta do especialista e pode provocar uma reformulação automática
-limitada. As regras determinísticas são executadas separadamente e a decisão do
-docente continua a ser obrigatória e soberana.
+A IA é facultativa e pode ser usada de duas formas independentes: verificação
+não bloqueante de uma etapa ou assistência localizada numa etapa, tabela, linha
+ou campo escolhido pelo docente. A assistência produz sempre uma proposta com o
+valor anterior e o valor sugerido; nada é aplicado antes de uma aceitação humana
+explícita. A conclusão depende de uma verificação global determinística, não de
+uma decisão declarada pelo modelo.
 
 ## Fluxo
 
 1. resultados de aprendizagem com nível SOLO ou Bloom e um único verbo de ação principal;
-2. conteúdos com IDs associados aos resultados aprovados e objetivos gerais em texto livre;
+2. conteúdos com IDs associados aos resultados formulados e objetivos gerais em texto livre;
 3. avaliação formativa ou sumativa;
 4. design pedagógico por *backward design*;
 5. atividades formativas com prática, acompanhamento e feedback;
@@ -28,8 +30,10 @@ docente continua a ser obrigatória e soberana.
 Seguindo o alinhamento construtivo de Biggs e Tang, os resultados de aprendizagem
 constituem a primeira decisão pedagógica formal. Os conteúdos, documentos e
 objetivos introduzidos pelo docente continuam a delimitar o contexto inicial.
-Depois de os resultados serem aprovados, os conteúdos são estruturados e
+Depois de os resultados serem formulados, os conteúdos podem ser estruturados e
 associados a esses resultados; os objetivos gerais permanecem como texto livre.
+Esta sequência é uma orientação pedagógica, não uma barreira técnica: todas as
+etapas permanecem navegáveis e editáveis desde o início.
 
 O modelo curricular segue também a orientação da `minutaProgramasUCs.xls`: conteúdos
 com IDs estáveis, 4 a 10 resultados de aprendizagem (preferencialmente 5 a 7),
@@ -43,13 +47,11 @@ uma UC conter apenas avaliações sumativas. O preenchimento inicial pode ser
 validado localmente e, a pedido, ter todos os campos vazios preenchidos por uma
 proposta editável da IA, sem substituir os dados já introduzidos pelo docente.
 
-Durante a geração de uma etapa, a interface identifica a etapa de destino,
-apresenta a fase efetivamente reportada pelo fluxo, o indicador de atividade
-existente e o tempo decorrido. Não é mostrada uma percentagem artificial, pois os
-fornecedores de IA não disponibilizam progresso percentual fiável. Se uma
-resposta demorar, a interface indica explicitamente que continua a aguardar o
-fornecedor; nos recursos educativos, assinala que esta é normalmente a etapa
-mais demorada.
+Durante uma operação de IA pedida explicitamente, a interface identifica o
+âmbito e mostra o indicador de atividade existente e o tempo decorrido. Não é
+mostrada uma percentagem artificial, pois os fornecedores não disponibilizam
+progresso percentual fiável. A navegação e a edição manual não apresentam este
+estado porque não contactam o fornecedor.
 
 Na tabela dos resultados de aprendizagem e na matriz de alinhamento, a taxonomia
 escolhida não é repetida como coluna. O nível é apresentado e editado através de
@@ -79,29 +81,26 @@ da VPS, a compilação PDF pode ser ativada; nesse caso, cada `.tex` é acompanh
 pelo respetivo `.pdf`, produzido por `pdflatex` sem `shell-escape` e com limite
 de tempo.
 
-As versões, decisões e métricas de geração são guardadas em SQLite, por
-predefinição em `data/prism.db`. Na instalação pública, cada sessão fica
-associada ao identificador pseudónimo do docente autenticado e não é listada
-nem carregada por outro participante. O nome técnico do ficheiro e o pacote Python `prism` são
-mantidos temporariamente por compatibilidade com sessões e instalações
-anteriores à adoção da identidade CoerIA. A interface permite a cada docente
-retomar as respetivas sessões e consultar todas as versões, incluindo propostas
-eliminar definitivamente as suas próprias sessões através da barra lateral e substituídas por reformulações. A barra de etapas permite abrir para consulta
-qualquer ponto de autoria já alcançado, incluindo numa sessão concluída, sem
-alterar o estado. Dentro dessa página, o docente pode escolher **Reformular**;
-só então descreve a alteração e vê quais as etapas dependentes que ficarão
-desatualizadas. Depois da confirmação, o estado coerente anterior é preservado e
-a nova revisão tem de voltar a ser validada até ao fim do fluxo.
+As versões, decisões, propostas de IA e respetivas decisões são guardadas em
+SQLite, por predefinição em `data/prism.db`. Na instalação pública, cada sessão
+fica associada ao identificador pseudónimo do docente autenticado e não é
+listada nem carregada por outro participante. O nome técnico do ficheiro e o
+pacote Python `prism` são mantidos temporariamente por compatibilidade com
+sessões anteriores. A interface permite retomar e eliminar as próprias sessões.
 
-Durante a consulta, selecionar a caixa do ponto atual tem o mesmo efeito de
-**Voltar ao ponto atual**. O docente também pode escolher **Editar manualmente**
-em qualquer etapa de autoria: a própria área da tabela passa para modo de
-edição, sem abrir uma interface separada, conservando os campos visíveis e a
-respetiva ordem; as linhas podem ser adicionadas ou removidas. As relações
-técnicas não apresentadas ao docente são preservadas internamente. Guardar cria
-uma nova versão sem chamada à IA, depois de validação estrutural, e invalida
-apenas os artefactos
-posteriores dependentes.
+A barra de etapas permite abrir qualquer ponto de autoria desde a criação da
+sessão. A navegação não chama a IA, não exige completude e não apaga dados. Em
+qualquer etapa, **Editar campos e tabelas** ativa a edição no próprio artefacto;
+podem ser alterados textos, adicionadas linhas e removidas linhas. Guardar cria
+uma nova versão mesmo que o rascunho ainda esteja incompleto. Se a alteração
+ocorrer antes de artefactos já preenchidos, esses artefactos são preservados e
+assinalados como **Rever após alterações anteriores**.
+
+**Verificar esta etapa com IA** guarda um parecer facultativo que nunca impede
+avançar. **Pedir proposta à IA** exige a escolha prévia do âmbito e uma instrução;
+o resultado fica pendente até o docente comparar o antes/depois e escolher
+**Aceitar** ou **Rejeitar**. Aceitar cria uma nova versão; rejeitar conserva o
+rascunho sem alterações.
 
 As tabelas editáveis não acrescentam uma coluna de numeração. Os campos que
 referenciam conteúdos, resultados, avaliações ou atividades de
@@ -117,15 +116,11 @@ A decisão e o microciclo gerador–crítico estão descritos em
 
 É possível combinar texto direto com vários ficheiros `.txt`, `.md`, `.tex`,
 `.pdf`, `.docx` e `.pptx`. O limite predefinido é 12 MB por ficheiro e o limite
-absoluto de ingestão é 2 000 000 de caracteres no conjunto das fontes. Quando o
-texto extraído ultrapassa 120 000 caracteres, o CoerIA reduz automaticamente as
-fontes por blocos com o fornecedor de IA selecionado, preservando etiquetas de
-proveniência e conceitos distintivos de cada documento, antes de iniciar a análise
-curricular. A análise recebe ainda a lista auditável das fontes reduzidas e deve
-explicitar, para cada uma, a contribuição curricular, conceitos-chave e conteúdos
-associados; uma fonte curta ou colocada primeiro não recebe prioridade automática.
-Esta redução pode implicar chamadas adicionais ao fornecedor e fica registada no
-estado da sessão. PDFs constituídos apenas por imagem necessitam de OCR externo.
+absoluto de ingestão é 2 000 000 de caracteres no conjunto das fontes. A criação
+da sessão conserva o texto extraído e não o envia a um fornecedor, mesmo acima do
+orçamento normal de 120 000 caracteres; nesse caso, o estado regista que uma
+redução de contexto foi adiada. PDFs constituídos apenas por imagem necessitam
+de OCR externo.
 
 O CoerIA extrai o conteúdo textual destes documentos e, quando aplicável,
 imagens internas de `.pdf`, `.docx` e `.pptx`, conservando a proveniência
@@ -148,8 +143,10 @@ editável.
 ## Configuração do fornecedor de IA
 
 O docente escolhe **OpenAI** ou **IAedu** antes de iniciar cada sessão. O
-fornecedor fica associado à sessão e não é trocado durante o fluxo. Defina apenas
-as chaves que pretende usar fora do projeto; nunca as escreva no código ou num
+fornecedor fica associado à sessão, mas não é contactado durante a criação,
+navegação ou edição manual. Uma chave só é necessária quando o docente pede
+explicitamente uma proposta, uma verificação ou uma imagem. Defina apenas as
+chaves que pretende usar fora do projeto; nunca as escreva no código ou num
 ficheiro partilhado:
 
 ```powershell
@@ -212,14 +209,11 @@ resultado que tenha ficado sem cobertura e normaliza proporcionalmente os pesos
 positivos dos critérios para 100%. Estas correções ficam registadas nos
 metadados e todo o conteúdo continua sujeito à aprovação do docente.
 
-O ciclo gerador–crítico é controlado por `COERIA_AGENTIC_CRITIC_ENABLED`,
-`COERIA_AGENTIC_CRITIC_STAGES` e `COERIA_AGENTIC_MAX_REVISIONS`. A crítica é
-estruturada, fica registada nos metadados e no rasto de auditoria, e não bloqueia
-nem aprova a etapa em nome do docente. Por predefinição, os recursos não são
-submetidos a uma chamada adicional do crítico: conservam as validações
-determinísticas por tipo e a aprovação humana final. Desativar o crítico ou
-reduzir as etapas abrangidas diminui chamadas e custos sem alterar o fluxo de
-aprovação humana.
+O gerador e o crítico são agora ações independentes. O gerador produz uma
+proposta apenas para o âmbito escolhido; o crítico devolve observações sem
+reescrever o artefacto. Ambas as operações ficam registadas, mas apenas a
+aceitação explícita de uma proposta pode criar uma nova versão com conteúdo de
+IA. As validações determinísticas permanecem independentes do modelo.
 
 As antigas variáveis `AGIR_SOLO_*` e `PRISM_*` continuam a ser reconhecidas como
 fallback para não quebrar instalações existentes; quando coexistem, prevalece a

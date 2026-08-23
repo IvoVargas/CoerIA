@@ -263,6 +263,7 @@ def reduce_source_text(
     *,
     provider: str,
     progress_callback: ProgressCallback | None = None,
+    allow_ai: bool = True,
 ) -> SourceReductionResult:
     """Reduz fontes acima do orçamento de contexto e devolve metadados auditáveis."""
 
@@ -277,6 +278,27 @@ def reduce_source_text(
             source,
             {
                 "applied": False,
+                "original_chars": len(source),
+                "effective_chars": len(source),
+                "target_chars": target_chars,
+                "provider": "",
+                "model": "",
+                "passes": 0,
+                "chunks": 0,
+                "sources": initial_sources,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+            },
+        )
+
+    if not allow_ai:
+        return SourceReductionResult(
+            source,
+            {
+                "applied": False,
+                "deferred": True,
+                "reason": "Autoria manual; nenhuma redução por IA foi executada.",
                 "original_chars": len(source),
                 "effective_chars": len(source),
                 "target_chars": target_chars,

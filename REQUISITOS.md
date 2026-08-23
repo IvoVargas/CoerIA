@@ -29,18 +29,13 @@ materiais produzidos.
 - Aceitar texto introduzido diretamente e um ou mais ficheiros de apoio.
 - Extrair texto de `.txt`, `.md`, `.tex`, `.pdf`, `.docx` e `.pptx`.
 - Rejeitar ficheiros vazios e formatos não suportados com uma mensagem compreensível.
-- Para conjuntos de fontes acima do orçamento normal do contexto, reduzir
-  automaticamente o texto por blocos com o fornecedor selecionado antes da
-  análise curricular, preservando a proveniência, conceitos distintivos e a
-  representatividade de cada documento, e registando a operação.
-- Na análise curricular de fontes reduzidas, demonstrar explicitamente a cobertura
-  de cada documento através da sua contribuição, conceitos-chave e conteúdos C*
-  associados, sem dar prioridade automática à primeira fonte ou à fonte mais curta.
-- Apenas rejeitar quando for ultrapassado o limite absoluto de ingestão configurado
-  ou quando a redução segura não for possível.
+- Para conjuntos de fontes acima do orçamento normal do contexto, permitir criar
+  e editar a sessão sem executar uma redução por IA; registar que a preparação
+  de contexto foi adiada.
+- Apenas rejeitar quando for ultrapassado o limite absoluto de ingestão configurado.
 - Permitir escolher OpenAI ou IAedu antes de iniciar a sessão.
-- Informar que o conteúdo fornecido é enviado exclusivamente ao fornecedor de
-  IA selecionado durante a geração.
+- Informar que o conteúdo fornecido só é enviado ao fornecedor selecionado
+  quando o docente pede explicitamente uma operação de IA.
 - Manter o fornecedor escolhido durante toda a sessão e ao retomá-la.
 - Validar o preenchimento manual e apresentar sugestões sem iniciar a sessão.
 - Gerar, apenas a pedido, uma proposta inicial editável por IA que preencha todos
@@ -50,18 +45,19 @@ materiais produzidos.
 
 ### RF02 — Fluxo pedagógico orientado por uma taxonomia
 
-Executar, por ordem, as seguintes etapas:
+Disponibilizar a seguinte sequência pedagógica recomendada, mantendo todas as
+etapas navegáveis e editáveis:
 
 1. formulação de resultados de aprendizagem com nível SOLO ou Bloom e um único
    verbo de ação principal;
-2. estruturação e validação de conteúdos associados aos resultados aprovados
+2. estruturação de conteúdos associados aos resultados formulados
    e registo dos objetivos gerais em texto livre;
-3. proposta de avaliações formativas ou sumativas;
+3. autoria de avaliações formativas ou sumativas;
 4. design pedagógico por *backward design*;
-5. proposta de atividades formativas com prática, acompanhamento e feedback;
-6. validação da matriz de alinhamento;
-7. geração e aprovação dos recursos educativos selecionados;
-8. validação final da estrutura e do alinhamento.
+5. autoria de atividades formativas com prática, acompanhamento e feedback;
+6. matriz de alinhamento;
+7. recursos educativos selecionados;
+8. verificação global determinística da estrutura e do alinhamento.
 
 Cada artefacto deve possuir um formato estruturado e identificadores estáveis
 que permitam ligar temas, resultados, atividades, avaliação e recursos.
@@ -71,7 +67,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
   etapa curricular formal.
-- Na segunda etapa, associar cada conteúdo a um ou mais resultados aprovados; o
+- Na segunda etapa, associar cada conteúdo a um ou mais resultados formulados; o
   conjunto das associações deve cobrir exatamente todos os resultados, sem linhas
   desligadas nem IDs desconhecidos.
 - Registar os objetivos gerais num único campo de texto livre, sem IDs e sem os
@@ -92,39 +88,42 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 
 ### RF03 — Human-in-the-loop
 
-- Parar depois de cada etapa para decisão do docente.
-- Permitir aprovação ou reformulação fundamentada.
-- Permitir selecionar e reabrir qualquer etapa de autoria já alcançada, mesmo
-  depois da conclusão da sessão.
-- Tratar a seleção de uma etapa anterior como navegação de consulta: não alterar
-  o estado, não criar uma versão e não invalidar dependências nessa operação.
-- Quando estiver a consultar uma etapa anterior, permitir selecionar a caixa da
-  etapa corrente para regressar ao ponto atual, com o mesmo efeito do botão
-  **Voltar ao ponto atual**.
-- Disponibilizar a ação **Reformular** dentro da etapa consultada e só iniciar a
-  alteração depois de o docente escrever e confirmar o respetivo pedido.
+- Criar novas sessões em modo **manual-first**, sem executar um LLM.
+- Permitir abrir qualquer etapa de autoria desde o início, sem exigir que as
+  etapas anteriores estejam preenchidas ou aprovadas.
+- Permitir avançar e recuar livremente sem chamar a IA, validar completude,
+  criar conteúdo ou apagar artefactos.
 - Disponibilizar edição manual estruturada em todas as etapas de autoria,
   transformando a tabela apresentada no próprio local e permitindo alterar
   texto, adicionar linhas e remover linhas, sem abrir um editor separado nem
   mudar os campos visíveis ou a respetiva ordem.
+- Permitir guardar rascunhos incompletos; validar apenas a forma estrutural
+  mínima necessária para a persistência.
 - Não acrescentar uma coluna de numeração de linhas no modo de edição.
 - Substituir a escrita manual de referências a IDs de etapas anteriores por
   seletores fechados, com escolha única ou múltipla conforme a cardinalidade.
-- Validar a edição manual antes de a persistir; ao guardar, criar uma nova
-  versão, preservar a anterior e aplicar a invalidação a jusante sem chamar a IA.
-- Apresentar, antes da confirmação e de qualquer chamada à IA, a nova versão a
-  criar e as etapas posteriores que ficarão desatualizadas.
-- Criar uma nova versão da etapa reaberta e marcar como desatualizados os
-  artefactos dependentes, sem apagar as versões históricas nem a fotografia
-  coerente anterior à revisão.
-- Obrigar a percorrer e aprovar novamente as etapas afetadas até à validação
-  final.
-- Não alterar o estado persistido se a nova geração falhar.
-- Apresentar a validação final num ecrã separado antes da conclusão.
+- Ao alterar uma etapa anterior, criar uma nova versão, preservar integralmente
+  o conteúdo posterior e assinalar os artefactos preenchidos a jusante para
+  revisão; nunca os apagar automaticamente.
+- Permitir pedir uma verificação por IA em qualquer etapa de autoria. O parecer
+  deve ser guardado, não deve alterar o artefacto e nunca deve bloquear a
+  navegação.
+- Permitir pedir assistência de IA apenas depois de o docente escolher o âmbito
+  exato — etapa, tabela, linha ou campo — e escrever uma instrução.
+- Apresentar a assistência como proposta pendente com comparação entre o valor
+  anterior e o valor sugerido. Não aplicar qualquer alteração automaticamente.
+- Exigir uma decisão humana explícita de aceitar ou rejeitar cada proposta;
+  aceitar cria uma nova versão e rejeitar preserva o rascunho.
+- Não alterar o estado persistido se a chamada à IA falhar.
+- Apresentar a verificação global determinística num ecrã separado e torná-la a
+  única barreira obrigatória à conclusão.
 
 ### RF04 — Validação automática
 
-- Validar o esquema e a completude de todas as respostas da IA.
+- Validar o esquema e a completude das propostas devolvidas pela IA antes de as
+  apresentar, sem confundir essa validação com a aceitação humana.
+- Aceitar rascunhos manuais incompletos durante a autoria e reservar os
+  controlos bloqueantes de completude e alinhamento para a verificação global.
 - Confirmar cobertura exata e sem duplicados dos resultados de aprendizagem.
 - Confirmar coerência entre a taxonomia escolhida, nível, verbo, atividades e avaliação.
 - Detetar resultados com mais de um verbo de ação.
@@ -133,12 +132,13 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Nas propostas geradas pela IA, canonicalizar o nível a partir do verbo
   controlado antes de repetir a chamada e registar a correção nos metadados.
 - Na edição manual dos resultados, filtrar o seletor de verbo pelo nível
-  escolhido na mesma linha e continuar a rejeitar pares incompatíveis.
+  escolhido na mesma linha; pares em falta ou incompatíveis devem ser
+  assinalados pela verificação global.
 - Verificar a finalidade formativa ou sumativa de cada avaliação.
 - Normalizar as ligações de cada avaliação, garantindo que `outcome_id` coincide
   com o primeiro elemento não vazio de `outcome_ids`.
 - Verificar prática, acompanhamento e feedback nas atividades formativas.
-- Calcular a matriz de alinhamento a partir dos artefactos produzidos.
+- Verificar a matriz de alinhamento relativamente aos artefactos produzidos.
 - Derivar os campos factuais e o estado de cada linha da matriz a partir das
   evidências aprovadas, reservando à IA apenas a fundamentação pedagógica.
 - Executar verificações determinísticas sobre os recursos finais.
@@ -159,6 +159,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   registando todas as correções nos metadados.
 - Distinguir verificações aprovadas, avisos e erros bloqueantes.
 - Nunca aceitar como validação automática apenas uma declaração do modelo.
+- Na verificação global, executar deterministicamente os validadores de todas
+  as sete etapas de autoria e impedir a conclusão enquanto existir um erro.
 
 ### RF05 — Avaliação, atividades e recursos educativos
 
@@ -267,13 +269,15 @@ ficheiros após a exportação.
 
 ### RF09 — Colaboração agentic controlada
 
-- Usar um agente especialista para produzir o artefacto da etapa.
-- Submeter etapas configuradas a um crítico pedagógico independente com saída
-  estruturada em avisos e problemas bloqueantes.
-- Permitir uma quantidade configurável e limitada de reformulações automáticas.
+- Usar um agente especialista apenas quando o docente pede uma proposta num
+  âmbito explicitamente selecionado.
+- Disponibilizar um crítico pedagógico independente, acionado a pedido, com
+  saída estruturada em avisos e problemas, sempre não bloqueante.
+- Impedir que o gerador ou o crítico aplique alterações ao artefacto ativo sem
+  aceitação humana explícita.
 - Executar as validações determinísticas fora do julgamento do crítico.
-- Registar gerações, críticas, observações, tentativas e consumo agregado.
-- Tratar a crítica como apoio à decisão; nunca substituir a aprovação humana.
+- Registar propostas, âmbitos, instruções, críticas, decisões humanas,
+  tentativas e consumo agregado.
 
 ## Requisitos não funcionais
 
@@ -330,14 +334,17 @@ ficheiros após a exportação.
 
 ## Critérios mínimos de aceitação
 
-- O fluxo completo termina apenas após oito aprovações humanas.
-- Uma etapa anterior pode ser consultada sem modificar a sessão; uma revisão só
-  começa depois da ação explícita **Reformular**, apresenta previamente o
-  impacto, invalida o estado ativo a jusante e preserva versões antigas.
-- Uma edição manual inválida não modifica a sessão; uma edição válida fica como
-  nova versão à espera de aprovação humana.
-- Uma sessão concluída pode ser reaberta e só volta ao estado concluído depois
-  de todas as etapas afetadas serem novamente aprovadas.
+- Uma sessão nova permite abrir e editar todas as etapas sem executar um LLM.
+- Um rascunho incompleto pode ser guardado e retomado como nova versão.
+- Alterar uma etapa anterior preserva os artefactos posteriores e assinala-os
+  para revisão quando contêm trabalho.
+- Uma verificação facultativa da IA nunca bloqueia a passagem à etapa seguinte.
+- Uma proposta da IA não modifica o artefacto antes da aceitação humana; a
+  rejeição deixa o rascunho intacto.
+- O fluxo completo termina apenas depois de a verificação global determinística
+  confirmar a estrutura, as relações, a taxonomia e os recursos.
+- Uma sessão concluída pode ser reaberta; qualquer alteração posterior exige
+  repetir a verificação global antes de nova conclusão.
 - Todos os resultados têm classificação na taxonomia exclusiva escolhida, avaliação
   e atividade formativa.
 - Cada resultado contém um único verbo de ação principal; infinitivos subordinados em complementos são permitidos, mas ações principais coordenadas são rejeitadas.

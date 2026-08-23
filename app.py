@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from queue import Empty, SimpleQueue
@@ -41,6 +42,7 @@ from prism.ingestion import (
 from prism.manual_editing import (
     FieldSpec,
     TableSpec,
+    assistance_scope_options,
     apply_editor_field_value,
     editor_field_value,
     editor_reference_options,
@@ -63,7 +65,12 @@ from prism.presentation import (
     render_stage_artifact,
 )
 from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
-from prism.workflow import STAGE_LABELS, STAGE_ORDER, revision_targets_for_state
+from prism.workflow import (
+    STAGE_LABELS,
+    STAGE_ORDER,
+    is_manual_first,
+    revision_targets_for_state,
+)
 
 
 SESSION_STORE = SQLiteSessionStore()
@@ -715,9 +722,9 @@ class AGIRSoloInterface:
     async def handle_start_session(self) -> None:
         progress_updates: SimpleQueue[str] = SimpleQueue()
         self._show_busy(
-            "A gerar a primeira proposta pedagógica…",
+            "A criar a sessão de autoria manual…",
             progress_updates,
-            "A operação foi iniciada…",
+            "A preparar localmente os dados e as fontes…",
         )
         try:
             with TemporaryDirectory(prefix="coeria_fontes_") as temporary_directory:
@@ -737,7 +744,7 @@ class AGIRSoloInterface:
             self.manual_edit_stage = None
             self.manual_edit_artifact = None
             self.show_workspace(
-                "Sessão iniciada. Valide a proposta atual ou solicite uma reformulação."
+                "Sessão iniciada sem executar a IA. Pode editar ou abrir qualquer etapa."
             )
             self.refresh_sessions()
             ui.notify("Sessão iniciada e guardada.", type="positive")
@@ -967,6 +974,8 @@ class AGIRSoloInterface:
                     )
                     with ui.row().classes("gap-2 mt-1"):
                         ui.chip(state.get("ai_provider", "OpenAI"), icon="smart_toy").classes("info-chip")
+                        if is_manual_first(state):
+                            ui.chip("IA facultativa", icon="person_edit").classes("info-chip")
                         ui.chip(
                             state.get("course", {}).get("taxonomy_type", "SOLO"),
                             icon="account_tree",
@@ -983,7 +992,7 @@ class AGIRSoloInterface:
 
             self._render_stage_track(state)
 
-            viewed_stage = (
+            viewed_stage = None if is_manual_first(state) else (
                 self.viewed_stage
                 if self.viewed_stage in revision_targets_for_state(state)
                 else None
@@ -1000,6 +1009,9 @@ class AGIRSoloInterface:
             self._render_history_and_audit(state)
 
     def _render_stage_track(self, state: dict[str, Any]) -> None:
+        if is_manual_first(state):
+            self._render_manual_stage_track(state)
+            return
         current_index = STAGE_ORDER.index(state["current_stage"])
         viewable_stages = set(revision_targets_for_state(state))
         stored_statuses = state.get("stage_statuses", {})
@@ -1065,6 +1077,63 @@ class AGIRSoloInterface:
                         else status_labels.get(stored_status, stored_status)
                     )
                     ui.label(stage_status_label).classes("stage-state")
+
+    def _render_manual_stage_track(self, state: dict[str, Any]) -> None:
+        status_labels = {
+            "draft": "Rascunho",
+            "empty": "Por preencher",
+            "needs_review": "Rever após alterações anteriores",
+            "checked": "Verificação executada",
+            "approved": "Concluído",
+            "pending": "Por verificar",
+        }
+        stored_statuses = state.get("stage_statuses", {})
+        with ui.element("div").classes("stage-track"):
+            for index, stage in enumerate(STAGE_ORDER):
+                stored_status = stored_statuses.get(stage, "empty")
+                current = stage == state.get("current_stage")
+                visual_status = (
+                    "current"
+                    if current
+                    else "done"
+                    if stored_status in {"draft", "checked", "approved"}
+                    else "stale"
+                    if stored_status == "needs_review"
+                    else "pending"
+                )
+                item = ui.element("div" if current else "button").classes(
+                    f"stage-item {visual_status}" + (" selectable" if not current else "")
+                )
+                item.mark(f"manual-stage-{stage}")
+                if not current:
+                    item.props("type=button")
+                    item.on(
+                        "click",
+                        lambda _event, selected_stage=stage: self._navigate_manual_stage(
+                            selected_stage
+                        ),
+                    )
+                with item:
+                    ui.label(f"{index + 1:02d}").classes("stage-number")
+                    ui.label(STAGE_LABELS[stage]).classes("stage-label")
+                    ui.label(
+                        "Ponto atual" if current else status_labels.get(stored_status, stored_status)
+                    ).classes("stage-state")
+
+    async def _navigate_manual_stage(self, target_stage: str) -> None:
+        try:
+            self.state, message = await run.io_bound(
+                self.service.navigate_session,
+                self.state,
+                target_stage,
+            )
+            self.viewed_stage = None
+            self.manual_edit_stage = None
+            self.manual_edit_artifact = None
+            self.show_workspace(message)
+            self.refresh_sessions()
+        except USER_ERRORS as error:
+            self._show_error(error)
 
     def _view_stage(self, target_stage: str) -> None:
         if not self.state or target_stage not in revision_targets_for_state(self.state):
@@ -1534,7 +1603,7 @@ class AGIRSoloInterface:
         ui.label(STAGE_LABELS[stage]).classes("section-title mb-2")
         ui.label(
             "Edite os campos abaixo ou adicione e remova linhas. Enquanto não "
-            "guardar, a versão aprovada e os passos seguintes permanecem intactos."
+            "guardar, a versão ativa e os passos seguintes permanecem intactos."
         ).classes("text-sm muted mb-4")
         with ui.column().classes("w-full gap-4"):
             for scalar in layout.fields:
@@ -1560,11 +1629,17 @@ class AGIRSoloInterface:
             "stage-actions"
         ):
             ui.label("EDIÇÃO MANUAL").classes("eyebrow")
-            ui.label("Guardar alterações").classes("section-title")
-            ui.label(
-                f"Será criada a versão {impact['next_version']} sem utilizar a IA."
-            ).classes("text-sm muted")
-            if impact["affected_labels"]:
+            ui.label("Guardar rascunho").classes("section-title")
+            if is_manual_first(state):
+                ui.label(
+                    f"Será criada a versão {impact['next_version']} sem utilizar a IA. "
+                    "Os passos seguintes serão preservados e apenas assinalados para revisão."
+                ).classes("text-sm muted")
+            else:
+                ui.label(
+                    f"Será criada a versão {impact['next_version']} sem utilizar a IA."
+                ).classes("text-sm muted")
+            if impact["affected_labels"] and not is_manual_first(state):
                 ui.label("Etapas que ficarão desatualizadas:").classes(
                     "font-semibold mt-2"
                 )
@@ -1586,7 +1661,7 @@ class AGIRSoloInterface:
                 )
 
             ui.button(
-                "Guardar nova versão",
+                "Guardar rascunho" if is_manual_first(state) else "Guardar nova versão",
                 icon="save",
                 on_click=save_manual_version,
             ).props("unelevated no-caps").classes("primary-action w-full mt-3")
@@ -1604,6 +1679,8 @@ class AGIRSoloInterface:
         with ui.column().classes("w-full gap-5"):
             if editing:
                 self._render_manual_edit_actions(state, stage)
+            elif is_manual_first(state):
+                self._render_manual_authoring_card(state, stage)
             else:
                 self._render_decision_card(state)
             with ui.card().classes("surface artifact-card w-full").mark(
@@ -1617,6 +1694,270 @@ class AGIRSoloInterface:
                     ).classes("artifact-markdown")
                     if stage == "resources":
                         self._render_selected_image_previews(state)
+
+    def _render_manual_authoring_card(
+        self,
+        state: dict[str, Any],
+        stage: str,
+    ) -> None:
+        with ui.card().classes("surface decision-card w-full").mark(
+            "teacher-control"
+        ):
+            ui.label("CONTROLO DO DOCENTE").classes("eyebrow")
+            ui.label("Autoria manual com IA facultativa").classes("section-title")
+            ui.label(
+                "Pode editar e avançar sem chamar qualquer modelo. A verificação "
+                "por IA é apenas informativa; a assistência cria uma proposta que "
+                "só altera o rascunho depois da sua aceitação."
+            ).classes("text-sm muted")
+
+            with ui.row().classes("w-full gap-2 flex-wrap mt-3"):
+                ui.button(
+                    "Editar campos e tabelas",
+                    icon="edit",
+                    on_click=lambda: self._start_manual_edit(stage),
+                ).props("unelevated no-caps").classes("primary-action").style(
+                    "min-width: 220px; flex: 1 1 220px;"
+                )
+                ui.button(
+                    "Verificar esta etapa com IA",
+                    icon="fact_check",
+                    on_click=lambda: self._handle_ai_verification(stage),
+                ).props("outline no-caps").classes("secondary-action").style(
+                    "min-width: 220px; flex: 1 1 220px;"
+                )
+
+            if stage == "alignment_matrix":
+                ui.separator().classes("my-3")
+                ui.label("RECURSOS A PREPARAR").classes("eyebrow")
+                ui.label(
+                    "Pode alterar esta seleção sem gerar os recursos."
+                ).classes("text-sm muted")
+                selected_resources = set(state.get("resource_types", []))
+                resource_checks = {
+                    resource_type: ui.checkbox(
+                        resource_type,
+                        value=resource_type in selected_resources,
+                    )
+                    for resource_type in RESOURCE_TYPES
+                }
+                source_image_checks = self._render_source_image_selector(state)
+
+                async def save_resource_settings() -> None:
+                    selected = [
+                        name
+                        for name, checkbox in resource_checks.items()
+                        if checkbox.value
+                    ]
+                    selected_image_ids = (
+                        [
+                            identifier
+                            for identifier, checkbox in source_image_checks.items()
+                            if checkbox.value
+                        ]
+                        if RESOURCE_PRESENTATION in selected
+                        else []
+                    )
+                    try:
+                        self.state, message = await run.io_bound(
+                            self.service.update_resource_settings,
+                            self.state,
+                            selected,
+                            selected_image_ids,
+                        )
+                        self.show_workspace(message)
+                        self.refresh_sessions()
+                        ui.notify(message, type="positive")
+                    except USER_ERRORS as error:
+                        self._show_error(error)
+
+                ui.button(
+                    "Guardar seleção de recursos",
+                    icon="save",
+                    on_click=save_resource_settings,
+                ).props("outline no-caps").classes("secondary-action w-full")
+
+            ui.separator().classes("my-3")
+            ui.label("ASSISTÊNCIA LOCALIZADA DA IA").classes("eyebrow")
+            ui.label(
+                "Escolha exatamente a parte que pode ser proposta pela IA. O restante "
+                "artefacto não será aplicado nem substituído."
+            ).classes("text-sm muted")
+            scopes = assistance_scope_options(stage, state[stage])
+            scope_by_key = {str(index): item for index, item in enumerate(scopes)}
+            scope = ui.select(
+                {key: item["label"] for key, item in scope_by_key.items()},
+                label="Âmbito da assistência",
+                value="0",
+            ).props("outlined options-dense").classes("w-full")
+            instruction = ui.textarea(
+                "O que pretende que a IA proponha?",
+                placeholder=(
+                    "Ex.: clarificar o texto sem alterar o nível taxonómico; "
+                    "propor duas linhas adicionais; rever a coerência desta tabela."
+                ),
+            ).props("outlined autogrow").classes("w-full")
+
+            async def ask_for_proposal() -> None:
+                selected = scope_by_key.get(str(scope.value or "0"), scopes[0])
+                await self._handle_ai_assistance(
+                    stage,
+                    list(selected["path"]),
+                    str(selected["label"]),
+                    str(instruction.value or ""),
+                )
+
+            ui.button(
+                "Pedir proposta à IA",
+                icon="auto_awesome",
+                on_click=ask_for_proposal,
+            ).props("outline no-caps").classes("secondary-action w-full")
+
+            pending = [
+                item
+                for item in state.get("ai_proposals", [])
+                if item.get("stage") == stage and item.get("status") == "pending"
+            ]
+            if pending:
+                proposal = pending[-1]
+                ui.separator().classes("my-3")
+                ui.label("PROPOSTA PENDENTE").classes("eyebrow")
+                ui.label(str(proposal.get("scope_label", "Âmbito selecionado"))).classes(
+                    "font-semibold"
+                )
+                with ui.row().classes("w-full gap-3 items-stretch flex-wrap"):
+                    with ui.card().classes("soft-surface p-3").style(
+                        "min-width: 280px; flex: 1 1 320px;"
+                    ):
+                        ui.label("Antes").classes("font-semibold")
+                        ui.code(
+                            json.dumps(proposal.get("before"), ensure_ascii=False, indent=2),
+                            language="json",
+                        ).classes("w-full")
+                    with ui.card().classes("soft-surface p-3").style(
+                        "min-width: 280px; flex: 1 1 320px;"
+                    ):
+                        ui.label("Proposta da IA").classes("font-semibold")
+                        ui.code(
+                            json.dumps(proposal.get("after"), ensure_ascii=False, indent=2),
+                            language="json",
+                        ).classes("w-full")
+                with ui.row().classes("w-full gap-2 flex-wrap"):
+                    ui.button(
+                        "Aceitar e guardar nova versão",
+                        icon="check",
+                        on_click=lambda: self._handle_ai_proposal(
+                            str(proposal["id"]), True
+                        ),
+                    ).props("unelevated no-caps").classes("primary-action")
+                    ui.button(
+                        "Rejeitar proposta",
+                        icon="close",
+                        on_click=lambda: self._handle_ai_proposal(
+                            str(proposal["id"]), False
+                        ),
+                    ).props("outline no-caps").classes("secondary-action")
+
+            reviews = state.get("ai_reviews", {}).get(stage, [])
+            if reviews:
+                latest = reviews[-1]
+                ui.separator().classes("my-3")
+                ui.label("ÚLTIMA VERIFICAÇÃO FACULTATIVA DA IA").classes("eyebrow")
+                findings = latest.get("findings", [])
+                if not findings:
+                    ui.label("A IA não assinalou problemas.").classes("text-sm")
+                for finding in findings:
+                    severity = "Bloqueante" if finding.get("severity") == "blocking" else "Aviso"
+                    ui.label(
+                        f"{severity} — {finding.get('criterion', '')}: "
+                        f"{finding.get('message', '')}"
+                    ).classes("text-sm soft-surface p-2 w-full")
+                ui.label(
+                    "Este parecer não bloqueia a passagem à etapa seguinte."
+                ).classes("text-xs muted")
+
+            current_index = STAGE_ORDER.index(stage)
+            ui.separator().classes("my-3")
+            with ui.row().classes("w-full gap-2 flex-wrap"):
+                if current_index > 0:
+                    ui.button(
+                        "Etapa anterior",
+                        icon="arrow_back",
+                        on_click=lambda: self._navigate_manual_stage(
+                            STAGE_ORDER[current_index - 1]
+                        ),
+                    ).props("outline no-caps").classes("secondary-action")
+                ui.space()
+                ui.button(
+                    "Continuar sem executar a IA",
+                    icon="arrow_forward",
+                    on_click=lambda: self._navigate_manual_stage(
+                        STAGE_ORDER[current_index + 1]
+                    ),
+                ).props("unelevated no-caps icon-right").classes("primary-action")
+
+    async def _handle_ai_assistance(
+        self,
+        stage: str,
+        scope_path: list[str | int],
+        scope_label: str,
+        instruction: str,
+    ) -> None:
+        progress_updates: SimpleQueue[str] = SimpleQueue()
+        self._show_busy(
+            f"A preparar uma proposta para {scope_label}…",
+            progress_updates,
+            "A aguardar o fornecedor de IA…",
+        )
+        try:
+            self.state, message = await run.io_bound(
+                self.service.request_assistance,
+                self.state,
+                stage,
+                scope_path,
+                scope_label,
+                instruction,
+            )
+            self.show_workspace(message)
+            self.refresh_sessions()
+        except USER_ERRORS as error:
+            self._show_error(error)
+        finally:
+            self._hide_busy()
+
+    async def _handle_ai_proposal(self, proposal_id: str, accept: bool) -> None:
+        try:
+            self.state, message = await run.io_bound(
+                self.service.decide_assistance,
+                self.state,
+                proposal_id,
+                accept,
+            )
+            self.show_workspace(message)
+            self.refresh_sessions()
+            ui.notify(message, type="positive")
+        except USER_ERRORS as error:
+            self._show_error(error)
+
+    async def _handle_ai_verification(self, stage: str) -> None:
+        progress_updates: SimpleQueue[str] = SimpleQueue()
+        self._show_busy(
+            f"A verificar «{STAGE_LABELS[stage]}» com IA…",
+            progress_updates,
+            "A aguardar o parecer facultativo da IA…",
+        )
+        try:
+            self.state, message = await run.io_bound(
+                self.service.verify_stage,
+                self.state,
+                stage,
+            )
+            self.show_workspace(message)
+            self.refresh_sessions()
+        except USER_ERRORS as error:
+            self._show_error(error)
+        finally:
+            self._hide_busy()
 
     def _render_final_validation_view(self, state: dict[str, Any]) -> None:
         with ui.column().classes("w-full gap-5"):
@@ -1677,23 +2018,38 @@ class AGIRSoloInterface:
             )
 
     def _render_decision_card(self, state: dict[str, Any], final: bool = False) -> None:
+        manual = is_manual_first(state)
         with ui.card().classes("surface decision-card w-full").mark(
             "teacher-decision"
         ):
-            ui.label("DECISÃO DO DOCENTE").classes("eyebrow")
+            ui.label(
+                "VERIFICAÇÃO GLOBAL OBRIGATÓRIA"
+                if manual and final
+                else "DECISÃO DO DOCENTE"
+            ).classes("eyebrow")
             ui.label(
                 "Validação final" if final else "Rever a proposta"
             ).classes("section-title")
             ui.label(
-                "A IA não avança sem a sua decisão."
+                (
+                    "Esta verificação é determinística e não chama um LLM. "
+                    "A sessão só pode ser concluída quando todos os controlos passam."
+                )
+                if manual and final
+                else "A IA não avança sem a sua decisão."
             ).classes("text-sm muted mb-2")
 
             decision = None
             feedback = None
             if final:
                 ui.label(
-                    "Para rever uma componente, selecione primeiro a respetiva "
-                    "etapa na barra superior, consulte-a e escolha Reformular."
+                    (
+                        "Pode selecionar qualquer etapa na barra superior, corrigi-la "
+                        "manualmente e regressar aqui para repetir a verificação."
+                        if manual
+                        else "Para rever uma componente, selecione primeiro a respetiva "
+                        "etapa na barra superior, consulte-a e escolha Reformular."
+                    )
                 ).classes("soft-surface p-3 text-sm")
             else:
                 ui.button(

@@ -13,8 +13,10 @@ from langgraph.graph import END, START, StateGraph
 
 from .agents import (
     AgentGenerationError,
+    CritiqueResult,
     GenerationResult,
     PedagogicalAgent,
+    PedagogicalCritic,
     RESOURCE_ARTIFACT_FIELDS,
     RuleBasedPedagogicalAgent,
     build_pedagogical_team,
@@ -79,6 +81,8 @@ class PrismState(TypedDict, total=False):
     active_versions: dict[str, int]
     stage_statuses: dict[str, str]
     revision_snapshots: list[dict[str, Any]]
+    ai_proposals: list[dict[str, Any]]
+    ai_reviews: dict[str, list[dict[str, Any]]]
 
 
 STAGE_LABELS = {
@@ -122,7 +126,10 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
+
+MANUAL_FIRST_MODE = "manual-first"
+AUTHORING_STAGES = STAGE_ORDER[:-1]
 
 # Uma etapa pode reabrir qualquer etapa já alcançada. A validação dinâmica
 # abaixo exclui artefactos que ainda nunca foram gerados para a sessão.
@@ -616,15 +623,576 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
     }
 
 
+def is_manual_first(state: PrismState) -> bool:
+    """Indica se a sessão usa autoria manual com IA facultativa."""
+
+    return state.get("orchestration", {}).get("mode") == MANUAL_FIRST_MODE
+
+
+def blank_artifact(stage: str, state: PrismState) -> Any:
+    """Cria apenas a estrutura editável de uma etapa, sem conteúdo pedagógico de IA."""
+
+    if stage == "learning_outcomes":
+        return []
+    if stage == "curriculum_analysis":
+        return {
+            "summary": "",
+            "themes": [],
+            "objectives": str(state.get("course", {}).get("general_aims", "") or ""),
+            "contents": [],
+            "assumptions": [],
+        }
+    if stage == "assessment_activities":
+        return []
+    if stage == "pedagogical_design":
+        return {"strategy": "", "sequence": []}
+    if stage == "teaching_activities":
+        return []
+    if stage == "alignment_matrix":
+        return []
+    if stage == "resources":
+        return {
+            "selected_types": list(state.get("resource_types", [])),
+            "presentation_outline": [],
+            "lesson_worksheet": {
+                "title": "",
+                "overview": "",
+                "instructions": "",
+                "sections": [],
+            },
+            "test": {
+                "title": "",
+                "instructions": "",
+                "total_points": 0,
+                "questions": [],
+            },
+            "practical_activity": {
+                "title": "",
+                "context": "",
+                "duration_minutes": 0,
+                "materials": [],
+                "steps": [],
+                "deliverables": [],
+                "criteria": [],
+            },
+            "feedback_considered": None,
+            "quality": {
+                "status": "Não calculada",
+                "passed": False,
+                "summary": {"passed": 0, "warnings": 0, "errors": 0},
+                "checks": [],
+            },
+        }
+    raise ValueError("A etapa selecionada não possui um artefacto editável.")
+
+
+def ensure_manual_artifacts(state: PrismState) -> PrismState:
+    """Completa estruturas ausentes numa sessão manual sem substituir dados existentes."""
+
+    for stage in AUTHORING_STAGES:
+        if stage not in state:
+            state[stage] = blank_artifact(stage, state)
+    state.setdefault("ai_proposals", [])
+    state.setdefault("ai_reviews", {})
+    return state
+
+
+def _artifact_has_content(artifact: Any, *, root: bool = True) -> bool:
+    if isinstance(artifact, str):
+        return bool(artifact.strip())
+    if isinstance(artifact, (int, float)):
+        return artifact != 0
+    if isinstance(artifact, list):
+        return any(_artifact_has_content(item, root=False) for item in artifact)
+    if isinstance(artifact, dict):
+        ignored = {"quality", "selected_types", "feedback_considered"} if root else set()
+        return any(
+            key not in ignored and _artifact_has_content(value, root=False)
+            for key, value in artifact.items()
+        )
+    return artifact not in {None, False}
+
+
+def _validate_draft_shape(stage: str, artifact: Any) -> None:
+    expected = dict if stage in {"curriculum_analysis", "pedagogical_design", "resources"} else list
+    if not isinstance(artifact, expected):
+        label = "um objeto" if expected is dict else "uma lista de linhas"
+        raise ValueError(f"A etapa {STAGE_LABELS[stage]} deve conservar {label}.")
+
+
+def _append_version(
+    state: PrismState,
+    stage: str,
+    artifact: Any,
+    metadata: dict[str, Any],
+) -> None:
+    versions = deepcopy(state.get("versions", {}))
+    versions.setdefault(stage, []).append(deepcopy(artifact))
+    state["versions"] = versions
+
+    stage_index = STAGE_ORDER.index(stage)
+    active_versions = dict(state.get("active_versions", {}))
+    dependencies = {
+        upstream: int(active_versions[upstream])
+        for upstream in STAGE_ORDER[:stage_index]
+        if upstream in active_versions
+    }
+    version_dependencies = deepcopy(state.get("version_dependencies", {}))
+    version_dependencies.setdefault(stage, []).append(dependencies)
+    state["version_dependencies"] = version_dependencies
+    active_versions[stage] = len(versions[stage])
+    state["active_versions"] = active_versions
+
+    generation_metadata = deepcopy(state.get("generation_metadata", {}))
+    generation_metadata.setdefault(stage, []).append(deepcopy(metadata))
+    state["generation_metadata"] = generation_metadata
+
+
+def _snapshot_without_invalidation(
+    state: PrismState,
+    target_stage: str,
+    reason: str,
+) -> None:
+    snapshots = deepcopy(state.get("revision_snapshots", []))
+    snapshots.append(
+        {
+            "revision_id": f"R{len(snapshots) + 1}",
+            "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "target_stage": target_stage,
+            "feedback": reason,
+            "previous_status": state.get("status", ""),
+            "active_versions": deepcopy(state.get("active_versions", {})),
+            "resource_types": list(state.get("resource_types", [])),
+            "artifacts": {
+                stage: deepcopy(state[stage])
+                for stage in STAGE_ORDER
+                if stage in state
+            },
+        }
+    )
+    state["revision_snapshots"] = snapshots
+
+
+def save_manual_draft(
+    state: PrismState,
+    target_stage: str,
+    artifact: Any,
+    reason: str = "",
+    *,
+    metadata: dict[str, Any] | None = None,
+) -> PrismState:
+    """Guarda um rascunho incompleto e preserva sempre os artefactos posteriores."""
+
+    if target_stage not in AUTHORING_STAGES:
+        raise ValueError("A etapa selecionada não pode ser editada manualmente.")
+    updated = ensure_manual_artifacts(deepcopy(state))
+    edited_artifact = deepcopy(artifact)
+    _validate_draft_shape(target_stage, edited_artifact)
+    if edited_artifact == updated.get(target_stage):
+        raise ValueError("Não foram detetadas alterações para guardar.")
+    if target_stage == "resources":
+        edited_artifact["selected_types"] = list(updated.get("resource_types", []))
+        edited_artifact = attach_quality_report(updated, edited_artifact)
+
+    clean_reason = reason.strip() or "Conteúdo alterado diretamente pelo docente."
+    _snapshot_without_invalidation(updated, target_stage, clean_reason)
+    updated[target_stage] = edited_artifact
+    updated.setdefault("feedback", {})[target_stage] = clean_reason
+    _append_version(
+        updated,
+        target_stage,
+        edited_artifact,
+        metadata
+        or {
+            "provider": "Docente",
+            "model": "Edição manual",
+            "duration_ms": 0,
+            "total_tokens": 0,
+            "validation_attempts": 0,
+            "manual_edit": True,
+        },
+    )
+
+    target_index = STAGE_ORDER.index(target_stage)
+    statuses = dict(updated.get("stage_statuses", {}))
+    statuses[target_stage] = "draft"
+    for stage in AUTHORING_STAGES[target_index + 1 :]:
+        statuses[stage] = (
+            "needs_review" if _artifact_has_content(updated.get(stage)) else "empty"
+        )
+    statuses["final_validation"] = "pending"
+    updated["stage_statuses"] = statuses
+    updated.pop("final_validation", None)
+    updated.get("active_versions", {}).pop("final_validation", None)
+    updated["current_stage"] = target_stage
+    updated["status"] = "drafting"
+    updated["review"] = {
+        "stage": target_stage,
+        "label": STAGE_LABELS[target_stage],
+        "message": "Rascunho guardado. Pode continuar sem executar a IA.",
+    }
+    _record_decision(
+        updated,
+        target_stage,
+        f"Docente guardou um rascunho em {STAGE_LABELS[target_stage]}.",
+        clean_reason,
+    )
+    return updated
+
+
+def navigate_to_stage(state: PrismState, target_stage: str) -> PrismState:
+    """Muda de etapa sem gerar, validar ou apagar conteúdo."""
+
+    if target_stage not in STAGE_ORDER:
+        raise ValueError("A etapa selecionada não está disponível.")
+    updated = ensure_manual_artifacts(deepcopy(state))
+    updated["current_stage"] = target_stage
+    if target_stage == "final_validation":
+        updated["final_validation"] = build_final_validation(updated)
+        _append_version(
+            updated,
+            target_stage,
+            updated["final_validation"],
+            {
+                "provider": "CoerIA",
+                "model": "Verificação determinística",
+                "duration_ms": 0,
+                "total_tokens": 0,
+                "validation_attempts": 1,
+            },
+        )
+        updated["stage_statuses"][target_stage] = "checked"
+        updated["status"] = "awaiting_review"
+    else:
+        updated["status"] = "drafting"
+    updated["review"] = {
+        "stage": target_stage,
+        "label": STAGE_LABELS[target_stage],
+        "message": (
+            "Verificação global atualizada."
+            if target_stage == "final_validation"
+            else "Etapa aberta para autoria manual."
+        ),
+    }
+    return updated
+
+
+def update_manual_resource_settings(
+    state: PrismState,
+    resource_types: list[str],
+    selected_source_image_ids: list[str] | None = None,
+) -> PrismState:
+    """Atualiza escolhas de recursos sem gerar conteúdo nem avançar a sessão."""
+
+    if not is_manual_first(state):
+        raise ValueError("Esta operação aplica-se apenas ao fluxo de autoria manual.")
+    updated = ensure_manual_artifacts(deepcopy(state))
+    selected = validate_resource_types(resource_types)
+    updated["resource_types"] = selected
+    for row in updated.get("alignment_matrix", []):
+        if isinstance(row, dict):
+            row["resource_types"] = list(selected)
+
+    if selected_source_image_ids is not None:
+        available_ids = {
+            str(item.get("id", "")).strip()
+            for item in updated.get("source_images", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        }
+        requested = list(
+            dict.fromkeys(
+                str(item).strip()
+                for item in selected_source_image_ids
+                if str(item).strip()
+            )
+        )
+        unknown = [item for item in requested if item not in available_ids]
+        if unknown:
+            raise ValueError(
+                "A seleção contém imagens que já não estão disponíveis: "
+                + ", ".join(unknown)
+            )
+        if RESOURCE_PRESENTATION in selected and len(requested) > len(
+            updated.get("learning_outcomes", [])
+        ):
+            raise ValueError(
+                "Foram selecionadas mais imagens documentais do que resultados de "
+                "aprendizagem disponíveis para os slides de conteúdo."
+            )
+        updated["selected_source_image_ids"] = (
+            requested if RESOURCE_PRESENTATION in selected else []
+        )
+
+    resources = deepcopy(updated["resources"])
+    resources["selected_types"] = list(selected)
+    updated["resources"] = attach_quality_report(updated, resources)
+    statuses = dict(updated.get("stage_statuses", {}))
+    if _artifact_has_content(updated.get("alignment_matrix")):
+        statuses["alignment_matrix"] = "draft"
+    statuses["resources"] = (
+        "needs_review" if _artifact_has_content(resources) else "empty"
+    )
+    statuses["final_validation"] = "pending"
+    updated["stage_statuses"] = statuses
+    updated.pop("final_validation", None)
+    updated.get("active_versions", {}).pop("final_validation", None)
+    _record_decision(
+        updated,
+        "alignment_matrix",
+        "Docente atualizou a seleção de recursos sem executar a IA.",
+        ", ".join(selected),
+    )
+    return updated
+
+
+def _value_at_scope(value: Any, path: list[str | int]) -> Any:
+    current = value
+    for part in path:
+        current = current[part]
+    return current
+
+
+def _replace_at_scope(value: Any, path: list[str | int], replacement: Any) -> Any:
+    if not path:
+        return deepcopy(replacement)
+    result = deepcopy(value)
+    parent = result
+    for part in path[:-1]:
+        parent = parent[part]
+    parent[path[-1]] = deepcopy(replacement)
+    return result
+
+
+def request_ai_assistance(
+    state: PrismState,
+    target_stage: str,
+    scope_path: list[str | int],
+    scope_label: str,
+    instruction: str,
+    agent: PedagogicalAgent | None = None,
+) -> PrismState:
+    """Produz uma proposta localizada; nunca altera o artefacto ativo."""
+
+    if target_stage not in AUTHORING_STAGES:
+        raise ValueError("A assistência de IA só está disponível nas etapas de autoria.")
+    clean_instruction = instruction.strip()
+    if not clean_instruction:
+        raise ValueError("Indique o que pretende que a IA proponha.")
+    updated = ensure_manual_artifacts(deepcopy(state))
+    current_artifact = deepcopy(updated[target_stage])
+    try:
+        before = deepcopy(_value_at_scope(current_artifact, scope_path))
+    except (KeyError, IndexError, TypeError) as error:
+        raise ValueError("O âmbito selecionado já não existe nesta versão.") from error
+
+    working = deepcopy(updated)
+    working["current_stage"] = target_stage
+    working.setdefault("feedback", {})[target_stage] = (
+        "Assistência localizada pedida pelo docente. Altera apenas "
+        f"{scope_label}. Pedido: {clean_instruction}. Preserva o restante conteúdo."
+    )
+    if target_stage == "resources" and scope_path:
+        resource_by_field = {
+            "presentation_outline": RESOURCE_PRESENTATION,
+            "lesson_worksheet": RESOURCE_WORKSHEET,
+            "test": RESOURCE_TEST,
+            "practical_activity": RESOURCE_PRACTICAL,
+        }
+        scoped_resource = resource_by_field.get(str(scope_path[0]))
+        if scoped_resource:
+            if scoped_resource not in updated.get("resource_types", []):
+                raise ValueError(
+                    "O âmbito pertence a um recurso que não está selecionado."
+                )
+            working["resource_types"] = [scoped_resource]
+            for row in working.get("alignment_matrix", []):
+                if isinstance(row, dict):
+                    row["resource_types"] = [scoped_resource]
+    active_agent = agent or build_pedagogical_team(
+        updated.get("ai_provider", configured_ai_provider())
+    ).generator
+    execution_agent: PedagogicalAgent = active_agent
+    if target_stage == "resources":
+        execution_agent = _SeparateResourceAgent(active_agent, None)
+    result = execution_agent.generate(target_stage, working)
+    proposed_artifact = deepcopy(result.artifact)
+    proposed_images: list[dict[str, Any]] = []
+    if target_stage == "resources" and isinstance(proposed_artifact, dict):
+        proposed_images = proposed_artifact.pop("_generated_images", [])
+    try:
+        after = deepcopy(_value_at_scope(proposed_artifact, scope_path))
+    except (KeyError, IndexError, TypeError) as error:
+        raise AgentGenerationError(
+            "A IA não devolveu uma proposta compatível com o âmbito escolhido."
+        ) from error
+    if before == after:
+        raise AgentGenerationError("A IA não propôs qualquer alteração nesse âmbito.")
+
+    proposals = deepcopy(updated.get("ai_proposals", []))
+    proposal = {
+        "id": f"P{len(proposals) + 1}",
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "stage": target_stage,
+        "scope_path": list(scope_path),
+        "scope_label": scope_label,
+        "instruction": clean_instruction,
+        "before": before,
+        "after": after,
+        "status": "pending",
+        "metadata": deepcopy(result.metadata),
+        "generated_images": proposed_images,
+    }
+    proposals.append(proposal)
+    updated["ai_proposals"] = proposals
+    _record_decision(
+        updated,
+        target_stage,
+        "IA produziu uma proposta localizada; nenhuma alteração foi aplicada.",
+        f"Âmbito: {scope_label}. Pedido: {clean_instruction}",
+    )
+    return updated
+
+
+def decide_ai_proposal(
+    state: PrismState,
+    proposal_id: str,
+    accept: bool,
+) -> PrismState:
+    """Aceita ou rejeita explicitamente uma proposta previamente guardada."""
+
+    working = deepcopy(state)
+    proposals = deepcopy(working.get("ai_proposals", []))
+    proposal = next((item for item in proposals if item.get("id") == proposal_id), None)
+    if proposal is None:
+        raise ValueError("A proposta de IA selecionada já não está disponível.")
+    if proposal.get("status") != "pending":
+        raise ValueError("Esta proposta de IA já foi decidida.")
+    proposal["status"] = "accepted" if accept else "rejected"
+    proposal["decided_at"] = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+    working["ai_proposals"] = proposals
+    stage = str(proposal["stage"])
+    if not accept:
+        _record_decision(working, stage, "Docente rejeitou a proposta localizada da IA.")
+        return working
+
+    scope_path = list(proposal.get("scope_path", []))
+    try:
+        current_scope_value = _value_at_scope(working[stage], scope_path)
+    except (KeyError, IndexError, TypeError) as error:
+        raise ValueError(
+            "O âmbito da proposta deixou de existir. Rejeite-a e peça uma nova proposta."
+        ) from error
+    if current_scope_value != proposal.get("before"):
+        raise ValueError(
+            "O rascunho foi alterado depois desta proposta. Para evitar substituir "
+            "trabalho mais recente, rejeite-a e peça uma nova proposta."
+        )
+
+    artifact = _replace_at_scope(
+        working[stage],
+        scope_path,
+        proposal.get("after"),
+    )
+    if stage == "resources" and proposal.get("generated_images"):
+        current_images = [
+            deepcopy(item)
+            for item in working.get("generated_images", [])
+            if isinstance(item, dict)
+        ]
+        known_ids = {str(item.get("id", "")) for item in current_images}
+        current_images.extend(
+            deepcopy(item)
+            for item in proposal.get("generated_images", [])
+            if isinstance(item, dict) and str(item.get("id", "")) not in known_ids
+        )
+        working["generated_images"] = current_images
+    accepted = save_manual_draft(
+        working,
+        stage,
+        artifact,
+        f"Proposta {proposal_id} da IA aceite pelo docente.",
+        metadata={
+            **deepcopy(proposal.get("metadata", {})),
+            "assistance_proposal_id": proposal_id,
+            "human_approved": True,
+        },
+    )
+    # save_manual_draft faz uma cópia; replica a decisão que acabá de ser tomada.
+    accepted["ai_proposals"] = proposals
+    return accepted
+
+
+def verify_stage_with_ai(
+    state: PrismState,
+    target_stage: str,
+    critic: PedagogicalCritic | None = None,
+) -> PrismState:
+    """Regista uma crítica facultativa e não bloqueante, sem modificar conteýo."""
+
+    if target_stage not in AUTHORING_STAGES:
+        raise ValueError("A verificação por IA só se aplica às etapas de autoria.")
+    updated = ensure_manual_artifacts(deepcopy(state))
+    active_critic = critic or build_pedagogical_team(
+        updated.get("ai_provider", configured_ai_provider())
+    ).critic
+    result: CritiqueResult = active_critic.review(
+        target_stage,
+        updated,
+        updated[target_stage],
+    )
+    review = {
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "passed": result.passed,
+        "findings": deepcopy(result.findings),
+        "revision_instructions": result.revision_instructions,
+        "metadata": deepcopy(result.metadata),
+        "non_blocking": True,
+    }
+    reviews = deepcopy(updated.get("ai_reviews", {}))
+    reviews.setdefault(target_stage, []).append(review)
+    updated["ai_reviews"] = reviews
+    _record_decision(
+        updated,
+        target_stage,
+        "Verificação facultativa por IA concluída; o resultado não bloqueia a navegação.",
+    )
+    return updated
+
+
 def build_final_validation(state: PrismState) -> dict[str, Any]:
     """Prepara o ecrã final sem delegar a decisão a um modelo."""
+
+    structural_checks: list[dict[str, Any]] = []
+    current_resource_quality: dict[str, Any] = {}
+    for stage in AUTHORING_STAGES:
+        artifact = state.get(stage, blank_artifact(stage, state))
+        try:
+            if stage == "resources":
+                quality = attach_quality_report(state, artifact).get("quality", {})
+                current_resource_quality = quality
+                if not quality.get("passed"):
+                    raise ValueError(
+                        f"{quality.get('summary', {}).get('errors', 0)} erro(s) de qualidade."
+                    )
+            validate_artifact(stage, artifact, state)
+            passed = True
+            detail = "Estrutura completa e relações válidas."
+        except (AgentGenerationError, IndexError, KeyError, TypeError, ValueError) as error:
+            passed = False
+            detail = str(error)
+        structural_checks.append(
+            {
+                "id": f"stage_{stage}",
+                "label": STAGE_LABELS[stage],
+                "passed": passed,
+                "detail": detail,
+            }
+        )
 
     alignment_ok = bool(state.get("alignment_matrix")) and all(
         row.get("status") == "Coerente" for row in state["alignment_matrix"]
     )
-    resource_quality_ok = bool(
-        state.get("resources", {}).get("quality", {}).get("passed")
-    )
+    resource_quality_ok = bool(current_resource_quality.get("passed"))
     selected_taxonomy = validate_taxonomy_choice(
         state.get("course", {}).get("taxonomy_type", "SOLO")
     )
@@ -637,28 +1205,32 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
         for item in state["learning_outcomes"]
     )
     checks = [
+        *structural_checks,
         {
             "id": "alignment",
             "label": "Estrutura e alinhamento pedagógico",
             "passed": alignment_ok,
+            "detail": "Todas as linhas devem estar assinaladas como Coerente.",
         },
         {
             "id": "resources",
             "label": "Qualidade automática dos recursos",
             "passed": resource_quality_ok,
+            "detail": "Os recursos selecionados devem cumprir os controlos determinísticos.",
         },
         {
             "id": "taxonomy",
             "label": f"Uso exclusivo da Taxonomia {selected_taxonomy}",
             "passed": taxonomy_ok,
+            "detail": "Cada verbo deve corresponder ao nível taxonómico escolhido.",
         },
     ]
     return {
         "passed": all(item["passed"] for item in checks),
         "checks": checks,
         "message": (
-            "Confirme se a integração dos recursos mantém a estrutura e o "
-            "alinhamento coerentes."
+            "Verificação global determinística. As observações de IA, quando "
+            "pedidas, são facultativas e não substituem estes controlos."
         ),
     }
 
@@ -1160,6 +1732,8 @@ def _record_decision(
 def revision_targets_for_state(state: PrismState) -> tuple[str, ...]:
     """Devolve as etapas de autoria já alcançadas que podem ser reabertas."""
 
+    if is_manual_first(state):
+        return tuple(AUTHORING_STAGES)
     current_stage = state.get("current_stage", STAGE_ORDER[0])
     if current_stage not in STAGE_ORDER:
         return ()
@@ -1187,7 +1761,7 @@ def revision_impact(state: PrismState, target_stage: str) -> dict[str, Any]:
     generated_downstream = [
         stage
         for stage in STAGE_ORDER[target_index + 1 :]
-        if stage in state
+        if stage in state and _artifact_has_content(state.get(stage))
     ]
     return {
         "target_stage": target_stage,
@@ -1253,6 +1827,11 @@ def reopen_stage(
 ) -> PrismState:
     """Cria uma nova versão de uma etapa e preserva a versão coerente anterior."""
 
+    if is_manual_first(state):
+        raise ValueError(
+            "Nesta sessão, use a assistência de IA e aprove ou rejeite a proposta "
+            "antes de alterar o rascunho."
+        )
     if state.get("status") not in {"awaiting_review", "completed"}:
         raise ValueError("A sessão não está disponível para reabertura.")
     clean_feedback = feedback.strip()
@@ -1294,6 +1873,8 @@ def apply_manual_edit(
 ) -> PrismState:
     """Guarda uma edição humana como nova versão, sem chamar um fornecedor de IA."""
 
+    if is_manual_first(state):
+        return save_manual_draft(state, target_stage, artifact, reason)
     if state.get("status") not in {"awaiting_review", "completed"}:
         raise ValueError("A sessão não está disponível para edição manual.")
     revision_impact(state, target_stage)
@@ -1447,15 +2028,20 @@ def create_session(
     ai_image_generation_enabled: bool = False,
     source_reduction: dict[str, Any] | None = None,
     progress_callback: ProgressCallback | None = None,
+    manual_first: bool | None = None,
 ) -> PrismState:
     """Inicia uma sessão no primeiro ponto de validação humana."""
 
     selected_resource_types = validate_resource_types(resource_types)
+    use_manual_first = agent is None if manual_first is None else bool(manual_first)
     state: PrismState = {
         "schema_version": SCHEMA_VERSION,
         "orchestration": {
-            "mode": "bounded-generator-critic",
-            "human_approval_required": True,
+            "mode": MANUAL_FIRST_MODE if use_manual_first else "bounded-generator-critic",
+            "human_approval_required": not use_manual_first,
+            "llm_optional": use_manual_first,
+            "proposal_approval_required": use_manual_first,
+            "global_deterministic_validation_required": True,
         },
         "course": course.to_dict(),
         "feedback": {},
@@ -1466,6 +2052,8 @@ def create_session(
         "active_versions": {},
         "stage_statuses": {stage: "pending" for stage in STAGE_ORDER},
         "revision_snapshots": [],
+        "ai_proposals": [],
+        "ai_reviews": {},
         "resource_types": selected_resource_types,
         "generated_images": [],
         "selected_source_image_ids": [],
@@ -1475,8 +2063,29 @@ def create_session(
             ai_provider or configured_ai_provider()
         ),
         "current_stage": STAGE_ORDER[0],
-        "status": "generating",
+        "status": "drafting" if use_manual_first else "generating",
     }
+    if use_manual_first:
+        ensure_manual_artifacts(state)
+        state["stage_statuses"] = {
+            stage: "draft" if stage == STAGE_ORDER[0] else "empty"
+            for stage in AUTHORING_STAGES
+        }
+        state["stage_statuses"]["final_validation"] = "pending"
+        state["review"] = {
+            "stage": STAGE_ORDER[0],
+            "label": STAGE_LABELS[STAGE_ORDER[0]],
+            "message": "Preencha manualmente ou peça assistência localizada à IA.",
+        }
+        state["audit"] = [
+            {
+                "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "stage": STAGE_LABELS[STAGE_ORDER[0]],
+                "event": "Sessão manual criada sem executar um fornecedor de IA.",
+                "feedback": "—",
+            }
+        ]
+        return state
     return run_current_stage(
         state,
         agent=agent,
@@ -1512,6 +2121,39 @@ def review_current_stage(
 
     # Não alteramos o estado persistido até a nova proposta ser produzida com êxito.
     state = deepcopy(state)
+    if is_manual_first(state):
+        if decision != "approve":
+            raise ValueError(
+                "A reformulação automática foi substituída por assistência "
+                "localizada com aprovação explícita."
+            )
+        current_stage = state.get("current_stage", STAGE_ORDER[0])
+        if current_stage == "final_validation":
+            refreshed = navigate_to_stage(state, "final_validation")
+            if not refreshed["final_validation"].get("passed"):
+                raise ValueError(
+                    "A verificação global encontrou problemas bloqueantes. "
+                    "Pode abrir qualquer etapa, corrigi-la e voltar a verificar."
+                )
+            _mark_selected_images_approved(refreshed)
+            refreshed["status"] = "completed"
+            refreshed["stage_statuses"]["final_validation"] = "approved"
+            refreshed["review"] = {
+                "stage": "completed",
+                "label": "Concluído",
+                "message": "Verificação global concluída; pacote pronto para exportação.",
+            }
+            _record_decision(
+                refreshed,
+                "final_validation",
+                "Docente concluiu a verificação global determinística.",
+            )
+            return refreshed
+        current_index = STAGE_ORDER.index(current_stage)
+        state.setdefault("stage_statuses", {})[current_stage] = (
+            "draft" if _artifact_has_content(state.get(current_stage)) else "empty"
+        )
+        return navigate_to_stage(state, STAGE_ORDER[current_index + 1])
     if state.get("status") == "completed" and decision == "approve":
         # Uma segunda submissão do botão final não deve criar uma exceção nem
         # duplicar a decisão já registada.

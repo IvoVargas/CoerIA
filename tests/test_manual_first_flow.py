@@ -1,0 +1,198 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from unittest.mock import patch
+
+import pytest
+
+from prism.agents import CritiqueResult, GenerationResult
+from prism.models import CourseInput, RESOURCE_TEST
+from prism.source_reduction import reduce_source_text
+from prism.workflow import (
+    STAGE_ORDER,
+    create_session,
+    decide_ai_proposal,
+    navigate_to_stage,
+    request_ai_assistance,
+    review_current_stage,
+    save_manual_draft,
+    update_manual_resource_settings,
+    verify_stage_with_ai,
+)
+
+
+def _course() -> CourseInput:
+    return CourseInput.create(
+        "Programção",
+        "Fundamentos de programação, algoritmos, estruturas de controlo e testes.",
+        taxonomy_type="SOLO",
+    )
+
+
+class OutcomeProposalAgent:
+    def generate(self, stage: str, state: dict) -> GenerationResult:
+        assert stage == "learning_outcomes"
+        return GenerationResult(
+            artifact=[
+                {
+                    "id": "RA1",
+                    "outcome_type": "Conhecimento teórico",
+                    "theme": "Algoritmos",
+                    "taxonomy_level": "Uni-estrutural",
+                    "action_verb": "Identificar",
+                    "statement": "Identificar os elementos fundamentais de um algoritmo.",
+                }
+            ],
+            metadata={"provider": "Teste", "model": "fake", "total_tokens": 3},
+        )
+
+
+class WarningCritic:
+    def review(self, stage: str, state: dict, artifact: object) -> CritiqueResult:
+        return CritiqueResult(
+            passed=True,
+            findings=[
+                {
+                    "severity": "warning",
+                    "criterion": "Clareza",
+                    "message": "Pode concretizar melhor o contexto.",
+                }
+            ],
+            revision_instructions="Opcional: concretizar o contexto.",
+            metadata={"provider": "Teste", "model": "critic-fake"},
+        )
+
+
+def test_new_session_is_manual_first_and_does_not_build_an_ai_team() -> None:
+    with patch("prism.workflow.build_pedagogical_team") as factory:
+        state = create_session(_course(), ai_provider="OpenAI")
+
+    factory.assert_not_called()
+    assert state["status"] == "drafting"
+    assert state["current_stage"] == "learning_outcomes"
+    assert state["orchestration"]["mode"] == "manual-first"
+    assert all(stage in state for stage in STAGE_ORDER[:-1])
+
+
+def test_all_stages_can_be_opened_without_generation_or_validation() -> None:
+    state = create_session(_course())
+    for stage in STAGE_ORDER[:-1]:
+        state = navigate_to_stage(state, stage)
+        assert state["current_stage"] == stage
+        assert state["status"] == "drafting"
+
+
+def test_earlier_edit_preserves_later_work_and_marks_it_for_review() -> None:
+    state = create_session(_course())
+    alignment = [
+        {
+            "outcome_id": "RA1",
+            "content_ids": ["C1"],
+            "taxonomy_level": "Uni-estrutural",
+            "assessment_ids": [],
+            "assessment_purposes": [],
+            "teaching_activity_ids": [],
+            "resource_types": [],
+            "status": "Requer revisão",
+            "rationale": "Rascunho do docente.",
+        }
+    ]
+    state = save_manual_draft(state, "alignment_matrix", alignment)
+    preserved = deepcopy(state["alignment_matrix"])
+
+    state = save_manual_draft(
+        state,
+        "learning_outcomes",
+        OutcomeProposalAgent().generate("learning_outcomes", state).artifact,
+    )
+
+    assert state["alignment_matrix"] == preserved
+    assert state["stage_statuses"]["alignment_matrix"] == "needs_review"
+
+
+def test_ai_assistance_requires_an_explicit_acceptance() -> None:
+    state = create_session(_course())
+    proposed = request_ai_assistance(
+        state,
+        "learning_outcomes",
+        [],
+        "Toda a etapa",
+        "Propor um resultado inicial.",
+        agent=OutcomeProposalAgent(),
+    )
+
+    assert proposed["learning_outcomes"] == []
+    assert proposed["ai_proposals"][-1]["status"] == "pending"
+
+    accepted = decide_ai_proposal(proposed, proposed["ai_proposals"][-1]["id"], True)
+    assert accepted["learning_outcomes"][0]["id"] == "RA1"
+    assert accepted["ai_proposals"][-1]["status"] == "accepted"
+    assert accepted["generation_metadata"]["learning_outcomes"][-1]["human_approved"]
+
+
+def test_rejected_ai_assistance_does_not_change_the_draft() -> None:
+    state = create_session(_course())
+    proposed = request_ai_assistance(
+        state,
+        "learning_outcomes",
+        [],
+        "Toda a etapa",
+        "Propor um resultado inicial.",
+        agent=OutcomeProposalAgent(),
+    )
+    rejected = decide_ai_proposal(proposed, proposed["ai_proposals"][-1]["id"], False)
+
+    assert rejected["learning_outcomes"] == []
+    assert rejected["ai_proposals"][-1]["status"] == "rejected"
+
+
+def test_stale_ai_proposal_cannot_overwrite_newer_manual_work() -> None:
+    state = create_session(_course())
+    proposed = request_ai_assistance(
+        state,
+        "learning_outcomes",
+        [],
+        "Toda a etapa",
+        "Propor um resultado inicial.",
+        agent=OutcomeProposalAgent(),
+    )
+    changed = deepcopy(proposed)
+    changed["learning_outcomes"] = [{"id": "RA-MANUAL"}]
+
+    with pytest.raises(ValueError, match="alterado depois desta proposta"):
+        decide_ai_proposal(changed, proposed["ai_proposals"][-1]["id"], True)
+
+
+def test_stage_ai_review_is_saved_but_does_not_block_navigation() -> None:
+    state = create_session(_course())
+    reviewed = verify_stage_with_ai(state, "learning_outcomes", critic=WarningCritic())
+
+    assert reviewed["status"] == "drafting"
+    assert reviewed["ai_reviews"]["learning_outcomes"][-1]["non_blocking"]
+    assert navigate_to_stage(reviewed, "curriculum_analysis")["current_stage"] == "curriculum_analysis"
+
+
+def test_resource_selection_can_change_without_generation() -> None:
+    state = create_session(_course())
+    updated = update_manual_resource_settings(state, [RESOURCE_TEST], [])
+
+    assert updated["resource_types"] == [RESOURCE_TEST]
+    assert updated["resources"]["selected_types"] == [RESOURCE_TEST]
+    assert updated["resources"]["test"]["questions"] == []
+
+
+def test_final_deterministic_validation_is_mandatory() -> None:
+    state = navigate_to_stage(create_session(_course()), "final_validation")
+    assert not state["final_validation"]["passed"]
+    with pytest.raises(ValueError, match="problemas bloqueantes"):
+        review_current_stage(state, "approve")
+
+
+def test_long_sources_can_start_manual_authoring_without_ai_reduction() -> None:
+    source = "Conteúdo curricular. " * 8_000
+    with patch("prism.source_reduction._provider_client") as provider:
+        result = reduce_source_text(source, provider="OpenAI", allow_ai=False)
+
+    provider.assert_not_called()
+    assert result.text == source.strip()
+    assert result.metadata["deferred"] is True

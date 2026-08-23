@@ -459,6 +459,50 @@ def editor_reference_options(
     return options
 
 
+def assistance_scope_options(stage: str, artifact: Any) -> list[dict[str, Any]]:
+    """Lista âmbitos estáveis que o docente pode entregar explicitamente à IA."""
+
+    layout = editor_layout(stage)
+    options: list[dict[str, Any]] = [
+        {"label": "Toda a etapa", "path": []},
+    ]
+    for scalar in layout.fields:
+        options.append({"label": f"Campo: {scalar.label}", "path": list(scalar.path)})
+    for table in layout.tables:
+        rows = value_at_path(artifact, table.path)
+        if table.path:
+            options.append(
+                {"label": f"Tabela completa: {table.title}", "path": list(table.path)}
+            )
+        if not isinstance(rows, list):
+            continue
+        for index, row in enumerate(rows):
+            identifier = ""
+            if isinstance(row, dict):
+                identifier = str(
+                    row.get("id")
+                    or row.get("outcome_id")
+                    or row.get("title")
+                    or row.get("heading")
+                    or ""
+                ).strip()
+            row_label = f"Linha {index + 1}" + (f" ({identifier})" if identifier else "")
+            row_path = [*table.path, index]
+            options.append(
+                {"label": f"{table.title} — {row_label}", "path": row_path}
+            )
+            if isinstance(row, dict):
+                for field in table.fields:
+                    if field.key in row:
+                        options.append(
+                            {
+                                "label": f"{row_label} — campo {field.label}",
+                                "path": [*row_path, field.key],
+                            }
+                        )
+    return options
+
+
 def editor_taxonomy_level_options(
     state: dict[str, Any],
     field: FieldSpec,
