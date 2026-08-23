@@ -17,9 +17,11 @@ from prism.workflow import (
     navigate_to_stage,
     reopen_completed_manual_session,
     request_ai_assistance,
+    restore_stage_version,
     review_current_stage,
     save_manual_draft,
     update_manual_resource_settings,
+    version_restore_impact,
     verify_stage_with_ai,
 )
 
@@ -142,6 +144,70 @@ def test_earlier_edit_preserves_later_work_and_marks_it_for_review() -> None:
 
     assert state["alignment_matrix"] == preserved
     assert state["stage_statuses"]["alignment_matrix"] == "needs_review"
+
+
+def test_historical_version_is_restored_as_a_new_auditable_version() -> None:
+    state = create_session(_course())
+    version_one = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar os elementos de um algoritmo.",
+        }
+    ]
+    version_two = deepcopy(version_one)
+    version_two[0]["statement"] = "Identificar os elementos essenciais de um algoritmo."
+    state = save_manual_draft(state, "learning_outcomes", version_one)
+    state = save_manual_draft(state, "learning_outcomes", version_two)
+    curriculum = deepcopy(state["curriculum_analysis"])
+    curriculum["summary"] = "Rascunho curricular posterior."
+    state = save_manual_draft(state, "curriculum_analysis", curriculum)
+    state["final_validation"] = {"passed": True, "checks": []}
+    state["versions"]["final_validation"] = [deepcopy(state["final_validation"])]
+    state["active_versions"]["final_validation"] = 1
+    state["status"] = "completed"
+    state["current_stage"] = "final_validation"
+
+    impact = version_restore_impact(state, "learning_outcomes::0")
+    restored = restore_stage_version(
+        state,
+        "learning_outcomes::0",
+        "Recuperar a formulação inicial validada pelo docente.",
+    )
+
+    assert impact["version_number"] == 1
+    assert impact["next_version"] == 3
+    assert impact["was_completed"] is True
+    assert "curriculum_analysis" in impact["affected_stages"]
+    assert restored["learning_outcomes"] == version_one
+    assert restored["versions"]["learning_outcomes"][1] == version_two
+    assert restored["versions"]["learning_outcomes"][2] == version_one
+    assert restored["active_versions"]["learning_outcomes"] == 3
+    assert restored["generation_metadata"]["learning_outcomes"][-1][
+        "restored_from_version"
+    ] == 1
+    assert restored["stage_statuses"]["curriculum_analysis"] == "needs_review"
+    assert restored["status"] == "drafting"
+    assert "final_validation" not in restored
+    assert any("restaurou a versão 1" in item["event"] for item in restored["audit"])
+
+
+def test_active_and_derived_versions_cannot_be_restored() -> None:
+    state = create_session(_course())
+    version = OutcomeProposalAgent().generate("learning_outcomes", state).artifact
+    state = save_manual_draft(state, "learning_outcomes", version)
+
+    with pytest.raises(ValueError, match="já é a versão ativa"):
+        restore_stage_version(
+            state,
+            "learning_outcomes::0",
+            "Tentativa sem efeito.",
+        )
+    with pytest.raises(ValueError, match="recalculada"):
+        version_restore_impact(state, "final_validation::0")
 
 
 def test_ai_assistance_requires_an_explicit_acceptance() -> None:

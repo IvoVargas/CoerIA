@@ -2319,11 +2319,50 @@ class AGIRSoloInterface:
                         render_history_artifact(selected, state),
                         extras=["tables"],
                     ).classes("artifact-markdown mt-4 overflow-x-auto")
-                    history_select.on_value_change(
-                        lambda event: history_markdown.set_content(
+                    restore_button = None
+                    if is_manual_first(state) and choices:
+                        ui.label(
+                            "Selecione uma versão não ativa de uma etapa de autoria para "
+                            "a recuperar como nova versão."
+                        ).classes("text-xs muted mt-3")
+                        restore_button = ui.button(
+                            "Restaurar versão selecionada",
+                            icon="restore",
+                            on_click=lambda: self._open_history_restore_dialog(
+                                str(history_select.value or "")
+                            ),
+                        ).props("outline no-caps").classes(
+                            "secondary-action mt-2"
+                        ).mark("restore-history-version")
+
+                    def update_history(event: Any) -> None:
+                        history_markdown.set_content(
                             render_history_artifact(event.value, state)
                         )
-                    )
+                        if restore_button is None:
+                            return
+                        try:
+                            impact = self.service.version_restore_impact(
+                                state, str(event.value or "")
+                            )
+                            enabled = not impact["is_active"] and not impact["same_content"]
+                        except ValueError:
+                            enabled = False
+                        restore_button.set_enabled(enabled)
+
+                    history_select.on_value_change(update_history)
+                    if restore_button is not None:
+                        try:
+                            initial_impact = self.service.version_restore_impact(
+                                state, str(selected or "")
+                            )
+                            initial_enabled = (
+                                not initial_impact["is_active"]
+                                and not initial_impact["same_content"]
+                            )
+                        except ValueError:
+                            initial_enabled = False
+                        restore_button.set_enabled(initial_enabled)
                 with ui.tab_panel(audit_tab).classes("px-0"):
                     columns = [
                         {"name": "timestamp", "label": "Data", "field": "timestamp", "align": "left"},
@@ -2336,6 +2375,84 @@ class AGIRSoloInterface:
                         rows=audit_rows(state),
                         pagination={"rowsPerPage": 10},
                     ).props("flat bordered wrap-cells").classes("w-full")
+
+    def _open_history_restore_dialog(self, selected_version: str) -> None:
+        try:
+            impact = self.service.version_restore_impact(
+                self.state,
+                selected_version,
+            )
+            if impact["is_active"]:
+                raise ValueError("A versão selecionada já está ativa.")
+            if impact["same_content"]:
+                raise ValueError("O conteúdo dessa versão já coincide com o rascunho ativo.")
+        except USER_ERRORS as error:
+            self._show_error(error)
+            return
+
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6 gap-4"):
+            ui.label("RESTAURAR VERSÃO").classes("eyebrow")
+            ui.label(
+                f"{impact['stage_label']} — versão {impact['version_number']}"
+            ).classes("section-title")
+            ui.label(
+                f"O conteúdo escolhido será copiado para a nova versão "
+                f"{impact['next_version']}. A versão ativa atual continuará disponível "
+                "no histórico."
+            ).classes("text-sm")
+            if impact["affected_labels"]:
+                ui.label("Etapas posteriores que ficarão para revisão:").classes(
+                    "font-semibold"
+                )
+                for label in impact["affected_labels"]:
+                    ui.label(f"• {label}").classes("text-sm muted")
+            if impact["was_completed"]:
+                ui.label(
+                    "A sessão deixará o estado Concluído e a exportação ficará "
+                    "indisponível até uma nova verificação global."
+                ).classes("soft-surface p-3 text-sm font-medium")
+            reason = ui.textarea(
+                "Motivo do restauro",
+                placeholder="Explique por que pretende recuperar esta versão.",
+            ).props("outlined autogrow").classes("w-full")
+
+            async def confirm() -> None:
+                clean_reason = str(reason.value or "").strip()
+                if not clean_reason:
+                    ui.notify("Indique o motivo do restauro.", type="warning")
+                    return
+                dialog.close()
+                await self._handle_restore_version(selected_version, clean_reason)
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat no-caps")
+                ui.button(
+                    "Confirmar restauro",
+                    icon="restore",
+                    on_click=confirm,
+                ).props("unelevated no-caps").classes("primary-action")
+        dialog.open()
+
+    async def _handle_restore_version(
+        self,
+        selected_version: str,
+        reason: str,
+    ) -> None:
+        try:
+            self.state, message = await run.io_bound(
+                self.service.restore_session_version,
+                self.state,
+                selected_version,
+                reason,
+            )
+            self.viewed_stage = None
+            self.manual_edit_stage = None
+            self.manual_edit_artifact = None
+            self.show_workspace(message)
+            self.refresh_sessions()
+            ui.notify(message, type="positive", multi_line=True)
+        except USER_ERRORS as error:
+            self._show_error(error)
 
     async def handle_export(self) -> None:
         self._show_busy("A preparar o pacote de recursos…")

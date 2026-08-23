@@ -16,6 +16,7 @@ from prism.workflow import (
     create_test_agent,
     navigate_to_stage,
     review_current_stage,
+    save_manual_draft,
 )
 
 
@@ -236,6 +237,43 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     user.find(marker="manual-stage-curriculum_analysis").click()
     await user.should_see("Objetivos gerais")
     assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
+
+
+@pytest.mark.asyncio
+async def test_manual_history_offers_explicit_version_restore(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    first = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar os elementos de um algoritmo.",
+        }
+    ]
+    second = deepcopy(first)
+    second[0]["statement"] = "Identificar os elementos essenciais de um algoritmo."
+    state = save_manual_draft(state, "learning_outcomes", first)
+    state = save_manual_draft(state, "learning_outcomes", second)
+
+    @ui.page("/_test_manual_history_restore")
+    def manual_history_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_manual_history_restore")
+
+    await user.should_see("Restaurar versão selecionada")
+    await user.should_see("recuperar como nova versão")
 
 
 @pytest.mark.asyncio

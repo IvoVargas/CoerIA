@@ -117,6 +117,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   anterior e o valor sugerido. Não aplicar qualquer alteração automaticamente.
 - Exigir uma decisão humana explícita de aceitar ou rejeitar cada proposta;
   aceitar cria uma nova versão e rejeitar preserva o rascunho.
+- Permitir restaurar uma versão não ativa de cada etapa de autoria mediante
+  confirmação e motivo. O restauro cria uma nova versão, preserva todo o
+  histórico, assinala os passos posteriores para revisão e invalida a verificação
+  global; o relatório final derivado não pode ser restaurado.
 - Não alterar o artefacto ativo nem persistir uma proposta parcial se a chamada à
   IA falhar.
 - Apresentar a verificação global determinística num ecrã separado e torná-la a

@@ -79,6 +79,17 @@ Uma proposta pendente não altera o artefacto ativo. Aceitar substitui apenas o
 caminho autorizado e guarda uma nova versão; rejeitar altera somente o estado
 da proposta.
 
+## Restauro de versões
+
+O histórico é imutável: restaurar não muda o ponteiro para uma entrada antiga
+nem apaga a versão atual. O docente seleciona uma versão não ativa, consulta o
+impacto, indica um motivo e confirma. O CoerIA copia esse artefacto para uma nova
+versão ativa com metadados `history_restore` e `restored_from_version`, preserva
+as versões intermédias, assinala os artefactos posteriores preenchidos para
+revisão e remove o relatório final derivado. As dependências a montante não são
+revertidas silenciosamente e serão verificadas novamente na validação global.
+`final_validation` não é restaurável porque pode ser recalculada localmente.
+
 ## Verificação facultativa por IA
 
 O crítico recebe a etapa ativa e os artefactos relevantes, mas não tem uma

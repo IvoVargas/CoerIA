@@ -28,9 +28,11 @@ from .workflow import (
     reopen_completed_manual_session,
     reopen_stage,
     request_ai_assistance,
+    restore_stage_version,
     review_current_stage,
     revision_impact,
     update_manual_resource_settings,
+    version_restore_impact,
     verify_stage_with_ai,
 )
 
@@ -160,6 +162,30 @@ class ApplicationService:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
         updated = self._persist(navigate_to_stage(state, target_stage))
         return updated, f"Etapa aberta: {STAGE_LABELS[target_stage]}."
+
+    @staticmethod
+    def version_restore_impact(
+        state: dict[str, Any] | None,
+        selected_version: str,
+    ) -> dict[str, Any]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        return version_restore_impact(state, selected_version)
+
+    def restore_session_version(
+        self,
+        state: dict[str, Any] | None,
+        selected_version: str,
+        reason: str,
+    ) -> tuple[dict[str, Any], str]:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        updated = restore_stage_version(state, selected_version, reason)
+        updated = self._persist(updated)
+        review = updated.get("review", {})
+        return updated, str(
+            review.get("message") or "Versão histórica restaurada como nova versão."
+        )
 
     def request_assistance(
         self,

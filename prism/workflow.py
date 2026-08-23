@@ -843,6 +843,110 @@ def save_manual_draft(
     return updated
 
 
+def _parse_history_selection(selected_version: str) -> tuple[str, int]:
+    try:
+        stage, index_text = str(selected_version or "").rsplit("::", maxsplit=1)
+        index = int(index_text)
+    except (ValueError, TypeError) as error:
+        raise ValueError("Selecione uma versão válida do histórico.") from error
+    if stage not in AUTHORING_STAGES:
+        raise ValueError(
+            "A verificação final é recalculada e não pode ser restaurada do histórico."
+        )
+    return stage, index
+
+
+def version_restore_impact(
+    state: PrismState,
+    selected_version: str,
+) -> dict[str, Any]:
+    """Descreve o impacto de restaurar uma versão sem modificar a sessão."""
+
+    if not is_manual_first(state):
+        raise ValueError("O restauro aplica-se ao fluxo de autoria manual.")
+    stage, index = _parse_history_selection(selected_version)
+    versions = state.get("versions", {}).get(stage, [])
+    if index < 0 or index >= len(versions):
+        raise ValueError("A versão selecionada já não está disponível.")
+    active_version = int(
+        state.get("active_versions", {}).get(stage) or len(versions) or 0
+    )
+    target_index = STAGE_ORDER.index(stage)
+    affected_stages = [
+        downstream
+        for downstream in AUTHORING_STAGES[target_index + 1 :]
+        if _artifact_has_content(state.get(downstream))
+    ]
+    return {
+        "stage": stage,
+        "stage_label": STAGE_LABELS[stage],
+        "version_index": index,
+        "version_number": index + 1,
+        "active_version": active_version,
+        "is_active": active_version == index + 1,
+        "same_content": deepcopy(versions[index]) == state.get(stage),
+        "was_completed": state.get("status") == "completed",
+        "affected_stages": affected_stages,
+        "affected_labels": [STAGE_LABELS[item] for item in affected_stages],
+        "next_version": len(versions) + 1,
+    }
+
+
+def restore_stage_version(
+    state: PrismState,
+    selected_version: str,
+    reason: str,
+) -> PrismState:
+    """Copia uma versão histórica para uma nova versão ativa e auditável."""
+
+    impact = version_restore_impact(state, selected_version)
+    if impact["is_active"]:
+        raise ValueError("A versão selecionada já é a versão ativa desta etapa.")
+    if impact["same_content"]:
+        raise ValueError("O conteúdo dessa versão já coincide com o rascunho ativo.")
+    clean_reason = reason.strip()
+    if not clean_reason:
+        raise ValueError("Indique o motivo do restauro.")
+    stage = str(impact["stage"])
+    artifact = deepcopy(
+        state["versions"][stage][int(impact["version_index"])]
+    )
+    restored = save_manual_draft(
+        state,
+        stage,
+        artifact,
+        clean_reason,
+        metadata={
+            "provider": "Docente",
+            "model": "Restauro do histórico",
+            "duration_ms": 0,
+            "total_tokens": 0,
+            "validation_attempts": 0,
+            "manual_edit": True,
+            "history_restore": True,
+            "restored_from_version": int(impact["version_number"]),
+        },
+    )
+    restored["review"] = {
+        "stage": stage,
+        "label": STAGE_LABELS[stage],
+        "message": (
+            f"A versão {impact['version_number']} foi copiada para a nova versão "
+            f"{impact['next_version']}."
+        ),
+    }
+    _record_decision(
+        restored,
+        stage,
+        (
+            f"Docente restaurou a versão {impact['version_number']} de "
+            f"{STAGE_LABELS[stage]} como versão {impact['next_version']}."
+        ),
+        clean_reason,
+    )
+    return restored
+
+
 def navigate_to_stage(state: PrismState, target_stage: str) -> PrismState:
     """Muda de etapa sem gerar, validar ou apagar conteúdo."""
 
