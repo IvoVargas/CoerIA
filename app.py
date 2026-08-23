@@ -500,20 +500,55 @@ class AGIRSoloInterface:
         )
 
     def _build_initial_view(self) -> None:
-        with ui.column().classes("gap-3 pt-4"):
-            ui.label("DESENHO CURRICULAR ORIENTADO").classes("eyebrow")
-            ui.label("Da ideia aos recursos, com cada decisão sob o seu controlo.").classes(
-                "hero-title"
+        with ui.column().classes("gap-2 pt-4"):
+            ui.label("NOVA SESSÃO PEDAGÓGICA").classes("eyebrow")
+            ui.label("Configure o ponto de partida").classes(
+                "text-3xl font-extrabold tracking-tight"
             )
             ui.label(
-                "Estruture resultados de aprendizagem, conteúdos, avaliação, "
-                "atividades e recursos numa sequência alinhada pela Taxonomia SOLO ou Bloom."
-            ).classes("hero-copy")
+                "Indique o contexto, as fontes e a caracterização da unidade "
+                "curricular antes de criar a sessão."
+            ).classes("muted")
+
+        with ui.card().classes("surface w-full p-5 md:p-6") as assistance_card:
+            assistance_card.mark("new-session-assistance")
+            with ui.row().classes("w-full items-start gap-4"):
+                ui.icon("auto_awesome", color="primary", size="2rem")
+                with ui.column().classes("gap-1 flex-1"):
+                    ui.label("Preenchimento manual orientado").classes("section-title")
+                    ui.label(
+                        "Valide os dados localmente ou solicite à IA uma proposta apenas para os campos vazios."
+                    ).classes("muted")
+            with ui.row().classes("w-full gap-3 mt-3 items-center"):
+                ui.button(
+                    "Validar e sugerir melhorias",
+                    icon="fact_check",
+                    on_click=self.handle_validate_initial,
+                ).props("outline no-caps").classes("secondary-action")
+                ui.button(
+                    "Gerar proposta inicial por IA",
+                    icon="auto_awesome",
+                    on_click=self.handle_generate_initial,
+                ).props("unelevated no-caps").classes("secondary-action")
+                ui.space()
+                create_session_button = ui.button(
+                    "Iniciar desenho curricular alinhado",
+                    icon="play_arrow",
+                    on_click=self.handle_start_session,
+                ).props("unelevated no-caps size=lg icon-right").classes(
+                    "primary-action px-6"
+                )
+                create_session_button.mark("create-pedagogical-session")
+            self.assistance_status = ui.markdown().classes(
+                "soft-surface w-full p-4 mt-3"
+            )
+            self.assistance_status.set_visibility(False)
 
         with ui.card().classes("surface w-full p-2 md:p-5"):
             with ui.stepper().props("flat animated alternative-labels").classes(
                 "w-full"
             ) as self.form_stepper:
+                self.form_stepper.mark("new-session-form")
                 with ui.step("contexto", "Contexto", icon="school"):
                     self._build_context_step()
                     with ui.stepper_navigation():
@@ -537,37 +572,6 @@ class AGIRSoloInterface:
                     self._build_characterization_step()
                     with ui.stepper_navigation():
                         ui.button("Voltar", on_click=self.form_stepper.previous).props("flat no-caps")
-
-        with ui.card().classes("surface w-full p-5 md:p-6"):
-            with ui.row().classes("w-full items-start gap-4"):
-                ui.icon("auto_awesome", color="primary", size="2rem")
-                with ui.column().classes("gap-1 flex-1"):
-                    ui.label("Preenchimento manual orientado").classes("section-title")
-                    ui.label(
-                        "Valide os dados localmente ou solicite à IA uma proposta apenas para os campos vazios."
-                    ).classes("muted")
-            with ui.row().classes("w-full gap-3 mt-3"):
-                ui.button(
-                    "Validar e sugerir melhorias",
-                    icon="fact_check",
-                    on_click=self.handle_validate_initial,
-                ).props("outline no-caps").classes("secondary-action")
-                ui.button(
-                    "Gerar proposta inicial por IA",
-                    icon="auto_awesome",
-                    on_click=self.handle_generate_initial,
-                ).props("unelevated no-caps").classes("secondary-action")
-            self.assistance_status = ui.markdown().classes(
-                "soft-surface w-full p-4 mt-3"
-            )
-            self.assistance_status.set_visibility(False)
-
-        with ui.row().classes("w-full justify-end"):
-            ui.button(
-                "Iniciar sessão pedagógica",
-                icon="play_arrow",
-                on_click=self.handle_start_session,
-            ).props("unelevated no-caps size=lg icon-right").classes("primary-action px-6")
 
     def _build_context_step(self) -> None:
         ui.label("Identificação e opções pedagógicas").classes("section-title mb-3")

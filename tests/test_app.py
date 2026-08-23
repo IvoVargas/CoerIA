@@ -96,8 +96,9 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("Construa uma unidade curricular coerente")
     await user.should_see("Iniciar nova sessão")
     user.find("Iniciar nova sessão").click()
-    await user.should_see("Da ideia aos recursos, com cada decisão sob o seu controlo.")
+    await user.should_see("Configure o ponto de partida")
     await user.should_see("Preenchimento manual orientado")
+    await user.should_see("Iniciar desenho curricular alinhado")
     await user.should_see("OpenAI")
     await user.should_see("IAedu")
     await user.should_see("SOLO")
@@ -175,6 +176,15 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Identificação e opções pedagógicas")
     assert not interfaces[-1].home_view.visible
     assert interfaces[-1].initial_view.visible
+    assistance = next(
+        iter(user.find(marker="new-session-assistance").elements)
+    )
+    create_button = next(
+        iter(user.find(marker="create-pedagogical-session").elements)
+    )
+    form = next(iter(user.find(marker="new-session-form").elements))
+    assert assistance.id < form.id
+    assert create_button.id < form.id
 
 
 @pytest.mark.asyncio
