@@ -126,6 +126,14 @@ class ApplicationService:
         ai_image_generation_enabled = bool(
             form.get("ai_image_generation_enabled", True)
         )
+        contact_hours = float(form.get("contact_hours", 0) or 0)
+        autonomous_hours = float(form.get("autonomous_hours", 0) or 0)
+        calculated_duration = contact_hours + autonomous_hours
+        duration_hours = (
+            calculated_duration
+            if calculated_duration > 0
+            else float(form.get("duration_hours", 0) or 0)
+        )
         course = CourseInput.create(
             str(form.get("unit_name", "") or ""),
             consolidated_source,
@@ -134,7 +142,7 @@ class ApplicationService:
                 or form.get("audience")
                 or "Ensino superior"
             ),
-            int(form.get("duration_hours", 0) or 0),
+            duration_hours,
             taxonomy_type=str(form.get("taxonomy_type", "SOLO") or "SOLO"),
             program_name=str(form.get("program_name", "") or ""),
             program_type=str(form.get("program_type", "") or ""),
@@ -143,8 +151,8 @@ class ApplicationService:
             cnaef_code=str(form.get("cnaef_code", "") or ""),
             cnaef_name=str(form.get("cnaef_name", "") or ""),
             ects_credits=float(form.get("ects_credits", 0) or 0),
-            contact_hours=float(form.get("contact_hours", 0) or 0),
-            autonomous_hours=float(form.get("autonomous_hours", 0) or 0),
+            contact_hours=contact_hours,
+            autonomous_hours=autonomous_hours,
             general_aims=str(form.get("general_aims", "") or ""),
             bibliography=str(form.get("bibliography", "") or ""),
         )
@@ -288,7 +296,7 @@ class ApplicationService:
         return {
             "unit_name": str(course.get("unit_name", "")),
             "audience": str(course.get("audience", "Ensino superior")),
-            "duration_hours": int(course.get("duration_hours", 12)),
+            "duration_hours": float(course.get("duration_hours", 12)),
             "taxonomy_type": str(course.get("taxonomy_type", "SOLO")),
             "source_text": str(direct_source),
             "program_name": str(course.get("program_name", "")),

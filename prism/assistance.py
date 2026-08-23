@@ -21,7 +21,6 @@ from .providers import (
 PROPOSAL_FIELDS = (
     "unit_name",
     "audience",
-    "duration_hours",
     "source_text",
     "program_name",
     "program_type",
@@ -35,7 +34,6 @@ PROPOSAL_FIELDS = (
     "general_aims",
 )
 NUMERIC_PROPOSAL_FIELDS = {
-    "duration_hours",
     "ects_credits",
     "contact_hours",
     "autonomous_hours",
@@ -109,18 +107,21 @@ def validate_initial_fields(data: dict[str, Any]) -> dict[str, Any]:
         issues.append("Indique o nome da unidade curricular ou ação de formação.")
     if len(source_text) < 40:
         issues.append(
-            "Acrescente uma descrição ou conteúdos programáticos com pelo menos 40 caracteres."
+            "Acrescente informação de referência com pelo menos 40 caracteres."
         )
     if not str(data.get("program_type", "") or "").strip():
         suggestions.append(
             "Indique o tipo de formação para melhorar o enquadramento."
         )
     try:
-        duration = int(float(data.get("duration_hours", 0) or 0))
+        duration = float(data.get("duration_hours", 0) or 0)
         if duration <= 0:
             raise ValueError
     except (TypeError, ValueError):
-        issues.append("A duração prevista deve ser um número inteiro superior a zero.")
+        issues.append(
+            "A soma das horas de contacto e do trabalho autónomo deve ser "
+            "superior a zero."
+        )
     try:
         validate_taxonomy_choice(str(data.get("taxonomy_type", "")))
     except ValueError as error:
@@ -199,7 +200,6 @@ class OpenAIInitialFormAssistant:
             "properties": {
                 "unit_name": {"type": "string"},
                 "audience": {"type": "string"},
-                "duration_hours": {"type": "integer"},
                 "source_text": {"type": "string"},
                 "program_name": {"type": "string"},
                 "program_type": {"type": "string"},
@@ -216,7 +216,6 @@ class OpenAIInitialFormAssistant:
             "required": [
                 "unit_name",
                 "audience",
-                "duration_hours",
                 "source_text",
                 "program_name",
                 "program_type",
@@ -238,7 +237,7 @@ class OpenAIInitialFormAssistant:
             "Preenche TODOS os campos indicados em fields_to_complete com valores "
             "concretos, coerentes e editáveis; não devolvas strings vazias nem valores "
             "numéricos iguais a zero. Quando source_text estiver em fields_to_complete, "
-            "cria uma proposta estruturada de conteúdos programáticos com pelo menos "
+            "cria uma proposta estruturada de informação de referência com pelo menos "
             "200 caracteres; nunca devolvas apenas um título ou uma frase curta. "
             "Código e designação CNAEF, ECTS e horas podem ser estimativas provisórias, "
             "mas a explanation deve identificá-los claramente como dados a confirmar. "

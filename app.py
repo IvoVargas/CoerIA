@@ -511,6 +511,16 @@ class AGIRSoloInterface:
 
         with ui.card().classes("surface w-full p-5 md:p-6") as assistance_card:
             assistance_card.mark("new-session-assistance")
+            ui.label("Fornecedor de IA").classes("text-sm font-semibold")
+            self.fields["ai_provider"] = ui.toggle(
+                list(AI_PROVIDER_CHOICES),
+                value=configured_ai_provider(),
+            ).props("spread no-caps").classes("full-control max-w-xl")
+            ui.label(
+                "A escolha é exclusiva, fica associada à sessão e só é usada "
+                "quando solicitar assistência por IA."
+            ).classes("text-xs muted")
+            ui.separator().classes("my-4")
             with ui.row().classes("w-full items-start gap-4"):
                 ui.icon("auto_awesome", color="primary", size="2rem")
                 with ui.column().classes("gap-1 flex-1"):
@@ -558,21 +568,6 @@ class AGIRSoloInterface:
                 "Unidade curricular / ação de formação",
                 placeholder="Ex.: Introdução às Pescas",
             ).classes("full-control")
-            self.fields["duration_hours"] = ui.number(
-                "Duração prevista",
-                value=12,
-                min=1,
-                precision=0,
-                suffix=" horas",
-            ).classes("full-control")
-            self.fields["ai_provider"] = ui.toggle(
-                list(AI_PROVIDER_CHOICES),
-                value=configured_ai_provider(),
-            ).props("spread no-caps").classes("full-control")
-        ui.label("Fornecedor de IA").classes("text-xs font-semibold muted mt-1")
-        ui.label(
-            "A escolha é exclusiva e fica associada à sessão."
-        ).classes("text-xs muted")
         ui.label("Taxonomia dos resultados de aprendizagem").classes(
             "text-sm font-semibold mt-4"
         )
@@ -582,17 +577,22 @@ class AGIRSoloInterface:
         ).props("spread no-caps").classes("full-control max-w-xl")
 
     def _build_sources_step(self) -> None:
-        ui.label("Conteúdos programáticos e fontes").classes("section-title")
+        ui.label("Texto de base e fontes de referência").classes("section-title")
         ui.label(
-            "Pode combinar texto direto com documentos. Os ficheiros são processados apenas quando iniciar a sessão."
+            "Pode combinar texto direto com documentos. Os ficheiros são "
+            "processados apenas quando iniciar o desenho curricular alinhado."
         ).classes("muted mb-3")
         self.fields["source_text"] = ui.textarea(
-            "Conteúdos programáticos ou texto de base",
+            "Informação de referência para a unidade curricular",
             placeholder=(
-                "Descreva os temas, competências, objetivos ou conteúdos "
-                "programáticos da unidade curricular."
+                "Introduza uma descrição da unidade curricular, temas preliminares, "
+                "orientações ou um programa existente."
             ),
         ).props("outlined autogrow input-style='min-height: 190px'").classes("full-control")
+        ui.label(
+            "Os conteúdos programáticos formais serão definidos posteriormente, "
+            "em função dos resultados de aprendizagem."
+        ).classes("text-xs muted")
         accepted = ",".join(sorted(SUPPORTED_SOURCE_SUFFIXES))
         self.uploader = ui.upload(
             label="Adicionar ficheiros de apoio",
@@ -644,8 +644,15 @@ class AGIRSoloInterface:
             ).classes("full-control")
         self.fields["general_aims"] = ui.textarea(
             "Objetivos gerais da unidade curricular",
-            placeholder="Indique os objetivos gerais, se já estiverem definidos.",
+            placeholder=(
+                "Descreva a finalidade ampla da unidade curricular, sem repetir "
+                "os resultados de aprendizagem observáveis."
+            ),
         ).props("outlined autogrow").classes("full-control mt-3")
+        ui.label(
+            "Funcionam como enquadramento amplo para formular os resultados de "
+            "aprendizagem; não são uma lista adicional a alinhar na matriz."
+        ).classes("text-xs muted")
         self.fields["bibliography"] = ui.textarea(
             "Bibliografia fornecida ou validada pelo docente",
             placeholder=(
@@ -680,9 +687,11 @@ class AGIRSoloInterface:
     def _form_data(self) -> dict[str, Any]:
         data = {name: element.value for name, element in self.fields.items()}
         data["audience"] = str(data.get("program_type", "") or "Ensino superior")
-        data["duration_hours"] = int(data.get("duration_hours", 0) or 0)
         for key in ("ects_credits", "contact_hours", "autonomous_hours"):
             data[key] = float(data.get(key, 0) or 0)
+        data["duration_hours"] = (
+            data["contact_hours"] + data["autonomous_hours"]
+        )
         data["resource_types"] = [RESOURCE_PRESENTATION]
         data["ai_image_generation_enabled"] = True
         return data
@@ -843,7 +852,6 @@ class AGIRSoloInterface:
         self._set_form_data(
             {
                 "unit_name": "",
-                "duration_hours": 12,
                 "ai_provider": configured_ai_provider(),
                 "taxonomy_type": "SOLO",
                 "source_text": "",

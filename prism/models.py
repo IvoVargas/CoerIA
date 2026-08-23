@@ -39,7 +39,7 @@ class CourseInput:
     unit_name: str
     source_text: str
     audience: str
-    duration_hours: int
+    duration_hours: float
     taxonomy_type: str = TAXONOMY_SOLO
     program_name: str = ""
     program_type: str = ""
@@ -81,14 +81,14 @@ class CourseInput:
             raise ValueError("Indique o nome da unidade curricular.")
         if len(text) < 40:
             raise ValueError(
-                "Introduza pelo menos uma breve descrição ou conteúdos programáticos "
+                "Introduza informação de referência para a unidade curricular "
                 "(40 caracteres)."
             )
 
         try:
-            hours = int(float(duration_hours))
+            hours = float(duration_hours)
         except (TypeError, ValueError) as error:
-            raise ValueError("A duração deve ser um número inteiro de horas.") from error
+            raise ValueError("A duração deve ser um número de horas.") from error
 
         if hours <= 0:
             raise ValueError("A duração deve ser superior a zero.")

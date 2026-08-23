@@ -97,7 +97,9 @@ se pretende iniciar uma nova sessão; as sessões guardadas permanecem acessíve
 menu lateral. A configuração da nova sessão apresenta contexto, fontes e
 caracterização numa única página. O tipo de formação fornece o enquadramento
 anteriormente pedido como público-alvo e o semestre obrigatório inicia-se em
-`1.º semestre`.
+`1.º semestre`. O fornecedor é escolhido junto das ações facultativas de IA e a
+duração total é calculada automaticamente pela soma das horas de contacto e do
+trabalho autónomo.
 
 A barra de etapas permite abrir qualquer ponto de autoria desde a criação da
 sessão. A navegação não chama a IA, não exige completude e não apaga dados. Em

@@ -103,6 +103,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     user.find("Iniciar nova sessão").click()
     await user.should_see("Configure o ponto de partida")
     await user.should_see("Preenchimento manual orientado")
+    await user.should_see("Fornecedor de IA")
     await user.should_see("OpenAI")
     await user.should_see("IAedu")
     await user.should_see("SOLO")
@@ -185,13 +186,19 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     assert form_data["ai_image_generation_enabled"] is True
     assert form_data["semester"] == "1.º semestre"
     assert form_data["audience"] == "Ensino superior"
+    assert form_data["duration_hours"] == 0
     interfaces[-1].fields["program_type"].set_value("Mestrado")
+    interfaces[-1].fields["contact_hours"].set_value(45.5)
+    interfaces[-1].fields["autonomous_hours"].set_value(116.75)
     assert interfaces[-1]._form_data()["audience"] == "Mestrado"
+    assert interfaces[-1]._form_data()["duration_hours"] == 162.25
 
-    await user.should_see("Conteúdos programáticos e fontes")
+    await user.should_see("Texto de base e fontes de referência")
+    await user.should_see("Informação de referência para a unidade curricular")
     await user.should_see("Caracterização da unidade curricular")
     await user.should_see("Iniciar desenho curricular alinhado")
     await user.should_not_see("Público-alvo")
+    await user.should_not_see("Duração prevista")
     await user.should_not_see("Recursos a produzir")
     await user.should_not_see("Permitir geração de imagens por IA")
     assistance = next(
@@ -654,3 +661,28 @@ def test_manual_assistance_validates_without_starting_a_session() -> None:
 
     assert result["valid"]
     assert result["suggestions"]
+
+
+def test_session_duration_is_derived_from_contact_and_autonomous_work() -> None:
+    with TemporaryDirectory() as temporary_directory:
+        service = ApplicationService(
+            SQLiteSessionStore(Path(temporary_directory) / "duration.db")
+        )
+        state = service.start_session(
+            {
+                "unit_name": "Introdução às Pescas",
+                "source_text": (
+                    "Ecossistemas aquáticos, técnicas de captura e gestão "
+                    "sustentável dos recursos pesqueiros."
+                ),
+                "program_type": "Licenciatura",
+                "duration_hours": 999,
+                "contact_hours": 45.5,
+                "autonomous_hours": 116.75,
+                "taxonomy_type": "SOLO",
+                "semester": "1.º semestre",
+                "resource_types": [RESOURCE_PRESENTATION],
+            }
+        )
+
+    assert state["course"]["duration_hours"] == 162.25

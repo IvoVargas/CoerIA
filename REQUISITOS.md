@@ -26,13 +26,17 @@ materiais produzidos.
 
 ### RF01 — Dados iniciais e fontes
 
-- Recolher nome da unidade curricular, tipo de formação e duração prevista.
-- Recolher opcionalmente curso, ano, CNAEF, ECTS,
-  horas de contacto, trabalho autónomo, objetivos gerais e bibliografia a
-  validar pelo docente.
+- Recolher o nome da unidade curricular e o tipo de formação.
+- Recolher curso, ano, CNAEF, ECTS, horas de contacto, trabalho autónomo,
+  objetivos gerais e bibliografia a validar pelo docente.
+- Calcular a duração total pela soma das horas de contacto e do trabalho
+  autónomo, sem pedir ao docente uma duração prevista redundante.
 - Tornar o semestre obrigatório, limitá-lo às opções `1.º semestre` e
   `2.º semestre` e selecionar a primeira por defeito.
 - Aceitar texto introduzido diretamente e um ou mais ficheiros de apoio.
+- Tratar o texto introduzido e os ficheiros como informação de referência; os
+  conteúdos programáticos formais são definidos na etapa posterior aos
+  resultados de aprendizagem.
 - Extrair texto de `.txt`, `.md`, `.tex`, `.pdf`, `.docx` e `.pptx`.
 - Rejeitar ficheiros vazios e formatos não suportados com uma mensagem compreensível.
 - Para conjuntos de fontes acima do orçamento normal do contexto, permitir criar
@@ -40,12 +44,14 @@ materiais produzidos.
   de contexto foi adiada.
 - Apenas rejeitar quando for ultrapassado o limite absoluto de ingestão configurado.
 - Permitir escolher OpenAI ou IAedu antes de iniciar a sessão.
+- Apresentar a escolha do fornecedor junto das ações facultativas de assistência
+  por IA, antes do preenchimento manual orientado.
 - Informar que o conteúdo fornecido só é enviado ao fornecedor selecionado
   quando o docente pede explicitamente uma operação de IA.
 - Manter o fornecedor escolhido durante toda a sessão e ao retomá-la.
 - Validar o preenchimento manual e apresentar sugestões sem iniciar a sessão.
 - Gerar, apenas a pedido, uma proposta inicial editável por IA que preencha todos
-  os campos vazios, incluindo os conteúdos programáticos, sem substituir valores
+  os campos vazios, incluindo a informação de referência, sem substituir valores
   já introduzidos pelo docente.
 - Exigir a escolha exclusiva entre SOLO e Bloom; nunca combinar as duas numa sessão.
 

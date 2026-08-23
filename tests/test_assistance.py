@@ -161,7 +161,6 @@ class InitialAssistanceTests(unittest.TestCase):
         ):
             self.assertTrue(result[field])
         for field in (
-            "duration_hours",
             "ects_credits",
             "contact_hours",
             "autonomous_hours",
@@ -210,7 +209,7 @@ class InitialAssistanceTests(unittest.TestCase):
 
         self.assertEqual(result["unit_name"], original["unit_name"])
         self.assertEqual(result["audience"], original["audience"])
-        self.assertEqual(result["duration_hours"], original["duration_hours"])
+        self.assertNotIn("duration_hours", result)
         self.assertEqual(result["source_text"], proposal["source_text"])
 
     def test_short_generated_source_text_is_repaired_automatically(self) -> None:
