@@ -26,11 +26,12 @@ materiais produzidos.
 
 ### RF01 — Dados iniciais e fontes
 
-- Recolher nome da unidade curricular, público-alvo e duração prevista.
-- Recolher opcionalmente curso e tipo de formação, ano, semestre, CNAEF, ECTS,
+- Recolher nome da unidade curricular, tipo de formação e duração prevista.
+- Recolher opcionalmente curso, ano, CNAEF, ECTS,
   horas de contacto, trabalho autónomo, objetivos gerais e bibliografia a
   validar pelo docente.
-- Limitar o campo de semestre às opções `1.º semestre` e `2.º semestre`.
+- Tornar o semestre obrigatório, limitá-lo às opções `1.º semestre` e
+  `2.º semestre` e selecionar a primeira por defeito.
 - Aceitar texto introduzido diretamente e um ou mais ficheiros de apoio.
 - Extrair texto de `.txt`, `.md`, `.tex`, `.pdf`, `.docx` e `.pptx`.
 - Rejeitar ficheiros vazios e formatos não suportados com uma mensagem compreensível.
@@ -327,7 +328,8 @@ ficheiros após a exportação.
 - A entrada na aplicação apresenta uma página inicial; o formulário de criação
   só é aberto depois de o docente escolher iniciar uma nova sessão.
 - O docente consegue iniciar ou retomar uma sessão sem editar ficheiros.
-- O preenchimento inicial é dividido em passos curtos e orientados.
+- O preenchimento inicial reúne contexto, fontes e caracterização numa única
+  página, com uma ação final para iniciar o desenho curricular alinhado.
 - A autoria apresenta o artefacto e a decisão docente em áreas distintas.
 - O ecrã adapta-se a computador, tablet e dispositivo móvel.
 - A aplicação disponibiliza uma ação explícita para terminar o servidor local.

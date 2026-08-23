@@ -78,7 +78,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         "program_name": "",
         "program_type": "",
         "academic_year": "",
-        "semester": "",
+        "semester": "1.º semestre",
         "cnaef_code": "",
         "cnaef_name": "",
         "ects_credits": 0.0,
@@ -89,6 +89,8 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         "taxonomy_type": "SOLO",
     }.items():
         course.setdefault(key, default)
+    if not str(course.get("semester", "") or "").strip():
+        course["semester"] = "1.º semestre"
 
     selected_taxonomy = validate_taxonomy_choice(course.get("taxonomy_type", "SOLO"))
     current_classifications = {

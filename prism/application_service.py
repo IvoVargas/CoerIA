@@ -14,7 +14,12 @@ from .ingestion import (
     extract_source_images,
     recover_direct_source_text,
 )
-from .models import CourseInput, RESOURCE_PRESENTATION, validate_resource_types
+from .models import (
+    CourseInput,
+    RESOURCE_PRESENTATION,
+    SEMESTER_OPTIONS,
+    validate_resource_types,
+)
 from .persistence import SQLiteSessionStore
 from .source_reduction import reduce_source_text
 from .providers import configured_ai_provider
@@ -124,7 +129,11 @@ class ApplicationService:
         course = CourseInput.create(
             str(form.get("unit_name", "") or ""),
             consolidated_source,
-            str(form.get("audience", "") or ""),
+            str(
+                form.get("program_type")
+                or form.get("audience")
+                or "Ensino superior"
+            ),
             int(form.get("duration_hours", 0) or 0),
             taxonomy_type=str(form.get("taxonomy_type", "SOLO") or "SOLO"),
             program_name=str(form.get("program_name", "") or ""),
@@ -285,7 +294,7 @@ class ApplicationService:
             "program_name": str(course.get("program_name", "")),
             "program_type": str(course.get("program_type", "")),
             "academic_year": str(course.get("academic_year", "")),
-            "semester": str(course.get("semester", "")),
+            "semester": str(course.get("semester") or SEMESTER_OPTIONS[0]),
             "cnaef_code": str(course.get("cnaef_code", "")),
             "cnaef_name": str(course.get("cnaef_name", "")),
             "ects_credits": float(course.get("ects_credits", 0) or 0),

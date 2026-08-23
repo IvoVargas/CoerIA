@@ -180,17 +180,18 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Identificação e opções pedagógicas")
     assert not interfaces[-1].home_view.visible
     assert interfaces[-1].initial_view.visible
-    assert interfaces[-1].form_stepper.value == "contexto"
     form_data = interfaces[-1]._form_data()
     assert form_data["resource_types"] == [RESOURCE_PRESENTATION]
     assert form_data["ai_image_generation_enabled"] is True
+    assert form_data["semester"] == "1.º semestre"
+    assert form_data["audience"] == "Ensino superior"
+    interfaces[-1].fields["program_type"].set_value("Mestrado")
+    assert interfaces[-1]._form_data()["audience"] == "Mestrado"
 
-    user.find("Continuar para os conteúdos").click()
     await user.should_see("Conteúdos programáticos e fontes")
-    user.find("Continuar para a caracterização").click()
-
     await user.should_see("Caracterização da unidade curricular")
     await user.should_see("Iniciar desenho curricular alinhado")
+    await user.should_not_see("Público-alvo")
     await user.should_not_see("Recursos a produzir")
     await user.should_not_see("Permitir geração de imagens por IA")
     assistance = next(
@@ -644,8 +645,10 @@ def test_manual_assistance_validates_without_starting_a_session() -> None:
                 "Conteúdos suficientemente detalhados para validar o formulário inicial."
             ),
             "audience": "Licenciatura",
+            "program_type": "Licenciatura",
             "duration_hours": 18,
             "taxonomy_type": "SOLO",
+            "semester": "1.º semestre",
         }
     )
 

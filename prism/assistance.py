@@ -111,8 +111,10 @@ def validate_initial_fields(data: dict[str, Any]) -> dict[str, Any]:
         issues.append(
             "Acrescente uma descrição ou conteúdos programáticos com pelo menos 40 caracteres."
         )
-    if not str(data.get("audience", "") or "").strip():
-        suggestions.append("Identifique o público-alvo e o respetivo nível de formação.")
+    if not str(data.get("program_type", "") or "").strip():
+        suggestions.append(
+            "Indique o tipo de formação para melhorar o enquadramento."
+        )
     try:
         duration = int(float(data.get("duration_hours", 0) or 0))
         if duration <= 0:

@@ -456,6 +456,7 @@ class WorkflowTests(unittest.TestCase):
             restored["curriculum_analysis"]["contents"][0]["outcome_ids"]
         )
         self.assertIn("program_name", restored["course"])
+        self.assertEqual(restored["course"]["semester"], "1.º semestre")
         self.assertIn("stage_statuses", restored)
         self.assertIn("active_versions", restored)
         self.assertIn("revision_snapshots", restored)

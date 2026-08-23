@@ -534,48 +534,22 @@ class AGIRSoloInterface:
             )
             self.assistance_status.set_visibility(False)
 
-        with ui.card().classes("surface w-full p-2 md:p-5"):
-            with ui.stepper().props("flat animated alternative-labels").classes(
-                "w-full"
-            ) as self.form_stepper:
-                self.form_stepper.mark("new-session-form")
-                with ui.step("contexto", "Contexto", icon="school"):
-                    self._build_context_step()
-                    with ui.stepper_navigation():
-                        ui.button(
-                            "Continuar para os conteúdos",
-                            icon="arrow_forward",
-                            on_click=self.form_stepper.next,
-                        ).props("unelevated no-caps icon-right").classes("primary-action")
-
-                with ui.step("conteudos", "Conteúdos", icon="description"):
-                    self._build_sources_step()
-                    with ui.stepper_navigation():
-                        ui.button("Voltar", on_click=self.form_stepper.previous).props("flat no-caps")
-                        ui.button(
-                            "Continuar para a caracterização",
-                            icon="arrow_forward",
-                            on_click=self.form_stepper.next,
-                        ).props("unelevated no-caps icon-right").classes("primary-action")
-
-                with ui.step("caracterizacao", "Caracterização", icon="tune"):
-                    self._build_characterization_step()
-                    with ui.stepper_navigation():
-                        with ui.row().classes("w-full items-center"):
-                            ui.button("Voltar", on_click=self.form_stepper.previous).props(
-                                "flat no-caps"
-                            )
-                            ui.space()
-                            create_session_button = ui.button(
-                                "Iniciar desenho curricular alinhado",
-                                icon="play_arrow",
-                                on_click=self.handle_start_session,
-                            ).props(
-                                "unelevated no-caps size=lg icon-right"
-                            ).classes("primary-action px-6")
-                            create_session_button.mark(
-                                "create-pedagogical-session"
-                            )
+        with ui.card().classes("surface w-full p-5 md:p-7") as form_card:
+            form_card.mark("new-session-form")
+            self._build_context_step()
+            ui.separator().classes("my-5")
+            self._build_sources_step()
+            ui.separator().classes("my-5")
+            self._build_characterization_step()
+            with ui.row().classes("w-full justify-end mt-6"):
+                create_session_button = ui.button(
+                    "Iniciar desenho curricular alinhado",
+                    icon="play_arrow",
+                    on_click=self.handle_start_session,
+                ).props("unelevated no-caps size=lg icon-right").classes(
+                    "primary-action px-6"
+                )
+                create_session_button.mark("create-pedagogical-session")
 
     def _build_context_step(self) -> None:
         ui.label("Identificação e opções pedagógicas").classes("section-title mb-3")
@@ -583,10 +557,6 @@ class AGIRSoloInterface:
             self.fields["unit_name"] = ui.input(
                 "Unidade curricular / ação de formação",
                 placeholder="Ex.: Introdução às Pescas",
-            ).classes("full-control")
-            self.fields["audience"] = ui.input(
-                "Público-alvo",
-                value="Ensino superior",
             ).classes("full-control")
             self.fields["duration_hours"] = ui.number(
                 "Duração prevista",
@@ -659,7 +629,7 @@ class AGIRSoloInterface:
             self.fields["semester"] = ui.select(
                 list(SEMESTER_OPTIONS),
                 label="Semestre",
-                clearable=True,
+                value=SEMESTER_OPTIONS[0],
             ).classes("full-control")
             self.fields["cnaef_code"] = ui.input("Código CNAEF").classes("full-control")
             self.fields["cnaef_name"] = ui.input("Área CNAEF").classes("full-control")
@@ -709,6 +679,7 @@ class AGIRSoloInterface:
 
     def _form_data(self) -> dict[str, Any]:
         data = {name: element.value for name, element in self.fields.items()}
+        data["audience"] = str(data.get("program_type", "") or "Ensino superior")
         data["duration_hours"] = int(data.get("duration_hours", 0) or 0)
         for key in ("ects_credits", "contact_hours", "autonomous_hours"):
             data[key] = float(data.get(key, 0) or 0)
@@ -720,8 +691,8 @@ class AGIRSoloInterface:
         for name, element in self.fields.items():
             if name in data:
                 value = data[name]
-                if name == "semester" and value not in (*SEMESTER_OPTIONS, "", None):
-                    value = None
+                if name == "semester" and value not in SEMESTER_OPTIONS:
+                    value = SEMESTER_OPTIONS[0]
                 element.set_value(value)
 
     def _assistance_markdown(self, result: dict[str, Any]) -> str:
@@ -872,7 +843,6 @@ class AGIRSoloInterface:
         self._set_form_data(
             {
                 "unit_name": "",
-                "audience": "Ensino superior",
                 "duration_hours": 12,
                 "ai_provider": configured_ai_provider(),
                 "taxonomy_type": "SOLO",
@@ -880,7 +850,7 @@ class AGIRSoloInterface:
                 "program_name": "",
                 "program_type": None,
                 "academic_year": "",
-                "semester": "",
+                "semester": SEMESTER_OPTIONS[0],
                 "cnaef_code": "",
                 "cnaef_name": "",
                 "ects_credits": 0,
@@ -898,7 +868,6 @@ class AGIRSoloInterface:
         self.home_view.set_visibility(False)
         self.workspace_view.set_visibility(False)
         self.initial_view.set_visibility(True)
-        self.form_stepper.set_value("contexto")
         self.drawer.hide()
 
     def refresh_sessions(self) -> None:

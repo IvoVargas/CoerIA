@@ -30,6 +30,7 @@ class InitialAssistanceTests(unittest.TestCase):
                     "Algoritmos, variáveis, estruturas de controlo, funções e testes."
                 ),
                 "audience": "Licenciatura",
+                "program_type": "Licenciatura",
                 "duration_hours": 18,
                 "taxonomy_type": "SOLO",
                 "semester": "3.º semestre",
@@ -38,6 +39,14 @@ class InitialAssistanceTests(unittest.TestCase):
 
         self.assertFalse(result["valid"])
         self.assertIn("1.º semestre", result["issues"][0])
+
+    def test_semester_cannot_be_empty(self) -> None:
+        with self.assertRaisesRegex(ValueError, "1.º semestre.*2.º semestre"):
+            CourseInput.create(
+                "Introdução à Programação",
+                "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+                semester="",
+            )
 
     def test_validation_does_not_require_the_api(self) -> None:
         result = validate_initial_fields(
@@ -48,8 +57,10 @@ class InitialAssistanceTests(unittest.TestCase):
                     "recursos pesqueiros."
                 ),
                 "audience": "Licenciatura",
+                "program_type": "Licenciatura",
                 "duration_hours": 18,
                 "taxonomy_type": "SOLO",
+                "semester": "1.º semestre",
             }
         )
         self.assertTrue(result["valid"])

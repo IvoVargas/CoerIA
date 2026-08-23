@@ -22,12 +22,12 @@ SEMESTER_OPTIONS = ("1.º semestre", "2.º semestre")
 
 
 def validate_semester(value: str | None) -> str:
-    """Aceita um semestre vazio ou uma das duas opções institucionais."""
+    """Aceita apenas uma das duas opções institucionais."""
 
     semester = (value or "").strip()
-    if semester and semester not in SEMESTER_OPTIONS:
+    if semester not in SEMESTER_OPTIONS:
         raise ValueError(
-            "O semestre deve ser «1.º semestre» ou «2.º semestre»."
+            "Selecione «1.º semestre» ou «2.º semestre»."
         )
     return semester
 
@@ -44,7 +44,7 @@ class CourseInput:
     program_name: str = ""
     program_type: str = ""
     academic_year: str = ""
-    semester: str = ""
+    semester: str = SEMESTER_OPTIONS[0]
     cnaef_code: str = ""
     cnaef_name: str = ""
     ects_credits: float = 0.0
@@ -64,7 +64,7 @@ class CourseInput:
         program_name: str = "",
         program_type: str = "",
         academic_year: str = "",
-        semester: str = "",
+        semester: str = SEMESTER_OPTIONS[0],
         cnaef_code: str = "",
         cnaef_name: str = "",
         ects_credits: int | float | str = 0,

@@ -308,7 +308,6 @@ def _add_program_metadata(document: Document, course: dict[str, Any]) -> None:
         ("Horas de contacto", _display(course.get("contact_hours") or "")),
         ("Trabalho autónomo", _display(course.get("autonomous_hours") or "")),
         ("Carga de trabalho total", f"{total_hours:g} horas" if total_hours else "A confirmar pelo docente"),
-        ("Público-alvo", _display(course.get("audience"))),
         ("Taxonomia selecionada", _display(course.get("taxonomy_type"))),
     ]
     table = document.add_table(rows=1, cols=2)
@@ -740,7 +739,6 @@ def export_program_latex(
             "Carga de trabalho total",
             f"{total_hours:g} horas" if total_hours else "A confirmar pelo docente",
         ],
-        ["Público-alvo", _display(course.get("audience"))],
         ["Taxonomia selecionada", _display(course.get("taxonomy_type"))],
     ]
     body = [
