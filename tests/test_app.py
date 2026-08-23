@@ -93,6 +93,9 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.open("/")
 
     await user.should_see("CoerIA")
+    await user.should_see("Construa uma unidade curricular coerente")
+    await user.should_see("Iniciar nova sessão")
+    user.find("Iniciar nova sessão").click()
     await user.should_see("Da ideia aos recursos, com cada decisão sob o seu controlo.")
     await user.should_see("Preenchimento manual orientado")
     await user.should_see("OpenAI")
@@ -148,6 +151,51 @@ def test_error_notification_is_replaced_after_the_previous_one_was_closed() -> N
 
     assert result is replacement
     create.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_application_opens_on_home_before_starting_a_new_session(
+    user: User,
+) -> None:
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_home")
+    def home_page():
+        interfaces.append(app.AGIRSoloInterface())
+
+    await user.open("/_test_home")
+
+    await user.should_see("Construa uma unidade curricular coerente")
+    await user.should_not_see("Identificação e opções pedagógicas")
+    assert interfaces[-1].home_view.visible
+    assert not interfaces[-1].initial_view.visible
+
+    user.find("Iniciar nova sessão").click()
+
+    await user.should_see("Identificação e opções pedagógicas")
+    assert not interfaces[-1].home_view.visible
+    assert interfaces[-1].initial_view.visible
+
+
+@pytest.mark.asyncio
+async def test_workspace_does_not_render_redundant_status_banner(user: User) -> None:
+    state = create_session(
+        CourseInput.create(
+            unit_name="Programação",
+            source_text="Algoritmos, estruturas de dados, funções e testes.",
+        )
+    )
+
+    @ui.page("/_test_workspace_without_status_banner")
+    def workspace_without_status_banner_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace("Etapa aberta: Resultados de aprendizagem.")
+
+    await user.open("/_test_workspace_without_status_banner")
+
+    await user.should_not_see("Etapa aberta: Resultados de aprendizagem.")
+    assert ".status-banner" not in app.APP_CSS
 
 
 @pytest.mark.asyncio

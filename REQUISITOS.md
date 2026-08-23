@@ -324,6 +324,8 @@ ficheiros após a exportação.
 - Durante uma espera prolongada, confirmar que a operação continua ativa e que
   a aplicação aguarda a resposta do fornecedor de IA.
 - A interface utiliza português europeu e rótulos consistentes.
+- A entrada na aplicação apresenta uma página inicial; o formulário de criação
+  só é aberto depois de o docente escolher iniciar uma nova sessão.
 - O docente consegue iniciar ou retomar uma sessão sem editar ficheiros.
 - O preenchimento inicial é dividido em passos curtos e orientados.
 - A autoria apresenta o artefacto e a decisão docente em áreas distintas.

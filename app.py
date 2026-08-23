@@ -255,7 +255,8 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .consultation-card { padding: 20px 22px; }
 .info-chip { background: var(--agir-primary) !important; color: #ffffff !important; font-weight: 700; }
 .info-chip *, .info-chip .q-icon { color: #ffffff !important; }
-.status-banner { border-left: 4px solid var(--agir-primary); }
+.home-hero { padding: 34px; background: linear-gradient(145deg, #eef8f5, #ffffff); }
+.home-feature { min-width: 0; padding: 22px; }
 .final-hero { padding: 28px; color: white; background: linear-gradient(130deg, #0d766e, #184f60); border-radius: 22px; }
 .complete-hero { padding: 34px; text-align: center; background: linear-gradient(145deg, #e8f6ef, #f7fbfa); }
 .session-entry { width: 100%; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(255,255,255,.06); }
@@ -353,7 +354,7 @@ class AGIRSoloInterface:
                 ui.label(APP_NAME).classes("font-bold text-lg leading-tight")
                 ui.label("Autoria pedagógica com IA").classes("header-tagline text-xs muted")
             ui.space()
-            self.header_context = ui.label("Nova sessão").classes(
+            self.header_context = ui.label("Início").classes(
                 "hidden md:block text-sm font-semibold muted"
             )
             ui.label(self.identity.display_name).classes(
@@ -371,6 +372,11 @@ class AGIRSoloInterface:
                         "text-xs tracking-widest opacity-60 font-bold"
                     )
                     ui.label("Sessões pedagógicas").classes("text-xl font-bold")
+                ui.button(
+                    "Página inicial",
+                    icon="home",
+                    on_click=self.show_home,
+                ).props("flat color=white no-caps align=left").classes("w-full")
                 ui.button(
                     "Criar nova sessão",
                     icon="add_circle",
@@ -393,12 +399,64 @@ class AGIRSoloInterface:
                     ui.label(f"CoerIA v{APP_VERSION} · SQLite")
 
         with ui.column().classes("agir-main"):
+            self.home_view = ui.column().classes("w-full gap-6")
             self.initial_view = ui.column().classes("w-full gap-6")
             self.workspace_view = ui.column().classes("w-full gap-5")
 
+        with self.home_view:
+            self._build_home_view()
         with self.initial_view:
             self._build_initial_view()
+        self.initial_view.set_visibility(False)
         self.workspace_view.set_visibility(False)
+
+    def _build_home_view(self) -> None:
+        with ui.card().classes("surface home-hero w-full mt-4"):
+            with ui.column().classes("gap-4 max-w-4xl"):
+                ui.label("AUTORIA PEDAGÓGICA ORIENTADA").classes("eyebrow")
+                ui.label(
+                    "Construa uma unidade curricular coerente, do primeiro resultado aos recursos finais."
+                ).classes("hero-title")
+                ui.label(
+                    "O CoerIA apoia o alinhamento entre resultados de aprendizagem, "
+                    "conteúdos, atividades, avaliação e recursos, mantendo cada "
+                    "decisão sob o controlo do docente."
+                ).classes("hero-copy")
+                with ui.row().classes("w-full gap-3 mt-2"):
+                    ui.button(
+                        "Iniciar nova sessão",
+                        icon="play_arrow",
+                        on_click=self.show_new_session,
+                    ).props("unelevated no-caps size=lg icon-right").classes(
+                        "primary-action px-6"
+                    )
+
+        with ui.grid(columns=3).classes("w-full gap-4 max-md:grid-cols-1"):
+            for icon, title, description in (
+                (
+                    "account_tree",
+                    "Percurso estruturado",
+                    "Avance livremente pelas etapas com base na Taxonomia SOLO ou Bloom.",
+                ),
+                (
+                    "edit_note",
+                    "Controlo do docente",
+                    "Preencha e edite todos os campos manualmente; a assistência por IA é opcional.",
+                ),
+                (
+                    "inventory_2",
+                    "Resultados utilizáveis",
+                    "Exporte o programa e os recursos educativos produzidos no percurso.",
+                ),
+            ):
+                with ui.card().classes("surface home-feature w-full"):
+                    ui.icon(icon, color="primary", size="2rem")
+                    ui.label(title).classes("section-title")
+                    ui.label(description).classes("muted")
+
+        ui.label(
+            "Para retomar um trabalho, escolha uma sessão guardada no menu lateral."
+        ).classes("text-sm muted")
 
     def _build_logout_dialog(self) -> None:
         with ui.dialog() as self.logout_dialog, ui.card().classes("p-5 w-96 max-w-full surface"):
@@ -500,7 +558,7 @@ class AGIRSoloInterface:
                     on_click=self.handle_generate_initial,
                 ).props("unelevated no-caps").classes("secondary-action")
             self.assistance_status = ui.markdown().classes(
-                "soft-surface status-banner w-full p-4 mt-3"
+                "soft-surface w-full p-4 mt-3"
             )
             self.assistance_status.set_visibility(False)
 
@@ -815,6 +873,17 @@ class AGIRSoloInterface:
         self.busy_updates = None
         self.busy_dialog.close()
 
+    def show_home(self) -> None:
+        self.state = None
+        self.viewed_stage = None
+        self.manual_edit_stage = None
+        self.manual_edit_artifact = None
+        self.header_context.set_text("Início")
+        self.initial_view.set_visibility(False)
+        self.workspace_view.set_visibility(False)
+        self.home_view.set_visibility(True)
+        self.drawer.hide()
+
     def show_new_session(self) -> None:
         self.state = None
         self.viewed_stage = None
@@ -849,6 +918,7 @@ class AGIRSoloInterface:
         self.render_upload_list()
         self.assistance_status.set_visibility(False)
         self.header_context.set_text("Nova sessão")
+        self.home_view.set_visibility(False)
         self.workspace_view.set_visibility(False)
         self.initial_view.set_visibility(True)
         self.form_stepper.set_value("contexto")
@@ -930,7 +1000,7 @@ class AGIRSoloInterface:
                 self.state and self.state.get("session_id") == session_id
             )
             if is_current:
-                self.show_new_session()
+                self.show_home()
             self.refresh_sessions()
             ui.notify("Sessão eliminada definitivamente.", type="positive")
         except USER_ERRORS as error:
@@ -963,6 +1033,7 @@ class AGIRSoloInterface:
     def show_workspace(self, message: str = "") -> None:
         if not self.state:
             return
+        self.home_view.set_visibility(False)
         self.initial_view.set_visibility(False)
         self.workspace_view.set_visibility(True)
         course = self.state.get("course", {})
@@ -993,11 +1064,6 @@ class AGIRSoloInterface:
                 ui.button("Nova sessão", icon="add", on_click=self.show_new_session).props(
                     "outline no-caps"
                 ).classes("secondary-action")
-
-            if message:
-                with ui.row().classes("soft-surface status-banner w-full p-4 items-center"):
-                    ui.icon("info", color="primary")
-                    ui.label(message).classes("font-medium")
 
             self._render_stage_track(state)
 
