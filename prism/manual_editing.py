@@ -505,6 +505,8 @@ def editor_reference_value(target: dict[str, Any], field: FieldSpec) -> Any:
         return list(target.get(field.key) or [target.get("outcome_id", "")])
     if field.kind == "csv":
         return list(target.get(field.key) or [])
+    if field.kind == "taxonomy_verb":
+        return str(target.get(field.key, "") or "").strip() or None
     return str(target.get(field.key, "") or "")
 
 

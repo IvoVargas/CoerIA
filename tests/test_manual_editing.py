@@ -213,6 +213,9 @@ def test_learning_outcome_verb_options_follow_the_level_in_the_same_row() -> Non
     assert "analisar" in options
     assert "aplicar" not in options
 
+    row["action_verb"] = ""
+    assert editor_reference_value(row, verb_field) is None
+
 
 def test_alignment_editor_omits_redundant_taxonomy_and_numbers_levels() -> None:
     state = _completed_state()
