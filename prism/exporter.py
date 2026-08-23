@@ -288,7 +288,7 @@ def _add_program_metadata(document: Document, course: dict[str, Any]) -> None:
     )
     rows = [
         ("Unidade curricular", _display(course.get("unit_name"))),
-        ("Curso / formação", _display(course.get("program_name"))),
+        ("Curso ou programa", _display(course.get("program_name"))),
         ("Tipo de formação", _display(course.get("program_type"))),
         ("Ano curricular", _display(course.get("academic_year"))),
         ("Semestre", _display(course.get("semester"))),
@@ -716,7 +716,7 @@ def export_program_latex(
     )
     metadata_rows = [
         ["Unidade curricular", _display(course.get("unit_name"))],
-        ["Curso / formação", _display(course.get("program_name"))],
+        ["Curso ou programa", _display(course.get("program_name"))],
         ["Tipo de formação", _display(course.get("program_type"))],
         ["Ano curricular", _display(course.get("academic_year"))],
         ["Semestre", _display(course.get("semester"))],

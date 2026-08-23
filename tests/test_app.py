@@ -100,7 +100,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("CoerIA")
     await user.should_see("Construa uma unidade curricular coerente")
     await user.should_see("Iniciar nova sessão")
-    user.find("Iniciar nova sessão").click()
+    user.find(marker="start-new-session").click()
     await user.should_see("Configure o ponto de partida")
     await user.should_see("Preenchimento manual orientado")
     await user.should_see("Fornecedor de IA")
@@ -176,7 +176,7 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     assert interfaces[-1].home_view.visible
     assert not interfaces[-1].initial_view.visible
 
-    user.find("Iniciar nova sessão").click()
+    user.find(marker="start-new-session").click()
 
     await user.should_see("Identificação e opções pedagógicas")
     assert not interfaces[-1].home_view.visible
@@ -195,6 +195,8 @@ async def test_application_opens_on_home_before_starting_a_new_session(
 
     await user.should_see("Texto de base e fontes de referência")
     await user.should_see("Informação de referência para a unidade curricular")
+    await user.should_see("Nome da unidade curricular ou ação de formação")
+    await user.should_see("Curso ou programa em que se integra")
     await user.should_see("Caracterização da unidade curricular")
     await user.should_see("Iniciar desenho curricular alinhado")
     await user.should_not_see("Público-alvo")

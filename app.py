@@ -377,7 +377,7 @@ class AGIRSoloInterface:
                     on_click=self.show_home,
                 ).props("flat color=white no-caps align=left").classes("w-full")
                 ui.button(
-                    "Criar nova sessão",
+                    "Iniciar nova sessão",
                     icon="add_circle",
                     on_click=self.show_new_session,
                 ).props("unelevated color=white text-color=primary no-caps").classes(
@@ -422,13 +422,14 @@ class AGIRSoloInterface:
                     "decisão sob o controlo do docente."
                 ).classes("hero-copy")
                 with ui.row().classes("w-full gap-3 mt-2"):
-                    ui.button(
+                    start_session_button = ui.button(
                         "Iniciar nova sessão",
                         icon="play_arrow",
                         on_click=self.show_new_session,
                     ).props("unelevated no-caps size=lg icon-right").classes(
                         "primary-action px-6"
                     )
+                    start_session_button.mark("start-new-session")
 
         with ui.grid(columns=3).classes("w-full gap-4 max-md:grid-cols-1"):
             for icon, title, description in (
@@ -565,7 +566,7 @@ class AGIRSoloInterface:
         ui.label("Identificação e opções pedagógicas").classes("section-title mb-3")
         with ui.grid(columns=2).classes("w-full gap-4 max-md:grid-cols-1"):
             self.fields["unit_name"] = ui.input(
-                "Unidade curricular / ação de formação",
+                "Nome da unidade curricular ou ação de formação",
                 placeholder="Ex.: Introdução às Pescas",
             ).classes("full-control")
         ui.label("Taxonomia dos resultados de aprendizagem").classes(
@@ -615,7 +616,10 @@ class AGIRSoloInterface:
     def _build_characterization_step(self) -> None:
         ui.label("Caracterização da unidade curricular").classes("section-title mb-3")
         with ui.grid(columns=4).classes("w-full gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1"):
-            self.fields["program_name"] = ui.input("Curso / formação").classes("full-control")
+            self.fields["program_name"] = ui.input(
+                "Curso ou programa em que se integra",
+                placeholder="Ex.: Licenciatura em Biologia",
+            ).classes("full-control")
             self.fields["program_type"] = ui.select(
                 ["CTeSP/CET", "Licenciatura", "Mestrado", "Outra"],
                 label="Tipo de formação",
@@ -1015,7 +1019,7 @@ class AGIRSoloInterface:
                             icon="account_tree",
                         ).classes("info-chip")
                 ui.space()
-                ui.button("Nova sessão", icon="add", on_click=self.show_new_session).props(
+                ui.button("Iniciar nova sessão", icon="add", on_click=self.show_new_session).props(
                     "outline no-caps"
                 ).classes("secondary-action")
 
