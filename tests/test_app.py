@@ -318,7 +318,10 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.should_not_see("Autoria manual com IA facultativa")
     await user.should_see("Etapa seguinte")
     await user.should_not_see("Continuar sem executar a IA")
-    await user.should_see("Criar versão com IA")
+    await user.should_not_see("CONTROLO DO DOCENTE")
+    await user.should_see("ASSISTÊNCIA COM IA")
+    await user.should_not_see("ASSISTÊNCIA LOCALIZADA DA IA")
+    await user.should_see("Criar etapa completa com IA")
     await user.should_see("Pedir propostas à IA")
     await user.should_see("Conteúdos e objetivos curriculares")
     user.find(marker="edit-artifact-content").click()
@@ -341,7 +344,7 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.should_see("Guardar seleção de recursos", retries=20)
     user.find(marker="manual-stage-curriculum_analysis").click()
     await user.should_see("Objetivos gerais")
-    await user.should_see("Criar versão com IA")
+    await user.should_see("Criar etapa completa com IA")
     assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
 
 
@@ -423,7 +426,7 @@ async def test_ai_version_action_remains_available_after_content_exists(
 
     await user.open("/_test_first_ai_version_with_content")
 
-    await user.should_see("Criar versão com IA")
+    await user.should_see("Criar etapa completa com IA")
     await user.should_see("Pedir propostas à IA")
 
 
@@ -454,7 +457,7 @@ async def test_ai_version_action_requests_the_complete_stage(
 
     await user.open("/_test_first_ai_version_action")
 
-    user.find("Criar versão com IA").click()
+    user.find("Criar etapa completa com IA").click()
     await user.should_see("Pedido da versão registado.")
 
     handlers[-1].assert_awaited_once_with(
@@ -494,7 +497,7 @@ async def test_first_resource_generation_requires_explicit_confirmation(
 
     await user.open("/_test_first_resource_generation_confirmation")
 
-    user.find("Criar versão com IA").click()
+    user.find("Criar etapa completa com IA").click()
     await user.should_see("Confirmar geração dos recursos selecionados")
     await user.should_see("pode originar várias chamadas")
     handlers[-1].assert_not_awaited()

@@ -260,6 +260,14 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .decision-card { padding: 22px; }
 .teacher-control-card { padding: 16px 18px; gap: 8px; }
 .teacher-control-card .secondary-action { min-height: 38px; }
+.ai-assistance-request {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, .34fr);
+  align-items: stretch; gap: 10px; width: 100%;
+}
+.ai-assistance-fields { min-width: 0; }
+.ai-assistance-request-button { width: 100%; height: 100%; min-height: 0 !important; }
+.ai-complete-stage-copy { min-width: 260px; flex: 1 1 460px; }
+.ai-complete-stage-button { min-width: 250px; flex: 0 1 300px; }
 .consultation-card { padding: 20px 22px; }
 .info-chip { background: var(--agir-primary) !important; color: #ffffff !important; font-weight: 700; }
 .info-chip *, .info-chip .q-icon { color: #ffffff !important; }
@@ -284,6 +292,9 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 @media (max-width: 640px) {
   .hero-title { font-size: 2.15rem; }
   .artifact-card { padding: 20px 16px; }
+  .ai-assistance-request { grid-template-columns: 1fr; }
+  .ai-assistance-request-button { min-height: 42px !important; }
+  .ai-complete-stage-button { min-width: 100%; flex-basis: 100%; }
   .q-stepper__title { display: none; }
   .brand-mark { width: 38px; height: 38px; border-radius: 12px; }
   .header-brand-copy { margin-left: 2px !important; }
@@ -2043,22 +2054,7 @@ class AGIRSoloInterface:
         ).mark(
             "teacher-control"
         ):
-            with ui.row().classes("w-full items-center gap-2 flex-wrap"):
-                ui.label("CONTROLO DO DOCENTE").classes("eyebrow")
-                ui.space()
-                ui.button(
-                    "Verificar esta etapa com IA",
-                    icon="fact_check",
-                    on_click=lambda: self._handle_ai_verification(stage),
-                ).props("outline no-caps dense").classes("secondary-action")
-            ui.label(
-                "Pode editar e avançar sem chamar qualquer modelo. A verificação "
-                "por IA é apenas informativa; a assistência cria uma proposta que "
-                "só altera o rascunho depois da sua aceitação."
-            ).classes("text-sm muted mt-1")
-
             if stage == "resources":
-                ui.separator().classes("my-2")
                 ui.label("RECURSOS A PREPARAR").classes("eyebrow")
                 ui.label(
                     "Escolha os recursos desta etapa. Guardar a seleção não executa a IA."
@@ -2107,25 +2103,13 @@ class AGIRSoloInterface:
                 ).props("outline no-caps").classes("secondary-action w-full")
 
             ui.separator().classes("my-2")
-            ui.label("ASSISTÊNCIA LOCALIZADA DA IA").classes("eyebrow")
+            ui.label("ASSISTÊNCIA COM IA").classes("eyebrow")
             ui.label(
                 "Escolha exatamente a parte que pode ser proposta pela IA. O restante "
                 "artefacto não será aplicado nem substituído."
             ).classes("text-sm muted")
             scopes = assistance_scope_options(stage, state[stage])
             scope_by_key = {str(index): item for index, item in enumerate(scopes)}
-            scope = ui.select(
-                {key: item["label"] for key, item in scope_by_key.items()},
-                label="Âmbito da assistência",
-                value="0",
-            ).props("outlined options-dense").classes("w-full")
-            instruction = ui.textarea(
-                "O que pretende que a IA proponha?",
-                placeholder=(
-                    "Ex.: clarificar o texto sem alterar o nível taxonómico; "
-                    "propor duas linhas adicionais; rever a coerência desta tabela."
-                ),
-            ).props("outlined autogrow").classes("w-full")
 
             async def ask_for_proposal() -> None:
                 selected = scope_by_key.get(str(scope.value or "0"), scopes[0])
@@ -2134,6 +2118,31 @@ class AGIRSoloInterface:
                     list(selected["path"]),
                     str(selected["label"]),
                     str(instruction.value or ""),
+                )
+
+            with ui.element("div").classes("ai-assistance-request").mark(
+                "ai-assistance-request"
+            ):
+                with ui.column().classes("ai-assistance-fields w-full gap-2"):
+                    scope = ui.select(
+                        {key: item["label"] for key, item in scope_by_key.items()},
+                        label="Âmbito da assistência",
+                        value="0",
+                    ).props("outlined options-dense").classes("w-full")
+                    instruction = ui.textarea(
+                        "O que pretende que a IA proponha?",
+                        placeholder=(
+                            "Ex.: clarificar o texto sem alterar o nível taxonómico; "
+                            "propor duas linhas adicionais; rever a coerência desta tabela."
+                        ),
+                    ).props("outlined autogrow").classes("w-full")
+
+                ui.button(
+                    "Pedir propostas à IA",
+                    icon="auto_awesome",
+                    on_click=ask_for_proposal,
+                ).props("outline no-caps").classes(
+                    "secondary-action ai-assistance-request-button"
                 )
 
             async def create_ai_version() -> None:
@@ -2148,21 +2157,30 @@ class AGIRSoloInterface:
                     "unidade curricular, no rascunho atual e nos artefactos anteriores.",
                 )
 
-            with ui.row().classes("w-full gap-2 flex-wrap"):
+            with ui.row().classes("w-full items-center gap-3 flex-wrap mt-1"):
+                ui.label(
+                    "A IA pode propor toda a etapa com base no contexto, no rascunho "
+                    "atual e nos artefactos anteriores. Nada é aplicado sem a sua revisão."
+                ).classes("text-sm muted ai-complete-stage-copy")
                 ui.button(
-                    "Pedir propostas à IA",
-                    icon="auto_awesome",
-                    on_click=ask_for_proposal,
-                ).props("outline no-caps").classes("secondary-action").style(
-                    "min-width: 210px; flex: 1 1 210px;"
-                )
-                ui.button(
-                    "Criar versão com IA",
+                    "Criar etapa completa com IA",
                     icon="auto_fix_high",
                     on_click=create_ai_version,
-                ).props("outline no-caps").classes("secondary-action").style(
-                    "min-width: 210px; flex: 1 1 210px;"
+                ).props("outline no-caps").classes(
+                    "secondary-action ai-complete-stage-button"
                 ).mark("create-ai-version")
+
+            ui.separator().classes("my-2")
+            ui.label(
+                "Pode editar e avançar sem chamar qualquer modelo. A verificação "
+                "por IA é apenas informativa; a assistência cria uma proposta que "
+                "só altera o rascunho depois da sua aceitação."
+            ).classes("text-sm muted")
+            ui.button(
+                "Verificar esta etapa com IA",
+                icon="fact_check",
+                on_click=lambda: self._handle_ai_verification(stage),
+            ).props("outline no-caps").classes("secondary-action w-full")
 
             if proposal is not None:
                 ui.separator().classes("my-2")
