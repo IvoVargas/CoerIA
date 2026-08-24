@@ -268,6 +268,56 @@ def test_localized_assistance_generates_only_the_selected_fragment() -> None:
     assert accepted["learning_outcomes"][1]["statement"].endswith("concretos.")
 
 
+def test_ai_proposal_applies_selected_cells_in_a_single_version() -> None:
+    state = create_session(_course())
+    current = {
+        "id": "RA1",
+        "outcome_type": "Conhecimento teórico",
+        "theme": "Algoritmos",
+        "taxonomy_level": "Relacional",
+        "action_verb": "Analisar",
+        "statement": "Analisar algoritmos.",
+    }
+    proposed_row = {
+        **current,
+        "theme": "Algoritmos eficientes",
+        "statement": "Analisar algoritmos através de exemplos concretos.",
+    }
+    state["learning_outcomes"] = [current]
+    state["ai_proposals"] = [
+        {
+            "id": "P1",
+            "stage": "learning_outcomes",
+            "scope_path": [0],
+            "scope_label": "Linha 1 (RA1)",
+            "instruction": "Melhorar a linha.",
+            "before": current,
+            "after": proposed_row,
+            "status": "pending",
+            "metadata": {"provider": "Teste"},
+        }
+    ]
+
+    accepted = decide_ai_proposal(
+        state,
+        "P1",
+        True,
+        [
+            {"key": "change-1", "accept": False},
+            {
+                "key": "change-2",
+                "accept": True,
+                "value": "Analisar algoritmos com casos reais.",
+            },
+        ],
+    )
+
+    assert accepted["learning_outcomes"][0]["theme"] == "Algoritmos"
+    assert accepted["learning_outcomes"][0]["statement"].endswith("casos reais.")
+    assert accepted["ai_proposals"][-1]["status"] == "partially_accepted"
+    assert len(accepted["versions"]["learning_outcomes"]) == 1
+
+
 def test_rejected_ai_assistance_does_not_change_the_draft() -> None:
     state = create_session(_course())
     proposed = request_ai_assistance(

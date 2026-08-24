@@ -45,6 +45,10 @@ from .models import (
 from .quality import attach_quality_report
 from .providers import configured_ai_provider, validate_ai_provider
 from .image_generation import enrich_presentation_with_ai_images
+from .manual_editing import (
+    apply_proposal_review_changes,
+    proposal_review_changes,
+)
 from .relationships import content_ids_for_outcome
 
 
@@ -1227,6 +1231,7 @@ def decide_ai_proposal(
     state: PrismState,
     proposal_id: str,
     accept: bool,
+    selections: list[dict[str, Any]] | None = None,
 ) -> PrismState:
     """Aceita ou rejeita explicitamente uma proposta previamente guardada."""
 
@@ -1258,11 +1263,36 @@ def decide_ai_proposal(
             "trabalho mais recente, rejeite-a e peça uma nova proposta."
         )
 
-    artifact = _replace_at_scope(
-        working[stage],
-        scope_path,
-        proposal.get("after"),
-    )
+    if selections is None:
+        artifact = _replace_at_scope(
+            working[stage],
+            scope_path,
+            proposal.get("after"),
+        )
+    else:
+        changes = proposal_review_changes(
+            stage,
+            working[stage],
+            scope_path,
+            proposal.get("after"),
+        )
+        artifact = apply_proposal_review_changes(
+            working[stage],
+            changes,
+            selections,
+        )
+        accepted_keys = {
+            str(item.get("key", ""))
+            for item in selections
+            if isinstance(item, dict) and item.get("accept") is True
+        }
+        accepted_keys &= {str(change["key"]) for change in changes}
+        proposal["review_decisions"] = deepcopy(selections)
+        proposal["status"] = (
+            "accepted"
+            if len(accepted_keys) == len(changes)
+            else "partially_accepted"
+        )
     if stage == "resources" and proposal.get("generated_images"):
         current_images = [
             deepcopy(item)

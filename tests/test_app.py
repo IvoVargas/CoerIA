@@ -374,6 +374,7 @@ async def test_manual_history_offers_explicit_version_restore(
 @pytest.mark.asyncio
 async def test_manual_first_workspace_renders_a_pending_ai_proposal(
     user: User,
+    tmp_path: Path,
 ) -> None:
     state = create_session(
         CourseInput.create(
@@ -381,33 +382,73 @@ async def test_manual_first_workspace_renders_a_pending_ai_proposal(
             "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
         )
     )
+    state["learning_outcomes"] = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Relacional",
+            "action_verb": "Analisar",
+            "statement": "Analisar algoritmos.",
+        }
+    ]
     state["ai_proposals"] = [
         {
             "id": "P1",
             "stage": "learning_outcomes",
-            "scope_path": [],
-            "scope_label": "Toda a etapa",
-            "instruction": "Propor um resultado.",
-            "before": [],
-            "after": [{"id": "RA1", "statement": "Identificar conceitos."}],
+            "scope_path": [0],
+            "scope_label": "Linha 1 (RA1)",
+            "instruction": "Melhorar a linha.",
+            "before": deepcopy(state["learning_outcomes"][0]),
+            "after": {
+                **state["learning_outcomes"][0],
+                "theme": "Algoritmos eficientes",
+                "statement": "Analisar algoritmos através de exemplos concretos.",
+            },
             "status": "pending",
             "metadata": {"provider": "Teste"},
         }
     ]
 
+    interfaces: list[app.AGIRSoloInterface] = []
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "inline-proposal.db"))
+
     @ui.page("/_test_pending_ai_proposal")
     def pending_proposal_page():
-        interface = app.AGIRSoloInterface()
+        interface = app.AGIRSoloInterface(service=service)
         interface.state = state
         interface.show_workspace()
+        interfaces.append(interface)
 
     await user.open("/_test_pending_ai_proposal")
 
     await user.should_see("PROPOSTA PENDENTE")
-    await user.should_see("Antes")
-    await user.should_see("Proposta da IA")
-    await user.should_see("Aceitar e guardar nova versão")
-    await user.should_see("Rejeitar proposta")
+    await user.should_see("REVISÃO DA PROPOSTA DA IA")
+    await user.should_see("Atual")
+    await user.should_see("Sugestão da IA")
+    await user.should_see("Analisar algoritmos.")
+    await user.should_see("Analisar algoritmos através de exemplos concretos.")
+    await user.should_see("Aceitar")
+    await user.should_see("Rejeitar")
+    await user.should_see("Aplicar alterações aceites")
+    await user.should_see("Rejeitar todas as alterações")
+    assert user.find(marker="inline-ai-proposal").elements
+
+    next(iter(user.find(marker="ai-decision-change-1").elements)).set_value(
+        "Rejeitar"
+    )
+    next(iter(user.find(marker="ai-change-change-2").elements)).set_value(
+        "Analisar algoritmos com casos reais."
+    )
+    user.find("Aplicar alterações aceites").click()
+    await user.should_not_see("PROPOSTA PENDENTE")
+
+    assert interfaces[-1].state["learning_outcomes"][0]["theme"] == "Algoritmos"
+    assert interfaces[-1].state["learning_outcomes"][0]["statement"].endswith(
+        "casos reais."
+    )
+    assert interfaces[-1].state["ai_proposals"][-1]["status"] == "partially_accepted"
+    assert len(interfaces[-1].state["versions"]["learning_outcomes"]) == 1
 
 
 def test_export_format_choice_maps_to_requested_document_formats() -> None:

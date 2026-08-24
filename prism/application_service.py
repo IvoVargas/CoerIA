@@ -231,10 +231,13 @@ class ApplicationService:
         state: dict[str, Any] | None,
         proposal_id: str,
         accept: bool,
+        selections: list[dict[str, Any]] | None = None,
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
-        updated = self._persist(decide_ai_proposal(state, proposal_id, accept))
+        updated = self._persist(
+            decide_ai_proposal(state, proposal_id, accept, selections)
+        )
         return (
             updated,
             "Proposta aplicada como nova versão."

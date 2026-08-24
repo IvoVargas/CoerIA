@@ -12,9 +12,10 @@ avançar não executa um LLM nem exige uma chave de API.
 A IA é facultativa e pode ser usada de duas formas independentes: verificação
 não bloqueante de uma etapa ou assistência localizada numa etapa, tabela, linha
 ou campo escolhido pelo docente. A assistência produz sempre uma proposta com o
-valor anterior e o valor sugerido; nada é aplicado antes de uma aceitação humana
-explícita. A conclusão depende de uma verificação global determinística, não de
-uma decisão declarada pelo modelo.
+valor atual e o valor sugerido diretamente nos campos e tabelas. Cada célula
+alterada pode ser editada, aceite ou rejeitada; nada é aplicado antes de uma
+aceitação humana explícita. A conclusão depende de uma verificação global
+determinística, não de uma decisão declarada pelo modelo.
 
 ## Fluxo
 
@@ -115,9 +116,10 @@ para uma célula, linha ou tabela, o fornecedor recebe um esquema de resposta
 limitado exatamente a esse fragmento, sem gerar primeiro a etapa inteira. O
 seletor não oferece os identificadores técnicos próprios das linhas como campos
 isolados para reformulação. A proposta fica pendente até o docente comparar o
-antes/depois e escolher
-**Aceitar** ou **Rejeitar**. Aceitar cria uma nova versão; rejeitar conserva o
-rascunho sem alterações.
+valor atual com a sugestão apresentada na própria célula. O docente pode editar,
+aceitar ou rejeitar cada alteração de forma independente. Linhas novas ou a
+remover são decididas como uma unidade. **Aplicar alterações aceites** reúne as
+decisões numa única nova versão; rejeitar todas conserva o rascunho sem alterações.
 
 Numa sessão concluída, a barra de etapas fica em modo de consulta. A reabertura
 exige o botão próprio, a seleção da etapa, um motivo e uma confirmação explícita.

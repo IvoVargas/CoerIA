@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from copy import deepcopy
 import logging
 from pathlib import Path
 from queue import Empty, SimpleQueue
@@ -51,6 +51,7 @@ from prism.manual_editing import (
     editor_taxonomy_verb_options,
     editor_layout,
     new_table_row,
+    proposal_review_changes,
     value_at_path,
 )
 from prism.models import (
@@ -251,6 +252,9 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table .manual-cell-number { min-width: 72px; }
 .manual-table .q-field__control { min-height: 40px; }
 .manual-table .q-field__native { line-height: 1.35; padding-top: 7px; padding-bottom: 7px; }
+.manual-table td.ai-proposal-changed-cell { background: #eef9f6; }
+.manual-table tr.ai-proposal-new-row td { background: #eef9f6; }
+.manual-table tr.ai-proposal-remove-row td { background: #fff3f0; }
 .decision-card { padding: 22px; }
 .consultation-card { padding: 20px 22px; }
 .info-chip { background: var(--agir-primary) !important; color: #ffffff !important; font-weight: 700; }
@@ -1501,7 +1505,7 @@ class AGIRSoloInterface:
         *,
         compact: bool = False,
         refresh_after_change: Any = None,
-    ) -> None:
+    ) -> Any:
         value = editor_field_value(target, field)
 
         def update_value(event: Any) -> None:
@@ -1535,10 +1539,18 @@ class AGIRSoloInterface:
             )
         if selection_options is not None:
             multiple = field.kind in {"csv", "content_ids", "linked_outcomes"}
+            selection_value = editor_reference_value(target, field)
+            allowed_values = set(selection_options)
+            if multiple:
+                selection_value = [
+                    item for item in (selection_value or []) if item in allowed_values
+                ]
+            elif selection_value not in allowed_values:
+                selection_value = None
             control = ui.select(
                 options=(list(selection_options) if multiple else selection_options),
                 label=label,
-                value=editor_reference_value(target, field),
+                value=selection_value,
                 multiple=multiple,
                 on_change=update_value,
             ).props("options-dense" + (" use-chips" if multiple else ""))
@@ -1564,6 +1576,7 @@ class AGIRSoloInterface:
             control.classes("w-full")
         if selection_options is None:
             control.on_value_change(update_value)
+        return control
 
     def _render_manual_table(
         self,
@@ -1710,6 +1723,268 @@ class AGIRSoloInterface:
                 on_click=self._cancel_manual_edit,
             ).props("outline no-caps").classes("secondary-action w-full mt-2")
 
+    @staticmethod
+    def _pending_ai_proposal(
+        state: dict[str, Any],
+        stage: str,
+    ) -> dict[str, Any] | None:
+        pending = [
+            item
+            for item in state.get("ai_proposals", [])
+            if item.get("stage") == stage and item.get("status") == "pending"
+        ]
+        return pending[-1] if pending else None
+
+    @staticmethod
+    def _proposal_decision_toggle(
+        decisions: dict[str, str],
+        change_key: str,
+    ) -> Any:
+        decisions.setdefault(change_key, "Aceitar")
+
+        def update_decision(event: Any) -> None:
+            decisions[change_key] = str(event.value or "Rejeitar")
+
+        return ui.toggle(
+            ["Aceitar", "Rejeitar"],
+            value=decisions[change_key],
+            on_change=update_decision,
+        ).props("dense no-caps").mark(f"ai-decision-{change_key}")
+
+    def _render_ai_proposal_review(
+        self,
+        state: dict[str, Any],
+        stage: str,
+        proposal: dict[str, Any],
+    ) -> None:
+        """Mostra as sugestões da IA junto das células atuais, sem as aplicar."""
+
+        artifact = state[stage]
+        changes = proposal_review_changes(
+            stage,
+            artifact,
+            list(proposal.get("scope_path", [])),
+            proposal.get("after"),
+        )
+        layout = editor_layout(stage)
+        decisions: dict[str, str] = {}
+        drafts: dict[str, dict[str, Any]] = {}
+        value_changes = {
+            tuple(change["path"]): change
+            for change in changes
+            if change["kind"] == "value"
+        }
+        row_changes = {
+            tuple(change["path"]): change
+            for change in changes
+            if change["kind"] in {"add_row", "remove_row"}
+        }
+
+        with ui.column().classes("w-full gap-4").mark("inline-ai-proposal"):
+            ui.label("REVISÃO DA PROPOSTA DA IA").classes("eyebrow")
+            ui.label(str(proposal.get("scope_label", "Âmbito selecionado"))).classes(
+                "section-title"
+            )
+            ui.label(
+                "As sugestões aparecem sob os valores atuais. Pode editá-las e "
+                "aceitar ou rejeitar cada alteração antes de criar uma única versão."
+            ).classes("text-sm muted")
+
+            if not changes:
+                ui.label(
+                    "A proposta não contém alterações pedagógicas editáveis. "
+                    "Os identificadores técnicos não são submetidos a revisão por IA."
+                ).classes("soft-surface p-3 text-sm")
+
+            for scalar in layout.fields:
+                path = tuple(scalar.path)
+                parent = (
+                    value_at_path(artifact, scalar.path[:-1])
+                    if scalar.path[:-1]
+                    else artifact
+                )
+                field = FieldSpec(scalar.path[-1], scalar.label, scalar.kind)
+                change = value_changes.get(path)
+                with ui.card().classes("soft-surface w-full p-3"):
+                    ui.label(scalar.label).classes("font-semibold")
+                    ui.label("Atual").classes("text-xs muted")
+                    ui.label(editor_field_value(parent, field) or "—").classes(
+                        "text-sm whitespace-pre-wrap"
+                    )
+                    if change is not None:
+                        ui.label("Sugestão da IA").classes(
+                            "text-xs font-semibold mt-2"
+                        )
+                        holder = deepcopy(change.get("row_after") or {})
+                        holder[field.key] = deepcopy(change.get("after"))
+                        drafts[str(change["key"])] = holder
+                        suggestion_control = self._render_manual_field(
+                            holder,
+                            FieldSpec(field.key, "Sugestão da IA", field.kind),
+                        )
+                        suggestion_control.mark(f"ai-change-{change['key']}")
+                        self._proposal_decision_toggle(
+                            decisions, str(change["key"])
+                        )
+
+            for table in layout.tables:
+                rows = value_at_path(artifact, table.path)
+                if not isinstance(rows, list):
+                    continue
+                table_row_changes = {
+                    int(path[-1]): change
+                    for path, change in row_changes.items()
+                    if tuple(path[:-1]) == tuple(table.path)
+                }
+                has_row_decisions = bool(table_row_changes)
+                with ui.column().classes("w-full gap-2"):
+                    ui.label(table.title).classes("text-lg font-bold")
+                    with ui.element("div").classes("manual-table-scroll"):
+                        with ui.element("table").classes("manual-table"):
+                            with ui.element("thead"):
+                                with ui.element("tr"):
+                                    for field in table.fields:
+                                        with ui.element("th"):
+                                            ui.label(field.label)
+                                    if has_row_decisions:
+                                        with ui.element("th"):
+                                            ui.label("Decisão da linha")
+                            with ui.element("tbody"):
+                                for index, row in enumerate(rows):
+                                    removal = table_row_changes.get(index)
+                                    if removal is not None and removal["kind"] != "remove_row":
+                                        removal = None
+                                    with ui.element("tr").classes(
+                                        "ai-proposal-remove-row" if removal else ""
+                                    ):
+                                        for field in table.fields:
+                                            path = (*table.path, index, field.key)
+                                            change = value_changes.get(path)
+                                            with ui.element("td").classes(
+                                                "ai-proposal-changed-cell"
+                                                if change is not None
+                                                else ""
+                                            ):
+                                                if change is not None:
+                                                    ui.label("Atual").classes(
+                                                        "text-xs muted"
+                                                    )
+                                                ui.label(
+                                                    editor_field_value(row, field) or "—"
+                                                ).classes("text-sm whitespace-pre-wrap")
+                                                if change is not None:
+                                                    ui.label("Sugestão da IA").classes(
+                                                        "text-xs font-semibold mt-2"
+                                                    )
+                                                    holder = deepcopy(
+                                                        change.get("row_after") or row
+                                                    )
+                                                    holder[field.key] = deepcopy(
+                                                        change.get("after")
+                                                    )
+                                                    drafts[str(change["key"])] = holder
+                                                    suggestion_control = self._render_manual_field(
+                                                        holder,
+                                                        field,
+                                                        compact=True,
+                                                    )
+                                                    suggestion_control.mark(
+                                                        f"ai-change-{change['key']}"
+                                                    )
+                                                    self._proposal_decision_toggle(
+                                                        decisions,
+                                                        str(change["key"]),
+                                                    )
+                                        if has_row_decisions:
+                                            with ui.element("td").classes(
+                                                "manual-row-action"
+                                            ):
+                                                if removal is not None:
+                                                    ui.label(
+                                                        "A IA propõe remover esta linha."
+                                                    ).classes("text-xs font-semibold")
+                                                    self._proposal_decision_toggle(
+                                                        decisions,
+                                                        str(removal["key"]),
+                                                    )
+
+                                additions = [
+                                    change
+                                    for change in table_row_changes.values()
+                                    if change["kind"] == "add_row"
+                                ]
+                                for addition in additions:
+                                    holder = deepcopy(addition.get("after") or {})
+                                    drafts[str(addition["key"])] = holder
+                                    with ui.element("tr").classes(
+                                        "ai-proposal-new-row"
+                                    ):
+                                        for field in table.fields:
+                                            with ui.element("td"):
+                                                ui.label("Nova linha sugerida").classes(
+                                                    "text-xs font-semibold"
+                                                )
+                                                if field.key == "id":
+                                                    ui.label(
+                                                        editor_field_value(holder, field)
+                                                        or "A atribuir"
+                                                    ).classes("text-sm")
+                                                else:
+                                                    self._render_manual_field(
+                                                        holder,
+                                                        field,
+                                                        compact=True,
+                                                    )
+                                        if has_row_decisions:
+                                            with ui.element("td").classes(
+                                                "manual-row-action"
+                                            ):
+                                                self._proposal_decision_toggle(
+                                                    decisions,
+                                                    str(addition["key"]),
+                                                )
+
+            async def apply_selected_changes() -> None:
+                selections: list[dict[str, Any]] = []
+                for change in changes:
+                    key = str(change["key"])
+                    accepted = decisions.get(key, "Aceitar") == "Aceitar"
+                    selection: dict[str, Any] = {"key": key, "accept": accepted}
+                    if accepted and change["kind"] == "value":
+                        holder = drafts.get(key, {})
+                        selection["value"] = deepcopy(
+                            holder.get(
+                                str(change.get("field_key", "")),
+                                change.get("after"),
+                            )
+                        )
+                    elif accepted and change["kind"] == "add_row":
+                        selection["value"] = deepcopy(
+                            drafts.get(key, change.get("after"))
+                        )
+                    selections.append(selection)
+                await self._handle_ai_proposal(
+                    str(proposal["id"]),
+                    True,
+                    selections,
+                )
+
+            with ui.row().classes("w-full gap-2 flex-wrap mt-2"):
+                apply_button = ui.button(
+                    "Aplicar alterações aceites",
+                    icon="check",
+                    on_click=apply_selected_changes,
+                ).props("unelevated no-caps").classes("primary-action")
+                if not changes:
+                    apply_button.disable()
+                ui.button(
+                    "Rejeitar todas as alterações",
+                    icon="close",
+                    on_click=lambda: self._handle_ai_proposal(
+                        str(proposal["id"]), False
+                    ),
+                ).props("outline no-caps").classes("secondary-action")
+
     def _render_authoring_view(self, state: dict[str, Any]) -> None:
         stage = state["current_stage"]
         editing = (
@@ -1727,6 +2002,8 @@ class AGIRSoloInterface:
             ):
                 if editing:
                     self._render_inline_manual_editor(stage)
+                elif proposal := self._pending_ai_proposal(state, stage):
+                    self._render_ai_proposal_review(state, stage, proposal)
                 else:
                     ui.markdown(
                         render_current_artifact(state), extras=["tables"]
@@ -1852,50 +2129,16 @@ class AGIRSoloInterface:
                 on_click=ask_for_proposal,
             ).props("outline no-caps").classes("secondary-action w-full")
 
-            pending = [
-                item
-                for item in state.get("ai_proposals", [])
-                if item.get("stage") == stage and item.get("status") == "pending"
-            ]
-            if pending:
-                proposal = pending[-1]
+            proposal = self._pending_ai_proposal(state, stage)
+            if proposal is not None:
                 ui.separator().classes("my-3")
                 ui.label("PROPOSTA PENDENTE").classes("eyebrow")
                 ui.label(str(proposal.get("scope_label", "Âmbito selecionado"))).classes(
                     "font-semibold"
                 )
-                with ui.row().classes("w-full gap-3 items-stretch flex-wrap"):
-                    with ui.card().classes("soft-surface p-3").style(
-                        "min-width: 280px; flex: 1 1 320px;"
-                    ):
-                        ui.label("Antes").classes("font-semibold")
-                        ui.code(
-                            json.dumps(proposal.get("before"), ensure_ascii=False, indent=2),
-                            language="json",
-                        ).classes("w-full")
-                    with ui.card().classes("soft-surface p-3").style(
-                        "min-width: 280px; flex: 1 1 320px;"
-                    ):
-                        ui.label("Proposta da IA").classes("font-semibold")
-                        ui.code(
-                            json.dumps(proposal.get("after"), ensure_ascii=False, indent=2),
-                            language="json",
-                        ).classes("w-full")
-                with ui.row().classes("w-full gap-2 flex-wrap"):
-                    ui.button(
-                        "Aceitar e guardar nova versão",
-                        icon="check",
-                        on_click=lambda: self._handle_ai_proposal(
-                            str(proposal["id"]), True
-                        ),
-                    ).props("unelevated no-caps").classes("primary-action")
-                    ui.button(
-                        "Rejeitar proposta",
-                        icon="close",
-                        on_click=lambda: self._handle_ai_proposal(
-                            str(proposal["id"]), False
-                        ),
-                    ).props("outline no-caps").classes("secondary-action")
+                ui.label(
+                    "Reveja a sugestão diretamente nos campos e tabelas abaixo."
+                ).classes("text-sm muted")
 
             reviews = state.get("ai_reviews", {}).get(stage, [])
             if reviews:
@@ -1964,13 +2207,19 @@ class AGIRSoloInterface:
         finally:
             self._hide_busy()
 
-    async def _handle_ai_proposal(self, proposal_id: str, accept: bool) -> None:
+    async def _handle_ai_proposal(
+        self,
+        proposal_id: str,
+        accept: bool,
+        selections: list[dict[str, Any]] | None = None,
+    ) -> None:
         try:
             self.state, message = await run.io_bound(
                 self.service.decide_assistance,
                 self.state,
                 proposal_id,
                 accept,
+                selections,
             )
             self.show_workspace(message)
             self.refresh_sessions()

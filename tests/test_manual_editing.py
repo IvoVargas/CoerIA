@@ -11,6 +11,8 @@ from prism.manual_editing import (
     format_editor_value,
     new_table_row,
     parse_editor_value,
+    apply_proposal_review_changes,
+    proposal_review_changes,
     value_at_path,
 )
 from prism.models import CourseInput
@@ -67,6 +69,98 @@ def test_ai_assistance_scopes_omit_technical_id_fields() -> None:
         ]
 
         assert all("campo ID" not in label for label in labels)
+
+
+def test_proposal_review_preserves_ids_and_applies_only_accepted_cells() -> None:
+    artifact = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Relacional",
+            "action_verb": "Analisar",
+            "statement": "Analisar algoritmos.",
+        }
+    ]
+    proposed = [
+        {
+            **artifact[0],
+            "id": "RA99",
+            "theme": "Algoritmos eficientes",
+            "statement": "Analisar algoritmos através de exemplos concretos.",
+        }
+    ]
+
+    changes = proposal_review_changes(
+        "learning_outcomes", artifact, [], proposed
+    )
+
+    assert [change["field_key"] for change in changes] == ["theme", "statement"]
+    result = apply_proposal_review_changes(
+        artifact,
+        changes,
+        [
+            {"key": changes[0]["key"], "accept": False},
+            {
+                "key": changes[1]["key"],
+                "accept": True,
+                "value": "Analisar algoritmos com casos reais.",
+            },
+        ],
+    )
+
+    assert result[0]["id"] == "RA1"
+    assert result[0]["theme"] == "Algoritmos"
+    assert result[0]["statement"] == "Analisar algoritmos com casos reais."
+
+
+def test_proposal_review_accepts_an_edited_new_row_as_one_decision() -> None:
+    artifact: list[dict] = []
+    proposed = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar elementos de um algoritmo.",
+        }
+    ]
+    changes = proposal_review_changes(
+        "learning_outcomes", artifact, [], proposed
+    )
+    edited_row = {**proposed[0], "theme": "Estruturas algorítmicas"}
+
+    result = apply_proposal_review_changes(
+        artifact,
+        changes,
+        [{"key": changes[0]["key"], "accept": True, "value": edited_row}],
+    )
+
+    assert result == [edited_row]
+
+
+def test_proposal_review_identifies_a_removed_middle_row_by_stable_id() -> None:
+    artifact = [
+        {"id": "RA1", "theme": "Algoritmos"},
+        {"id": "RA2", "theme": "Estruturas"},
+        {"id": "RA3", "theme": "Testes"},
+    ]
+    proposed = [artifact[0], artifact[2]]
+
+    changes = proposal_review_changes(
+        "learning_outcomes", artifact, [], proposed
+    )
+
+    assert len(changes) == 1
+    assert changes[0]["kind"] == "remove_row"
+    assert changes[0]["path"] == [1]
+    result = apply_proposal_review_changes(
+        artifact,
+        changes,
+        [{"key": changes[0]["key"], "accept": True}],
+    )
+    assert [row["id"] for row in result] == ["RA1", "RA3"]
 
 
 def test_relationship_fields_round_trip_through_the_manual_editor() -> None:

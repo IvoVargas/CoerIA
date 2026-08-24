@@ -305,18 +305,290 @@ def editor_layout(stage: str) -> EditorLayout:
         raise ValueError("Esta etapa ainda não suporta edição manual.") from error
 
 
-def value_at_path(artifact: Any, path: tuple[str, ...]) -> Any:
+def value_at_path(artifact: Any, path: tuple[str | int, ...] | list[str | int]) -> Any:
     value = artifact
     for key in path:
         value = value[key]
     return value
 
 
-def set_value_at_path(artifact: Any, path: tuple[str, ...], value: Any) -> None:
+def set_value_at_path(
+    artifact: Any,
+    path: tuple[str | int, ...] | list[str | int],
+    value: Any,
+) -> None:
     parent = artifact
     for key in path[:-1]:
         parent = parent[key]
     parent[path[-1]] = value
+
+
+def _replace_value_at_path(
+    artifact: Any,
+    path: list[str | int],
+    value: Any,
+) -> Any:
+    if not path:
+        return deepcopy(value)
+    result = deepcopy(artifact)
+    set_value_at_path(result, path, deepcopy(value))
+    return result
+
+
+def _paired_table_rows(
+    before_rows: list[Any],
+    after_rows: list[Any],
+) -> tuple[list[tuple[int, int]], list[int], list[int]]:
+    """Alinha linhas estÃ¡veis sem permitir que a IA substitua IDs existentes."""
+
+    identity_keys = ("id", "outcome_id", "order", "title", "heading", "criterion")
+    pairs: list[tuple[int, int]] = []
+    matched_before: set[int] = set()
+    matched_after: set[int] = set()
+
+    for identity_key in identity_keys:
+        before_index: dict[str, int] = {}
+        after_index: dict[str, int] = {}
+        duplicate_before: set[str] = set()
+        duplicate_after: set[str] = set()
+        for index, row in enumerate(before_rows):
+            if index in matched_before or not isinstance(row, dict):
+                continue
+            value = str(row.get(identity_key, "")).strip()
+            if not value:
+                continue
+            if value in before_index:
+                duplicate_before.add(value)
+            else:
+                before_index[value] = index
+        for index, row in enumerate(after_rows):
+            if index in matched_after or not isinstance(row, dict):
+                continue
+            value = str(row.get(identity_key, "")).strip()
+            if not value:
+                continue
+            if value in after_index:
+                duplicate_after.add(value)
+            else:
+                after_index[value] = index
+        for value in before_index.keys() & after_index.keys():
+            if value in duplicate_before or value in duplicate_after:
+                continue
+            before_position = before_index[value]
+            after_position = after_index[value]
+            pairs.append((before_position, after_position))
+            matched_before.add(before_position)
+            matched_after.add(after_position)
+
+    remaining_before = [
+        index for index in range(len(before_rows)) if index not in matched_before
+    ]
+    remaining_after = [
+        index for index in range(len(after_rows)) if index not in matched_after
+    ]
+    substitutions = min(len(remaining_before), len(remaining_after))
+    pairs.extend(zip(remaining_before[:substitutions], remaining_after[:substitutions]))
+    pairs.sort(key=lambda item: item[0])
+    return (
+        pairs,
+        remaining_before[substitutions:],
+        remaining_after[substitutions:],
+    )
+
+
+def proposal_review_changes(
+    stage: str,
+    artifact: Any,
+    scope_path: list[str | int],
+    proposed_fragment: Any,
+) -> list[dict[str, Any]]:
+    """Decompõe uma proposta nos campos e linhas visíveis do editor manual."""
+
+    proposed_artifact = _replace_value_at_path(
+        artifact,
+        list(scope_path),
+        proposed_fragment,
+    )
+    layout = editor_layout(stage)
+    changes: list[dict[str, Any]] = []
+
+    def add_change(kind: str, path: list[str | int], **values: Any) -> None:
+        changes.append(
+            {
+                "key": f"change-{len(changes) + 1}",
+                "kind": kind,
+                "path": list(path),
+                **values,
+            }
+        )
+
+    for scalar in layout.fields:
+        try:
+            before = deepcopy(value_at_path(artifact, scalar.path))
+            after = deepcopy(value_at_path(proposed_artifact, scalar.path))
+        except (KeyError, IndexError, TypeError):
+            continue
+        if before != after:
+            add_change(
+                "value",
+                list(scalar.path),
+                before=before,
+                after=after,
+                field_key=str(scalar.path[-1]),
+                field_label=scalar.label,
+                field_kind=scalar.kind,
+                table_path=None,
+                row_index=None,
+            )
+
+    for table in layout.tables:
+        try:
+            before_rows = value_at_path(artifact, table.path)
+            after_rows = value_at_path(proposed_artifact, table.path)
+        except (KeyError, IndexError, TypeError):
+            continue
+        if not isinstance(before_rows, list) or not isinstance(after_rows, list):
+            continue
+
+        paired_rows, removed_indexes, added_indexes = _paired_table_rows(
+            before_rows,
+            after_rows,
+        )
+        for before_index, after_index in paired_rows:
+            before_row = before_rows[before_index]
+            after_row = after_rows[after_index]
+            if not isinstance(before_row, dict) or not isinstance(after_row, dict):
+                continue
+            row_identifier = str(
+                before_row.get("id")
+                or before_row.get("outcome_id")
+                or before_index + 1
+            )
+            for field in table.fields:
+                if field.key == "id":
+                    continue
+                before = deepcopy(before_row.get(field.key))
+                after = deepcopy(after_row.get(field.key))
+                if before == after:
+                    continue
+                add_change(
+                    "value",
+                    [*table.path, before_index, field.key],
+                    before=before,
+                    after=after,
+                    field_key=field.key,
+                    field_label=field.label,
+                    field_kind=field.kind,
+                    table_path=list(table.path),
+                    table_title=table.title,
+                    row_index=before_index,
+                    row_identifier=row_identifier,
+                    row_after=deepcopy(after_row),
+                )
+
+        for index in added_indexes:
+            row = after_rows[index]
+            if not isinstance(row, dict):
+                continue
+            add_change(
+                "add_row",
+                [*table.path, index],
+                before=None,
+                after=deepcopy(row),
+                table_path=list(table.path),
+                table_title=table.title,
+                row_index=index,
+                fields=[
+                    {"key": field.key, "label": field.label, "kind": field.kind}
+                    for field in table.fields
+                ],
+            )
+
+        for index in removed_indexes:
+            row = before_rows[index]
+            if not isinstance(row, dict):
+                continue
+            add_change(
+                "remove_row",
+                [*table.path, index],
+                before=deepcopy(row),
+                after=None,
+                table_path=list(table.path),
+                table_title=table.title,
+                row_index=index,
+                fields=[
+                    {"key": field.key, "label": field.label, "kind": field.kind}
+                    for field in table.fields
+                ],
+            )
+
+    return changes
+
+
+def apply_proposal_review_changes(
+    artifact: Any,
+    changes: list[dict[str, Any]],
+    selections: list[dict[str, Any]],
+) -> Any:
+    """Aplica apenas as alterações explicitamente aceites pelo docente."""
+
+    selected = {
+        str(item.get("key", "")): item
+        for item in selections
+        if isinstance(item, dict) and str(item.get("key", ""))
+    }
+    result = deepcopy(artifact)
+    accepted = [
+        (change, selected.get(str(change["key"]), {}))
+        for change in changes
+        if selected.get(str(change["key"]), {}).get("accept") is True
+    ]
+    if not accepted:
+        raise ValueError("Aceite pelo menos uma alteração antes de aplicar a proposta.")
+
+    for change, decision in accepted:
+        if change["kind"] != "value":
+            continue
+        set_value_at_path(
+            result,
+            change["path"],
+            deepcopy(decision.get("value", change.get("after"))),
+        )
+
+    removals = sorted(
+        (
+            (change, decision)
+            for change, decision in accepted
+            if change["kind"] == "remove_row"
+        ),
+        key=lambda item: (tuple(str(part) for part in item[0]["path"][:-1]), -int(item[0]["path"][-1])),
+    )
+    for change, _decision in removals:
+        rows = value_at_path(result, change["path"][:-1])
+        index = int(change["path"][-1])
+        if not isinstance(rows, list) or index >= len(rows):
+            raise ValueError("Uma linha proposta para remoção já não existe.")
+        rows.pop(index)
+
+    additions = sorted(
+        (
+            (change, decision)
+            for change, decision in accepted
+            if change["kind"] == "add_row"
+        ),
+        key=lambda item: (tuple(str(part) for part in item[0]["path"][:-1]), int(item[0]["path"][-1])),
+    )
+    for change, decision in additions:
+        rows = value_at_path(result, change["path"][:-1])
+        if not isinstance(rows, list):
+            raise ValueError("A tabela proposta já não existe.")
+        index = min(int(change["path"][-1]), len(rows))
+        rows.insert(
+            index,
+            deepcopy(decision.get("value", change.get("after"))),
+        )
+
+    return result
 
 
 def format_editor_value(value: Any, kind: str) -> Any:

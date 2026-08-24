@@ -133,10 +133,13 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Para um âmbito inferior à etapa, pedir ao fornecedor apenas um fragmento com o
   esquema exato da célula, linha ou tabela selecionada; não gerar a etapa inteira
   para depois extrair um índice.
-- Apresentar a assistência como proposta pendente com comparação entre o valor
-  anterior e o valor sugerido. Não aplicar qualquer alteração automaticamente.
-- Exigir uma decisão humana explícita de aceitar ou rejeitar cada proposta;
-  aceitar cria uma nova versão e rejeitar preserva o rascunho.
+- Apresentar a assistência como proposta pendente diretamente nos campos e
+  tabelas existentes, colocando a sugestão sob o valor atual e sem expor o JSON
+  como interface principal.
+- Permitir editar, aceitar ou rejeitar independentemente cada célula alterada;
+  tratar linhas novas ou propostas para remoção como decisões ao nível da linha.
+- Aplicar em conjunto apenas as alterações aceites e criar uma única nova versão;
+  rejeitar todas preserva o rascunho.
 - Permitir restaurar uma versão não ativa de cada etapa de autoria mediante
   confirmação, sem exigir motivo e sem criar uma nova versão. O restauro altera
   apenas a versão ativa, preserva todo o histórico, assinala os passos posteriores
