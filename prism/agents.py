@@ -141,7 +141,7 @@ STAGE_REQUIREMENTS = {
     ),
     "assessment_activities": (
         "Lista de objetos {id, outcome_id, outcome_ids, work_type, assessment_purpose, "
-        "activity, evidence, criterion}. Os IDs são obrigatoriamente AT1, AT2, ... "
+        "activity, evidence, criterion}. Os IDs são obrigatoriamente TA1, TA2, ... "
         "pela ordem das linhas. assessment_purpose é exclusivamente Formativa ou "
         "Sumativa. É válido o conjunto conter apenas avaliações sumativas."
     ),
@@ -153,13 +153,13 @@ STAGE_REQUIREMENTS = {
     "teaching_activities": (
         "Lista de objetos {id, outcome_id, outcome_ids, learning_context, "
         "activity, method, practice, support, feedback_strategy}. Os IDs são "
-        "obrigatoriamente TLA1, TLA2, ... pela ordem das linhas; o conjunto deve "
+        "obrigatoriamente AE1, AE2, ... pela ordem das linhas; o conjunto deve "
         "cobrir todos os resultados e explicitar prática, acompanhamento e feedback."
     ),
     "alignment_matrix": (
         "Lista de objetos {outcome_id, result, content_ids, taxonomy, "
         "taxonomy_level, assessment_ids, assessment_purposes, teaching_activity_ids, "
-        "resource_types, assessment, teaching_activity, status, rationale}. "
+        "assessment, teaching_activity, status, rationale}. "
         "assessment e teaching_activity devem ser Sim ou Não; status deve indicar "
         "Coerente ou Requer revisão."
     ),
@@ -297,7 +297,7 @@ def _schema_for(
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "id": {"type": "string", "pattern": "^AT[1-9][0-9]*$"},
+                    "id": {"type": "string", "pattern": "^TA[1-9][0-9]*$"},
                     "outcome_id": string,
                     "outcome_ids": {"type": "array", "items": string},
                     "work_type": string,
@@ -346,7 +346,7 @@ def _schema_for(
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "id": {"type": "string", "pattern": "^TLA[1-9][0-9]*$"},
+                    "id": {"type": "string", "pattern": "^AE[1-9][0-9]*$"},
                     "outcome_id": string,
                     "outcome_ids": {"type": "array", "items": string},
                     "learning_context": {"type": "string", "enum": list(LEARNING_CONTEXTS)},
@@ -386,7 +386,6 @@ def _schema_for(
                         },
                     },
                     "teaching_activity_ids": {"type": "array", "items": string},
-                    "resource_types": {"type": "array", "items": string},
                     "assessment": {"type": "string", "enum": ["Sim", "Não"]},
                     "teaching_activity": {"type": "string", "enum": ["Sim", "Não"]},
                     "status": {
@@ -404,7 +403,6 @@ def _schema_for(
                     "assessment_ids",
                     "assessment_purposes",
                     "teaching_activity_ids",
-                    "resource_types",
                     "assessment",
                     "teaching_activity",
                     "status",
@@ -817,7 +815,7 @@ def _canonicalize_assessment_activities(
             purpose,
         )
         canonical = {
-            "id": f"AT{index}",
+            "id": f"TA{index}",
             "outcome_id": canonical_primary,
             "outcome_ids": links,
             "assessment_purpose": canonical_purpose,
@@ -838,13 +836,13 @@ def _canonicalize_assessment_activities(
 def _canonicalize_teaching_activities(
     artifact: Any,
 ) -> tuple[Any, list[dict[str, Any]]]:
-    """Aplica a convenção TLA<n> usada por Biggs e Tang."""
+    """Aplica a convenção portuguesa AE<n> às atividades de ensino-aprendizagem."""
 
     if not isinstance(artifact, list):
         return artifact, []
     normalized = normalize_structured_activity_ids(
         artifact,
-        prefix="TLA",
+        prefix="AE",
         sequential=True,
     )
     corrections = [
@@ -948,7 +946,6 @@ def _expected_alignment_rows(
                 {item["assessment_purpose"] for item in assessment_items}
             ),
             "teaching_activity_ids": teaching_ids,
-            "resource_types": list(state.get("resource_types", [])),
             "assessment": "Sim" if has_assessment else "Não",
             "teaching_activity": "Sim" if has_teaching else "Não",
             "status": "Coerente" if has_assessment and has_teaching else "Requer revisão",
@@ -975,12 +972,21 @@ def _canonicalize_alignment_matrix(
             "Estado calculado a partir das avaliações e atividades de ensino-aprendizagem "
             "associadas ao resultado."
         )
-        corrected = {**item, **canonical, "rationale": rationale}
+        corrected = {
+            **{key: value for key, value in item.items() if key != "resource_types"},
+            **canonical,
+            "rationale": rationale,
+        }
         changes = {
             field: {"received": item.get(field), "used": value}
             for field, value in canonical.items()
             if item.get(field) != value
         }
+        if "resource_types" in item:
+            changes["resource_types"] = {
+                "received": item.get("resource_types"),
+                "used": None,
+            }
         normalized.append(corrected)
         if changes:
             corrections.append(
@@ -1778,7 +1784,7 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         expected = {item["id"] for item in state["learning_outcomes"]}
         covered = set(_flattened_ids(artifact, "outcome_ids", "outcome_id"))
         identifiers = [item["id"] for item in artifact]
-        expected_prefix = "AT" if stage == "assessment_activities" else "TLA"
+        expected_prefix = "TA" if stage == "assessment_activities" else "AE"
         if (
             covered != expected
             or len(identifiers) != len(set(identifiers))
@@ -1880,7 +1886,6 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 }
             )
             or sorted(row["teaching_activity_ids"]) != teaching_by_outcome[row["outcome_id"]]
-            or sorted(row["resource_types"]) != sorted(state.get("resource_types", []))
         ]
         if divergent:
             raise AgentGenerationError(

@@ -135,7 +135,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -296,7 +296,7 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
     )
     assessments = [
         {
-            "id": f"AT{index + 1}",
+            "id": f"TA{index + 1}",
             "outcome_id": outcome["id"],
             "outcome_ids": [
                 outcome["id"],
@@ -369,7 +369,7 @@ def propose_teaching_activities(state: PrismState) -> dict[str, Any]:
     feedback = _feedback(state, "teaching_activities")
     activities = [
         {
-            "id": f"TLA{index + 1}",
+            "id": f"AE{index + 1}",
             "outcome_id": outcome["id"],
             "outcome_ids": [outcome["id"]],
             "learning_context": LEARNING_CONTEXTS[index % len(LEARNING_CONTEXTS)],
@@ -431,7 +431,6 @@ def validate_alignment(state: PrismState) -> dict[str, Any]:
             "assessment_ids": assessments_by_outcome[outcome["id"]],
             "assessment_purposes": assessment_purposes_by_outcome[outcome["id"]],
             "teaching_activity_ids": teaching_by_outcome[outcome["id"]],
-            "resource_types": list(state.get("resource_types", [])),
             "assessment": "Sim" if assessments_by_outcome[outcome["id"]] else "Não",
             "teaching_activity": "Sim" if teaching_by_outcome[outcome["id"]] else "Não",
             "status": (
@@ -893,7 +892,7 @@ def save_manual_draft(
                         id_mapping,
                     )
     elif target_stage in {"teaching_activities", "assessment_activities"}:
-        prefix = "TLA" if target_stage == "teaching_activities" else "AT"
+        prefix = "AE" if target_stage == "teaching_activities" else "TA"
         reference_field = (
             "teaching_activity_ids"
             if target_stage == "teaching_activities"
@@ -1051,12 +1050,6 @@ def restore_stage_version(
             if artifact_has_content(restored.get(downstream))
             else "empty"
         )
-    if (
-        stage == "resources"
-        and previous_resource_types != restored.get("resource_types", [])
-        and artifact_has_content(restored.get("alignment_matrix"))
-    ):
-        statuses["alignment_matrix"] = "needs_review"
     statuses["final_validation"] = "pending"
     restored["stage_statuses"] = statuses
     restored.pop("final_validation", None)
@@ -1172,11 +1165,10 @@ def update_manual_resource_settings(
     if not is_manual_first(state):
         raise ValueError("Esta operação aplica-se apenas ao fluxo de autoria manual.")
     updated = ensure_manual_artifacts(deepcopy(state))
+    if updated.get("current_stage") != "resources":
+        raise ValueError("A seleção de recursos pertence à etapa Recursos educativos.")
     selected = validate_resource_types(resource_types)
     updated["resource_types"] = selected
-    for row in updated.get("alignment_matrix", []):
-        if isinstance(row, dict):
-            row["resource_types"] = list(selected)
 
     if selected_source_image_ids is not None:
         available_ids = {
@@ -1212,8 +1204,6 @@ def update_manual_resource_settings(
     resources["selected_types"] = list(selected)
     updated["resources"] = attach_quality_report(updated, resources)
     statuses = dict(updated.get("stage_statuses", {}))
-    if artifact_has_content(updated.get("alignment_matrix")):
-        statuses["alignment_matrix"] = "draft"
     statuses["resources"] = (
         "needs_review" if artifact_has_content(resources) else "empty"
     )
@@ -1223,7 +1213,7 @@ def update_manual_resource_settings(
     updated.get("active_versions", {}).pop("final_validation", None)
     _record_decision(
         updated,
-        "alignment_matrix",
+        "resources",
         "Docente atualizou a seleção de recursos sem executar a IA.",
         ", ".join(selected),
     )
@@ -1602,8 +1592,6 @@ def _resource_generation_scope(
     scoped = deepcopy(state)
     scoped["resource_types"] = [resource_type]
     scoped["resource_generation_scope"] = resource_type
-    for row in scoped.get("alignment_matrix", []):
-        row["resource_types"] = [resource_type]
     return scoped
 
 

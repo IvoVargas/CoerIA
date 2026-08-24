@@ -305,7 +305,6 @@ def render_artifact(
                 ", ".join(item.get("assessment_ids", [])),
                 ", ".join(item.get("assessment_purposes", [])),
                 ", ".join(item.get("teaching_activity_ids", [])),
-                ", ".join(item.get("resource_types", [])),
                 item["status"],
                 item.get("rationale", ""),
             ]
@@ -315,7 +314,7 @@ def render_artifact(
             [
                 "Resultado", "Conteúdos", "Nível",
                 "Avaliações", "Finalidade", "Atividades de ensino-aprendizagem",
-                "Recursos", "Alinhamento", "Justificação",
+                "Alinhamento", "Justificação",
             ],
             rows,
         )

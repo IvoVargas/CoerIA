@@ -339,26 +339,21 @@ class ApplicationService:
         if progress_callback is not None:
             progress_callback("A validar a decisão e os dados da etapa atual…")
         working_state = state
-        if resource_types is not None and state.get("current_stage") == "alignment_matrix":
-            working_state = deepcopy(state)
-            selected = validate_resource_types(resource_types)
-            working_state["resource_types"] = selected
-            for row in working_state.get("alignment_matrix", []):
-                row["resource_types"] = list(selected)
-            versions = working_state.get("versions", {}).get("alignment_matrix", [])
-            if versions:
-                versions[-1] = deepcopy(working_state.get("alignment_matrix", []))
-        elif resource_types is not None and state.get("current_stage") == "resources":
+        if resource_types is not None and state.get("current_stage") == "resources":
             selected = validate_resource_types(resource_types)
             if selected != state.get("resource_types", []):
                 raise ValueError(
-                    "Para alterar os recursos, solicite a revisão da matriz de alinhamento."
+                    "Guarde a seleção na etapa Recursos educativos antes de gerar conteúdo."
                 )
+        elif resource_types is not None:
+            raise ValueError(
+                "A seleção de recursos só pode ser alterada na etapa Recursos educativos."
+            )
 
         if selected_source_image_ids is not None:
-            if state.get("current_stage") != "alignment_matrix":
+            if state.get("current_stage") != "resources":
                 raise ValueError(
-                    "A seleção de imagens documentais só pode ser alterada antes da geração dos recursos."
+                    "A seleção de imagens documentais pertence à etapa Recursos educativos."
                 )
             if working_state is state:
                 working_state = deepcopy(state)

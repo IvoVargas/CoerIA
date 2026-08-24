@@ -381,7 +381,6 @@ class ResourceGenerationTests(unittest.TestCase):
                     service.review_session(
                         alignment_state,
                         "approve",
-                        resource_types=list(SUPPORTED_RESOURCE_TYPES),
                         progress_callback=first_progress.append,
                     )
 
@@ -396,7 +395,6 @@ class ResourceGenerationTests(unittest.TestCase):
                 completed, _ = service.review_session(
                     persisted,
                     "approve",
-                    resource_types=list(SUPPORTED_RESOURCE_TYPES),
                     progress_callback=second_progress.append,
                 )
 
@@ -480,6 +478,7 @@ class ResourceGenerationTests(unittest.TestCase):
                 )
                 self.assertNotIn("Atividades formativas", alignment_header)
                 self.assertNotIn("Objetivos", alignment_header)
+                self.assertNotIn("Recursos", alignment_header)
                 presentation = Presentation(BytesIO(package.read(presentation_name)))
                 self.assertGreaterEqual(len(presentation.slides), 3)
                 for slide in presentation.slides:

@@ -1614,7 +1614,6 @@ def export_resource_package(
                 ", ".join(row.get("assessment_ids", [])),
                 ", ".join(row.get("assessment_purposes", [])),
                 ", ".join(row.get("teaching_activity_ids", [])),
-                ", ".join(row.get("resource_types", [])),
                 row.get("status", ""),
                 row.get("rationale", ""),
             ]
@@ -1690,7 +1689,7 @@ def export_resource_package(
                     [
                         "Resultado", "Descrição", "Conteúdos",
                         "Taxonomia", "Nível", "Avaliações", "Finalidade",
-                        "Atividades de ensino-aprendizagem", "Recursos", "Estado",
+                        "Atividades de ensino-aprendizagem", "Estado",
                         "Justificação"
                     ],
                     alignment_rows,

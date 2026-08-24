@@ -89,9 +89,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   completa, derivar estes IDs deterministicamente pela ordem das linhas. Na
   edição manual, apresentar o ID como campo não editável e atribuir o próximo
   número automaticamente às linhas novas.
-- Identificar as atividades de ensino-aprendizagem como `TLA1`, `TLA2`, … e as
-  tarefas de avaliação como `AT1`, `AT2`, …, seguindo a terminologia de Biggs e
-  Tang. Atribuir estes IDs automaticamente, apresentá-los como campos não
+- Identificar as atividades de ensino-aprendizagem como `AE1`, `AE2`, … e as
+  tarefas de avaliação como `TA1`, `TA2`, …, localizando para português a
+  distinção entre *Teaching/Learning Activities* e *Assessment Tasks* usada por
+  Biggs e Tang. Atribuir estes IDs automaticamente, apresentá-los como campos não
   editáveis e conservar as respetivas referências na matriz de alinhamento.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
@@ -126,6 +127,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   transformando a tabela apresentada no próprio local e permitindo alterar
   texto, adicionar linhas e remover linhas, sem abrir um editor separado nem
   mudar os campos visíveis ou a respetiva ordem.
+- Apresentar a ação **Editar campos e tabelas** no canto superior direito do
+  cartão que contém o artefacto e designar a navegação para a frente como
+  **Etapa seguinte**.
 - Permitir guardar rascunhos incompletos; validar apenas a forma estrutural
   mínima necessária para a persistência.
 - Não acrescentar uma coluna de numeração de linhas no modo de edição.
@@ -221,8 +225,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir avaliações formativas e sumativas, mas nunca uma finalidade mista.
 - Não obrigar à existência de avaliação formativa.
 - Estruturar atividades de ensino-aprendizagem com prática, acompanhamento e estratégia de feedback.
-- Apresentar a seleção dos tipos de recursos na matriz de alinhamento, antes da
-  sua aprovação, sem repetir essa decisão no formulário inicial.
+- Apresentar a seleção dos tipos de recursos e das imagens documentais no início
+  da etapa **Recursos educativos**, antes de qualquer geração, sem repetir essa
+  decisão no formulário inicial nem nas linhas da matriz de alinhamento.
 
 Gerar efetivamente cada tipo selecionado pelo docente:
 
@@ -410,8 +415,8 @@ ficheiros após a exportação.
 - Cada resultado contém um único verbo de ação principal; infinitivos subordinados em complementos são permitidos, mas ações principais coordenadas são rejeitadas.
 - Cada avaliação é Formativa ou Sumativa, nunca Mista.
 - Todos os conteúdos estão ligados a pelo menos um resultado; todas as tarefas
-  de avaliação usam IDs `AT<n>`, todas as atividades de ensino-aprendizagem usam
-  IDs `TLA<n>` e ambas possuem ligações explícitas.
+  de avaliação usam IDs `TA<n>`, todas as atividades de ensino-aprendizagem usam
+  IDs `AE<n>` e ambas possuem ligações explícitas.
 - A matriz assinala incoerências sem depender da opinião declarada pelo LLM.
 - Cada tipo de recurso selecionado gera um ficheiro utilizável.
 - Uma sessão persistida pode ser retomada numa nova instância da aplicação.

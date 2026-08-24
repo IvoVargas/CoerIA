@@ -316,11 +316,12 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.open("/_test_manual_first_workspace")
 
     await user.should_see("Autoria manual com IA facultativa")
-    await user.should_see("Continuar sem executar a IA")
+    await user.should_see("Etapa seguinte")
+    await user.should_not_see("Continuar sem executar a IA")
     await user.should_see("Criar primeira versão com IA")
     await user.should_see("Pedir proposta à IA")
     await user.should_see("Conteúdos e objetivos curriculares")
-    user.find("Editar campos e tabelas").click()
+    user.find(marker="edit-artifact-content").click()
     await user.should_see("EDIÇÃO NA TABELA ATUAL")
     await user.should_see("Adicionar linha")
     assert interfaces[-1].manual_edit_stage == "learning_outcomes"
@@ -332,6 +333,11 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     )
     assert id_control._props.get("readonly") is True
     user.find("Cancelar edição").click()
+    user.find(marker="manual-stage-alignment_matrix").click()
+    await user.should_not_see("RECURSOS A PREPARAR")
+    user.find(marker="manual-stage-resources").click()
+    await user.should_see("RECURSOS A PREPARAR", retries=20)
+    await user.should_see("Guardar seleção de recursos", retries=20)
     user.find(marker="manual-stage-curriculum_analysis").click()
     await user.should_see("Objetivos gerais")
     await user.should_see("Criar primeira versão com IA")

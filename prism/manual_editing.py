@@ -181,7 +181,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     _field("assessment_ids", "Avaliações", "csv"),
                     _field("assessment_purposes", "Finalidade", "csv"),
                     _field("teaching_activity_ids", "Atividades de ensino-aprendizagem", "csv"),
-                    _field("resource_types", "Recursos", "csv"),
                     _field("status", "Alinhamento", "alignment_status"),
                     _field("rationale", "Justificação", "long"),
                 ),
@@ -194,7 +193,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "assessment_ids": [],
                     "assessment_purposes": [],
                     "teaching_activity_ids": [],
-                    "resource_types": [],
                     "assessment": "Não",
                     "teaching_activity": "Não",
                     "status": "Requer revisão",
@@ -899,9 +897,9 @@ def new_table_row(
     if any(field.kind == "learning_outcome_id" for field in table.fields):
         row["id"] = next_learning_outcome_id(existing_rows or [])
     elif any(field.kind == "teaching_activity_id" for field in table.fields):
-        row["id"] = next_structured_activity_id(existing_rows or [], "TLA")
+        row["id"] = next_structured_activity_id(existing_rows or [], "AE")
     elif any(field.kind == "assessment_task_id" for field in table.fields):
-        row["id"] = next_structured_activity_id(existing_rows or [], "AT")
+        row["id"] = next_structured_activity_id(existing_rows or [], "TA")
     if state is not None and "taxonomy" in row:
         row["taxonomy"] = validate_taxonomy_choice(
             str(state.get("course", {}).get("taxonomy_type", "SOLO"))

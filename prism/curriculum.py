@@ -15,8 +15,8 @@ TAXONOMY_SOLO = "SOLO"
 TAXONOMY_BLOOM = "Bloom"
 TAXONOMY_CHOICES = (TAXONOMY_SOLO, TAXONOMY_BLOOM)
 LEARNING_OUTCOME_ID_PATTERN = re.compile(r"^RA([1-9]\d*)$", re.IGNORECASE)
-TEACHING_ACTIVITY_ID_PATTERN = re.compile(r"^TLA([1-9]\d*)$", re.IGNORECASE)
-ASSESSMENT_TASK_ID_PATTERN = re.compile(r"^AT([1-9]\d*)$", re.IGNORECASE)
+TEACHING_ACTIVITY_ID_PATTERN = re.compile(r"^AE([1-9]\d*)$", re.IGNORECASE)
+ASSESSMENT_TASK_ID_PATTERN = re.compile(r"^TA([1-9]\d*)$", re.IGNORECASE)
 
 
 def normalize_learning_outcome_ids(
@@ -93,16 +93,16 @@ def normalize_structured_activity_ids(
     prefix: str,
     sequential: bool,
 ) -> Any:
-    """Normaliza IDs TLA/AT, preservando IDs válidos durante a autoria manual."""
+    """Normaliza IDs AE/TA, preservando IDs válidos durante a autoria manual."""
 
     if not isinstance(artifact, list):
         return artifact
     canonical_prefix = str(prefix or "").strip().upper()
-    if canonical_prefix not in {"TLA", "AT"}:
+    if canonical_prefix not in {"AE", "TA"}:
         raise ValueError("Prefixo de atividade desconhecido.")
     pattern = (
         TEACHING_ACTIVITY_ID_PATTERN
-        if canonical_prefix == "TLA"
+        if canonical_prefix == "AE"
         else ASSESSMENT_TASK_ID_PATTERN
     )
     if sequential:
@@ -139,7 +139,7 @@ def normalize_structured_activity_ids(
 
 
 def next_structured_activity_id(rows: list[Any], prefix: str) -> str:
-    """Devolve o próximo ID TLA ou AT sem reutilizar números removidos."""
+    """Devolve o próximo ID AE ou TA sem reutilizar números removidos."""
 
     canonical_prefix = str(prefix or "").strip().upper()
     normalized = normalize_structured_activity_ids(
@@ -157,13 +157,13 @@ def next_structured_activity_id(rows: list[Any], prefix: str) -> str:
 
 
 def is_structured_activity_id(value: Any, prefix: str) -> bool:
-    """Valida a convenção TLA<n> ou AT<n> sem diferenciar maiúsculas."""
+    """Valida a convenção AE<n> ou TA<n> sem diferenciar maiúsculas."""
 
     pattern = (
         TEACHING_ACTIVITY_ID_PATTERN
-        if str(prefix).upper() == "TLA"
+        if str(prefix).upper() == "AE"
         else ASSESSMENT_TASK_ID_PATTERN
-        if str(prefix).upper() == "AT"
+        if str(prefix).upper() == "TA"
         else None
     )
     return bool(pattern and pattern.fullmatch(str(value or "").strip()))

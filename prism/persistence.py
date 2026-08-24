@@ -28,9 +28,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 19:
+    if previous_version < 20:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 19
+    state["schema_version"] = 20
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -280,7 +280,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         for index, item in enumerate(activities):
             if not isinstance(item, dict):
                 continue
-            item.setdefault("id", f"AT{index + 1}")
+            item.setdefault("id", f"TA{index + 1}")
             item.setdefault("outcome_ids", [item.get("outcome_id", "")])
             item.setdefault("work_type", "Não especificado")
             item.setdefault("assessment_purpose", "Sumativa")
@@ -300,7 +300,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(item, dict):
                 continue
             item.setdefault("outcome_ids", [item.get("outcome_id", "")])
-            item.setdefault("id", f"TLA{index + 1}")
+            item.setdefault("id", f"AE{index + 1}")
             # As atividades alinham-se diretamente com os resultados. A ligação
             # a avaliações era redundante e impedia que esta etapa as precedesse.
             item.pop("assessment_ids", None)
@@ -324,7 +324,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             str(item.get("id", "")) if isinstance(item, dict) else ""
             for item in rows
         ]
-        if previous_version < 19:
+        if previous_version < 20:
             normalized = normalize_structured_activity_ids(
                 rows,
                 prefix=prefix,
@@ -343,18 +343,18 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
 
     assessment_id_map = canonicalize_activity_ids(
         state.get("assessment_activities"),
-        "AT",
+        "TA",
     )
     teaching_id_map = canonicalize_activity_ids(
         state.get("teaching_activities"),
-        "TLA",
+        "AE",
     )
     assessment_version_maps = [
-        canonicalize_activity_ids(version, "AT")
+        canonicalize_activity_ids(version, "TA")
         for version in version_map.get("assessment_activities", [])
     ] if isinstance(version_map, dict) else []
     teaching_version_maps = [
-        canonicalize_activity_ids(version, "TLA")
+        canonicalize_activity_ids(version, "AE")
         for version in version_map.get("teaching_activities", [])
     ] if isinstance(version_map, dict) else []
 
@@ -369,6 +369,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         for row in rows:
             if not isinstance(row, dict):
                 continue
+            row.pop("resource_types", None)
             if isinstance(row.get("assessment_ids"), list):
                 row["assessment_ids"] = [
                     assessment_mapping.get(str(identifier), str(identifier))
@@ -423,11 +424,11 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         artifacts = snapshot["artifacts"]
         snapshot_assessment_map = canonicalize_activity_ids(
             artifacts.get("assessment_activities"),
-            "AT",
+            "TA",
         )
         snapshot_teaching_map = canonicalize_activity_ids(
             artifacts.get("teaching_activities"),
-            "TLA",
+            "AE",
         )
         remap_alignment_activity_ids(
             artifacts.get("alignment_matrix"),
@@ -448,7 +449,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         for item in value.values():
             remap_own_activity_ids(item, mapping)
 
-    if previous_version < 19:
+    if previous_version < 20:
         for proposal in state.get("ai_proposals", []):
             if not isinstance(proposal, dict):
                 continue
@@ -562,7 +563,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 if outcome_id in item.get("outcome_ids", [])
             ],
         )
-        row.setdefault("resource_types", list(state.get("resource_types", [])))
+        row.pop("resource_types", None)
 
     if state.get("current_stage") == "solo_taxonomy":
         state["current_stage"] = "learning_outcomes"

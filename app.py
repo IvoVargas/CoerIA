@@ -1986,6 +1986,7 @@ class AGIRSoloInterface:
 
     def _render_authoring_view(self, state: dict[str, Any]) -> None:
         stage = state["current_stage"]
+        proposal = self._pending_ai_proposal(state, stage)
         editing = (
             self.manual_edit_stage == stage and self.manual_edit_artifact is not None
         )
@@ -1999,9 +2000,19 @@ class AGIRSoloInterface:
             with ui.card().classes("surface artifact-card w-full").mark(
                 "artifact-content"
             ):
+                if not editing and is_manual_first(state) and proposal is None:
+                    with ui.row().classes("w-full items-center gap-2"):
+                        ui.space()
+                        ui.button(
+                            "Editar campos e tabelas",
+                            icon="edit",
+                            on_click=lambda: self._start_manual_edit(stage),
+                        ).props("outline no-caps").classes("secondary-action").mark(
+                            "edit-artifact-content"
+                        )
                 if editing:
                     self._render_inline_manual_editor(stage)
-                elif proposal := self._pending_ai_proposal(state, stage):
+                elif proposal:
                     self._render_ai_proposal_review(state, stage, proposal)
                 else:
                     ui.markdown(
@@ -2030,13 +2041,6 @@ class AGIRSoloInterface:
 
             with ui.row().classes("w-full gap-2 flex-wrap mt-3"):
                 ui.button(
-                    "Editar campos e tabelas",
-                    icon="edit",
-                    on_click=lambda: self._start_manual_edit(stage),
-                ).props("unelevated no-caps").classes("primary-action").style(
-                    "min-width: 220px; flex: 1 1 220px;"
-                )
-                ui.button(
                     "Verificar esta etapa com IA",
                     icon="fact_check",
                     on_click=lambda: self._handle_ai_verification(stage),
@@ -2044,11 +2048,11 @@ class AGIRSoloInterface:
                     "min-width: 220px; flex: 1 1 220px;"
                 )
 
-            if stage == "alignment_matrix":
+            if stage == "resources":
                 ui.separator().classes("my-3")
                 ui.label("RECURSOS A PREPARAR").classes("eyebrow")
                 ui.label(
-                    "Pode alterar esta seleção sem gerar os recursos."
+                    "Escolha os recursos desta etapa. Guardar a seleção não executa a IA."
                 ).classes("text-sm muted")
                 selected_resources = set(state.get("resource_types", []))
                 resource_checks = {
@@ -2202,7 +2206,7 @@ class AGIRSoloInterface:
                     ).props("outline no-caps").classes("secondary-action")
                 ui.space()
                 ui.button(
-                    "Continuar sem executar a IA",
+                    "Etapa seguinte",
                     icon="arrow_forward",
                     on_click=lambda: self._navigate_manual_stage(
                         STAGE_ORDER[current_index + 1]
@@ -2486,22 +2490,7 @@ class AGIRSoloInterface:
                     )
                 )
 
-            resource_checks: dict[str, Any] = {}
-            source_image_checks: dict[str, Any] = {}
-            if state["current_stage"] == "alignment_matrix":
-                ui.separator().classes("my-2")
-                ui.label("Confirmar recursos").classes("font-semibold")
-                ui.label(
-                    "Esta é a etapa em que a seleção provisória pode ser alterada."
-                ).classes("text-xs muted")
-                selected = set(state.get("resource_types", []))
-                for resource_type in RESOURCE_TYPES:
-                    resource_checks[resource_type] = ui.checkbox(
-                        resource_type,
-                        value=resource_type in selected,
-                    )
-                source_image_checks = self._render_source_image_selector(state)
-            elif state["current_stage"] == "resources":
+            if state["current_stage"] == "resources":
                 ui.separator().classes("my-2")
                 ui.label("Recursos confirmados").classes("font-semibold")
                 with ui.row().classes("gap-1"):
@@ -2509,29 +2498,12 @@ class AGIRSoloInterface:
                         ui.chip(resource).classes("info-chip")
 
             async def submit_decision() -> None:
-                resources = (
-                    [name for name, checkbox in resource_checks.items() if checkbox.value]
-                    if resource_checks
-                    else None
-                )
-                selected_source_image_ids = None
-                if source_image_checks:
-                    selected_resources = set(resources or state.get("resource_types", []))
-                    selected_source_image_ids = (
-                        [
-                            identifier
-                            for identifier, checkbox in source_image_checks.items()
-                            if checkbox.value
-                        ]
-                        if "Apresentação PowerPoint" in selected_resources
-                        else []
-                    )
                 await self.handle_review(
                     "approve" if final else str(decision.value),
                     "" if final else str(feedback.value or ""),
                     state["current_stage"],
-                    resources,
-                    selected_source_image_ids,
+                    None,
+                    None,
                 )
 
             ui.button(

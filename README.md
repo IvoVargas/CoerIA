@@ -44,8 +44,9 @@ aprendizagem, as atividades de ensino-aprendizagem e as tarefas e critérios de
 avaliação. Os verbos dos resultados funcionam como marcadores dessa coerência.
 O protótipo usa conteúdos com IDs estáveis, 4 a 10 resultados de aprendizagem
 (preferencialmente 5 a 7), tipos de resultado, verbos taxonómicos controlados e
-relações muitos-para-muitos. A matriz acrescenta os conteúdos e os recursos
-selecionados a essa cadeia de alinhamento. A `minutaProgramasUCs.xls` não é uma
+relações muitos-para-muitos. A matriz acrescenta os conteúdos a essa cadeia de
+alinhamento; os recursos selecionados são posteriormente produzidos a partir dela.
+A `minutaProgramasUCs.xls` não é uma
 referência oficial do alinhamento ou do fluxo; permanece apenas como documento
 histórico ou institucional.
 
@@ -72,14 +73,16 @@ divergência. Na edição manual, o seletor de verbos mostra exclusivamente os
 verbos do nível escolhido na mesma linha. Os resultados usam sempre IDs no
 formato `RA1`, `RA2`, …; a geração normaliza-os pela ordem das linhas e o editor
 atribui automaticamente o próximo ID, sem permitir edição livre desse campo.
-Pela terminologia usada por Biggs e Tang, as atividades de
-ensino-aprendizagem usam `TLA1`, `TLA2`, … (*Teaching/Learning Activities*) e
-as tarefas de avaliação usam `AT1`, `AT2`, … (*Assessment Tasks*). Os dois
-prefixos são atribuídos automaticamente e tornam inequívocas as referências
+Biggs e Tang distinguem *Teaching/Learning Activities* e *Assessment Tasks*. Na
+interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
+(atividades de ensino-aprendizagem) e `TA1`, `TA2`, … (tarefas de avaliação).
+Os prefixos são atribuídos automaticamente e tornam inequívocas as referências
 apresentadas na matriz de alinhamento.
 
-A seleção dos recursos é feita na matriz de alinhamento, imediatamente antes da
-etapa de produção, evitando repetir a mesma decisão no formulário inicial.
+A seleção dos recursos e das imagens documentais é feita no início da etapa
+**Recursos educativos**. A matriz permanece dedicada às relações entre
+resultados, conteúdos, atividades de ensino-aprendizagem e tarefas de avaliação;
+os recursos são produzidos posteriormente com base nesse alinhamento.
 
 Podem ser produzidos quatro tipos de recurso: apresentação PowerPoint, ficha de
 aula, teste com chave de correção e atividade prática. As apresentações devem
@@ -121,6 +124,8 @@ podem ser alterados textos, adicionadas linhas e removidas linhas. Guardar cria
 uma nova versão mesmo que o rascunho ainda esteja incompleto. Se a alteração
 ocorrer antes de artefactos já preenchidos, esses artefactos são preservados e
 assinalados como **Rever após alterações anteriores**.
+O botão de edição encontra-se no canto superior direito do cartão do conteúdo;
+**Etapa seguinte** navega sem executar a IA.
 
 **Verificar esta etapa com IA** guarda um parecer facultativo que nunca impede
 avançar. Quando o artefacto está completamente vazio, **Criar primeira versão

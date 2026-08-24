@@ -253,10 +253,10 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
         {"id": "C1", "title": "Testes", "description": "Testes", "outcome_ids": ["RA3"]}
     ]
     state["teaching_activities"] = [
-        {"id": "TLA1", "outcome_ids": ["RA3"], "activity": "Analisar casos."}
+        {"id": "AE1", "outcome_ids": ["RA3"], "activity": "Analisar casos."}
     ]
     state["assessment_activities"] = [
-        {"id": "AT1", "outcome_ids": ["RA3"], "task": "Resolver um caso."}
+        {"id": "TA1", "outcome_ids": ["RA3"], "task": "Resolver um caso."}
     ]
     state["pedagogical_design"] = {
         "strategy": "Prática orientada.",
@@ -434,12 +434,19 @@ def test_stage_ai_review_is_saved_but_does_not_block_navigation() -> None:
 
 
 def test_resource_selection_can_change_without_generation() -> None:
-    state = create_session(_course())
+    state = navigate_to_stage(create_session(_course()), "resources")
+    state["alignment_matrix"] = [{"outcome_id": "RA1"}]
     updated = update_manual_resource_settings(state, [RESOURCE_TEST], [])
 
     assert updated["resource_types"] == [RESOURCE_TEST]
     assert updated["resources"]["selected_types"] == [RESOURCE_TEST]
     assert updated["resources"]["test"]["questions"] == []
+    assert all("resource_types" not in row for row in updated["alignment_matrix"])
+
+
+def test_resource_selection_is_restricted_to_the_resources_stage() -> None:
+    with pytest.raises(ValueError, match="pertence à etapa Recursos educativos"):
+        update_manual_resource_settings(create_session(_course()), [RESOURCE_TEST], [])
 
 
 def test_final_deterministic_validation_is_mandatory() -> None:

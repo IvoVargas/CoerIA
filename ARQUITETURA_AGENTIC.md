@@ -18,11 +18,12 @@ expressas, e os critérios devem permitir julgar o desempenho alcançado. A
 `minutaProgramasUCs.xls` não é uma referência oficial do alinhamento nem do
 fluxo do CoerIA.
 
-A nomenclatura técnica acompanha os exemplos da mesma referência: `RA<n>` para
-resultados de aprendizagem, `TLA<n>` para *Teaching/Learning Activities* e
-`AT<n>` para *Assessment Tasks*. A separação entre `TLA` e `AT` evita a
-ambiguidade na matriz de alinhamento e mantém estes identificadores estáveis ao
-longo da autoria e das versões.
+A nomenclatura técnica preserva a distinção conceptual da mesma referência e
+localiza-a para a interface portuguesa: `RA<n>` para resultados de aprendizagem,
+`AE<n>` para atividades de ensino-aprendizagem e `TA<n>` para tarefas de
+avaliação. A separação entre `AE` e `TA` evita a ambiguidade na matriz de
+alinhamento e mantém estes identificadores estáveis ao longo da autoria e das
+versões.
 
 ```mermaid
 flowchart LR
@@ -127,6 +128,11 @@ ruído ao histórico. Depois da conclusão, a barra é apenas informativa; reabr
 autoria requer uma ação separada, etapa, motivo e confirmação explícita.
 
 ## Recursos e imagens
+
+Os tipos de recurso e as imagens documentais são selecionados no início da
+etapa **Recursos educativos**. Esta configuração pertence ao artefacto de
+recursos e não é repetida em cada linha da matriz; a geração recebe a matriz
+completa como contexto de alinhamento.
 
 Quando a assistência abrange toda a etapa de recursos, cada tipo selecionado
 continua a ser gerado e validado separadamente. Num âmbito inferior, a IA devolve

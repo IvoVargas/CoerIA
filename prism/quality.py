@@ -296,8 +296,6 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         ).get("level")
         or sorted(row.get("teaching_activity_ids", []))
         != teaching_by_outcome.get(str(row.get("outcome_id", "")), [])
-        or sorted(row.get("resource_types", []))
-        != sorted(state.get("resource_types", []))
     ]
     checks.append(
         _check(
