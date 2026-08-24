@@ -127,7 +127,14 @@ assinalados como **Rever após alterações anteriores**.
 O botão de edição encontra-se no canto superior direito do cartão do conteúdo;
 **Etapa seguinte** navega sem executar a IA.
 
-No cartão **Assistência com IA**, **Pedir propostas à IA** permite pedidos
+**Criar etapa completa com IA** é a primeira ação apresentada na zona de IA e
+pede uma proposta para toda a etapa, considerando o rascunho atual; o conteúdo
+só se torna uma nova versão depois da revisão do docente. Em **Recursos
+educativos**, esta ação apresenta primeiro uma confirmação explícita, porque
+pode executar uma chamada por tipo de recurso e chamadas adicionais para gerar
+imagens da apresentação.
+
+Depois, no bloco **Assistência com IA**, **Pedir propostas à IA** permite pedidos
 dirigidos e exige a escolha prévia do âmbito e uma instrução. Para uma célula,
 linha ou tabela, o fornecedor recebe um esquema de resposta
 limitado exatamente a esse fragmento, sem gerar primeiro a etapa inteira. O
@@ -138,11 +145,6 @@ aceitar ou rejeitar cada alteração de forma independente. Linhas novas ou a
 remover são decididas como uma unidade. **Aplicar alterações aceites** reúne as
 decisões numa única nova versão; rejeitar todas conserva o rascunho sem alterações.
 
-**Criar etapa completa com IA** está sempre disponível e pede uma proposta para
-toda a etapa, considerando o rascunho atual; o conteúdo só se torna uma nova
-versão depois da revisão do docente. Em **Recursos educativos**, esta ação
-apresenta primeiro uma confirmação explícita, porque pode executar uma chamada
-por tipo de recurso e chamadas adicionais para gerar imagens da apresentação.
 **Verificar esta etapa com IA**, apresentada no fim do cartão, guarda um parecer
 facultativo que nunca impede avançar.
 

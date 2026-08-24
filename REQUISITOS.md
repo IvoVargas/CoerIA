@@ -141,13 +141,13 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir pedir uma verificação por IA em qualquer etapa de autoria. O parecer
   deve ser guardado, não deve alterar o artefacto e nunca deve bloquear a
   navegação.
-- Organizar o cartão sem o título redundante «Controlo do docente»: apresentar
-  **Assistência com IA**, com os campos de âmbito e instrução à esquerda e
-  **Pedir propostas à IA** à direita, ocupando a altura dos dois campos.
-- Apresentar sempre a ação **Criar etapa completa com IA**, acompanhada de uma
-  explicação própria, para obter uma proposta completa com base no contexto, no
-  rascunho atual e nos artefactos anteriores. A proposta só se torna uma nova
-  versão depois da revisão e aplicação explícitas pelo docente.
+- Organizar o cartão sem o título redundante «Controlo do docente» e apresentar
+  primeiro **Criar etapa completa com IA**, acompanhada de uma explicação própria
+  e num botão de largura total, para obter uma proposta completa com base no
+  contexto, no rascunho atual e nos artefactos anteriores. A proposta só se torna
+  uma nova versão depois da revisão e aplicação explícitas pelo docente.
+- Apresentar depois **Assistência com IA**, com os campos de âmbito e instrução à
+  esquerda e **Pedir propostas à IA** à direita, ocupando a altura dos dois campos.
 - Colocar a explicação da autoria manual e **Verificar esta etapa com IA** no fim
   do cartão, com o botão de verificação por baixo do texto.
 - Na etapa de recursos, identificar inequivocamente que essa ação gera os tipos

@@ -266,8 +266,6 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 }
 .ai-assistance-fields { min-width: 0; }
 .ai-assistance-request-button { width: 100%; height: 100%; min-height: 0 !important; }
-.ai-complete-stage-copy { min-width: 260px; flex: 1 1 460px; }
-.ai-complete-stage-button { min-width: 250px; flex: 0 1 300px; }
 .consultation-card { padding: 20px 22px; }
 .info-chip { background: var(--agir-primary) !important; color: #ffffff !important; font-weight: 700; }
 .info-chip *, .info-chip .q-icon { color: #ffffff !important; }
@@ -294,7 +292,6 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   .artifact-card { padding: 20px 16px; }
   .ai-assistance-request { grid-template-columns: 1fr; }
   .ai-assistance-request-button { min-height: 42px !important; }
-  .ai-complete-stage-button { min-width: 100%; flex-basis: 100%; }
   .q-stepper__title { display: none; }
   .brand-mark { width: 38px; height: 38px; border-radius: 12px; }
   .header-brand-copy { margin-left: 2px !important; }
@@ -2101,6 +2098,31 @@ class AGIRSoloInterface:
                     icon="save",
                     on_click=save_resource_settings,
                 ).props("outline no-caps").classes("secondary-action w-full")
+                ui.separator().classes("my-2")
+
+            async def create_ai_version() -> None:
+                if stage == "resources":
+                    self._open_resource_generation_confirmation()
+                    return
+                await self._handle_ai_assistance(
+                    stage,
+                    [],
+                    "Toda a etapa",
+                    "Crie uma versão completa desta etapa com base no contexto da "
+                    "unidade curricular, no rascunho atual e nos artefactos anteriores.",
+                )
+
+            ui.label(
+                "A IA pode propor toda a etapa com base no contexto, no rascunho "
+                "atual e nos artefactos anteriores. Nada é aplicado sem a sua revisão."
+            ).classes("text-sm muted")
+            ui.button(
+                "Criar etapa completa com IA",
+                icon="auto_fix_high",
+                on_click=create_ai_version,
+            ).props("outline no-caps").classes("secondary-action w-full").mark(
+                "create-ai-version"
+            )
 
             ui.separator().classes("my-2")
             ui.label("ASSISTÊNCIA COM IA").classes("eyebrow")
@@ -2145,31 +2167,6 @@ class AGIRSoloInterface:
                     "secondary-action ai-assistance-request-button"
                 )
 
-            async def create_ai_version() -> None:
-                if stage == "resources":
-                    self._open_resource_generation_confirmation()
-                    return
-                await self._handle_ai_assistance(
-                    stage,
-                    [],
-                    "Toda a etapa",
-                    "Crie uma versão completa desta etapa com base no contexto da "
-                    "unidade curricular, no rascunho atual e nos artefactos anteriores.",
-                )
-
-            with ui.row().classes("w-full items-center gap-3 flex-wrap mt-1"):
-                ui.label(
-                    "A IA pode propor toda a etapa com base no contexto, no rascunho "
-                    "atual e nos artefactos anteriores. Nada é aplicado sem a sua revisão."
-                ).classes("text-sm muted ai-complete-stage-copy")
-                ui.button(
-                    "Criar etapa completa com IA",
-                    icon="auto_fix_high",
-                    on_click=create_ai_version,
-                ).props("outline no-caps").classes(
-                    "secondary-action ai-complete-stage-button"
-                ).mark("create-ai-version")
-
             ui.separator().classes("my-2")
             ui.label(
                 "Pode editar e avançar sem chamar qualquer modelo. A verificação "
@@ -2180,7 +2177,9 @@ class AGIRSoloInterface:
                 "Verificar esta etapa com IA",
                 icon="fact_check",
                 on_click=lambda: self._handle_ai_verification(stage),
-            ).props("outline no-caps").classes("secondary-action w-full")
+            ).props("outline no-caps").classes("secondary-action w-full").mark(
+                "verify-stage-with-ai"
+            )
 
             if proposal is not None:
                 ui.separator().classes("my-2")
