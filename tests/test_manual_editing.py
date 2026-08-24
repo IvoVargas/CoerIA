@@ -54,7 +54,12 @@ def test_every_authorship_stage_has_editable_fields_and_tables() -> None:
             assert isinstance(rows, list)
             added = new_table_row(table)
             rows.append(added)
-            assert rows[-1] == table.template
+            if any(
+                field.kind == "learning_outcome_id" for field in table.fields
+            ):
+                assert rows[-1] == {**table.template, "id": "RA1"}
+            else:
+                assert rows[-1] == table.template
             rows.pop()
 
 
@@ -354,4 +359,18 @@ def test_new_learning_outcome_row_inherits_the_first_allowed_level() -> None:
 
     row = new_table_row(table, state)
 
+    assert row["id"] == "RA1"
     assert row["taxonomy_level"] == "Uni-estrutural"
+
+
+def test_new_learning_outcome_row_uses_the_next_ra_identifier() -> None:
+    state = _completed_state()
+    table = editor_layout("learning_outcomes").tables[0]
+    rows = [{"id": "RA1"}, {"id": "RA3"}]
+
+    row = new_table_row(table, state, rows)
+
+    assert row["id"] == "RA4"
+    assert next(field for field in table.fields if field.key == "id").kind == (
+        "learning_outcome_id"
+    )

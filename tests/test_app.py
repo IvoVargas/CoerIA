@@ -323,6 +323,13 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.should_see("EDIÇÃO NA TABELA ATUAL")
     await user.should_see("Adicionar linha")
     assert interfaces[-1].manual_edit_stage == "learning_outcomes"
+    user.find("Adicionar linha").click()
+    await user.should_see("RA1")
+    assert interfaces[-1].manual_edit_artifact[0]["id"] == "RA1"
+    id_control = next(
+        iter(user.find(marker="learning-outcome-id").elements)
+    )
+    assert id_control._props.get("readonly") is True
     user.find("Cancelar edição").click()
     user.find(marker="manual-stage-curriculum_analysis").click()
     await user.should_see("Objetivos gerais")

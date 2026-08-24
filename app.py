@@ -1563,6 +1563,8 @@ class AGIRSoloInterface:
             control = ui.textarea(label, value=value).props("outlined autogrow")
         else:
             control = ui.input(label, value=value).props("outlined")
+        if field.kind == "learning_outcome_id":
+            control.props("readonly").mark("learning-outcome-id")
         if compact:
             control.props(
                 f"dense hide-bottom-space aria-label='{field.label}'"
@@ -1632,7 +1634,7 @@ class AGIRSoloInterface:
                                     )
 
         def add_row() -> None:
-            row = new_table_row(table, self.state)
+            row = new_table_row(table, self.state, rows)
             if "order" in row:
                 row["order"] = len(rows) + 1
             rows.append(row)

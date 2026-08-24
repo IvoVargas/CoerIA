@@ -41,7 +41,7 @@ class OutcomeProposalAgent:
         return GenerationResult(
             artifact=[
                 {
-                    "id": "RA1",
+                    "id": "1",
                     "outcome_type": "Conhecimento teórico",
                     "theme": "Algoritmos",
                     "taxonomy_level": "Uni-estrutural",
@@ -220,6 +220,7 @@ def test_ai_assistance_requires_an_explicit_acceptance() -> None:
 
     assert proposed["learning_outcomes"] == []
     assert proposed["ai_proposals"][-1]["status"] == "pending"
+    assert proposed["ai_proposals"][-1]["after"][0]["id"] == "RA1"
 
     accepted = decide_ai_proposal(proposed, proposed["ai_proposals"][-1]["id"], True)
     assert accepted["learning_outcomes"][0]["id"] == "RA1"

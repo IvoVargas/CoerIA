@@ -31,6 +31,7 @@ from .curriculum import (
     OUTCOME_TYPES,
     TAXONOMY_LEVELS,
     TAXONOMY_VERBS,
+    normalize_learning_outcome_ids,
     taxonomy_verb_allowed,
     validate_taxonomy_choice,
 )
@@ -795,6 +796,11 @@ def save_manual_draft(
     updated = ensure_manual_artifacts(deepcopy(state))
     edited_artifact = deepcopy(artifact)
     _validate_draft_shape(target_stage, edited_artifact)
+    if target_stage == "learning_outcomes":
+        edited_artifact = normalize_learning_outcome_ids(
+            edited_artifact,
+            sequential=False,
+        )
     if edited_artifact == updated.get(target_stage):
         raise ValueError("Não foram detetadas alterações para guardar.")
     if target_stage == "resources":
@@ -1199,6 +1205,8 @@ def request_ai_assistance(
         after = deepcopy(result.artifact)
         if target_stage == "resources" and isinstance(after, dict):
             proposed_images = after.pop("_generated_images", [])
+    if target_stage == "learning_outcomes" and not scope_path:
+        after = normalize_learning_outcome_ids(after, sequential=True)
     if before == after:
         raise AgentGenerationError("A IA não propôs qualquer alteração nesse âmbito.")
 

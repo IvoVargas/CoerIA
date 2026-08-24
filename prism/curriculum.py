@@ -8,11 +8,79 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from typing import Any
 
 
 TAXONOMY_SOLO = "SOLO"
 TAXONOMY_BLOOM = "Bloom"
 TAXONOMY_CHOICES = (TAXONOMY_SOLO, TAXONOMY_BLOOM)
+LEARNING_OUTCOME_ID_PATTERN = re.compile(r"^RA([1-9]\d*)$", re.IGNORECASE)
+
+
+def normalize_learning_outcome_ids(
+    artifact: Any,
+    *,
+    sequential: bool,
+) -> Any:
+    """Normaliza IDs para RA<n>, preservando-os quando a autoria já está em curso."""
+
+    if not isinstance(artifact, list):
+        return artifact
+    if sequential:
+        return [
+            {**item, "id": f"RA{index + 1}"}
+            if isinstance(item, dict)
+            else item
+            for index, item in enumerate(artifact)
+        ]
+
+    existing_numbers = [
+        int(match.group(1))
+        for item in artifact
+        if isinstance(item, dict)
+        and (match := LEARNING_OUTCOME_ID_PATTERN.fullmatch(
+            str(item.get("id", "")).strip()
+        ))
+    ]
+    next_number = max(existing_numbers, default=0) + 1
+    used: set[int] = set()
+    normalized: list[Any] = []
+    for item in artifact:
+        if not isinstance(item, dict):
+            normalized.append(item)
+            continue
+        match = LEARNING_OUTCOME_ID_PATTERN.fullmatch(
+            str(item.get("id", "")).strip()
+        )
+        number = int(match.group(1)) if match else 0
+        if not number or number in used:
+            while next_number in used:
+                next_number += 1
+            number = next_number
+            next_number += 1
+        used.add(number)
+        normalized.append({**item, "id": f"RA{number}"})
+    return normalized
+
+
+def next_learning_outcome_id(rows: list[Any]) -> str:
+    """Devolve o próximo ID RA disponível sem reutilizar IDs removidos."""
+
+    numbers = [
+        int(match.group(1))
+        for item in rows
+        if isinstance(item, dict)
+        and (match := LEARNING_OUTCOME_ID_PATTERN.fullmatch(
+            str(item.get("id", "")).strip()
+        ))
+    ]
+    return f"RA{max(numbers, default=0) + 1}"
+
+
+def is_learning_outcome_id(value: Any) -> bool:
+    """Indica se o valor usa a forma canónica RA1, RA2, ..."""
+
+    return bool(re.fullmatch(r"RA[1-9]\d*", str(value or "").strip()))
 
 SOLO_LEVELS = (
     "Uni-estrutural",

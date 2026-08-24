@@ -82,6 +82,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 
 - Numerar os conteúdos com IDs estáveis.
 - Formular entre 4 e 10 resultados de aprendizagem, preferencialmente 5 a 7.
+- Identificar os resultados exclusivamente como `RA1`, `RA2`, …; numa proposta
+  completa, derivar estes IDs deterministicamente pela ordem das linhas. Na
+  edição manual, apresentar o ID como campo não editável e atribuir o próximo
+  número automaticamente às linhas novas.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
   etapa curricular formal.
@@ -168,6 +172,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   aprovados segundo o catálogo SOLO ou Bloom selecionado.
 - Nas propostas geradas pela IA, canonicalizar o nível a partir do verbo
   controlado antes de repetir a chamada e registar a correção nos metadados.
+- Canonicalizar os IDs dos resultados para `RA1`, `RA2`, … antes da validação,
+  sem repetir uma chamada apenas porque o fornecedor devolveu outra notação.
 - Na edição manual dos resultados, filtrar o seletor de verbo pelo nível
   escolhido na mesma linha; pares em falta ou incompatíveis devem ser
   assinalados pela verificação global.

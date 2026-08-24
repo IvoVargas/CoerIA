@@ -9,6 +9,7 @@ from typing import Any
 
 from .curriculum import (
     TAXONOMY_VERBS,
+    next_learning_outcome_id,
     taxonomy_level_options,
     validate_taxonomy_choice,
 )
@@ -73,7 +74,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 "Resultados de aprendizagem",
                 (),
                 (
-                    _field("id", "ID"),
+                    _field("id", "ID", "learning_outcome_id"),
                     _field("outcome_type", "Tipo"),
                     _field("theme", "Tema ou objeto"),
                     _field("taxonomy_level", "Nível", "taxonomy_level"),
@@ -887,8 +888,11 @@ def apply_editor_field_value(
 def new_table_row(
     table: TableSpec,
     state: dict[str, Any] | None = None,
+    existing_rows: list[Any] | None = None,
 ) -> dict[str, Any]:
     row = deepcopy(table.template)
+    if any(field.kind == "learning_outcome_id" for field in table.fields):
+        row["id"] = next_learning_outcome_id(existing_rows or [])
     if state is not None and "taxonomy" in row:
         row["taxonomy"] = validate_taxonomy_choice(
             str(state.get("course", {}).get("taxonomy_type", "SOLO"))

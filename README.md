@@ -67,7 +67,9 @@ autónomo. O valor canónico continua guardado no modelo para validação e
 exportação. Nas propostas da IA, o nível é canonicalizado a partir do verbo
 controlado antes da validação, evitando repetir a chamada apenas por essa
 divergência. Na edição manual, o seletor de verbos mostra exclusivamente os
-verbos do nível escolhido na mesma linha.
+verbos do nível escolhido na mesma linha. Os resultados usam sempre IDs no
+formato `RA1`, `RA2`, …; a geração normaliza-os pela ordem das linhas e o editor
+atribui automaticamente o próximo ID, sem permitir edição livre desse campo.
 
 A seleção dos recursos é feita na matriz de alinhamento, imediatamente antes da
 etapa de produção, evitando repetir a mesma decisão no formulário inicial.

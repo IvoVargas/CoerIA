@@ -1210,6 +1210,11 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(AgentGenerationError, "nível e verbo compatíveis"):
             _validate_artifact("learning_outcomes", invalid_artifact, state)
 
+        invalid_ids = deepcopy(state["learning_outcomes"])
+        invalid_ids[0]["id"] = "1"
+        with self.assertRaisesRegex(AgentGenerationError, "IDs RA1, RA2"):
+            _validate_artifact("learning_outcomes", invalid_ids, state)
+
         schema = _schema_for("learning_outcomes", state)
         item_properties = schema["properties"]["artifact"]["items"]["properties"]
         self.assertEqual(
@@ -1223,6 +1228,7 @@ class WorkflowTests(unittest.TestCase):
         generated[0]["action_verb"] = "analisar"
         generated[0]["statement"] = "Analisar conceitos fundamentais."
         generated[0]["taxonomy_level"] = "Uni-estrutural"
+        generated[0]["id"] = "resultado-um"
 
         class FakeResponses:
             def __init__(self) -> None:
@@ -1248,6 +1254,10 @@ class WorkflowTests(unittest.TestCase):
             result = agent.generate("learning_outcomes", state)
 
         self.assertEqual(len(responses.calls), 1)
+        self.assertEqual(
+            [item["id"] for item in result.artifact],
+            [f"RA{index + 1}" for index in range(len(result.artifact))],
+        )
         self.assertEqual(result.artifact[0]["taxonomy_level"], "Relacional")
         self.assertEqual(
             result.artifact[0]["taxonomy_level"],
@@ -1255,7 +1265,11 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertEqual(len(result.metadata["guardrail_corrections"]), 1)
         correction = result.metadata["guardrail_corrections"][0]
-        self.assertEqual(correction["outcome_id"], generated[0]["id"])
+        self.assertEqual(correction["outcome_id"], "RA1")
+        self.assertEqual(
+            correction["changes"]["id"],
+            {"received": "resultado-um", "used": "RA1"},
+        )
         self.assertEqual(
             correction["changes"]["taxonomy_level"],
             {"received": "Uni-estrutural", "used": "Relacional"},

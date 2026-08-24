@@ -32,6 +32,8 @@ from .curriculum import (
     taxonomy_catalogue_for_prompt,
     taxonomy_level_for_verb,
     taxonomy_verb_allowed,
+    is_learning_outcome_id,
+    normalize_learning_outcome_ids,
     validate_taxonomy_choice,
 )
 from .models import (
@@ -128,7 +130,7 @@ STAGE_REQUIREMENTS = {
     ),
     "learning_outcomes": (
         "Lista de 4 a 10 objetos {id, theme, statement, action_verb, taxonomy_level, "
-        "outcome_type}. "
+        "outcome_type}. Os IDs são obrigatoriamente RA1, RA2, ... pela ordem das linhas. "
         "Cada resultado contém exatamente um verbo de ação principal observável e começa "
         "por esse verbo. taxonomy_level pertence à taxonomia selecionada e é compatível "
         "com action_verb. O objeto da ação explicita o conhecimento ou competência em causa. "
@@ -828,37 +830,45 @@ def _canonicalize_assessment_activities(
 def _canonicalize_learning_outcomes(
     artifact: Any, state: dict[str, Any]
 ) -> tuple[Any, list[dict[str, Any]]]:
-    """Deriva o nível do verbo gerado sem alterar a formulação do resultado."""
+    """Deriva IDs e níveis controlados sem alterar a formulação do resultado."""
 
     if not isinstance(artifact, list):
         return artifact, []
+    normalized_ids = normalize_learning_outcome_ids(artifact, sequential=True)
     selected_taxonomy = validate_taxonomy_choice(
         state.get("course", {}).get("taxonomy_type", "SOLO")
     )
     normalized: list[Any] = []
     corrections: list[dict[str, Any]] = []
-    for item in artifact:
-        if not isinstance(item, dict):
+    for received, item in zip(artifact, normalized_ids):
+        if not isinstance(received, dict) or not isinstance(item, dict):
             normalized.append(item)
             continue
+        changes: dict[str, Any] = {}
+        if received.get("id") != item.get("id"):
+            changes["id"] = {
+                "received": received.get("id"),
+                "used": item.get("id"),
+            }
         canonical_level = taxonomy_level_for_verb(
             selected_taxonomy, str(item.get("action_verb", ""))
         )
-        if canonical_level is None:
-            normalized.append(item)
-            continue
-        corrected = {**item, "taxonomy_level": canonical_level}
+        corrected = (
+            {**item, "taxonomy_level": canonical_level}
+            if canonical_level is not None
+            else item
+        )
         normalized.append(corrected)
-        if item.get("taxonomy_level") != canonical_level:
+        if canonical_level is not None and item.get("taxonomy_level") != canonical_level:
+            changes["taxonomy_level"] = {
+                "received": item.get("taxonomy_level"),
+                "used": canonical_level,
+            }
+        if changes:
             corrections.append(
                 {
-                    "outcome_id": item.get("id", ""),
-                    "changes": {
-                        "taxonomy_level": {
-                            "received": item.get("taxonomy_level"),
-                            "used": canonical_level,
-                        }
-                    },
+                    "outcome_id": corrected.get("id", ""),
+                    "changes": changes,
                 }
             )
     return normalized, corrections
@@ -1687,6 +1697,10 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         outcome_ids = [item["id"] for item in artifact]
         if len(outcome_ids) != len(set(outcome_ids)):
             raise AgentGenerationError("Os resultados de aprendizagem contêm IDs duplicados.")
+        if not all(is_learning_outcome_id(identifier) for identifier in outcome_ids):
+            raise AgentGenerationError(
+                "Os resultados de aprendizagem devem usar IDs RA1, RA2, ..."
+            )
 
         taxonomy_type = validate_taxonomy_choice(
             state["course"].get("taxonomy_type", "SOLO")
