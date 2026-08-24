@@ -10,6 +10,7 @@ from typing import Any
 from .curriculum import (
     TAXONOMY_VERBS,
     next_learning_outcome_id,
+    next_structured_activity_id,
     taxonomy_level_options,
     validate_taxonomy_choice,
 )
@@ -98,7 +99,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 "Tarefas e critérios de avaliação",
                 (),
                 (
-                    _field("id", "ID"),
+                    _field("id", "ID", "assessment_task_id"),
                     _field("outcome_ids", "Resultados", "linked_outcomes"),
                     _field("work_type", "Modalidade"),
                     _field("assessment_purpose", "Finalidade"),
@@ -146,7 +147,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 "Atividades de ensino-aprendizagem",
                 (),
                 (
-                    _field("id", "ID"),
+                    _field("id", "ID", "teaching_activity_id"),
                     _field("outcome_ids", "Resultados", "linked_outcomes"),
                     _field("learning_context", "Contexto"),
                     _field("activity", "Atividade", "long"),
@@ -897,6 +898,10 @@ def new_table_row(
     row = deepcopy(table.template)
     if any(field.kind == "learning_outcome_id" for field in table.fields):
         row["id"] = next_learning_outcome_id(existing_rows or [])
+    elif any(field.kind == "teaching_activity_id" for field in table.fields):
+        row["id"] = next_structured_activity_id(existing_rows or [], "TLA")
+    elif any(field.kind == "assessment_task_id" for field in table.fields):
+        row["id"] = next_structured_activity_id(existing_rows or [], "AT")
     if state is not None and "taxonomy" in row:
         row["taxonomy"] = validate_taxonomy_choice(
             str(state.get("course", {}).get("taxonomy_type", "SOLO"))

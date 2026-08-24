@@ -89,6 +89,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   completa, derivar estes IDs deterministicamente pela ordem das linhas. Na
   edição manual, apresentar o ID como campo não editável e atribuir o próximo
   número automaticamente às linhas novas.
+- Identificar as atividades de ensino-aprendizagem como `TLA1`, `TLA2`, … e as
+  tarefas de avaliação como `AT1`, `AT2`, …, seguindo a terminologia de Biggs e
+  Tang. Atribuir estes IDs automaticamente, apresentá-los como campos não
+  editáveis e conservar as respetivas referências na matriz de alinhamento.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
   etapa curricular formal.
@@ -405,8 +409,9 @@ ficheiros após a exportação.
   e atividade de ensino-aprendizagem.
 - Cada resultado contém um único verbo de ação principal; infinitivos subordinados em complementos são permitidos, mas ações principais coordenadas são rejeitadas.
 - Cada avaliação é Formativa ou Sumativa, nunca Mista.
-- Todos os conteúdos estão ligados a pelo menos um resultado; todas as
-  avaliações e atividades possuem IDs próprios e ligações explícitas.
+- Todos os conteúdos estão ligados a pelo menos um resultado; todas as tarefas
+  de avaliação usam IDs `AT<n>`, todas as atividades de ensino-aprendizagem usam
+  IDs `TLA<n>` e ambas possuem ligações explícitas.
 - A matriz assinala incoerências sem depender da opinião declarada pelo LLM.
 - Cada tipo de recurso selecionado gera um ficheiro utilizável.
 - Uma sessão persistida pode ser retomada numa nova instância da aplicação.

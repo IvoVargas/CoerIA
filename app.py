@@ -1551,8 +1551,16 @@ class AGIRSoloInterface:
             control = ui.textarea(label, value=value).props("outlined autogrow")
         else:
             control = ui.input(label, value=value).props("outlined")
-        if field.kind == "learning_outcome_id":
-            control.props("readonly").mark("learning-outcome-id")
+        if field.kind in {
+            "learning_outcome_id",
+            "teaching_activity_id",
+            "assessment_task_id",
+        }:
+            control.props("readonly").mark(
+                "learning-outcome-id"
+                if field.kind == "learning_outcome_id"
+                else "structured-activity-id"
+            )
         if compact:
             control.props(
                 f"dense hide-bottom-space aria-label='{field.label}'"

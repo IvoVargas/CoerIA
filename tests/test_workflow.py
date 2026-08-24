@@ -457,7 +457,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 18)
+        self.assertEqual(restored["schema_version"], 19)
         self.assertEqual(restored["migrated_from_schema_version"], 1)
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
@@ -489,7 +489,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 18)
+        self.assertEqual(restored["schema_version"], 19)
         self.assertNotIn("assessment_ids", restored["teaching_activities"][0])
         self.assertNotIn(
             "assessment_ids",
@@ -516,7 +516,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 18)
+        self.assertEqual(restored["schema_version"], 19)
         self.assertTrue(
             all(
                 item["teaching_activity"].strip()
@@ -556,6 +556,99 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(restored["versions"]["assessment_activities"])
         self.assertTrue(restored["versions"]["pedagogical_design"])
 
+    def test_schema_18_separates_teaching_and_assessment_identifiers(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        while state["current_stage"] != "alignment_matrix":
+            state = review_current_stage(state, "approve", agent=self.agent)
+        state["schema_version"] = 18
+
+        def use_ambiguous_ids(rows):
+            mapping = {}
+            for index, row in enumerate(rows, start=1):
+                old = row["id"]
+                row["id"] = f"A{index}"
+                mapping[old] = row["id"]
+            return mapping
+
+        assessment_map = use_ambiguous_ids(state["assessment_activities"])
+        teaching_map = use_ambiguous_ids(state["teaching_activities"])
+        version_assessment_map = use_ambiguous_ids(
+            state["versions"]["assessment_activities"][-1]
+        )
+        version_teaching_map = use_ambiguous_ids(
+            state["versions"]["teaching_activities"][-1]
+        )
+        for row in state["alignment_matrix"]:
+            row["assessment_ids"] = [
+                assessment_map.get(identifier, identifier)
+                for identifier in row["assessment_ids"]
+            ]
+            row["teaching_activity_ids"] = [
+                teaching_map.get(identifier, identifier)
+                for identifier in row["teaching_activity_ids"]
+            ]
+        for row in state["versions"]["alignment_matrix"][-1]:
+            row["assessment_ids"] = [
+                version_assessment_map.get(identifier, identifier)
+                for identifier in row["assessment_ids"]
+            ]
+            row["teaching_activity_ids"] = [
+                version_teaching_map.get(identifier, identifier)
+                for identifier in row["teaching_activity_ids"]
+            ]
+        state["revision_snapshots"] = [
+            {
+                "artifacts": {
+                    "assessment_activities": deepcopy(state["assessment_activities"]),
+                    "teaching_activities": deepcopy(state["teaching_activities"]),
+                    "alignment_matrix": deepcopy(state["alignment_matrix"]),
+                }
+            }
+        ]
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(state)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], 19)
+        self.assertEqual(restored["migrated_from_schema_version"], 18)
+        self.assertTrue(
+            all(
+                item["id"] == f"TLA{index}"
+                for index, item in enumerate(
+                    restored["teaching_activities"], start=1
+                )
+            )
+        )
+        self.assertTrue(
+            all(
+                item["id"] == f"AT{index}"
+                for index, item in enumerate(
+                    restored["assessment_activities"], start=1
+                )
+            )
+        )
+        for matrix in (
+            restored["alignment_matrix"],
+            restored["versions"]["alignment_matrix"][-1],
+            restored["revision_snapshots"][0]["artifacts"]["alignment_matrix"],
+        ):
+            self.assertTrue(
+                all(
+                    identifier.startswith("TLA")
+                    for row in matrix
+                    for identifier in row["teaching_activity_ids"]
+                )
+            )
+            self.assertTrue(
+                all(
+                    identifier.startswith("AT")
+                    for row in matrix
+                    for identifier in row["assessment_ids"]
+                )
+            )
+
     def test_legacy_session_at_the_old_first_stage_moves_to_outcomes(self) -> None:
         state = create_session(self.course, agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)
@@ -578,7 +671,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 18)
+        self.assertEqual(restored["schema_version"], 19)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(restored["status"], "drafting")
         self.assertTrue(restored["learning_outcomes"])
@@ -616,7 +709,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 18)
+        self.assertEqual(restored["schema_version"], 19)
         self.assertEqual(
             restored["curriculum_analysis"]["objectives"],
             "Desenvolver conhecimentos fundamentais.",
@@ -683,7 +776,7 @@ class WorkflowTests(unittest.TestCase):
             "Compreender os fundamentos da programação.\n"
             "Aplicar os conhecimentos em problemas concretos."
         )
-        self.assertEqual(restored["schema_version"], 18)
+        self.assertEqual(restored["schema_version"], 19)
         self.assertEqual(restored["current_stage"], "alignment_matrix")
         self.assertEqual(restored["status"], "drafting")
         self.assertEqual(restored["curriculum_analysis"]["objectives"], expected_text)
@@ -728,7 +821,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 18)
+        self.assertEqual(restored["schema_version"], 19)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(
             restored["stage_statuses"]["learning_outcomes"], "draft"
@@ -1414,10 +1507,43 @@ class WorkflowTests(unittest.TestCase):
                 "assessment_activities", state
             )
 
-        for item in result.artifact:
+        for index, item in enumerate(result.artifact, start=1):
+            self.assertEqual(item["id"], f"AT{index}")
             self.assertTrue(item["outcome_ids"])
             self.assertEqual(item["outcome_id"], item["outcome_ids"][0])
             self.assertEqual(item["assessment_purpose"], "Formativa")
+        self.assertTrue(result.metadata["guardrail_corrections"])
+
+    def test_teaching_guardrail_uses_biggs_identifiers(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        generated = deepcopy(state["teaching_activities"])
+        for index, item in enumerate(generated, start=1):
+            item["id"] = f"A{index}"
+
+        class FakeResponses:
+            def create(self, **_kwargs):
+                return SimpleNamespace(
+                    output_text=json.dumps({"artifact": generated}),
+                    id="teaching-response",
+                    usage=SimpleNamespace(
+                        input_tokens=10,
+                        output_tokens=20,
+                        total_tokens=30,
+                    ),
+                )
+
+        agent = OpenAIPedagogicalAgent(
+            client_factory=lambda: SimpleNamespace(responses=FakeResponses())
+        )
+        with patch.dict(environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+            result = agent.generate("teaching_activities", state)
+
+        self.assertEqual(
+            [item["id"] for item in result.artifact],
+            [f"TLA{index}" for index in range(1, len(generated) + 1)],
+        )
         self.assertTrue(result.metadata["guardrail_corrections"])
 
     def test_alignment_guardrail_derives_status_from_approved_evidence(self) -> None:
@@ -1596,6 +1722,33 @@ class WorkflowTests(unittest.TestCase):
             all(row["assessment_ids"] for row in state["alignment_matrix"])
         )
 
+    def test_teaching_and_assessment_identifiers_are_unambiguous(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        for _ in range(3):
+            state = review_current_stage(state, "approve", agent=self.agent)
+
+        teaching_ids = [item["id"] for item in state["teaching_activities"]]
+        assessment_ids = [item["id"] for item in state["assessment_activities"]]
+        self.assertEqual(
+            teaching_ids,
+            [f"TLA{index}" for index in range(1, len(teaching_ids) + 1)],
+        )
+        self.assertEqual(
+            assessment_ids,
+            [f"AT{index}" for index in range(1, len(assessment_ids) + 1)],
+        )
+        self.assertTrue(set(teaching_ids).isdisjoint(assessment_ids))
+
+        invalid_teaching = deepcopy(state["teaching_activities"])
+        invalid_teaching[0]["id"] = "A1"
+        with self.assertRaisesRegex(AgentGenerationError, "IDs TLA1"):
+            _validate_artifact("teaching_activities", invalid_teaching, state)
+
+        invalid_assessment = deepcopy(state["assessment_activities"])
+        invalid_assessment[0]["id"] = "A1"
+        with self.assertRaisesRegex(AgentGenerationError, "IDs AT1"):
+            _validate_artifact("assessment_activities", invalid_assessment, state)
+
     def test_bloom_is_exclusive_and_assessments_are_never_mixed(self) -> None:
         course = CourseInput.create(
             "Programação com Bloom",
@@ -1699,6 +1852,7 @@ class WorkflowTests(unittest.TestCase):
         properties = schema["properties"]["artifact"]["items"]["properties"]
 
         self.assertIn("analisar", properties["action_verb"]["enum"])
+        self.assertEqual(properties["id"]["pattern"], "^RA[1-9][0-9]*$")
         self.assertNotIn("content_links", properties)
         self.assertNotIn("objective_ids", properties)
 
@@ -1712,7 +1866,27 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(set(outcome_items["enum"]), allowed_outcomes)
         self.assertEqual(curriculum_properties["objectives"]["type"], "string")
 
-        for _ in range(3):
+        state = review_current_stage(state, "approve", agent=self.agent)
+        teaching_schema = _schema_for("teaching_activities", state)
+        teaching_properties = teaching_schema["properties"]["artifact"]["items"][
+            "properties"
+        ]
+        self.assertEqual(
+            teaching_properties["id"]["pattern"],
+            "^TLA[1-9][0-9]*$",
+        )
+
+        state = review_current_stage(state, "approve", agent=self.agent)
+        assessment_schema = _schema_for("assessment_activities", state)
+        assessment_properties = assessment_schema["properties"]["artifact"]["items"][
+            "properties"
+        ]
+        self.assertEqual(
+            assessment_properties["id"]["pattern"],
+            "^AT[1-9][0-9]*$",
+        )
+
+        for _ in range(1):
             state = review_current_stage(state, "approve", agent=self.agent)
         design_schema = _schema_for("pedagogical_design", state)
         sequence_properties = design_schema["properties"]["artifact"]["properties"][

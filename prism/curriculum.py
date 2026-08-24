@@ -15,6 +15,8 @@ TAXONOMY_SOLO = "SOLO"
 TAXONOMY_BLOOM = "Bloom"
 TAXONOMY_CHOICES = (TAXONOMY_SOLO, TAXONOMY_BLOOM)
 LEARNING_OUTCOME_ID_PATTERN = re.compile(r"^RA([1-9]\d*)$", re.IGNORECASE)
+TEACHING_ACTIVITY_ID_PATTERN = re.compile(r"^TLA([1-9]\d*)$", re.IGNORECASE)
+ASSESSMENT_TASK_ID_PATTERN = re.compile(r"^AT([1-9]\d*)$", re.IGNORECASE)
 
 
 def normalize_learning_outcome_ids(
@@ -83,6 +85,88 @@ def is_learning_outcome_id(value: Any) -> bool:
     return bool(
         LEARNING_OUTCOME_ID_PATTERN.fullmatch(str(value or "").strip())
     )
+
+
+def normalize_structured_activity_ids(
+    artifact: Any,
+    *,
+    prefix: str,
+    sequential: bool,
+) -> Any:
+    """Normaliza IDs TLA/AT, preservando IDs válidos durante a autoria manual."""
+
+    if not isinstance(artifact, list):
+        return artifact
+    canonical_prefix = str(prefix or "").strip().upper()
+    if canonical_prefix not in {"TLA", "AT"}:
+        raise ValueError("Prefixo de atividade desconhecido.")
+    pattern = (
+        TEACHING_ACTIVITY_ID_PATTERN
+        if canonical_prefix == "TLA"
+        else ASSESSMENT_TASK_ID_PATTERN
+    )
+    if sequential:
+        return [
+            {**item, "id": f"{canonical_prefix}{index + 1}"}
+            if isinstance(item, dict)
+            else item
+            for index, item in enumerate(artifact)
+        ]
+
+    existing_numbers = [
+        int(match.group(1))
+        for item in artifact
+        if isinstance(item, dict)
+        and (match := pattern.fullmatch(str(item.get("id", "")).strip()))
+    ]
+    next_number = max(existing_numbers, default=0) + 1
+    used: set[int] = set()
+    normalized: list[Any] = []
+    for item in artifact:
+        if not isinstance(item, dict):
+            normalized.append(item)
+            continue
+        match = pattern.fullmatch(str(item.get("id", "")).strip())
+        number = int(match.group(1)) if match else 0
+        if not number or number in used:
+            while next_number in used:
+                next_number += 1
+            number = next_number
+            next_number += 1
+        used.add(number)
+        normalized.append({**item, "id": f"{canonical_prefix}{number}"})
+    return normalized
+
+
+def next_structured_activity_id(rows: list[Any], prefix: str) -> str:
+    """Devolve o próximo ID TLA ou AT sem reutilizar números removidos."""
+
+    canonical_prefix = str(prefix or "").strip().upper()
+    normalized = normalize_structured_activity_ids(
+        rows,
+        prefix=canonical_prefix,
+        sequential=False,
+    )
+    numbers = [
+        int(str(item.get("id", ""))[len(canonical_prefix):])
+        for item in normalized
+        if isinstance(item, dict)
+        and str(item.get("id", "")).startswith(canonical_prefix)
+    ]
+    return f"{canonical_prefix}{max(numbers, default=0) + 1}"
+
+
+def is_structured_activity_id(value: Any, prefix: str) -> bool:
+    """Valida a convenção TLA<n> ou AT<n> sem diferenciar maiúsculas."""
+
+    pattern = (
+        TEACHING_ACTIVITY_ID_PATTERN
+        if str(prefix).upper() == "TLA"
+        else ASSESSMENT_TASK_ID_PATTERN
+        if str(prefix).upper() == "AT"
+        else None
+    )
+    return bool(pattern and pattern.fullmatch(str(value or "").strip()))
 
 SOLO_LEVELS = (
     "Uni-estrutural",

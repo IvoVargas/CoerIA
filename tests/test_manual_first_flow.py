@@ -253,10 +253,10 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
         {"id": "C1", "title": "Testes", "description": "Testes", "outcome_ids": ["RA3"]}
     ]
     state["teaching_activities"] = [
-        {"id": "EA1", "outcome_ids": ["RA3"], "activity": "Analisar casos."}
+        {"id": "TLA1", "outcome_ids": ["RA3"], "activity": "Analisar casos."}
     ]
     state["assessment_activities"] = [
-        {"id": "AV1", "outcome_ids": ["RA3"], "task": "Resolver um caso."}
+        {"id": "AT1", "outcome_ids": ["RA3"], "task": "Resolver um caso."}
     ]
     state["pedagogical_design"] = {
         "strategy": "Prática orientada.",

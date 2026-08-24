@@ -34,6 +34,8 @@ from .curriculum import (
     taxonomy_verb_allowed,
     is_learning_outcome_id,
     normalize_learning_outcome_ids,
+    normalize_structured_activity_ids,
+    is_structured_activity_id,
     validate_taxonomy_choice,
 )
 from .models import (
@@ -139,8 +141,9 @@ STAGE_REQUIREMENTS = {
     ),
     "assessment_activities": (
         "Lista de objetos {id, outcome_id, outcome_ids, work_type, assessment_purpose, "
-        "activity, evidence, criterion}. assessment_purpose é exclusivamente Formativa "
-        "ou Sumativa. É válido o conjunto conter apenas avaliações sumativas."
+        "activity, evidence, criterion}. Os IDs são obrigatoriamente AT1, AT2, ... "
+        "pela ordem das linhas. assessment_purpose é exclusivamente Formativa ou "
+        "Sumativa. É válido o conjunto conter apenas avaliações sumativas."
     ),
     "pedagogical_design": (
         "Objeto com strategy e sequence. sequence é uma lista de objetos "
@@ -149,8 +152,9 @@ STAGE_REQUIREMENTS = {
     ),
     "teaching_activities": (
         "Lista de objetos {id, outcome_id, outcome_ids, learning_context, "
-        "activity, method, practice, support, feedback_strategy}; o conjunto deve cobrir "
-        "todos os resultados e explicitar prática, acompanhamento e feedback."
+        "activity, method, practice, support, feedback_strategy}. Os IDs são "
+        "obrigatoriamente TLA1, TLA2, ... pela ordem das linhas; o conjunto deve "
+        "cobrir todos os resultados e explicitar prática, acompanhamento e feedback."
     ),
     "alignment_matrix": (
         "Lista de objetos {outcome_id, result, content_ids, taxonomy, "
@@ -274,7 +278,7 @@ def _schema_for(
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "id": string,
+                    "id": {"type": "string", "pattern": "^RA[1-9][0-9]*$"},
                     "theme": string,
                     "statement": string,
                     "action_verb": string,
@@ -293,7 +297,7 @@ def _schema_for(
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "id": string,
+                    "id": {"type": "string", "pattern": "^AT[1-9][0-9]*$"},
                     "outcome_id": string,
                     "outcome_ids": {"type": "array", "items": string},
                     "work_type": string,
@@ -342,7 +346,7 @@ def _schema_for(
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "id": string,
+                    "id": {"type": "string", "pattern": "^TLA[1-9][0-9]*$"},
                     "outcome_id": string,
                     "outcome_ids": {"type": "array", "items": string},
                     "learning_context": {"type": "string", "enum": list(LEARNING_CONTEXTS)},
@@ -791,7 +795,7 @@ def _canonicalize_assessment_activities(
     allowed = {item["id"] for item in state.get("learning_outcomes", [])}
     normalized: list[Any] = []
     corrections: list[dict[str, Any]] = []
-    for item in artifact:
+    for index, item in enumerate(artifact, start=1):
         if not isinstance(item, dict):
             normalized.append(item)
             continue
@@ -813,6 +817,7 @@ def _canonicalize_assessment_activities(
             purpose,
         )
         canonical = {
+            "id": f"AT{index}",
             "outcome_id": canonical_primary,
             "outcome_ids": links,
             "assessment_purpose": canonical_purpose,
@@ -827,6 +832,36 @@ def _canonicalize_assessment_activities(
             corrections.append(
                 {"assessment_id": item.get("id", ""), "changes": changes}
             )
+    return normalized, corrections
+
+
+def _canonicalize_teaching_activities(
+    artifact: Any,
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Aplica a convenção TLA<n> usada por Biggs e Tang."""
+
+    if not isinstance(artifact, list):
+        return artifact, []
+    normalized = normalize_structured_activity_ids(
+        artifact,
+        prefix="TLA",
+        sequential=True,
+    )
+    corrections = [
+        {
+            "teaching_activity_id": item.get("id", ""),
+            "changes": {
+                "id": {
+                    "received": received.get("id"),
+                    "used": item.get("id"),
+                }
+            },
+        }
+        for received, item in zip(artifact, normalized)
+        if isinstance(received, dict)
+        and isinstance(item, dict)
+        and received.get("id") != item.get("id")
+    ]
     return normalized, corrections
 
 
@@ -1743,9 +1778,18 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         expected = {item["id"] for item in state["learning_outcomes"]}
         covered = set(_flattened_ids(artifact, "outcome_ids", "outcome_id"))
         identifiers = [item["id"] for item in artifact]
-        if covered != expected or len(identifiers) != len(set(identifiers)):
+        expected_prefix = "AT" if stage == "assessment_activities" else "TLA"
+        if (
+            covered != expected
+            or len(identifiers) != len(set(identifiers))
+            or not all(
+                is_structured_activity_id(identifier, expected_prefix)
+                for identifier in identifiers
+            )
+        ):
             raise AgentGenerationError(
-                "A proposta deve ter IDs únicos e cobrir todos e apenas os resultados definidos."
+                f"A proposta deve usar IDs {expected_prefix}1, {expected_prefix}2, ... "
+                "sem duplicados e cobrir todos e apenas os resultados definidos."
             )
 
     if stage == "assessment_activities":
@@ -2429,6 +2473,10 @@ class OpenAIPedagogicalAgent:
                 elif stage == "assessment_activities":
                     artifact, guardrail_corrections = (
                         _canonicalize_assessment_activities(artifact, state)
+                    )
+                elif stage == "teaching_activities":
+                    artifact, guardrail_corrections = (
+                        _canonicalize_teaching_activities(artifact)
                     )
                 elif stage == "alignment_matrix":
                     artifact, guardrail_corrections = (

@@ -72,6 +72,11 @@ divergência. Na edição manual, o seletor de verbos mostra exclusivamente os
 verbos do nível escolhido na mesma linha. Os resultados usam sempre IDs no
 formato `RA1`, `RA2`, …; a geração normaliza-os pela ordem das linhas e o editor
 atribui automaticamente o próximo ID, sem permitir edição livre desse campo.
+Pela terminologia usada por Biggs e Tang, as atividades de
+ensino-aprendizagem usam `TLA1`, `TLA2`, … (*Teaching/Learning Activities*) e
+as tarefas de avaliação usam `AT1`, `AT2`, … (*Assessment Tasks*). Os dois
+prefixos são atribuídos automaticamente e tornam inequívocas as referências
+apresentadas na matriz de alinhamento.
 
 A seleção dos recursos é feita na matriz de alinhamento, imediatamente antes da
 etapa de produção, evitando repetir a mesma decisão no formulário inicial.

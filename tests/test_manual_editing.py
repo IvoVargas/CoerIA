@@ -58,6 +58,14 @@ def test_every_authorship_stage_has_editable_fields_and_tables() -> None:
                 field.kind == "learning_outcome_id" for field in table.fields
             ):
                 assert rows[-1] == {**table.template, "id": "RA1"}
+            elif any(
+                field.kind == "teaching_activity_id" for field in table.fields
+            ):
+                assert rows[-1] == {**table.template, "id": "TLA1"}
+            elif any(
+                field.kind == "assessment_task_id" for field in table.fields
+            ):
+                assert rows[-1] == {**table.template, "id": "AT1"}
             else:
                 assert rows[-1] == table.template
             rows.pop()
@@ -374,3 +382,29 @@ def test_new_learning_outcome_row_uses_the_next_ra_identifier() -> None:
     assert next(field for field in table.fields if field.key == "id").kind == (
         "learning_outcome_id"
     )
+
+
+def test_new_teaching_and_assessment_rows_use_biggs_identifiers() -> None:
+    state = _completed_state()
+    teaching_table = editor_layout("teaching_activities").tables[0]
+    assessment_table = editor_layout("assessment_activities").tables[0]
+
+    teaching_row = new_table_row(
+        teaching_table,
+        state,
+        [{"id": "TLA1"}, {"id": "TLA3"}],
+    )
+    assessment_row = new_table_row(
+        assessment_table,
+        state,
+        [{"id": "AT1"}, {"id": "AT3"}],
+    )
+
+    assert teaching_row["id"] == "TLA4"
+    assert assessment_row["id"] == "AT4"
+    assert next(
+        field for field in teaching_table.fields if field.key == "id"
+    ).kind == "teaching_activity_id"
+    assert next(
+        field for field in assessment_table.fields if field.key == "id"
+    ).kind == "assessment_task_id"

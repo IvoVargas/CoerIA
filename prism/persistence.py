@@ -13,6 +13,7 @@ from uuid import uuid4
 from .auth import normalize_user_id
 from .curriculum import (
     TAXONOMY_LEVELS,
+    normalize_structured_activity_ids,
     taxonomy_level_for_verb,
     validate_taxonomy_choice,
 )
@@ -27,9 +28,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 18:
+    if previous_version < 19:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 18
+    state["schema_version"] = 19
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -273,12 +274,24 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 else None
             )
 
-    assessments = state.get("assessment_activities", [])
-    for index, item in enumerate(assessments):
-        item.setdefault("id", f"AV{index + 1}")
-        item.setdefault("outcome_ids", [item.get("outcome_id", "")])
-        item.setdefault("work_type", "Não especificado")
-        item.setdefault("assessment_purpose", "Sumativa")
+    def migrate_assessment_rows(activities: Any) -> None:
+        if not isinstance(activities, list):
+            return
+        for index, item in enumerate(activities):
+            if not isinstance(item, dict):
+                continue
+            item.setdefault("id", f"AT{index + 1}")
+            item.setdefault("outcome_ids", [item.get("outcome_id", "")])
+            item.setdefault("work_type", "Não especificado")
+            item.setdefault("assessment_purpose", "Sumativa")
+
+    migrate_assessment_rows(state.get("assessment_activities"))
+    if isinstance(version_map, dict):
+        for assessment_version in version_map.get("assessment_activities", []):
+            migrate_assessment_rows(assessment_version)
+    for snapshot in state.get("revision_snapshots", []):
+        if isinstance(snapshot, dict) and isinstance(snapshot.get("artifacts"), dict):
+            migrate_assessment_rows(snapshot["artifacts"].get("assessment_activities"))
 
     def migrate_teaching_rows(activities: Any) -> None:
         if not isinstance(activities, list):
@@ -287,7 +300,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(item, dict):
                 continue
             item.setdefault("outcome_ids", [item.get("outcome_id", "")])
-            item.setdefault("id", f"EA{index + 1}")
+            item.setdefault("id", f"TLA{index + 1}")
             # As atividades alinham-se diretamente com os resultados. A ligação
             # a avaliações era redundante e impedia que esta etapa as precedesse.
             item.pop("assessment_ids", None)
@@ -303,6 +316,162 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     for snapshot in state.get("revision_snapshots", []):
         if isinstance(snapshot, dict) and isinstance(snapshot.get("artifacts"), dict):
             migrate_teaching_rows(snapshot["artifacts"].get("teaching_activities"))
+
+    def canonicalize_activity_ids(rows: Any, prefix: str) -> dict[str, str]:
+        if not isinstance(rows, list):
+            return {}
+        before = [
+            str(item.get("id", "")) if isinstance(item, dict) else ""
+            for item in rows
+        ]
+        if previous_version < 19:
+            normalized = normalize_structured_activity_ids(
+                rows,
+                prefix=prefix,
+                sequential=True,
+            )
+            rows[:] = normalized
+        after = [
+            str(item.get("id", "")) if isinstance(item, dict) else ""
+            for item in rows
+        ]
+        return {
+            old: new
+            for old, new in zip(before, after)
+            if old and new
+        }
+
+    assessment_id_map = canonicalize_activity_ids(
+        state.get("assessment_activities"),
+        "AT",
+    )
+    teaching_id_map = canonicalize_activity_ids(
+        state.get("teaching_activities"),
+        "TLA",
+    )
+    assessment_version_maps = [
+        canonicalize_activity_ids(version, "AT")
+        for version in version_map.get("assessment_activities", [])
+    ] if isinstance(version_map, dict) else []
+    teaching_version_maps = [
+        canonicalize_activity_ids(version, "TLA")
+        for version in version_map.get("teaching_activities", [])
+    ] if isinstance(version_map, dict) else []
+
+    def remap_alignment_activity_ids(
+        matrix: Any,
+        assessment_mapping: dict[str, str],
+        teaching_mapping: dict[str, str],
+    ) -> None:
+        rows = [matrix] if isinstance(matrix, dict) else matrix
+        if not isinstance(rows, list):
+            return
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if isinstance(row.get("assessment_ids"), list):
+                row["assessment_ids"] = [
+                    assessment_mapping.get(str(identifier), str(identifier))
+                    for identifier in row["assessment_ids"]
+                ]
+            if isinstance(row.get("teaching_activity_ids"), list):
+                row["teaching_activity_ids"] = [
+                    teaching_mapping.get(str(identifier), str(identifier))
+                    for identifier in row["teaching_activity_ids"]
+                ]
+
+    remap_alignment_activity_ids(
+        state.get("alignment_matrix"),
+        assessment_id_map,
+        teaching_id_map,
+    )
+    alignment_versions = (
+        version_map.get("alignment_matrix", [])
+        if isinstance(version_map, dict)
+        else []
+    )
+    alignment_dependencies = state.get("version_dependencies", {}).get(
+        "alignment_matrix", []
+    )
+    for index, matrix_version in enumerate(alignment_versions):
+        dependencies = (
+            alignment_dependencies[index]
+            if index < len(alignment_dependencies)
+            and isinstance(alignment_dependencies[index], dict)
+            else {}
+        )
+        assessment_version = int(dependencies.get("assessment_activities", 0) or 0)
+        teaching_version = int(dependencies.get("teaching_activities", 0) or 0)
+        version_assessment_map = (
+            assessment_version_maps[assessment_version - 1]
+            if 0 < assessment_version <= len(assessment_version_maps)
+            else assessment_id_map
+        )
+        version_teaching_map = (
+            teaching_version_maps[teaching_version - 1]
+            if 0 < teaching_version <= len(teaching_version_maps)
+            else teaching_id_map
+        )
+        remap_alignment_activity_ids(
+            matrix_version,
+            version_assessment_map,
+            version_teaching_map,
+        )
+    for snapshot in state.get("revision_snapshots", []):
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("artifacts"), dict):
+            continue
+        artifacts = snapshot["artifacts"]
+        snapshot_assessment_map = canonicalize_activity_ids(
+            artifacts.get("assessment_activities"),
+            "AT",
+        )
+        snapshot_teaching_map = canonicalize_activity_ids(
+            artifacts.get("teaching_activities"),
+            "TLA",
+        )
+        remap_alignment_activity_ids(
+            artifacts.get("alignment_matrix"),
+            snapshot_assessment_map,
+            snapshot_teaching_map,
+        )
+
+    def remap_own_activity_ids(value: Any, mapping: dict[str, str]) -> None:
+        if isinstance(value, list):
+            for item in value:
+                remap_own_activity_ids(item, mapping)
+            return
+        if not isinstance(value, dict):
+            return
+        identifier = str(value.get("id", ""))
+        if identifier in mapping:
+            value["id"] = mapping[identifier]
+        for item in value.values():
+            remap_own_activity_ids(item, mapping)
+
+    if previous_version < 19:
+        for proposal in state.get("ai_proposals", []):
+            if not isinstance(proposal, dict):
+                continue
+            proposal_stage = str(proposal.get("stage", ""))
+            if proposal_stage == "assessment_activities":
+                remap_own_activity_ids(proposal.get("before"), assessment_id_map)
+                remap_own_activity_ids(proposal.get("after"), assessment_id_map)
+            elif proposal_stage == "teaching_activities":
+                remap_own_activity_ids(proposal.get("before"), teaching_id_map)
+                remap_own_activity_ids(proposal.get("after"), teaching_id_map)
+            elif proposal_stage == "alignment_matrix":
+                remap_alignment_activity_ids(
+                    proposal.get("before"),
+                    assessment_id_map,
+                    teaching_id_map,
+                )
+                remap_alignment_activity_ids(
+                    proposal.get("after"),
+                    assessment_id_map,
+                    teaching_id_map,
+                )
+
+    assessments = state.get("assessment_activities", [])
 
     def migrate_pedagogical_sequence(
         design: Any,

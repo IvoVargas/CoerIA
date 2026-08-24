@@ -31,6 +31,7 @@ from .curriculum import (
     OUTCOME_TYPES,
     TAXONOMY_LEVELS,
     TAXONOMY_VERBS,
+    normalize_structured_activity_ids,
     normalize_learning_outcome_ids,
     taxonomy_verb_allowed,
     validate_taxonomy_choice,
@@ -134,7 +135,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -295,7 +296,7 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
     )
     assessments = [
         {
-            "id": f"AV{index + 1}",
+            "id": f"AT{index + 1}",
             "outcome_id": outcome["id"],
             "outcome_ids": [
                 outcome["id"],
@@ -368,7 +369,7 @@ def propose_teaching_activities(state: PrismState) -> dict[str, Any]:
     feedback = _feedback(state, "teaching_activities")
     activities = [
         {
-            "id": f"EA{index + 1}",
+            "id": f"TLA{index + 1}",
             "outcome_id": outcome["id"],
             "outcome_ids": [outcome["id"]],
             "learning_context": LEARNING_CONTEXTS[index % len(LEARNING_CONTEXTS)],
@@ -781,7 +782,7 @@ def _snapshot_without_invalidation(
     state["revision_snapshots"] = snapshots
 
 
-def _learning_outcome_id_remap(before: Any, after: Any) -> dict[str, str]:
+def _stable_identifier_remap(before: Any, after: Any) -> dict[str, str]:
     """Relaciona IDs preservados e IDs renumerados sem adivinhar linhas removidas."""
 
     if not isinstance(before, list) or not isinstance(after, list):
@@ -828,6 +829,38 @@ def _remap_outcome_references(value: Any, mapping: dict[str, str]) -> Any:
     return remapped
 
 
+def _remap_list_references(
+    value: Any,
+    field_name: str,
+    mapping: dict[str, str],
+) -> Any:
+    """Atualiza uma lista de referências técnicas num artefacto dependente."""
+
+    if isinstance(value, list):
+        return [
+            _remap_list_references(item, field_name, mapping)
+            for item in value
+        ]
+    if not isinstance(value, dict):
+        return deepcopy(value)
+    remapped: dict[str, Any] = {}
+    for key, item in value.items():
+        if key == field_name and isinstance(item, list):
+            remapped[key] = [
+                mapping.get(identifier, identifier)
+                if isinstance(identifier, str)
+                else deepcopy(identifier)
+                for identifier in item
+            ]
+        else:
+            remapped[key] = _remap_list_references(
+                item,
+                field_name,
+                mapping,
+            )
+    return remapped
+
+
 def save_manual_draft(
     state: PrismState,
     target_stage: str,
@@ -848,7 +881,7 @@ def save_manual_draft(
             edited_artifact,
             sequential=False,
         )
-        id_mapping = _learning_outcome_id_remap(
+        id_mapping = _stable_identifier_remap(
             updated.get("learning_outcomes"),
             edited_artifact,
         )
@@ -859,6 +892,31 @@ def save_manual_draft(
                         updated[downstream],
                         id_mapping,
                     )
+    elif target_stage in {"teaching_activities", "assessment_activities"}:
+        prefix = "TLA" if target_stage == "teaching_activities" else "AT"
+        reference_field = (
+            "teaching_activity_ids"
+            if target_stage == "teaching_activities"
+            else "assessment_ids"
+        )
+        edited_artifact = normalize_structured_activity_ids(
+            edited_artifact,
+            prefix=prefix,
+            sequential=False,
+        )
+        id_mapping = _stable_identifier_remap(
+            updated.get(target_stage),
+            edited_artifact,
+        )
+        if (
+            any(before != after for before, after in id_mapping.items())
+            and "alignment_matrix" in updated
+        ):
+            updated["alignment_matrix"] = _remap_list_references(
+                updated["alignment_matrix"],
+                reference_field,
+                id_mapping,
+            )
     if edited_artifact == updated.get(target_stage):
         raise ValueError("Não foram detetadas alterações para guardar.")
     if target_stage == "resources":

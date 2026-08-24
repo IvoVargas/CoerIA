@@ -18,6 +18,12 @@ expressas, e os critérios devem permitir julgar o desempenho alcançado. A
 `minutaProgramasUCs.xls` não é uma referência oficial do alinhamento nem do
 fluxo do CoerIA.
 
+A nomenclatura técnica acompanha os exemplos da mesma referência: `RA<n>` para
+resultados de aprendizagem, `TLA<n>` para *Teaching/Learning Activities* e
+`AT<n>` para *Assessment Tasks*. A separação entre `TLA` e `AT` evita a
+ambiguidade na matriz de alinhamento e mantém estes identificadores estáveis ao
+longo da autoria e das versões.
+
 ```mermaid
 flowchart LR
     D["Docente abre qualquer etapa"] --> M["Edita e guarda um rascunho"]
