@@ -128,15 +128,14 @@ O botão de edição encontra-se no canto superior direito do cartão do conteú
 **Etapa seguinte** navega sem executar a IA.
 
 **Verificar esta etapa com IA** guarda um parecer facultativo que nunca impede
-avançar. Quando o artefacto está completamente vazio, **Criar primeira versão
-com IA** pede uma proposta para toda a etapa através de uma instrução inicial
-predefinida; o conteúdo só se torna a primeira versão depois da revisão do
-docente. Em **Recursos educativos**, esta ação chama-se **Gerar recursos
-selecionados com IA** e apresenta primeiro uma confirmação explícita, porque
-pode executar uma chamada por tipo de recurso e chamadas adicionais para gerar
-imagens da apresentação. **Pedir proposta à IA** continua disponível para pedidos dirigidos e
-exige a escolha prévia do âmbito e uma instrução;
-para uma célula, linha ou tabela, o fornecedor recebe um esquema de resposta
+avançar. **Criar versão com IA** está sempre disponível e pede uma proposta para
+toda a etapa, considerando o rascunho atual; o conteúdo só se torna uma nova
+versão depois da revisão do docente. Em **Recursos educativos**, esta ação
+apresenta primeiro uma confirmação explícita, porque pode executar uma chamada
+por tipo de recurso e chamadas adicionais para gerar imagens da apresentação.
+**Pedir propostas à IA** continua disponível para pedidos dirigidos e exige a
+escolha prévia do âmbito e uma instrução. Para uma célula, linha ou tabela, o
+fornecedor recebe um esquema de resposta
 limitado exatamente a esse fragmento, sem gerar primeiro a etapa inteira. O
 seletor não oferece os identificadores técnicos próprios das linhas como campos
 isolados para reformulação. A proposta fica pendente até o docente comparar o

@@ -315,11 +315,11 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
 
     await user.open("/_test_manual_first_workspace")
 
-    await user.should_see("Autoria manual com IA facultativa")
+    await user.should_not_see("Autoria manual com IA facultativa")
     await user.should_see("Etapa seguinte")
     await user.should_not_see("Continuar sem executar a IA")
-    await user.should_see("Criar primeira versão com IA")
-    await user.should_see("Pedir proposta à IA")
+    await user.should_see("Criar versão com IA")
+    await user.should_see("Pedir propostas à IA")
     await user.should_see("Conteúdos e objetivos curriculares")
     user.find(marker="edit-artifact-content").click()
     await user.should_see("EDIÇÃO NA TABELA ATUAL")
@@ -340,7 +340,7 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.should_see("Guardar seleção de recursos", retries=20)
     user.find(marker="manual-stage-curriculum_analysis").click()
     await user.should_see("Objetivos gerais")
-    await user.should_see("Criar primeira versão com IA")
+    await user.should_see("Criar versão com IA")
     assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
 
 
@@ -394,7 +394,7 @@ async def test_manual_history_offers_explicit_version_restore(
 
 
 @pytest.mark.asyncio
-async def test_first_ai_version_action_is_hidden_after_content_exists(
+async def test_ai_version_action_remains_available_after_content_exists(
     user: User,
 ) -> None:
     state = create_session(
@@ -422,12 +422,12 @@ async def test_first_ai_version_action_is_hidden_after_content_exists(
 
     await user.open("/_test_first_ai_version_with_content")
 
-    await user.should_not_see("Criar primeira versão com IA")
-    await user.should_see("Pedir proposta à IA")
+    await user.should_see("Criar versão com IA")
+    await user.should_see("Pedir propostas à IA")
 
 
 @pytest.mark.asyncio
-async def test_first_ai_version_action_requests_the_complete_stage(
+async def test_ai_version_action_requests_the_complete_stage(
     user: User,
 ) -> None:
     state = create_session(
@@ -443,7 +443,7 @@ async def test_first_ai_version_action_requests_the_complete_stage(
         interface = app.AGIRSoloInterface()
 
         async def record_request(*_args, **_kwargs) -> None:
-            ui.notify("Pedido da primeira versão registado.")
+            ui.notify("Pedido da versão registado.")
 
         handler = AsyncMock(side_effect=record_request)
         interface._handle_ai_assistance = handler
@@ -453,15 +453,15 @@ async def test_first_ai_version_action_requests_the_complete_stage(
 
     await user.open("/_test_first_ai_version_action")
 
-    user.find("Criar primeira versão com IA").click()
-    await user.should_see("Pedido da primeira versão registado.")
+    user.find("Criar versão com IA").click()
+    await user.should_see("Pedido da versão registado.")
 
     handlers[-1].assert_awaited_once_with(
         "learning_outcomes",
         [],
         "Toda a etapa",
-        "Crie uma primeira versão completa desta etapa com base no "
-        "contexto da unidade curricular e nos artefactos anteriores.",
+        "Crie uma versão completa desta etapa com base no contexto da "
+        "unidade curricular, no rascunho atual e nos artefactos anteriores.",
     )
 
 
@@ -493,7 +493,7 @@ async def test_first_resource_generation_requires_explicit_confirmation(
 
     await user.open("/_test_first_resource_generation_confirmation")
 
-    user.find("Gerar recursos selecionados com IA").click()
+    user.find("Criar versão com IA").click()
     await user.should_see("Confirmar geração dos recursos selecionados")
     await user.should_see("pode originar várias chamadas")
     handlers[-1].assert_not_awaited()
@@ -504,8 +504,8 @@ async def test_first_resource_generation_requires_explicit_confirmation(
         "resources",
         [],
         "Toda a etapa",
-        "Crie uma primeira versão completa desta etapa com base no "
-        "contexto da unidade curricular e nos artefactos anteriores.",
+        "Crie uma versão completa desta etapa com base no contexto da "
+        "unidade curricular, no rascunho atual e nos artefactos anteriores.",
     )
 
 

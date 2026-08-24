@@ -73,7 +73,6 @@ from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
 from prism.workflow import (
     STAGE_LABELS,
     STAGE_ORDER,
-    artifact_has_content,
     is_manual_first,
     revision_targets_for_state,
 )
@@ -237,6 +236,8 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .stage-label { font-size: .78rem; line-height: 1.25; font-weight: 700; margin-top: 5px; }
 .stage-state { font-size: .67rem; line-height: 1.2; margin-top: 6px; opacity: .78; }
 .artifact-card { min-width: 0; padding: 26px 30px; overflow-x: auto; }
+.artifact-markdown.artifact-heading { width: auto; min-width: 0; flex: 1 1 420px; }
+.artifact-heading h1 { margin: 0; }
 .artifact-markdown { color: var(--agir-ink); line-height: 1.65; width: 100%; }
 .artifact-markdown h1 { font-size: 1.65rem; margin: 0 0 .35rem; letter-spacing: -.025em; }
 .artifact-markdown h2 { font-size: 1.08rem; margin-top: 1.8rem; color: var(--agir-secondary); }
@@ -257,6 +258,8 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table tr.ai-proposal-new-row td { background: #eef9f6; }
 .manual-table tr.ai-proposal-remove-row td { background: #fff3f0; }
 .decision-card { padding: 22px; }
+.teacher-control-card { padding: 16px 18px; gap: 8px; }
+.teacher-control-card .secondary-action { min-height: 38px; }
 .consultation-card { padding: 20px 22px; }
 .info-chip { background: var(--agir-primary) !important; color: #ffffff !important; font-weight: 700; }
 .info-chip *, .info-chip .q-icon { color: #ffffff !important; }
@@ -1002,10 +1005,10 @@ class AGIRSoloInterface:
             with ui.row().classes("w-full items-start gap-3"):
                 with ui.column().classes("gap-1"):
                     ui.label("SESSÃO PEDAGÓGICA").classes("eyebrow")
-                    ui.label(state.get("course", {}).get("unit_name", "Sessão")).classes(
-                        "text-3xl font-extrabold tracking-tight"
-                    )
-                    with ui.row().classes("gap-2 mt-1"):
+                    with ui.row().classes("items-center gap-2 flex-wrap"):
+                        ui.label(
+                            state.get("course", {}).get("unit_name", "Sessão")
+                        ).classes("text-3xl font-extrabold tracking-tight")
                         ui.chip(state.get("ai_provider", "OpenAI"), icon="smart_toy").classes("info-chip")
                         ui.chip(
                             state.get("course", {}).get("taxonomy_type", "SOLO"),
@@ -2000,24 +2003,32 @@ class AGIRSoloInterface:
             with ui.card().classes("surface artifact-card w-full").mark(
                 "artifact-content"
             ):
-                if not editing and is_manual_first(state) and proposal is None:
-                    with ui.row().classes("w-full items-center gap-2"):
-                        ui.space()
-                        ui.button(
-                            "Editar campos e tabelas",
-                            icon="edit",
-                            on_click=lambda: self._start_manual_edit(stage),
-                        ).props("outline no-caps").classes("secondary-action").mark(
-                            "edit-artifact-content"
-                        )
                 if editing:
                     self._render_inline_manual_editor(stage)
                 elif proposal:
                     self._render_ai_proposal_review(state, stage, proposal)
                 else:
-                    ui.markdown(
-                        render_current_artifact(state), extras=["tables"]
-                    ).classes("artifact-markdown")
+                    artifact_markdown = render_current_artifact(state)
+                    artifact_title, separator, artifact_body = artifact_markdown.partition(
+                        "\n\n"
+                    )
+                    with ui.row().classes("w-full items-center gap-3 flex-wrap"):
+                        ui.markdown(artifact_title).classes(
+                            "artifact-markdown artifact-heading"
+                        )
+                        ui.space()
+                        if is_manual_first(state):
+                            ui.button(
+                                "Editar campos e tabelas",
+                                icon="edit",
+                                on_click=lambda: self._start_manual_edit(stage),
+                            ).props("outline no-caps").classes(
+                                "secondary-action"
+                            ).mark("edit-artifact-content")
+                    if separator and artifact_body:
+                        ui.markdown(artifact_body, extras=["tables"]).classes(
+                            "artifact-markdown"
+                        )
                     if stage == "resources":
                         self._render_selected_image_previews(state)
 
@@ -2027,29 +2038,27 @@ class AGIRSoloInterface:
         stage: str,
     ) -> None:
         proposal = self._pending_ai_proposal(state, stage)
-        stage_is_empty = not artifact_has_content(state.get(stage))
-        with ui.card().classes("surface decision-card w-full").mark(
+        with ui.card().classes(
+            "surface decision-card teacher-control-card w-full"
+        ).mark(
             "teacher-control"
         ):
-            ui.label("CONTROLO DO DOCENTE").classes("eyebrow")
-            ui.label("Autoria manual com IA facultativa").classes("section-title")
-            ui.label(
-                "Pode editar e avançar sem chamar qualquer modelo. A verificação "
-                "por IA é apenas informativa; a assistência cria uma proposta que "
-                "só altera o rascunho depois da sua aceitação."
-            ).classes("text-sm muted")
-
-            with ui.row().classes("w-full gap-2 flex-wrap mt-3"):
+            with ui.row().classes("w-full items-center gap-2 flex-wrap"):
+                ui.label("CONTROLO DO DOCENTE").classes("eyebrow")
+                ui.space()
                 ui.button(
                     "Verificar esta etapa com IA",
                     icon="fact_check",
                     on_click=lambda: self._handle_ai_verification(stage),
-                ).props("outline no-caps").classes("secondary-action").style(
-                    "min-width: 220px; flex: 1 1 220px;"
-                )
+                ).props("outline no-caps dense").classes("secondary-action")
+            ui.label(
+                "Pode editar e avançar sem chamar qualquer modelo. A verificação "
+                "por IA é apenas informativa; a assistência cria uma proposta que "
+                "só altera o rascunho depois da sua aceitação."
+            ).classes("text-sm muted mt-1")
 
             if stage == "resources":
-                ui.separator().classes("my-3")
+                ui.separator().classes("my-2")
                 ui.label("RECURSOS A PREPARAR").classes("eyebrow")
                 ui.label(
                     "Escolha os recursos desta etapa. Guardar a seleção não executa a IA."
@@ -2097,39 +2106,7 @@ class AGIRSoloInterface:
                     on_click=save_resource_settings,
                 ).props("outline no-caps").classes("secondary-action w-full")
 
-            if stage_is_empty and proposal is None:
-                ui.separator().classes("my-3")
-                ui.label("PRIMEIRA VERSÃO").classes("eyebrow")
-                ui.label(
-                    "Esta etapa ainda está vazia. A IA pode preparar uma primeira "
-                    "proposta completa, que só se torna uma versão depois da sua revisão."
-                ).classes("text-sm muted")
-
-                async def create_first_version() -> None:
-                    if stage == "resources":
-                        self._open_resource_generation_confirmation()
-                        return
-                    await self._handle_ai_assistance(
-                        stage,
-                        [],
-                        "Toda a etapa",
-                        "Crie uma primeira versão completa desta etapa com base no "
-                        "contexto da unidade curricular e nos artefactos anteriores.",
-                    )
-
-                ui.button(
-                    (
-                        "Gerar recursos selecionados com IA"
-                        if stage == "resources"
-                        else "Criar primeira versão com IA"
-                    ),
-                    icon="auto_fix_high",
-                    on_click=create_first_version,
-                ).props("outline no-caps").classes(
-                    "secondary-action w-full mt-2"
-                ).mark("create-first-ai-version")
-
-            ui.separator().classes("my-3")
+            ui.separator().classes("my-2")
             ui.label("ASSISTÊNCIA LOCALIZADA DA IA").classes("eyebrow")
             ui.label(
                 "Escolha exatamente a parte que pode ser proposta pela IA. O restante "
@@ -2159,14 +2136,36 @@ class AGIRSoloInterface:
                     str(instruction.value or ""),
                 )
 
-            ui.button(
-                "Pedir proposta à IA",
-                icon="auto_awesome",
-                on_click=ask_for_proposal,
-            ).props("outline no-caps").classes("secondary-action w-full")
+            async def create_ai_version() -> None:
+                if stage == "resources":
+                    self._open_resource_generation_confirmation()
+                    return
+                await self._handle_ai_assistance(
+                    stage,
+                    [],
+                    "Toda a etapa",
+                    "Crie uma versão completa desta etapa com base no contexto da "
+                    "unidade curricular, no rascunho atual e nos artefactos anteriores.",
+                )
+
+            with ui.row().classes("w-full gap-2 flex-wrap"):
+                ui.button(
+                    "Pedir propostas à IA",
+                    icon="auto_awesome",
+                    on_click=ask_for_proposal,
+                ).props("outline no-caps").classes("secondary-action").style(
+                    "min-width: 210px; flex: 1 1 210px;"
+                )
+                ui.button(
+                    "Criar versão com IA",
+                    icon="auto_fix_high",
+                    on_click=create_ai_version,
+                ).props("outline no-caps").classes("secondary-action").style(
+                    "min-width: 210px; flex: 1 1 210px;"
+                ).mark("create-ai-version")
 
             if proposal is not None:
-                ui.separator().classes("my-3")
+                ui.separator().classes("my-2")
                 ui.label("PROPOSTA PENDENTE").classes("eyebrow")
                 ui.label(str(proposal.get("scope_label", "Âmbito selecionado"))).classes(
                     "font-semibold"
@@ -2178,7 +2177,7 @@ class AGIRSoloInterface:
             reviews = state.get("ai_reviews", {}).get(stage, [])
             if reviews:
                 latest = reviews[-1]
-                ui.separator().classes("my-3")
+                ui.separator().classes("my-2")
                 ui.label("ÚLTIMA VERIFICAÇÃO FACULTATIVA DA IA").classes("eyebrow")
                 findings = latest.get("findings", [])
                 if not findings:
@@ -2194,7 +2193,7 @@ class AGIRSoloInterface:
                 ).classes("text-xs muted")
 
             current_index = STAGE_ORDER.index(stage)
-            ui.separator().classes("my-3")
+            ui.separator().classes("my-2")
             with ui.row().classes("w-full gap-2 flex-wrap"):
                 if current_index > 0:
                     ui.button(
@@ -2239,8 +2238,8 @@ class AGIRSoloInterface:
                     "resources",
                     [],
                     "Toda a etapa",
-                    "Crie uma primeira versão completa desta etapa com base no "
-                    "contexto da unidade curricular e nos artefactos anteriores.",
+                    "Crie uma versão completa desta etapa com base no contexto da "
+                    "unidade curricular, no rascunho atual e nos artefactos anteriores.",
                 )
 
             with ui.row().classes("w-full justify-end gap-2"):

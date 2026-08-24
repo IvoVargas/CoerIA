@@ -128,8 +128,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   texto, adicionar linhas e remover linhas, sem abrir um editor separado nem
   mudar os campos visíveis ou a respetiva ordem.
 - Apresentar a ação **Editar campos e tabelas** no canto superior direito do
-  cartão que contém o artefacto e designar a navegação para a frente como
-  **Etapa seguinte**.
+  cartão que contém o artefacto, alinhada verticalmente com o respetivo título,
+  e designar a navegação para a frente como **Etapa seguinte**.
 - Permitir guardar rascunhos incompletos; validar apenas a forma estrutural
   mínima necessária para a persistência.
 - Não acrescentar uma coluna de numeração de linhas no modo de edição.
@@ -141,10 +141,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir pedir uma verificação por IA em qualquer etapa de autoria. O parecer
   deve ser guardado, não deve alterar o artefacto e nunca deve bloquear a
   navegação.
-- Quando uma etapa está completamente vazia, apresentar uma ação própria para a
-  IA criar uma primeira proposta completa. O âmbito é toda a etapa e a instrução
-  inicial é predefinida; a proposta só se torna a primeira versão depois da
-  revisão e aplicação explícitas pelo docente.
+- Apresentar sempre a ação **Criar versão com IA**, ao lado de **Pedir propostas
+  à IA**, para obter uma proposta completa de toda a etapa com base no contexto,
+  no rascunho atual e nos artefactos anteriores. A proposta só se torna uma nova
+  versão depois da revisão e aplicação explícitas pelo docente.
 - Na etapa de recursos, identificar inequivocamente que essa ação gera os tipos
   de recurso selecionados, pode efetuar várias chamadas ao fornecedor e exige
   confirmação explícita antes de iniciar, incluindo o aviso sobre eventual
