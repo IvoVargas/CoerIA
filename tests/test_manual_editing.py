@@ -1,6 +1,7 @@
 from prism.manual_editing import (
     FieldSpec,
     apply_editor_field_value,
+    assistance_scope_options,
     editor_field_value,
     editor_reference_options,
     editor_reference_value,
@@ -53,6 +54,19 @@ def test_every_authorship_stage_has_editable_fields_and_tables() -> None:
             rows.append(added)
             assert rows[-1] == table.template
             rows.pop()
+
+
+def test_ai_assistance_scopes_omit_technical_id_fields() -> None:
+    state = _completed_state()
+
+    for stage in STAGE_ORDER[:-1]:
+        artifact = active_stage_artifact(state, stage)
+        labels = [
+            option["label"]
+            for option in assistance_scope_options(stage, artifact)
+        ]
+
+        assert all("campo ID" not in label for label in labels)
 
 
 def test_relationship_fields_round_trip_through_the_manual_editor() -> None:

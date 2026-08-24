@@ -113,7 +113,9 @@ assinalados como **Rever após alterações anteriores**.
 avançar. **Pedir proposta à IA** exige a escolha prévia do âmbito e uma instrução;
 para uma célula, linha ou tabela, o fornecedor recebe um esquema de resposta
 limitado exatamente a esse fragmento, sem gerar primeiro a etapa inteira. O
-resultado fica pendente até o docente comparar o antes/depois e escolher
+seletor não oferece os identificadores técnicos próprios das linhas como campos
+isolados para reformulação. A proposta fica pendente até o docente comparar o
+antes/depois e escolher
 **Aceitar** ou **Rejeitar**. Aceitar cria uma nova versão; rejeitar conserva o
 rascunho sem alterações.
 
@@ -121,7 +123,8 @@ Numa sessão concluída, a barra de etapas fica em modo de consulta. A reabertur
 exige o botão próprio, a seleção da etapa, um motivo e uma confirmação explícita.
 
 O separador **Versões** permite consultar e restaurar qualquer versão não ativa
-das sete etapas de autoria. O restauro exige apenas confirmação e volta a tornar
+das sete etapas de autoria. A ação de restauro surge à direita do seletor de
+etapa e versão. O restauro exige apenas confirmação e volta a tornar
 ativa a versão escolhida, sem criar uma nova versão nem apagar as restantes. Os
 passos posteriores preenchidos ficam assinalados para revisão e a
 verificação global é recalculada; o relatório final, por ser derivado, não é

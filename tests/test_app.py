@@ -362,6 +362,13 @@ async def test_manual_history_offers_explicit_version_restore(
 
     await user.should_see("Restaurar versão selecionada")
     await user.should_see("voltar a tornar ativa")
+    history_select = next(
+        iter(user.find(marker="history-version-select").elements)
+    )
+    restore_button = next(
+        iter(user.find(marker="restore-history-version").elements)
+    )
+    assert history_select.parent_slot.parent.id == restore_button.parent_slot.parent.id
 
 
 @pytest.mark.asyncio

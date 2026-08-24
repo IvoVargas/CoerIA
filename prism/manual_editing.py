@@ -493,7 +493,7 @@ def assistance_scope_options(stage: str, artifact: Any) -> list[dict[str, Any]]:
             )
             if isinstance(row, dict):
                 for field in table.fields:
-                    if field.key in row:
+                    if field.key in row and field.key != "id":
                         options.append(
                             {
                                 "label": f"{row_label} — campo {field.label}",

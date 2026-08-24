@@ -128,6 +128,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   navegação.
 - Permitir pedir assistência de IA apenas depois de o docente escolher o âmbito
   exato — etapa, tabela, linha ou campo — e escrever uma instrução.
+- Excluir os identificadores técnicos próprios de cada linha dos âmbitos ao nível
+  do campo, pois não constituem conteúdo pedagógico a reformular pela IA.
 - Para um âmbito inferior à etapa, pedir ao fornecedor apenas um fragmento com o
   esquema exato da célula, linha ou tabela selecionada; não gerar a etapa inteira
   para depois extrair um índice.
@@ -140,6 +142,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   apenas a versão ativa, preserva todo o histórico, assinala os passos posteriores
   para revisão e invalida a verificação global; o relatório final derivado não
   pode ser restaurado.
+- Apresentar a ação de restauro à direita do seletor de etapa e versão.
 - Não alterar o artefacto ativo nem persistir uma proposta parcial se a chamada à
   IA falhar.
 - Apresentar a verificação global determinística num ecrã separado e torná-la a

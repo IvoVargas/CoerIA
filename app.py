@@ -1018,10 +1018,6 @@ class AGIRSoloInterface:
                             state.get("course", {}).get("taxonomy_type", "SOLO"),
                             icon="account_tree",
                         ).classes("info-chip")
-                ui.space()
-                ui.button("Iniciar nova sessão", icon="add", on_click=self.show_new_session).props(
-                    "outline no-caps"
-                ).classes("secondary-action")
 
             self._render_stage_track(state)
 
@@ -2347,30 +2343,34 @@ class AGIRSoloInterface:
                     choices = history_choices(state)
                     options = {value: label for label, value in choices}
                     selected = current_history_value(state)
-                    history_select = ui.select(
-                        options,
-                        value=selected,
-                        label="Etapa e versão",
-                    ).classes("full-control max-w-3xl")
-                    history_markdown = ui.markdown(
-                        render_history_artifact(selected, state),
-                        extras=["tables"],
-                    ).classes("artifact-markdown mt-4 overflow-x-auto")
                     restore_button = None
-                    if is_manual_first(state) and choices:
+                    with ui.row().classes("w-full items-end gap-3 flex-wrap"):
+                        history_select = ui.select(
+                            options,
+                            value=selected,
+                            label="Etapa e versão",
+                        ).classes("full-control flex-1 min-w-64").mark(
+                            "history-version-select"
+                        )
+                        if is_manual_first(state) and choices:
+                            restore_button = ui.button(
+                                "Restaurar versão selecionada",
+                                icon="restore",
+                                on_click=lambda: self._open_history_restore_dialog(
+                                    str(history_select.value or "")
+                                ),
+                            ).props("outline no-caps").classes(
+                                "secondary-action"
+                            ).mark("restore-history-version")
+                    if restore_button is not None:
                         ui.label(
                             "Selecione uma versão não ativa de uma etapa de autoria para "
                             "a voltar a tornar ativa."
                         ).classes("text-xs muted mt-3")
-                        restore_button = ui.button(
-                            "Restaurar versão selecionada",
-                            icon="restore",
-                            on_click=lambda: self._open_history_restore_dialog(
-                                str(history_select.value or "")
-                            ),
-                        ).props("outline no-caps").classes(
-                            "secondary-action mt-2"
-                        ).mark("restore-history-version")
+                    history_markdown = ui.markdown(
+                        render_history_artifact(selected, state),
+                        extras=["tables"],
+                    ).classes("artifact-markdown mt-4 overflow-x-auto")
 
                     def update_history(event: Any) -> None:
                         history_markdown.set_content(
