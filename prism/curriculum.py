@@ -80,7 +80,9 @@ def next_learning_outcome_id(rows: list[Any]) -> str:
 def is_learning_outcome_id(value: Any) -> bool:
     """Indica se o valor usa a forma canónica RA1, RA2, ..."""
 
-    return bool(re.fullmatch(r"RA[1-9]\d*", str(value or "").strip()))
+    return bool(
+        LEARNING_OUTCOME_ID_PATTERN.fullmatch(str(value or "").strip())
+    )
 
 SOLO_LEVELS = (
     "Uni-estrutural",

@@ -95,7 +95,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
     "assessment_activities": EditorLayout(
         tables=(
             TableSpec(
-                "Atividades de avaliação",
+                "Tarefas e critérios de avaliação",
                 (),
                 (
                     _field("id", "ID"),
@@ -128,9 +128,15 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (
                     _field("outcome_id", "Resultado"),
                     _field("focus", "Foco", "long"),
+                    _field("teaching_activity", "Atividade de ensino-aprendizagem", "long"),
                     _field("assessment", "Avaliação", "long"),
                 ),
-                {"outcome_id": "", "focus": "", "assessment": ""},
+                {
+                    "outcome_id": "",
+                    "focus": "",
+                    "teaching_activity": "",
+                    "assessment": "",
+                },
             ),
         ),
     ),

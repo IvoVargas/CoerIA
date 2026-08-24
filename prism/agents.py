@@ -144,7 +144,7 @@ STAGE_REQUIREMENTS = {
     ),
     "pedagogical_design": (
         "Objeto com strategy e sequence. sequence é uma lista de objetos "
-        "{outcome_id, focus, assessment}; deve organizar a progressão pedagógica "
+        "{outcome_id, focus, teaching_activity, assessment}; deve organizar a progressão pedagógica "
         "articulando os resultados, as atividades de ensino-aprendizagem e a avaliação."
     ),
     "teaching_activities": (
@@ -325,9 +325,12 @@ def _schema_for(
                         "properties": {
                             "outcome_id": string,
                             "focus": string,
+                            "teaching_activity": string,
                             "assessment": string,
                         },
-                        "required": ["outcome_id", "focus", "assessment"],
+                        "required": [
+                            "outcome_id", "focus", "teaching_activity", "assessment"
+                        ],
                     },
                 },
             },
@@ -1846,8 +1849,20 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             artifact.get("sequence", []),
             expected,
             "outcome_id",
-            "O design pedagógico não contempla todos os resultados de aprendizagem.",
+            "A sequência pedagógica não contempla todos os resultados de aprendizagem.",
         )
+        incomplete = [
+            str(item.get("outcome_id", "?"))
+            for item in artifact.get("sequence", [])
+            if not str(item.get("focus", "")).strip()
+            or not str(item.get("teaching_activity", "")).strip()
+            or not str(item.get("assessment", "")).strip()
+        ]
+        if incomplete:
+            raise AgentGenerationError(
+                "A sequência deve explicitar foco, atividade de ensino-aprendizagem "
+                "e avaliação em: " + ", ".join(incomplete)
+            )
 
     if stage == "resources":
         selected = set(artifact["selected_types"])
@@ -2827,8 +2842,8 @@ class AgenticPedagogicalTeam:
 
     DEFAULT_CRITIC_STAGES = (
         "learning_outcomes",
-        "assessment_activities",
         "teaching_activities",
+        "assessment_activities",
         "alignment_matrix",
     )
 

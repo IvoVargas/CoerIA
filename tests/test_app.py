@@ -215,7 +215,7 @@ async def test_application_opens_on_home_before_starting_a_new_session(
 
 
 @pytest.mark.asyncio
-async def test_workspace_does_not_render_redundant_status_banner(user: User) -> None:
+async def test_workspace_uses_a_notification_instead_of_a_status_banner(user: User) -> None:
     state = create_session(
         CourseInput.create(
             unit_name="Programação",
@@ -231,7 +231,7 @@ async def test_workspace_does_not_render_redundant_status_banner(user: User) -> 
 
     await user.open("/_test_workspace_without_status_banner")
 
-    await user.should_not_see("Etapa aberta: Resultados de aprendizagem.")
+    await user.should_see("Etapa aberta: Resultados de aprendizagem.")
     assert ".status-banner" not in app.APP_CSS
 
 
@@ -450,6 +450,50 @@ async def test_first_ai_version_action_requests_the_complete_stage(
 
     handlers[-1].assert_awaited_once_with(
         "learning_outcomes",
+        [],
+        "Toda a etapa",
+        "Crie uma primeira versão completa desta etapa com base no "
+        "contexto da unidade curricular e nos artefactos anteriores.",
+    )
+
+
+@pytest.mark.asyncio
+async def test_first_resource_generation_requires_explicit_confirmation(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    state = navigate_to_stage(state, "resources")
+    handlers: list[AsyncMock] = []
+
+    @ui.page("/_test_first_resource_generation_confirmation")
+    def first_resource_generation_confirmation_page():
+        interface = app.AGIRSoloInterface()
+
+        async def record_request(*_args, **_kwargs) -> None:
+            ui.notify("Geração de recursos registada.")
+
+        handler = AsyncMock(side_effect=record_request)
+        interface._handle_ai_assistance = handler
+        interface.state = state
+        interface.show_workspace()
+        handlers.append(handler)
+
+    await user.open("/_test_first_resource_generation_confirmation")
+
+    user.find("Gerar recursos selecionados com IA").click()
+    await user.should_see("Confirmar geração dos recursos selecionados")
+    await user.should_see("pode originar várias chamadas")
+    handlers[-1].assert_not_awaited()
+    user.find(marker="confirm-resource-generation").click()
+    await user.should_see("Geração de recursos registada.")
+
+    handlers[-1].assert_awaited_once_with(
+        "resources",
         [],
         "Toda a etapa",
         "Crie uma primeira versão completa desta etapa com base no "

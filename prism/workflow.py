@@ -134,7 +134,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -336,6 +336,11 @@ def create_pedagogical_design(state: PrismState) -> dict[str, Any]:
             {
                 "outcome_id": outcome["id"],
                 "focus": outcome["statement"],
+                "teaching_activity": next(
+                    item["activity"]
+                    for item in state["teaching_activities"]
+                    if outcome["id"] in item.get("outcome_ids", [item.get("outcome_id")])
+                ),
                 "assessment": next(
                     item["activity"]
                     for item in state["assessment_activities"]
@@ -776,6 +781,53 @@ def _snapshot_without_invalidation(
     state["revision_snapshots"] = snapshots
 
 
+def _learning_outcome_id_remap(before: Any, after: Any) -> dict[str, str]:
+    """Relaciona IDs preservados e IDs renumerados sem adivinhar linhas removidas."""
+
+    if not isinstance(before, list) or not isinstance(after, list):
+        return {}
+    before_ids = [
+        str(item.get("id", "")).strip()
+        for item in before
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    ]
+    after_ids = [
+        str(item.get("id", "")).strip()
+        for item in after
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    ]
+    after_set = set(after_ids)
+    mapping = {identifier: identifier for identifier in before_ids if identifier in after_set}
+    unmatched_before = [identifier for identifier in before_ids if identifier not in mapping]
+    mapped_after = set(mapping.values())
+    unmatched_after = [identifier for identifier in after_ids if identifier not in mapped_after]
+    mapping.update(zip(unmatched_before, unmatched_after))
+    return mapping
+
+
+def _remap_outcome_references(value: Any, mapping: dict[str, str]) -> Any:
+    """Atualiza apenas chaves de referência a RA em artefactos dependentes."""
+
+    if isinstance(value, list):
+        return [_remap_outcome_references(item, mapping) for item in value]
+    if not isinstance(value, dict):
+        return deepcopy(value)
+    remapped: dict[str, Any] = {}
+    for key, item in value.items():
+        if key == "outcome_id" and isinstance(item, str):
+            remapped[key] = mapping.get(item, item)
+        elif key == "outcome_ids" and isinstance(item, list):
+            remapped[key] = [
+                mapping.get(identifier, identifier)
+                if isinstance(identifier, str)
+                else deepcopy(identifier)
+                for identifier in item
+            ]
+        else:
+            remapped[key] = _remap_outcome_references(item, mapping)
+    return remapped
+
+
 def save_manual_draft(
     state: PrismState,
     target_stage: str,
@@ -796,6 +848,17 @@ def save_manual_draft(
             edited_artifact,
             sequential=False,
         )
+        id_mapping = _learning_outcome_id_remap(
+            updated.get("learning_outcomes"),
+            edited_artifact,
+        )
+        if any(before != after for before, after in id_mapping.items()):
+            for downstream in AUTHORING_STAGES[1:]:
+                if downstream in updated:
+                    updated[downstream] = _remap_outcome_references(
+                        updated[downstream],
+                        id_mapping,
+                    )
     if edited_artifact == updated.get(target_stage):
         raise ValueError("Não foram detetadas alterações para guardar.")
     if target_stage == "resources":

@@ -650,7 +650,7 @@ def export_program_document(
         [700, 3000, 2360, 2500, 1400],
     )
 
-    document.add_heading("6. Atividades de avaliação", level=1)
+    document.add_heading("6. Tarefas e critérios de avaliação", level=1)
     table = document.add_table(rows=1, cols=6)
     for assessment in state.get("assessment_activities", []):
         cells = table.add_row().cells
@@ -791,7 +791,7 @@ def export_program_latex(
                 ],
                 [0.06, 0.24, 0.19, 0.20, 0.13],
             ),
-            r"\section{Atividades de avaliação}",
+            r"\section{Tarefas e critérios de avaliação}",
             _latex_table(
                 ["ID", "Finalidade", "Modalidade", "Atividade", "Critério", "Resultados"],
                 [
@@ -1690,7 +1690,7 @@ def export_resource_package(
                     [
                         "Resultado", "Descrição", "Conteúdos",
                         "Taxonomia", "Nível", "Avaliações", "Finalidade",
-                        "Atividades formativas", "Recursos", "Estado",
+                        "Atividades de ensino-aprendizagem", "Recursos", "Estado",
                         "Justificação"
                     ],
                     alignment_rows,

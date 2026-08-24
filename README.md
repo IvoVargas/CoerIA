@@ -118,7 +118,10 @@ assinalados como **Rever após alterações anteriores**.
 avançar. Quando o artefacto está completamente vazio, **Criar primeira versão
 com IA** pede uma proposta para toda a etapa através de uma instrução inicial
 predefinida; o conteúdo só se torna a primeira versão depois da revisão do
-docente. **Pedir proposta à IA** continua disponível para pedidos dirigidos e
+docente. Em **Recursos educativos**, esta ação chama-se **Gerar recursos
+selecionados com IA** e apresenta primeiro uma confirmação explícita, porque
+pode executar uma chamada por tipo de recurso e chamadas adicionais para gerar
+imagens da apresentação. **Pedir proposta à IA** continua disponível para pedidos dirigidos e
 exige a escolha prévia do âmbito e uma instrução;
 para uma célula, linha ou tabela, o fornecedor recebe um esquema de resposta
 limitado exatamente a esse fragmento, sem gerar primeiro a etapa inteira. O

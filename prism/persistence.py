@@ -27,9 +27,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 17:
+    if previous_version < 18:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 17
+    state["schema_version"] = 18
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -304,6 +304,50 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         if isinstance(snapshot, dict) and isinstance(snapshot.get("artifacts"), dict):
             migrate_teaching_rows(snapshot["artifacts"].get("teaching_activities"))
 
+    def migrate_pedagogical_sequence(
+        design: Any,
+        teaching_activities: Any,
+    ) -> None:
+        if not isinstance(design, dict) or not isinstance(design.get("sequence"), list):
+            return
+        activities = teaching_activities if isinstance(teaching_activities, list) else []
+        for item in design["sequence"]:
+            if not isinstance(item, dict):
+                continue
+            outcome_id = str(item.get("outcome_id", ""))
+            linked = [
+                str(activity.get("activity", "")).strip()
+                for activity in activities
+                if isinstance(activity, dict)
+                and outcome_id in (
+                    activity.get("outcome_ids") or [activity.get("outcome_id")]
+                )
+                and str(activity.get("activity", "")).strip()
+            ]
+            item.setdefault(
+                "teaching_activity",
+                "; ".join(linked) or "A confirmar pelo docente.",
+            )
+
+    migrate_pedagogical_sequence(
+        state.get("pedagogical_design"),
+        state.get("teaching_activities"),
+    )
+    if isinstance(version_map, dict):
+        for design_version in version_map.get("pedagogical_design", []):
+            migrate_pedagogical_sequence(
+                design_version,
+                state.get("teaching_activities"),
+            )
+    for snapshot in state.get("revision_snapshots", []):
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("artifacts"), dict):
+            continue
+        artifacts = snapshot["artifacts"]
+        migrate_pedagogical_sequence(
+            artifacts.get("pedagogical_design"),
+            artifacts.get("teaching_activities"),
+        )
+
     outcome_by_id = {
         str(item.get("id", "")): item
         for item in state.get("learning_outcomes", [])
@@ -358,6 +402,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         MANUAL_FIRST_MODE,
         STAGE_LABELS,
         STAGE_ORDER,
+        artifact_has_content,
         ensure_manual_artifacts,
         formulate_learning_outcomes,
     )
@@ -415,6 +460,45 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             ),
         }
 
+    sequential_flow_repositioned = (
+        previous_version < 18
+        and state.get("orchestration", {}).get("mode") != MANUAL_FIRST_MODE
+        and state.get("status") != "completed"
+        and state.get("current_stage") in {
+            "assessment_activities",
+            "pedagogical_design",
+            "alignment_matrix",
+            "resources",
+            "final_validation",
+        }
+        and artifact_has_content(state.get("curriculum_analysis"))
+        and not artifact_has_content(state.get("teaching_activities"))
+    )
+    if sequential_flow_repositioned:
+        previous_stage = str(state.get("current_stage", ""))
+        state["current_stage"] = "curriculum_analysis"
+        state["status"] = "awaiting_review"
+        state["review"] = {
+            "stage": "curriculum_analysis",
+            "label": STAGE_LABELS["curriculum_analysis"],
+            "message": (
+                "A sessão foi reposicionada para respeitar a sequência de alinhamento "
+                "construtivo. Confirme esta etapa antes de gerar as atividades de "
+                "ensino-aprendizagem."
+            ),
+        }
+        state.setdefault("audit", []).append(
+            {
+                "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "stage": "curriculum_analysis",
+                "event": "Sessão sequencial reposicionada durante a migração.",
+                "feedback": (
+                    f"Etapa anterior: {previous_stage}. As versões posteriores foram "
+                    "preservadas, mas deixaram de estar ativas."
+                ),
+            }
+        )
+
     current_stage = state.get("current_stage", STAGE_ORDER[0])
     current_index = (
         STAGE_ORDER.index(current_stage)
@@ -425,7 +509,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     existing_stage_statuses.pop("outcome_taxonomy", None)
     stage_statuses = (
         {}
-        if previous_version < 12 or removed_stage_was_current
+        if previous_version < 12
+        or removed_stage_was_current
+        or sequential_flow_repositioned
         else existing_stage_statuses
     )
     for index, stage in enumerate(STAGE_ORDER):
@@ -445,7 +531,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
 
     active_versions = state.setdefault("active_versions", {})
     active_versions.pop("outcome_taxonomy", None)
-    if previous_version < 12 or removed_stage_was_current:
+    if previous_version < 12 or removed_stage_was_current or sequential_flow_repositioned:
         for stage in STAGE_ORDER[current_index + 1 :]:
             if stage_statuses.get(stage) == "stale":
                 active_versions.pop(stage, None)

@@ -784,7 +784,6 @@ class AGIRSoloInterface:
                 "Sessão iniciada sem executar a IA. Pode editar ou abrir qualquer etapa."
             )
             self.refresh_sessions()
-            ui.notify("Sessão iniciada e guardada.", type="positive")
         except USER_ERRORS as error:
             self._show_error(error)
         finally:
@@ -987,7 +986,6 @@ class AGIRSoloInterface:
                 "Sessão retomada. As fontes incorporadas permanecem no estado guardado."
             )
             self.drawer.hide()
-            ui.notify("Sessão retomada com sucesso.", type="positive")
         except USER_ERRORS as error:
             self._show_error(error)
         finally:
@@ -1004,6 +1002,8 @@ class AGIRSoloInterface:
             f"{course.get('unit_name', 'Sessão')} · {self.state.get('ai_provider', 'OpenAI')}"
         )
         self._render_workspace(message)
+        if message:
+            ui.notify(message, type="positive", multi_line=True)
 
     def _render_workspace(self, message: str = "") -> None:
         if not self.state:
@@ -2088,7 +2088,6 @@ class AGIRSoloInterface:
                         )
                         self.show_workspace(message)
                         self.refresh_sessions()
-                        ui.notify(message, type="positive")
                     except USER_ERRORS as error:
                         self._show_error(error)
 
@@ -2107,6 +2106,9 @@ class AGIRSoloInterface:
                 ).classes("text-sm muted")
 
                 async def create_first_version() -> None:
+                    if stage == "resources":
+                        self._open_resource_generation_confirmation()
+                        return
                     await self._handle_ai_assistance(
                         stage,
                         [],
@@ -2116,7 +2118,11 @@ class AGIRSoloInterface:
                     )
 
                 ui.button(
-                    "Criar primeira versão com IA",
+                    (
+                        "Gerar recursos selecionados com IA"
+                        if stage == "resources"
+                        else "Criar primeira versão com IA"
+                    ),
                     icon="auto_fix_high",
                     on_click=create_first_version,
                 ).props("outline no-caps").classes(
@@ -2207,6 +2213,47 @@ class AGIRSoloInterface:
                     ),
                 ).props("unelevated no-caps icon-right").classes("primary-action")
 
+    def _open_resource_generation_confirmation(self) -> None:
+        selected = list((self.state or {}).get("resource_types", []))
+        selected_text = ", ".join(selected) or "nenhum recurso"
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6 gap-4"):
+            ui.label("GERAR RECURSOS COM IA").classes("eyebrow")
+            ui.label("Confirmar geração dos recursos selecionados").classes(
+                "section-title"
+            )
+            ui.label(
+                "Esta ação contacta o fornecedor de IA e pode originar várias "
+                "chamadas, uma por tipo de recurso. A apresentação também pode "
+                "originar chamadas de geração de imagens."
+            ).classes("text-sm")
+            ui.label(f"Recursos: {selected_text}.").classes(
+                "soft-surface p-3 text-sm font-medium"
+            )
+            ui.label(
+                "O conteúdo gerado continuará pendente até rever e aceitar a proposta."
+            ).classes("text-sm muted")
+
+            async def confirm() -> None:
+                dialog.close()
+                await self._handle_ai_assistance(
+                    "resources",
+                    [],
+                    "Toda a etapa",
+                    "Crie uma primeira versão completa desta etapa com base no "
+                    "contexto da unidade curricular e nos artefactos anteriores.",
+                )
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat no-caps")
+                ui.button(
+                    "Confirmar geração",
+                    icon="auto_fix_high",
+                    on_click=confirm,
+                ).props("unelevated no-caps").classes("primary-action").mark(
+                    "confirm-resource-generation"
+                )
+        dialog.open()
+
     async def _handle_ai_assistance(
         self,
         stage: str,
@@ -2252,7 +2299,6 @@ class AGIRSoloInterface:
             )
             self.show_workspace(message)
             self.refresh_sessions()
-            ui.notify(message, type="positive")
         except USER_ERRORS as error:
             self._show_error(error)
 
@@ -2544,7 +2590,6 @@ class AGIRSoloInterface:
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
-            ui.notify(message, type="positive")
         except USER_ERRORS as error:
             self._show_error(error)
         finally:
@@ -2576,7 +2621,6 @@ class AGIRSoloInterface:
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
-            ui.notify(message, type="positive", multi_line=True)
         except USER_ERRORS as error:
             self._show_error(error)
         finally:
@@ -2603,7 +2647,6 @@ class AGIRSoloInterface:
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
-            ui.notify(message, type="positive", multi_line=True)
             return True
         except USER_ERRORS as error:
             self._show_error(error)
@@ -2754,7 +2797,6 @@ class AGIRSoloInterface:
             self.manual_edit_artifact = None
             self.show_workspace(message)
             self.refresh_sessions()
-            ui.notify(message, type="positive", multi_line=True)
         except USER_ERRORS as error:
             self._show_error(error)
 

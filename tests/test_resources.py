@@ -467,12 +467,18 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertIn("Programa da Unidade Curricular", program_text)
                 self.assertIn("Taxonomia selecionada", program_text)
                 self.assertIn("Matriz de alinhamento", program_text)
+                self.assertIn("Tarefas e critérios de avaliação", program_text)
                 self.assertIn("Teaching for Quality Learning", program_text)
                 self.assertNotIn("Learning outcomes", program_text)
                 alignment_header = package.read("matriz_alinhamento.csv").decode(
                     "utf-8-sig"
                 ).splitlines()[0]
                 self.assertIn("Conteúdos", alignment_header)
+                self.assertIn(
+                    "Atividades de ensino-aprendizagem",
+                    alignment_header,
+                )
+                self.assertNotIn("Atividades formativas", alignment_header)
                 self.assertNotIn("Objetivos", alignment_header)
                 presentation = Presentation(BytesIO(package.read(presentation_name)))
                 self.assertGreaterEqual(len(presentation.slides), 3)
@@ -525,6 +531,10 @@ class ResourceGenerationTests(unittest.TestCase):
                             program = package.read(program_name).decode("utf-8")
                             normalized_program = program.replace("\r\n", "\n")
                             self.assertIn(r"\begin{document}", program)
+                            self.assertIn(
+                                r"\section{Tarefas e critérios de avaliação}",
+                                program,
+                            )
                             self.assertIn(r"\section{Matriz de alinhamento}", program)
                             self.assertIn(
                                 r"\clearpage" "\n" r"\section{Matriz de alinhamento}",

@@ -105,6 +105,9 @@ class InitialAssistanceTests(unittest.TestCase):
         self.assertEqual(result["unit_name"], "Introdução às Pescas")
         self.assertEqual(calls[0]["model"], "gpt-4o-mini")
         self.assertNotIn("reasoning", calls[0])
+        proposal_schema = calls[0]["text"]["format"]["schema"]
+        self.assertNotIn("audience", proposal_schema["properties"])
+        self.assertNotIn("audience", proposal_schema["required"])
 
     def test_requested_proposal_preserves_the_exclusive_taxonomy(self) -> None:
         proposal = {
@@ -208,7 +211,7 @@ class InitialAssistanceTests(unittest.TestCase):
             result = OpenAIInitialFormAssistant().propose(original)
 
         self.assertEqual(result["unit_name"], original["unit_name"])
-        self.assertEqual(result["audience"], original["audience"])
+        self.assertNotIn("audience", result)
         self.assertNotIn("duration_hours", result)
         self.assertEqual(result["source_text"], proposal["source_text"])
 

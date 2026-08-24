@@ -257,14 +257,22 @@ def render_artifact(
 
     if stage == "pedagogical_design":
         sequence_rows = [
-            [item["outcome_id"], item["focus"], item["assessment"]]
+            [
+                item["outcome_id"],
+                item["focus"],
+                item.get("teaching_activity", "—"),
+                item["assessment"],
+            ]
             for item in artifact["sequence"]
         ]
         return (
             header
             + f"**Estratégia:** {artifact['strategy']}\n\n"
             + "## Sequência pedagógica\n\n"
-            + _table(["Resultado", "Foco", "Avaliação"], sequence_rows)
+            + _table(
+                ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Avaliação"],
+                sequence_rows,
+            )
         )
 
     if stage == "teaching_activities":

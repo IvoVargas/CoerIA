@@ -228,6 +228,78 @@ def test_ai_assistance_requires_an_explicit_acceptance() -> None:
     assert accepted["generation_metadata"]["learning_outcomes"][-1]["human_approved"]
 
 
+def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -> None:
+    state = create_session(_course())
+    outcomes = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar os elementos de um algoritmo.",
+        },
+        {
+            "id": "RA3",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Testes",
+            "taxonomy_level": "Relacional",
+            "action_verb": "Analisar",
+            "statement": "Analisar os resultados de testes.",
+        },
+    ]
+    state["learning_outcomes"] = deepcopy(outcomes)
+    state["curriculum_analysis"]["contents"] = [
+        {"id": "C1", "title": "Testes", "description": "Testes", "outcome_ids": ["RA3"]}
+    ]
+    state["teaching_activities"] = [
+        {"id": "EA1", "outcome_ids": ["RA3"], "activity": "Analisar casos."}
+    ]
+    state["assessment_activities"] = [
+        {"id": "AV1", "outcome_ids": ["RA3"], "task": "Resolver um caso."}
+    ]
+    state["pedagogical_design"] = {
+        "strategy": "Prática orientada.",
+        "sequence": [{"outcome_id": "RA3", "focus": "Testes"}],
+    }
+    state["alignment_matrix"] = [{"outcome_id": "RA3", "content_ids": ["C1"]}]
+    state["resources"]["test"]["questions"] = [
+        {"id": "Q1", "outcome_ids": ["RA3"], "question": "Analise o caso."}
+    ]
+
+    class CompactOutcomeProposalAgent:
+        def generate(self, stage: str, _state: dict) -> GenerationResult:
+            assert stage == "learning_outcomes"
+            compacted = deepcopy(outcomes)
+            compacted[1]["id"] = "RA2"
+            return GenerationResult(
+                artifact=compacted,
+                metadata={"provider": "Teste", "model": "compact-fake"},
+            )
+
+    proposed = request_ai_assistance(
+        state,
+        "learning_outcomes",
+        [],
+        "Toda a etapa",
+        "Compactar os identificadores.",
+        agent=CompactOutcomeProposalAgent(),
+    )
+    accepted = decide_ai_proposal(
+        proposed,
+        proposed["ai_proposals"][-1]["id"],
+        True,
+    )
+
+    assert [item["id"] for item in accepted["learning_outcomes"]] == ["RA1", "RA2"]
+    assert accepted["curriculum_analysis"]["contents"][0]["outcome_ids"] == ["RA2"]
+    assert accepted["teaching_activities"][0]["outcome_ids"] == ["RA2"]
+    assert accepted["assessment_activities"][0]["outcome_ids"] == ["RA2"]
+    assert accepted["pedagogical_design"]["sequence"][0]["outcome_id"] == "RA2"
+    assert accepted["alignment_matrix"][0]["outcome_id"] == "RA2"
+    assert accepted["resources"]["test"]["questions"][0]["outcome_ids"] == ["RA2"]
+
+
 def test_localized_assistance_generates_only_the_selected_fragment() -> None:
     state = create_session(_course())
     state["learning_outcomes"] = [

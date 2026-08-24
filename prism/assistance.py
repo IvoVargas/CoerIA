@@ -20,7 +20,6 @@ from .providers import (
 
 PROPOSAL_FIELDS = (
     "unit_name",
-    "audience",
     "source_text",
     "program_name",
     "program_type",
@@ -199,7 +198,6 @@ class OpenAIInitialFormAssistant:
             "additionalProperties": False,
             "properties": {
                 "unit_name": {"type": "string"},
-                "audience": {"type": "string"},
                 "source_text": {"type": "string"},
                 "program_name": {"type": "string"},
                 "program_type": {"type": "string"},
@@ -215,7 +213,6 @@ class OpenAIInitialFormAssistant:
             },
             "required": [
                 "unit_name",
-                "audience",
                 "source_text",
                 "program_name",
                 "program_type",

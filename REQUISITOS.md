@@ -66,7 +66,8 @@ etapas navegáveis e editáveis:
    e registo dos objetivos gerais em texto livre;
 3. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 4. autoria de tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
-5. organização da sequência pedagógica;
+5. organização da sequência pedagógica, articulando em cada resultado o foco,
+   a atividade de ensino-aprendizagem e a tarefa de avaliação;
 6. matriz de alinhamento;
 7. recursos educativos selecionados;
 8. verificação global determinística da estrutura e do alinhamento.
@@ -134,6 +135,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   IA criar uma primeira proposta completa. O âmbito é toda a etapa e a instrução
   inicial é predefinida; a proposta só se torna a primeira versão depois da
   revisão e aplicação explícitas pelo docente.
+- Na etapa de recursos, identificar inequivocamente que essa ação gera os tipos
+  de recurso selecionados, pode efetuar várias chamadas ao fornecedor e exige
+  confirmação explícita antes de iniciar, incluindo o aviso sobre eventual
+  geração de imagens para a apresentação.
 - Permitir pedir assistência de IA apenas depois de o docente escolher o âmbito
   exato — etapa, tabela, linha ou campo — e escrever uma instrução.
 - Excluir os identificadores técnicos próprios de cada linha dos âmbitos ao nível
