@@ -704,17 +704,17 @@ def ensure_manual_artifacts(state: PrismState) -> PrismState:
     return state
 
 
-def _artifact_has_content(artifact: Any, *, root: bool = True) -> bool:
+def artifact_has_content(artifact: Any, *, root: bool = True) -> bool:
     if isinstance(artifact, str):
         return bool(artifact.strip())
     if isinstance(artifact, (int, float)):
         return artifact != 0
     if isinstance(artifact, list):
-        return any(_artifact_has_content(item, root=False) for item in artifact)
+        return any(artifact_has_content(item, root=False) for item in artifact)
     if isinstance(artifact, dict):
         ignored = {"quality", "selected_types", "feedback_considered"} if root else set()
         return any(
-            key not in ignored and _artifact_has_content(value, root=False)
+            key not in ignored and artifact_has_content(value, root=False)
             for key, value in artifact.items()
         )
     return artifact not in {None, False}
@@ -825,7 +825,7 @@ def save_manual_draft(
     statuses[target_stage] = "draft"
     for stage in AUTHORING_STAGES[target_index + 1 :]:
         statuses[stage] = (
-            "needs_review" if _artifact_has_content(updated.get(stage)) else "empty"
+            "needs_review" if artifact_has_content(updated.get(stage)) else "empty"
         )
     statuses["final_validation"] = "pending"
     updated["stage_statuses"] = statuses
@@ -879,7 +879,7 @@ def version_restore_impact(
     affected_stages = [
         downstream
         for downstream in AUTHORING_STAGES[target_index + 1 :]
-        if _artifact_has_content(state.get(downstream))
+        if artifact_has_content(state.get(downstream))
     ]
     return {
         "stage": stage,
@@ -926,13 +926,13 @@ def restore_stage_version(
     for downstream in AUTHORING_STAGES[target_index + 1 :]:
         statuses[downstream] = (
             "needs_review"
-            if _artifact_has_content(restored.get(downstream))
+            if artifact_has_content(restored.get(downstream))
             else "empty"
         )
     if (
         stage == "resources"
         and previous_resource_types != restored.get("resource_types", [])
-        and _artifact_has_content(restored.get("alignment_matrix"))
+        and artifact_has_content(restored.get("alignment_matrix"))
     ):
         statuses["alignment_matrix"] = "needs_review"
     statuses["final_validation"] = "pending"
@@ -1090,10 +1090,10 @@ def update_manual_resource_settings(
     resources["selected_types"] = list(selected)
     updated["resources"] = attach_quality_report(updated, resources)
     statuses = dict(updated.get("stage_statuses", {}))
-    if _artifact_has_content(updated.get("alignment_matrix")):
+    if artifact_has_content(updated.get("alignment_matrix")):
         statuses["alignment_matrix"] = "draft"
     statuses["resources"] = (
-        "needs_review" if _artifact_has_content(resources) else "empty"
+        "needs_review" if artifact_has_content(resources) else "empty"
     )
     statuses["final_validation"] = "pending"
     updated["stage_statuses"] = statuses
@@ -1961,7 +1961,7 @@ def revision_impact(state: PrismState, target_stage: str) -> dict[str, Any]:
     generated_downstream = [
         stage
         for stage in STAGE_ORDER[target_index + 1 :]
-        if stage in state and _artifact_has_content(state.get(stage))
+        if stage in state and artifact_has_content(state.get(stage))
     ]
     return {
         "target_stage": target_stage,
@@ -2351,7 +2351,7 @@ def review_current_stage(
             return refreshed
         current_index = STAGE_ORDER.index(current_stage)
         state.setdefault("stage_statuses", {})[current_stage] = (
-            "draft" if _artifact_has_content(state.get(current_stage)) else "empty"
+            "draft" if artifact_has_content(state.get(current_stage)) else "empty"
         )
         return navigate_to_stage(state, STAGE_ORDER[current_index + 1])
     if state.get("status") == "completed" and decision == "approve":

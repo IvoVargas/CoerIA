@@ -339,7 +339,7 @@ def _paired_table_rows(
     before_rows: list[Any],
     after_rows: list[Any],
 ) -> tuple[list[tuple[int, int]], list[int], list[int]]:
-    """Alinha linhas estÃ¡veis sem permitir que a IA substitua IDs existentes."""
+    """Alinha linhas estáveis sem permitir que a IA substitua IDs existentes."""
 
     identity_keys = ("id", "outcome_id", "order", "title", "heading", "criterion")
     pairs: list[tuple[int, int]] = []

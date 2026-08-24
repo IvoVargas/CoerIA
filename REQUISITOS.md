@@ -126,6 +126,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir pedir uma verificação por IA em qualquer etapa de autoria. O parecer
   deve ser guardado, não deve alterar o artefacto e nunca deve bloquear a
   navegação.
+- Quando uma etapa está completamente vazia, apresentar uma ação própria para a
+  IA criar uma primeira proposta completa. O âmbito é toda a etapa e a instrução
+  inicial é predefinida; a proposta só se torna a primeira versão depois da
+  revisão e aplicação explícitas pelo docente.
 - Permitir pedir assistência de IA apenas depois de o docente escolher o âmbito
   exato — etapa, tabela, linha ou campo — e escrever uma instrução.
 - Excluir os identificadores técnicos próprios de cada linha dos âmbitos ao nível
@@ -262,6 +266,8 @@ ficheiros após a exportação.
 - Registar a versão ativa de cada etapa e as versões dos artefactos usados como
   dependências de cada nova geração.
 - Identificar na interface versões ativas e artefactos desatualizados.
+- Manter o card de versões e rastreabilidade recolhido por defeito, sem remover o
+  acesso ao histórico, ao restauro ou às decisões registadas.
 - Guardar uma fotografia coerente dos artefactos e versões ativas antes de cada
   revisão em cascata.
 

@@ -111,7 +111,11 @@ ocorrer antes de artefactos já preenchidos, esses artefactos são preservados e
 assinalados como **Rever após alterações anteriores**.
 
 **Verificar esta etapa com IA** guarda um parecer facultativo que nunca impede
-avançar. **Pedir proposta à IA** exige a escolha prévia do âmbito e uma instrução;
+avançar. Quando o artefacto está completamente vazio, **Criar primeira versão
+com IA** pede uma proposta para toda a etapa através de uma instrução inicial
+predefinida; o conteúdo só se torna a primeira versão depois da revisão do
+docente. **Pedir proposta à IA** continua disponível para pedidos dirigidos e
+exige a escolha prévia do âmbito e uma instrução;
 para uma célula, linha ou tabela, o fornecedor recebe um esquema de resposta
 limitado exatamente a esse fragmento, sem gerar primeiro a etapa inteira. O
 seletor não oferece os identificadores técnicos próprios das linhas como campos
@@ -124,8 +128,10 @@ decisões numa única nova versão; rejeitar todas conserva o rascunho sem alter
 Numa sessão concluída, a barra de etapas fica em modo de consulta. A reabertura
 exige o botão próprio, a seleção da etapa, um motivo e uma confirmação explícita.
 
-O separador **Versões** permite consultar e restaurar qualquer versão não ativa
-das sete etapas de autoria. A ação de restauro surge à direita do seletor de
+O card **Versões e rastreabilidade** permanece recolhido por defeito para reduzir
+a carga visual da área de trabalho. Depois de aberto, o separador **Versões**
+permite consultar e restaurar qualquer versão não ativa das sete etapas de
+autoria. A ação de restauro surge à direita do seletor de
 etapa e versão. O restauro exige apenas confirmação e volta a tornar
 ativa a versão escolhida, sem criar uma nova versão nem apagar as restantes. Os
 passos posteriores preenchidos ficam assinalados para revisão e a

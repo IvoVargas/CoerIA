@@ -73,6 +73,7 @@ from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
 from prism.workflow import (
     STAGE_LABELS,
     STAGE_ORDER,
+    artifact_has_content,
     is_manual_first,
     revision_targets_for_state,
 )
@@ -2016,6 +2017,8 @@ class AGIRSoloInterface:
         state: dict[str, Any],
         stage: str,
     ) -> None:
+        proposal = self._pending_ai_proposal(state, stage)
+        stage_is_empty = not artifact_has_content(state.get(stage))
         with ui.card().classes("surface decision-card w-full").mark(
             "teacher-control"
         ):
@@ -2093,6 +2096,31 @@ class AGIRSoloInterface:
                     on_click=save_resource_settings,
                 ).props("outline no-caps").classes("secondary-action w-full")
 
+            if stage_is_empty and proposal is None:
+                ui.separator().classes("my-3")
+                ui.label("PRIMEIRA VERSÃO").classes("eyebrow")
+                ui.label(
+                    "Esta etapa ainda está vazia. A IA pode preparar uma primeira "
+                    "proposta completa, que só se torna uma versão depois da sua revisão."
+                ).classes("text-sm muted")
+
+                async def create_first_version() -> None:
+                    await self._handle_ai_assistance(
+                        stage,
+                        [],
+                        "Toda a etapa",
+                        "Crie uma primeira versão completa desta etapa com base no "
+                        "contexto da unidade curricular e nos artefactos anteriores.",
+                    )
+
+                ui.button(
+                    "Criar primeira versão com IA",
+                    icon="auto_fix_high",
+                    on_click=create_first_version,
+                ).props("outline no-caps").classes(
+                    "secondary-action w-full mt-2"
+                ).mark("create-first-ai-version")
+
             ui.separator().classes("my-3")
             ui.label("ASSISTÊNCIA LOCALIZADA DA IA").classes("eyebrow")
             ui.label(
@@ -2129,7 +2157,6 @@ class AGIRSoloInterface:
                 on_click=ask_for_proposal,
             ).props("outline no-caps").classes("secondary-action w-full")
 
-            proposal = self._pending_ai_proposal(state, stage)
             if proposal is not None:
                 ui.separator().classes("my-3")
                 ui.label("PROPOSTA PENDENTE").classes("eyebrow")
@@ -2583,81 +2610,87 @@ class AGIRSoloInterface:
             self._hide_busy()
 
     def _render_history_and_audit(self, state: dict[str, Any]) -> None:
-        with ui.card().classes("surface w-full p-3 md:p-5"):
-            with ui.tabs().props("no-caps align=left").classes("w-full") as tabs:
-                history_tab = ui.tab("history", label="Versões", icon="history")
-                audit_tab = ui.tab("audit", label="Rastreabilidade", icon="route")
-            with ui.tab_panels(tabs, value=history_tab).classes("w-full"):
-                with ui.tab_panel(history_tab).classes("px-0"):
-                    choices = history_choices(state)
-                    options = {value: label for label, value in choices}
-                    selected = current_history_value(state)
-                    restore_button = None
-                    with ui.row().classes("w-full items-end gap-3 flex-wrap"):
-                        history_select = ui.select(
-                            options,
-                            value=selected,
-                            label="Etapa e versão",
-                        ).classes("full-control flex-1 min-w-64").mark(
-                            "history-version-select"
-                        )
-                        if is_manual_first(state) and choices:
-                            restore_button = ui.button(
-                                "Restaurar versão selecionada",
-                                icon="restore",
-                                on_click=lambda: self._open_history_restore_dialog(
-                                    str(history_select.value or "")
-                                ),
-                            ).props("outline no-caps").classes(
-                                "secondary-action"
-                            ).mark("restore-history-version")
-                    if restore_button is not None:
-                        ui.label(
-                            "Selecione uma versão não ativa de uma etapa de autoria para "
-                            "a voltar a tornar ativa."
-                        ).classes("text-xs muted mt-3")
-                    history_markdown = ui.markdown(
-                        render_history_artifact(selected, state),
-                        extras=["tables"],
-                    ).classes("artifact-markdown mt-4 overflow-x-auto")
-
-                    def update_history(event: Any) -> None:
-                        history_markdown.set_content(
-                            render_history_artifact(event.value, state)
-                        )
-                        if restore_button is None:
-                            return
-                        try:
-                            impact = self.service.version_restore_impact(
-                                state, str(event.value or "")
+        with ui.card().classes("surface w-full p-0"):
+            with ui.expansion(
+                "Versões e rastreabilidade",
+                caption="Consultar histórico, restauros e decisões registadas",
+                icon="history",
+                value=False,
+            ).props("dense").classes("w-full").mark("history-audit-expansion"):
+                with ui.tabs().props("no-caps align=left").classes("w-full") as tabs:
+                    history_tab = ui.tab("history", label="Versões", icon="history")
+                    audit_tab = ui.tab("audit", label="Rastreabilidade", icon="route")
+                with ui.tab_panels(tabs, value=history_tab).classes("w-full"):
+                    with ui.tab_panel(history_tab).classes("px-0"):
+                        choices = history_choices(state)
+                        options = {value: label for label, value in choices}
+                        selected = current_history_value(state)
+                        restore_button = None
+                        with ui.row().classes("w-full items-end gap-3 flex-wrap"):
+                            history_select = ui.select(
+                                options,
+                                value=selected,
+                                label="Etapa e versão",
+                            ).classes("full-control flex-1 min-w-64").mark(
+                                "history-version-select"
                             )
-                            enabled = not impact["is_active"]
-                        except ValueError:
-                            enabled = False
-                        restore_button.set_enabled(enabled)
+                            if is_manual_first(state) and choices:
+                                restore_button = ui.button(
+                                    "Restaurar versão selecionada",
+                                    icon="restore",
+                                    on_click=lambda: self._open_history_restore_dialog(
+                                        str(history_select.value or "")
+                                    ),
+                                ).props("outline no-caps").classes(
+                                    "secondary-action"
+                                ).mark("restore-history-version")
+                        if restore_button is not None:
+                            ui.label(
+                                "Selecione uma versão não ativa de uma etapa de autoria para "
+                                "a voltar a tornar ativa."
+                            ).classes("text-xs muted mt-3")
+                        history_markdown = ui.markdown(
+                            render_history_artifact(selected, state),
+                            extras=["tables"],
+                        ).classes("artifact-markdown mt-4 overflow-x-auto")
 
-                    history_select.on_value_change(update_history)
-                    if restore_button is not None:
-                        try:
-                            initial_impact = self.service.version_restore_impact(
-                                state, str(selected or "")
+                        def update_history(event: Any) -> None:
+                            history_markdown.set_content(
+                                render_history_artifact(event.value, state)
                             )
-                            initial_enabled = not initial_impact["is_active"]
-                        except ValueError:
-                            initial_enabled = False
-                        restore_button.set_enabled(initial_enabled)
-                with ui.tab_panel(audit_tab).classes("px-0"):
-                    columns = [
-                        {"name": "timestamp", "label": "Data", "field": "timestamp", "align": "left"},
-                        {"name": "stage", "label": "Etapa", "field": "stage", "align": "left"},
-                        {"name": "event", "label": "Evento", "field": "event", "align": "left"},
-                        {"name": "feedback", "label": "Feedback", "field": "feedback", "align": "left"},
-                    ]
-                    ui.table(
-                        columns=columns,
-                        rows=audit_rows(state),
-                        pagination={"rowsPerPage": 10},
-                    ).props("flat bordered wrap-cells").classes("w-full")
+                            if restore_button is None:
+                                return
+                            try:
+                                impact = self.service.version_restore_impact(
+                                    state, str(event.value or "")
+                                )
+                                enabled = not impact["is_active"]
+                            except ValueError:
+                                enabled = False
+                            restore_button.set_enabled(enabled)
+
+                        history_select.on_value_change(update_history)
+                        if restore_button is not None:
+                            try:
+                                initial_impact = self.service.version_restore_impact(
+                                    state, str(selected or "")
+                                )
+                                initial_enabled = not initial_impact["is_active"]
+                            except ValueError:
+                                initial_enabled = False
+                            restore_button.set_enabled(initial_enabled)
+                    with ui.tab_panel(audit_tab).classes("px-0"):
+                        columns = [
+                            {"name": "timestamp", "label": "Data", "field": "timestamp", "align": "left"},
+                            {"name": "stage", "label": "Etapa", "field": "stage", "align": "left"},
+                            {"name": "event", "label": "Evento", "field": "event", "align": "left"},
+                            {"name": "feedback", "label": "Feedback", "field": "feedback", "align": "left"},
+                        ]
+                        ui.table(
+                            columns=columns,
+                            rows=audit_rows(state),
+                            pagination={"rowsPerPage": 10},
+                        ).props("flat bordered wrap-cells").classes("w-full")
 
     def _open_history_restore_dialog(self, selected_version: str) -> None:
         try:

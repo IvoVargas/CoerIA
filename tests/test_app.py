@@ -1,7 +1,7 @@
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from nicegui import ui
@@ -316,6 +316,8 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
 
     await user.should_see("Autoria manual com IA facultativa")
     await user.should_see("Continuar sem executar a IA")
+    await user.should_see("Criar primeira versão com IA")
+    await user.should_see("Pedir proposta à IA")
     await user.should_see("Conteúdos e objetivos curriculares")
     user.find("Editar campos e tabelas").click()
     await user.should_see("EDIÇÃO NA TABELA ATUAL")
@@ -360,6 +362,11 @@ async def test_manual_history_offers_explicit_version_restore(
 
     await user.open("/_test_manual_history_restore")
 
+    expansion = next(
+        iter(user.find(marker="history-audit-expansion").elements)
+    )
+    assert expansion.value is False
+    user.find(marker="history-audit-expansion").click()
     await user.should_see("Restaurar versão selecionada")
     await user.should_see("voltar a tornar ativa")
     history_select = next(
@@ -369,6 +376,78 @@ async def test_manual_history_offers_explicit_version_restore(
         iter(user.find(marker="restore-history-version").elements)
     )
     assert history_select.parent_slot.parent.id == restore_button.parent_slot.parent.id
+
+
+@pytest.mark.asyncio
+async def test_first_ai_version_action_is_hidden_after_content_exists(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    state["learning_outcomes"] = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar os elementos de um algoritmo.",
+        }
+    ]
+
+    @ui.page("/_test_first_ai_version_with_content")
+    def first_ai_version_with_content_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_first_ai_version_with_content")
+
+    await user.should_not_see("Criar primeira versão com IA")
+    await user.should_see("Pedir proposta à IA")
+
+
+@pytest.mark.asyncio
+async def test_first_ai_version_action_requests_the_complete_stage(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    handlers: list[AsyncMock] = []
+
+    @ui.page("/_test_first_ai_version_action")
+    def first_ai_version_action_page():
+        interface = app.AGIRSoloInterface()
+
+        async def record_request(*_args, **_kwargs) -> None:
+            ui.notify("Pedido da primeira versão registado.")
+
+        handler = AsyncMock(side_effect=record_request)
+        interface._handle_ai_assistance = handler
+        interface.state = state
+        interface.show_workspace()
+        handlers.append(handler)
+
+    await user.open("/_test_first_ai_version_action")
+
+    user.find("Criar primeira versão com IA").click()
+    await user.should_see("Pedido da primeira versão registado.")
+
+    handlers[-1].assert_awaited_once_with(
+        "learning_outcomes",
+        [],
+        "Toda a etapa",
+        "Crie uma primeira versão completa desta etapa com base no "
+        "contexto da unidade curricular e nos artefactos anteriores.",
+    )
 
 
 @pytest.mark.asyncio
