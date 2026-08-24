@@ -64,9 +64,9 @@ etapas navegáveis e editáveis:
    verbo de ação principal;
 2. estruturação de conteúdos associados aos resultados formulados
    e registo dos objetivos gerais em texto livre;
-3. autoria de avaliações formativas ou sumativas;
-4. design pedagógico por *backward design*;
-5. autoria de atividades formativas com prática, acompanhamento e feedback;
+3. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
+4. autoria de tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
+5. organização da sequência pedagógica;
 6. matriz de alinhamento;
 7. recursos educativos selecionados;
 8. verificação global determinística da estrutura e do alinhamento.
@@ -104,7 +104,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   `SOLO 2`–`SOLO 5` ou `Bloom 1`–`Bloom 6`.
 - Não estabelecer uma equivalência rígida entre níveis SOLO e Bloom.
 - Permitir relações muitos-para-muitos entre conteúdos, resultados, avaliações
-  e atividades formativas.
+  e atividades de ensino-aprendizagem.
 - Classificar cada avaliação exclusivamente como `Formativa` ou `Sumativa`;
   é válido existir apenas avaliação sumativa.
 
@@ -180,7 +180,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Verificar a finalidade formativa ou sumativa de cada avaliação.
 - Normalizar as ligações de cada avaliação, garantindo que `outcome_id` coincide
   com o primeiro elemento não vazio de `outcome_ids`.
-- Verificar prática, acompanhamento e feedback nas atividades formativas.
+- Verificar prática, acompanhamento e feedback nas atividades de ensino-aprendizagem.
 - Verificar a matriz de alinhamento relativamente aos artefactos produzidos.
 - Derivar os campos factuais e o estado de cada linha da matriz a partir das
   evidências aprovadas, reservando à IA apenas a fundamentação pedagógica.
@@ -209,7 +209,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 
 - Permitir avaliações formativas e sumativas, mas nunca uma finalidade mista.
 - Não obrigar à existência de avaliação formativa.
-- Estruturar atividades formativas com prática, acompanhamento e estratégia de feedback.
+- Estruturar atividades de ensino-aprendizagem com prática, acompanhamento e estratégia de feedback.
 - Apresentar a seleção dos tipos de recursos na matriz de alinhamento, antes da
   sua aprovação, sem repetir essa decisão no formulário inicial.
 
@@ -395,7 +395,7 @@ ficheiros após a exportação.
   repetir a verificação global antes de nova conclusão. A barra de etapas é só de
   leitura nesse estado e a reabertura exige uma ação e confirmação próprias.
 - Todos os resultados têm classificação na taxonomia exclusiva escolhida, avaliação
-  e atividade formativa.
+  e atividade de ensino-aprendizagem.
 - Cada resultado contém um único verbo de ação principal; infinitivos subordinados em complementos são permitidos, mas ações principais coordenadas são rejeitadas.
 - Cada avaliação é Formativa ou Sumativa, nunca Mista.
 - Todos os conteúdos estão ligados a pelo menos um resultado; todas as

@@ -205,7 +205,7 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
     checks.append(
         _check(
             "formative_activity_structure",
-            "Estrutura das atividades formativas",
+            "Estrutura das atividades de ensino-aprendizagem",
             "error" if incomplete_formative_activities else "pass",
             (
                 "Estrutura incompleta em: "

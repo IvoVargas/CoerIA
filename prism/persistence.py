@@ -27,9 +27,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 16:
+    if previous_version < 17:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 16
+    state["schema_version"] = 17
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -280,21 +280,29 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         item.setdefault("work_type", "Não especificado")
         item.setdefault("assessment_purpose", "Sumativa")
 
-    for index, item in enumerate(state.get("teaching_activities", [])):
-        outcome_ids = item.setdefault("outcome_ids", [item.get("outcome_id", "")])
-        item.setdefault("id", f"EA{index + 1}")
-        item.setdefault(
-            "assessment_ids",
-            [
-                assessment.get("id", "")
-                for assessment in assessments
-                if set(outcome_ids) & set(assessment.get("outcome_ids", []))
-            ],
-        )
-        item.setdefault("learning_context", "Não especificado")
-        item.setdefault("practice", item.get("activity", "Prática orientada."))
-        item.setdefault("support", "Acompanhamento do docente.")
-        item.setdefault("feedback_strategy", "Feedback formativo.")
+    def migrate_teaching_rows(activities: Any) -> None:
+        if not isinstance(activities, list):
+            return
+        for index, item in enumerate(activities):
+            if not isinstance(item, dict):
+                continue
+            item.setdefault("outcome_ids", [item.get("outcome_id", "")])
+            item.setdefault("id", f"EA{index + 1}")
+            # As atividades alinham-se diretamente com os resultados. A ligação
+            # a avaliações era redundante e impedia que esta etapa as precedesse.
+            item.pop("assessment_ids", None)
+            item.setdefault("learning_context", "Não especificado")
+            item.setdefault("practice", item.get("activity", "Prática orientada."))
+            item.setdefault("support", "Acompanhamento do docente.")
+            item.setdefault("feedback_strategy", "Feedback formativo.")
+
+    migrate_teaching_rows(state.get("teaching_activities"))
+    if isinstance(version_map, dict):
+        for teaching_version in version_map.get("teaching_activities", []):
+            migrate_teaching_rows(teaching_version)
+    for snapshot in state.get("revision_snapshots", []):
+        if isinstance(snapshot, dict) and isinstance(snapshot.get("artifacts"), dict):
+            migrate_teaching_rows(snapshot["artifacts"].get("teaching_activities"))
 
     outcome_by_id = {
         str(item.get("id", "")): item
@@ -348,6 +356,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     versions = state.setdefault("versions", {})
     from .workflow import (
         MANUAL_FIRST_MODE,
+        STAGE_LABELS,
         STAGE_ORDER,
         ensure_manual_artifacts,
         formulate_learning_outcomes,
@@ -447,6 +456,24 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             for dependency in dependencies:
                 if isinstance(dependency, dict):
                     dependency.pop("outcome_taxonomy", None)
+    if previous_version < 17:
+        allowed_dependencies = {
+            stage: set(STAGE_ORDER[:index])
+            for index, stage in enumerate(STAGE_ORDER)
+        }
+        for stage, dependencies in version_dependencies.items():
+            if not isinstance(dependencies, list):
+                continue
+            allowed = allowed_dependencies.get(stage, set())
+            for dependency in dependencies:
+                if not isinstance(dependency, dict):
+                    continue
+                for dependency_stage in list(dependency):
+                    if dependency_stage not in allowed:
+                        dependency.pop(dependency_stage, None)
+        review = state.get("review")
+        if isinstance(review, dict) and review.get("stage") in STAGE_LABELS:
+            review["label"] = STAGE_LABELS[str(review["stage"])]
     for stage in STAGE_ORDER:
         stage_versions = versions.get(stage, [])
         if (

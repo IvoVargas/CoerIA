@@ -21,9 +21,9 @@ determinística, não de uma decisão declarada pelo modelo.
 
 1. resultados de aprendizagem com nível SOLO ou Bloom e um único verbo de ação principal;
 2. conteúdos com IDs associados aos resultados formulados e objetivos gerais em texto livre;
-3. avaliação formativa ou sumativa;
-4. design pedagógico por *backward design*;
-5. atividades formativas com prática, acompanhamento e feedback;
+3. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
+4. tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
+5. organização da sequência pedagógica;
 6. matriz de alinhamento;
 7. recursos educativos e validação automática;
 8. validação final da estrutura e do alinhamento.
@@ -34,6 +34,8 @@ constituem a primeira decisão pedagógica formal. Os conteúdos, documentos e
 objetivos introduzidos pelo docente continuam a delimitar o contexto inicial.
 Depois de os resultados serem formulados, os conteúdos podem ser estruturados e
 associados a esses resultados; os objetivos gerais permanecem como texto livre.
+As atividades de ensino-aprendizagem são então definidas antes das tarefas de
+avaliação, que recolhem as evidências e aplicam os critérios correspondentes.
 Esta sequência é uma orientação pedagógica, não uma barreira técnica: todas as
 etapas permanecem navegáveis e editáveis desde o início.
 

@@ -96,9 +96,9 @@ class PrismState(TypedDict, total=False):
 STAGE_LABELS = {
     "curriculum_analysis": "Conteúdos e objetivos curriculares",
     "learning_outcomes": "Formulação dos resultados de aprendizagem",
-    "assessment_activities": "Avaliação formativa e sumativa",
-    "pedagogical_design": "Design pedagógico",
-    "teaching_activities": "Atividades formativas de aprendizagem",
+    "teaching_activities": "Atividades de ensino-aprendizagem",
+    "assessment_activities": "Tarefas e critérios de avaliação",
+    "pedagogical_design": "Organização da sequência pedagógica",
     "alignment_matrix": "Matriz de alinhamento",
     "resources": "Recursos educativos",
     "final_validation": "Validação final da estrutura e do alinhamento",
@@ -107,9 +107,9 @@ STAGE_LABELS = {
 STAGE_ORDER = (
     "learning_outcomes",
     "curriculum_analysis",
+    "teaching_activities",
     "assessment_activities",
     "pedagogical_design",
-    "teaching_activities",
     "alignment_matrix",
     "resources",
     "final_validation",
@@ -134,7 +134,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -366,11 +366,6 @@ def propose_teaching_activities(state: PrismState) -> dict[str, Any]:
             "id": f"EA{index + 1}",
             "outcome_id": outcome["id"],
             "outcome_ids": [outcome["id"]],
-            "assessment_ids": [
-                item["id"]
-                for item in state["assessment_activities"]
-                if outcome["id"] in item.get("outcome_ids", [item.get("outcome_id")])
-            ],
             "learning_context": LEARNING_CONTEXTS[index % len(LEARNING_CONTEXTS)],
             "activity": f"Exploração orientada e discussão sobre {outcome['statement'].split(' de ', 1)[-1]}",
             "method": "Aprendizagem ativa com feedback formativo.",
@@ -385,7 +380,7 @@ def propose_teaching_activities(state: PrismState) -> dict[str, Any]:
         **_audit_update(
             state,
             "teaching_activities",
-            "Atividades formativas de aprendizagem propostas.",
+            "Atividades de ensino-aprendizagem propostas.",
             feedback,
         ),
     }
@@ -439,7 +434,7 @@ def validate_alignment(state: PrismState) -> dict[str, Any]:
                 else "Requer revisão"
             ),
             "rationale": (
-                "Existem uma avaliação e uma atividade formativa de aprendizagem "
+                "Existem uma tarefa de avaliação e uma atividade de ensino-aprendizagem "
                 "associadas ao resultado."
                 if assessments_by_outcome[outcome["id"]] and teaching_by_outcome[outcome["id"]]
                 else "Falta pelo menos uma evidência necessária ao alinhamento."
@@ -1465,9 +1460,9 @@ DETERMINISTIC_GENERATORS = {
 GENERATION_EVENTS = {
     "curriculum_analysis": "Conteúdos e objetivos curriculares estruturados.",
     "learning_outcomes": "Resultados de aprendizagem formulados.",
-    "assessment_activities": "Avaliações formativas ou sumativas propostas.",
-    "pedagogical_design": "Estrutura pedagógica criada.",
-    "teaching_activities": "Atividades formativas de aprendizagem propostas.",
+    "teaching_activities": "Atividades de ensino-aprendizagem propostas.",
+    "assessment_activities": "Tarefas e critérios de avaliação propostos.",
+    "pedagogical_design": "Sequência pedagógica organizada.",
     "alignment_matrix": "Matriz de alinhamento validada.",
     "resources": "Recursos educativos e verificação automática de qualidade gerados.",
 }

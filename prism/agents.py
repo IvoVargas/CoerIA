@@ -112,9 +112,9 @@ class PedagogicalCritic(Protocol):
 STAGE_ROLES = {
     "curriculum_analysis": "especialista em análise curricular",
     "learning_outcomes": "especialista em resultados de aprendizagem",
-    "assessment_activities": "especialista em avaliação formativa e sumativa",
-    "pedagogical_design": "agente de Design Pedagógico",
-    "teaching_activities": "especialista em atividades formativas de aprendizagem",
+    "teaching_activities": "especialista em atividades de ensino-aprendizagem",
+    "assessment_activities": "especialista em tarefas e critérios de avaliação",
+    "pedagogical_design": "especialista em organização da sequência pedagógica",
     "alignment_matrix": "especialista em alinhamento construtivo",
     "resources": "especialista em recursos educativos",
 }
@@ -144,10 +144,11 @@ STAGE_REQUIREMENTS = {
     ),
     "pedagogical_design": (
         "Objeto com strategy e sequence. sequence é uma lista de objetos "
-        "{outcome_id, focus, assessment}; deve aplicar backward design."
+        "{outcome_id, focus, assessment}; deve organizar a progressão pedagógica "
+        "articulando os resultados, as atividades de ensino-aprendizagem e a avaliação."
     ),
     "teaching_activities": (
-        "Lista de objetos {id, outcome_id, outcome_ids, assessment_ids, learning_context, "
+        "Lista de objetos {id, outcome_id, outcome_ids, learning_context, "
         "activity, method, practice, support, feedback_strategy}; o conjunto deve cobrir "
         "todos os resultados e explicitar prática, acompanhamento e feedback."
     ),
@@ -341,7 +342,6 @@ def _schema_for(
                     "id": string,
                     "outcome_id": string,
                     "outcome_ids": {"type": "array", "items": string},
-                    "assessment_ids": {"type": "array", "items": string},
                     "learning_context": {"type": "string", "enum": list(LEARNING_CONTEXTS)},
                     "activity": string,
                     "method": string,
@@ -350,7 +350,7 @@ def _schema_for(
                     "feedback_strategy": string,
                 },
                 "required": [
-                    "id", "outcome_id", "outcome_ids", "assessment_ids",
+                    "id", "outcome_id", "outcome_ids",
                     "learning_context", "activity", "method", "practice",
                     "support", "feedback_strategy"
                 ],
@@ -675,9 +675,9 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     stage_order = (
         "learning_outcomes",
         "curriculum_analysis",
+        "teaching_activities",
         "assessment_activities",
         "pedagogical_design",
-        "teaching_activities",
         "alignment_matrix",
         "resources",
     )
@@ -934,7 +934,7 @@ def _canonicalize_alignment_matrix(
             continue
         canonical = expected[item["outcome_id"]]
         rationale = str(item.get("rationale", "")).strip() or (
-            "Estado calculado a partir das avaliações e atividades formativas "
+            "Estado calculado a partir das avaliações e atividades de ensino-aprendizagem "
             "associadas ao resultado."
         )
         corrected = {**item, **canonical, "rationale": rationale}
@@ -1766,14 +1766,6 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             )
 
     if stage == "teaching_activities":
-        expected_assessments = {item["id"] for item in state["assessment_activities"]}
-        covered_assessments = {
-            identifier for item in artifact for identifier in item.get("assessment_ids", [])
-        }
-        if covered_assessments != expected_assessments:
-            raise AgentGenerationError(
-                "As atividades de ensino devem cobrir todas e apenas as avaliações definidas."
-            )
         if any(
             not item.get("practice")
             or not item.get("support")
@@ -1781,7 +1773,8 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             for item in artifact
         ):
             raise AgentGenerationError(
-                "Cada atividade formativa deve explicitar prática, acompanhamento e feedback."
+                "Cada atividade de ensino-aprendizagem deve explicitar prática, "
+                "acompanhamento e feedback."
             )
 
     if stage == "alignment_matrix":

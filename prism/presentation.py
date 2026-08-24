@@ -272,7 +272,6 @@ def render_artifact(
             [
                 item.get("id", "—"),
                 ", ".join(item.get("outcome_ids", [item.get("outcome_id", "")])),
-                ", ".join(item.get("assessment_ids", [])),
                 item.get("learning_context", "—"),
                 item["activity"],
                 item["practice"],
@@ -282,7 +281,7 @@ def render_artifact(
             for item in artifact
         ]
         return header + _table(
-            ["ID", "Resultados", "Avaliações", "Contexto", "Atividade", "Prática", "Acompanhamento", "Feedback"],
+            ["ID", "Resultados", "Contexto", "Atividade", "Prática", "Acompanhamento", "Feedback"],
             rows,
         )
 
@@ -307,7 +306,7 @@ def render_artifact(
         return header + _table(
             [
                 "Resultado", "Conteúdos", "Nível",
-                "Avaliações", "Finalidade", "Atividades formativas",
+                "Avaliações", "Finalidade", "Atividades de ensino-aprendizagem",
                 "Recursos", "Alinhamento", "Justificação",
             ],
             rows,

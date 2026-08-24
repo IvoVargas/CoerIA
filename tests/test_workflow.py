@@ -194,8 +194,15 @@ class WorkflowTests(unittest.TestCase):
 
     def test_workflow_stops_at_each_human_review(self) -> None:
         self.assertEqual(
-            STAGE_ORDER[:2],
-            ("learning_outcomes", "curriculum_analysis"),
+            STAGE_ORDER[:6],
+            (
+                "learning_outcomes",
+                "curriculum_analysis",
+                "teaching_activities",
+                "assessment_activities",
+                "pedagogical_design",
+                "alignment_matrix",
+            ),
         )
         state = create_session(self.course, agent=self.agent)
         self.assertEqual(state["current_stage"], "learning_outcomes")
@@ -203,9 +210,9 @@ class WorkflowTests(unittest.TestCase):
 
         for expected_stage in (
             "curriculum_analysis",
+            "teaching_activities",
             "assessment_activities",
             "pedagogical_design",
-            "teaching_activities",
             "alignment_matrix",
             "resources",
             "final_validation",
@@ -215,6 +222,9 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(state["status"], "awaiting_review")
 
         self.assertTrue(all(row["status"] == "Coerente" for row in state["alignment_matrix"]))
+        self.assertTrue(
+            all("assessment_ids" not in item for item in state["teaching_activities"])
+        )
         self.assertEqual(state["resources"]["quality"]["status"], "OK")
         self.assertTrue(state["final_validation"]["passed"])
 
@@ -446,7 +456,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 16)
+        self.assertEqual(restored["schema_version"], 17)
         self.assertEqual(restored["migrated_from_schema_version"], 1)
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
@@ -461,6 +471,33 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("active_versions", restored)
         self.assertIn("revision_snapshots", restored)
         self.assertEqual(restored["selected_source_image_ids"], [])
+
+    def test_schema_16_session_is_migrated_to_biggs_stage_dependencies(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        state["schema_version"] = 16
+        state["teaching_activities"][0]["assessment_ids"] = ["AV1"]
+        state["versions"]["teaching_activities"][-1][0]["assessment_ids"] = ["AV1"]
+        state["version_dependencies"]["teaching_activities"][-1][
+            "assessment_activities"
+        ] = 1
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(state)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], 17)
+        self.assertNotIn("assessment_ids", restored["teaching_activities"][0])
+        self.assertNotIn(
+            "assessment_ids",
+            restored["versions"]["teaching_activities"][-1][0],
+        )
+        self.assertNotIn(
+            "assessment_activities",
+            restored["version_dependencies"]["teaching_activities"][-1],
+        )
 
     def test_legacy_session_at_the_old_first_stage_moves_to_outcomes(self) -> None:
         state = create_session(self.course, agent=self.agent)
@@ -484,7 +521,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 16)
+        self.assertEqual(restored["schema_version"], 17)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(restored["status"], "drafting")
         self.assertTrue(restored["learning_outcomes"])
@@ -522,7 +559,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 16)
+        self.assertEqual(restored["schema_version"], 17)
         self.assertEqual(
             restored["curriculum_analysis"]["objectives"],
             "Desenvolver conhecimentos fundamentais.",
@@ -589,7 +626,7 @@ class WorkflowTests(unittest.TestCase):
             "Compreender os fundamentos da programação.\n"
             "Aplicar os conhecimentos em problemas concretos."
         )
-        self.assertEqual(restored["schema_version"], 16)
+        self.assertEqual(restored["schema_version"], 17)
         self.assertEqual(restored["current_stage"], "alignment_matrix")
         self.assertEqual(restored["status"], "drafting")
         self.assertEqual(restored["curriculum_analysis"]["objectives"], expected_text)
@@ -634,7 +671,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 16)
+        self.assertEqual(restored["schema_version"], 17)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(
             restored["stage_statuses"]["learning_outcomes"], "draft"
