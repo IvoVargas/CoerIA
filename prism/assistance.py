@@ -30,7 +30,6 @@ PROPOSAL_FIELDS = (
     "ects_credits",
     "contact_hours",
     "autonomous_hours",
-    "general_aims",
 )
 NUMERIC_PROPOSAL_FIELDS = {
     "ects_credits",
@@ -99,7 +98,6 @@ def validate_initial_fields(data: dict[str, Any]) -> dict[str, Any]:
     suggestions: list[str] = []
     unit_name = str(data.get("unit_name", "") or "").strip()
     source_text = str(data.get("source_text", "") or "").strip()
-    general_aims = str(data.get("general_aims", "") or "").strip()
     bibliography = str(data.get("bibliography", "") or "").strip()
 
     if not unit_name:
@@ -129,11 +127,6 @@ def validate_initial_fields(data: dict[str, Any]) -> dict[str, Any]:
         validate_semester(str(data.get("semester", "") or ""))
     except ValueError as error:
         issues.append(str(error))
-    if not general_aims:
-        suggestions.append(
-            "Pode indicar os objetivos gerais da unidade curricular num campo de "
-            "texto livre."
-        )
     if not bibliography:
         suggestions.append(
             "Acrescente bibliografia fornecida ou validada pelo docente antes da exportação final."
@@ -208,7 +201,6 @@ class OpenAIInitialFormAssistant:
                 "ects_credits": {"type": "number"},
                 "contact_hours": {"type": "number"},
                 "autonomous_hours": {"type": "number"},
-                "general_aims": {"type": "string"},
                 "explanation": {"type": "string"},
             },
             "required": [
@@ -223,7 +215,6 @@ class OpenAIInitialFormAssistant:
                 "ects_credits",
                 "contact_hours",
                 "autonomous_hours",
-                "general_aims",
                 "explanation",
             ],
         }

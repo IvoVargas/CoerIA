@@ -27,8 +27,8 @@ materiais produzidos.
 ### RF01 — Dados iniciais e fontes
 
 - Recolher o nome da unidade curricular e o tipo de formação.
-- Recolher curso, ano, CNAEF, ECTS, horas de contacto, trabalho autónomo,
-  objetivos gerais e bibliografia a validar pelo docente.
+- Recolher curso, ano, CNAEF, ECTS, horas de contacto, trabalho autónomo e
+  bibliografia a validar pelo docente.
 - Calcular a duração total pela soma das horas de contacto e do trabalho
   autónomo, sem pedir ao docente uma duração prevista redundante.
 - Tornar o semestre obrigatório, limitá-lo às opções `1.º semestre` e
@@ -53,6 +53,8 @@ materiais produzidos.
 - Gerar, apenas a pedido, uma proposta inicial editável por IA que preencha todos
   os campos vazios, incluindo a informação de referência, sem substituir valores
   já introduzidos pelo docente.
+- Não pedir objetivos gerais na criação da sessão; estes são formulados ou
+  introduzidos uma única vez na etapa de conteúdos e objetivos curriculares.
 - Exigir a escolha exclusiva entre SOLO e Bloom; nunca combinar as duas numa sessão.
 
 ### RF02 — Fluxo pedagógico orientado por uma taxonomia

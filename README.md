@@ -104,7 +104,10 @@ caracterização numa única página. O tipo de formação fornece o enquadramen
 anteriormente pedido como público-alvo e o semestre obrigatório inicia-se em
 `1.º semestre`. O fornecedor é escolhido junto das ações facultativas de IA e a
 duração total é calculada automaticamente pela soma das horas de contacto e do
-trabalho autónomo.
+trabalho autónomo. Os objetivos gerais não são pedidos nesta configuração
+inicial: são formulados ou introduzidos apenas na etapa **Conteúdos e objetivos
+curriculares**, evitando duplicação e mantendo essa etapa disponível para uma
+primeira proposta completa por IA.
 
 A barra de etapas permite abrir qualquer ponto de autoria desde a criação da
 sessão. A navegação não chama a IA, não exige completude e não apaga dados. Em

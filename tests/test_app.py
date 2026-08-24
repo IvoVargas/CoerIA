@@ -201,6 +201,7 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Iniciar desenho curricular alinhado")
     await user.should_not_see("Público-alvo")
     await user.should_not_see("Duração prevista")
+    await user.should_not_see("Objetivos gerais da unidade curricular")
     await user.should_not_see("Recursos a produzir")
     await user.should_not_see("Permitir geração de imagens por IA")
     assistance = next(
@@ -333,6 +334,7 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     user.find("Cancelar edição").click()
     user.find(marker="manual-stage-curriculum_analysis").click()
     await user.should_see("Objetivos gerais")
+    await user.should_see("Criar primeira versão com IA")
     assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
 
 

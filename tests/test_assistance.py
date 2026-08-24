@@ -84,7 +84,6 @@ class InitialAssistanceTests(unittest.TestCase):
             "ects_credits": 6,
             "contact_hours": 45,
             "autonomous_hours": 117,
-            "general_aims": "Compreender o setor pesqueiro.",
             "explanation": "Proposta sujeita a confirmação pelo docente.",
         }
 
@@ -108,6 +107,8 @@ class InitialAssistanceTests(unittest.TestCase):
         proposal_schema = calls[0]["text"]["format"]["schema"]
         self.assertNotIn("audience", proposal_schema["properties"])
         self.assertNotIn("audience", proposal_schema["required"])
+        self.assertNotIn("general_aims", proposal_schema["properties"])
+        self.assertNotIn("general_aims", proposal_schema["required"])
 
     def test_requested_proposal_preserves_the_exclusive_taxonomy(self) -> None:
         proposal = {
@@ -127,7 +128,6 @@ class InitialAssistanceTests(unittest.TestCase):
             "ects_credits": 6,
             "contact_hours": 45,
             "autonomous_hours": 117,
-            "general_aims": "Compreender o setor pesqueiro.",
             "explanation": (
                 "Proposta baseada nos dados disponíveis; valores institucionais "
                 "devem ser confirmados."
@@ -160,7 +160,6 @@ class InitialAssistanceTests(unittest.TestCase):
             "semester",
             "cnaef_code",
             "cnaef_name",
-            "general_aims",
         ):
             self.assertTrue(result[field])
         for field in (
@@ -185,7 +184,6 @@ class InitialAssistanceTests(unittest.TestCase):
             "ects_credits": 6,
             "contact_hours": 45,
             "autonomous_hours": 117,
-            "general_aims": "Objetivo geral proposto.",
             "explanation": "Foram preenchidos apenas os campos vazios.",
         }
         fake_module = SimpleNamespace(
@@ -234,7 +232,6 @@ class InitialAssistanceTests(unittest.TestCase):
             "ects_credits": 6,
             "contact_hours": 60,
             "autonomous_hours": 102,
-            "general_aims": "Desenvolver fundamentos de resolução de problemas.",
             "explanation": "Os valores institucionais devem ser confirmados.",
         }
         invalid_proposal = {**valid_proposal, "source_text": "Programação básica."}

@@ -651,17 +651,6 @@ class AGIRSoloInterface:
             self.fields["autonomous_hours"] = ui.number(
                 "Trabalho autónomo", value=0, min=0, precision=1
             ).classes("full-control")
-        self.fields["general_aims"] = ui.textarea(
-            "Objetivos gerais da unidade curricular",
-            placeholder=(
-                "Descreva a finalidade ampla da unidade curricular, sem repetir "
-                "os resultados de aprendizagem observáveis."
-            ),
-        ).props("outlined autogrow").classes("full-control mt-3")
-        ui.label(
-            "Funcionam como enquadramento amplo para formular os resultados de "
-            "aprendizagem; não são uma lista adicional a alinhar na matriz."
-        ).classes("text-xs muted")
         self.fields["bibliography"] = ui.textarea(
             "Bibliografia fornecida ou validada pelo docente",
             placeholder=(
@@ -872,7 +861,6 @@ class AGIRSoloInterface:
                 "ects_credits": 0,
                 "contact_hours": 0,
                 "autonomous_hours": 0,
-                "general_aims": "",
                 "bibliography": "",
             }
         )
