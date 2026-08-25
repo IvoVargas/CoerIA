@@ -205,6 +205,12 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Derivar os campos factuais e o estado de cada linha da matriz a partir das
   evidências aprovadas, reservando à IA apenas a fundamentação pedagógica.
 - Executar verificações determinísticas sobre os recursos finais.
+- Recalcular a qualidade dos recursos ao abrir a validação final e imediatamente
+  antes da exportação, substituindo qualquer relatório derivado desatualizado.
+- Associar cada parecer facultativo da IA à versão dos artefactos analisados e
+  apresentá-lo como desatualizado depois de qualquer alteração relevante.
+- Ignorar no parecer facultativo alegações da IA sobre controlos determinísticos
+  de IDs, cobertura, ligações e somas, que permanecem exclusivos do sistema.
 - Calcular esses controlos durante a produção e a edição dos recursos, mas
   apresentar cada controlo, respetivo estado `✅`/`⚠️`/`❌` e detalhe apenas na
   etapa de validação final, evitando um bloco de «Validação automática» na

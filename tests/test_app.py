@@ -581,6 +581,18 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
     fifth_slide["visual_title"] = "Visual exclusivo do slide 5"
     fifth_slide["visual_source"] = "Imagem extraída de apoio.pdf, Página 2."
     fifth_slide["visual_warning"] = "Aviso técnico que não deve aparecer na etapa."
+    state.setdefault("ai_reviews", {})["resources"] = [
+        {
+            "findings": [
+                {
+                    "severity": "blocking",
+                    "criterion": "assessment_coverage",
+                    "message": "Parecer antigo que já não corresponde aos artefactos.",
+                }
+            ],
+            "non_blocking": True,
+        }
+    ]
     active_resource_version = int(state["active_versions"]["resources"])
     state["versions"]["resources"][active_resource_version - 1] = deepcopy(
         state["resources"]
@@ -595,6 +607,10 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
     await user.open("/_test_resource_tabs")
 
     await user.should_see("CONTEÚDO DOS RECURSOS")
+    await user.should_see("VERIFICAÇÃO FACULTATIVA DA IA DESATUALIZADA")
+    await user.should_not_see(
+        "Parecer antigo que já não corresponde aos artefactos."
+    )
     await user.should_see("Modo visual")
     await user.should_not_see("AVISOS VISUAIS")
     await user.should_not_see("IMAGENS SELECIONADAS")

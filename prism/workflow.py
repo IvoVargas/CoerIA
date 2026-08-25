@@ -1085,6 +1085,9 @@ def navigate_to_stage(state: PrismState, target_stage: str) -> PrismState:
     updated = ensure_manual_artifacts(deepcopy(state))
     updated["current_stage"] = target_stage
     if target_stage == "final_validation":
+        resources = updated.get("resources")
+        if isinstance(resources, dict):
+            updated["resources"] = attach_quality_report(updated, resources)
         previous_validation = deepcopy(updated.get("final_validation"))
         current_validation = build_final_validation(updated)
         updated["final_validation"] = current_validation
@@ -1456,12 +1459,45 @@ def verify_stage_with_ai(
         updated,
         updated[target_stage],
     )
+    deterministic_criteria = {
+        "unique_outcomes",
+        "taxonomy_outcomes",
+        "assessment_coverage",
+        "assessment_purposes",
+        "teaching_coverage",
+        "formative_activity_structure",
+        "alignment_coverage",
+        "alignment_consistency",
+        "alignment_links",
+        "resource_selection",
+        "presentation_visuals",
+        "test_points",
+        "practical_weights",
+    }
+    ignored_findings = [
+        finding
+        for finding in result.findings
+        if str(finding.get("criterion", "")).strip().casefold()
+        in deterministic_criteria
+        or str(finding.get("criterion", "")).strip().casefold().startswith(
+            ("resource_", "coverage_")
+        )
+    ]
+    findings = [
+        finding for finding in result.findings if finding not in ignored_findings
+    ]
+    metadata = deepcopy(result.metadata)
+    if ignored_findings:
+        metadata["ignored_deterministic_findings"] = deepcopy(ignored_findings)
     review = {
         "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
-        "passed": result.passed,
-        "findings": deepcopy(result.findings),
-        "revision_instructions": result.revision_instructions,
-        "metadata": deepcopy(result.metadata),
+        "context_signature": ai_review_context_signature(updated, target_stage),
+        "passed": not any(
+            finding.get("severity") == "blocking" for finding in findings
+        ),
+        "findings": deepcopy(findings),
+        "revision_instructions": result.revision_instructions if findings else "",
+        "metadata": metadata,
         "non_blocking": True,
     }
     reviews = deepcopy(updated.get("ai_reviews", {}))
@@ -1473,6 +1509,47 @@ def verify_stage_with_ai(
         "Verificação facultativa por IA concluída; o resultado não bloqueia a navegação.",
     )
     return updated
+
+
+def ai_review_context_signature(state: PrismState, target_stage: str) -> str:
+    """Identifica o conteúdo e as dependências usados numa verificação facultativa."""
+
+    if target_stage not in AUTHORING_STAGES:
+        return ""
+    target_index = AUTHORING_STAGES.index(target_stage)
+    artifacts: dict[str, Any] = {}
+    for stage in AUTHORING_STAGES[: target_index + 1]:
+        artifact = deepcopy(state.get(stage))
+        if stage == "resources" and isinstance(artifact, dict):
+            artifact.pop("quality", None)
+        artifacts[stage] = artifact
+    relevant = {
+        "course": state.get("course"),
+        "resource_types": state.get("resource_types", []),
+        "selected_source_image_ids": state.get("selected_source_image_ids", []),
+        "artifacts": artifacts,
+    }
+    serialized = json.dumps(
+        relevant,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def ai_review_is_current(
+    state: PrismState,
+    target_stage: str,
+    review: dict[str, Any],
+) -> bool:
+    """Distingue um parecer atual de um parecer histórico ou legado."""
+
+    signature = str(review.get("context_signature", "")).strip()
+    return bool(signature) and signature == ai_review_context_signature(
+        state, target_stage
+    )
 
 
 def build_final_validation(state: PrismState) -> dict[str, Any]:
@@ -2266,6 +2343,9 @@ def run_current_stage(
             "A executar as verificações finais de estrutura e alinhamento…",
         )
         generated = deepcopy(state)
+        resources = generated.get("resources")
+        if isinstance(resources, dict):
+            generated["resources"] = attach_quality_report(generated, resources)
         generated[stage] = build_final_validation(generated)
         generated.setdefault("audit", []).append(
             {

@@ -159,13 +159,18 @@ remover são decididas como uma unidade. **Aplicar alterações aceites** reúne
 decisões numa única nova versão; rejeitar todas conserva o rascunho sem alterações.
 
 **Verificar esta etapa com IA**, apresentada no fim do cartão, guarda um parecer
-facultativo que nunca impede avançar.
+facultativo que nunca impede avançar. O parecer fica identificado pela versão dos
+artefactos que analisou; depois de qualquer alteração é apresentado como
+desatualizado até o docente pedir uma nova verificação. Alegações da IA sobre IDs,
+cobertura ou somas não substituem nem contradizem os controlos determinísticos.
 
 Os controlos determinísticos dos recursos são executados durante a produção e a
 edição da etapa **Recursos educativos**, mas o relatório consolidado não é
 apresentado nesse artefacto. O respetivo estado surge na etapa **Validação final
 da estrutura e do alinhamento**, em **Qualidade automática dos recursos**, com
-uma linha por controlo, estado `✅`/`⚠️`/`❌` e o respetivo detalhe.
+uma linha por controlo, estado `✅`/`⚠️`/`❌` e o respetivo detalhe. Esse relatório
+é recalculado antes da validação final e da exportação, sem confiar numa cópia
+anterior guardada na sessão.
 
 Numa sessão concluída, a barra de etapas fica em modo de consulta. A reabertura
 exige o botão próprio, a seleção da etapa, um motivo e uma confirmação explícita.

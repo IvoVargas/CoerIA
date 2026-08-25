@@ -35,7 +35,12 @@ from prism.models import (
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import render_current_artifact, render_resource_detail_sections
 from prism.quality import evaluate_quality
-from prism.workflow import create_session, create_test_agent, review_current_stage
+from prism.workflow import (
+    create_session,
+    create_test_agent,
+    navigate_to_stage,
+    review_current_stage,
+)
 
 
 class ResourceGenerationTests(unittest.TestCase):
@@ -131,6 +136,34 @@ class ResourceGenerationTests(unittest.TestCase):
             "Os recursos selecionados devem cumprir os controlos determinísticos.",
             final_view,
         )
+
+    def test_final_validation_refreshes_the_cached_resource_quality(self) -> None:
+        state = self._resource_state()
+        state["resources"]["quality"] = {
+            "passed": False,
+            "checks": [],
+            "summary": {"errors": 1},
+        }
+
+        validated = navigate_to_stage(state, "final_validation")
+
+        self.assertTrue(validated["resources"]["quality"]["passed"])
+        self.assertTrue(validated["final_validation"]["passed"])
+
+    def test_export_recomputes_a_stale_resource_quality_cache(self) -> None:
+        state = review_current_stage(self._resource_state(), "approve", agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        state["resources"]["quality"] = {
+            "passed": False,
+            "checks": [],
+            "summary": {"errors": 1},
+        }
+
+        package_path = Path(export_resource_package(state))
+        try:
+            self.assertTrue(package_path.is_file())
+        finally:
+            package_path.unlink(missing_ok=True)
 
     def test_document_image_is_approved_and_embedded_in_presentation(self) -> None:
         state = self._resource_state()
@@ -692,6 +725,7 @@ class ResourceGenerationTests(unittest.TestCase):
     def test_application_service_persists_export_format_choice_in_audit(self) -> None:
         state = review_current_stage(self._resource_state(), "approve", agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)
+        state["resources"]["quality"]["passed"] = False
         with TemporaryDirectory() as temporary_directory:
             store = SQLiteSessionStore(
                 Path(temporary_directory) / "coeria-export-formats.db"
@@ -706,6 +740,7 @@ class ResourceGenerationTests(unittest.TestCase):
             package_path = Path(package_path_text)
             try:
                 self.assertEqual(updated["last_export_document_formats"], ["latex"])
+                self.assertTrue(updated["resources"]["quality"]["passed"])
                 self.assertEqual(
                     updated["audit"][-1]["feedback"],
                     "Formatos documentais: LaTeX.",
@@ -715,6 +750,7 @@ class ResourceGenerationTests(unittest.TestCase):
                     restored["last_export_document_formats"],
                     ["latex"],
                 )
+                self.assertTrue(restored["resources"]["quality"]["passed"])
             finally:
                 package_path.unlink(missing_ok=True)
 

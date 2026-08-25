@@ -29,6 +29,7 @@ from .models import (
     validate_resource_types,
 )
 from .persistence import SQLiteSessionStore
+from .quality import attach_quality_report
 from .source_reduction import reduce_source_text
 from .providers import configured_ai_provider
 from .workflow import (
@@ -594,6 +595,9 @@ class ApplicationService:
             "latex": "LaTeX",
         }
         updated = deepcopy(state)
+        resources = updated.get("resources")
+        if isinstance(resources, dict):
+            updated["resources"] = attach_quality_report(updated, resources)
         updated["last_export_document_formats"] = list(formats)
         updated.setdefault("audit", []).append(
             {

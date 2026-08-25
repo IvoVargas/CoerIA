@@ -13,6 +13,7 @@ from prism.presentation import render_current_artifact
 from prism.source_reduction import SourceReductionResult, reduce_source_text
 from prism.workflow import (
     STAGE_ORDER,
+    ai_review_is_current,
     create_session,
     decide_ai_proposal,
     navigate_to_stage,
@@ -429,8 +430,54 @@ def test_stage_ai_review_is_saved_but_does_not_block_navigation() -> None:
     reviewed = verify_stage_with_ai(state, "learning_outcomes", critic=WarningCritic())
 
     assert reviewed["status"] == "drafting"
-    assert reviewed["ai_reviews"]["learning_outcomes"][-1]["non_blocking"]
+    review = reviewed["ai_reviews"]["learning_outcomes"][-1]
+    assert review["non_blocking"]
+    assert ai_review_is_current(reviewed, "learning_outcomes", review)
     assert navigate_to_stage(reviewed, "curriculum_analysis")["current_stage"] == "curriculum_analysis"
+
+    changed = save_manual_draft(
+        reviewed,
+        "learning_outcomes",
+        [{"id": "RA1", "statement": "Identificar elementos de um algoritmo."}],
+    )
+    assert not ai_review_is_current(changed, "learning_outcomes", review)
+
+
+def test_ai_review_discards_deterministic_coverage_claims() -> None:
+    class DeterministicHallucinationCritic:
+        def review(self, stage, state, artifact):
+            return CritiqueResult(
+                passed=False,
+                findings=[
+                    {
+                        "severity": "blocking",
+                        "criterion": "assessment_coverage",
+                        "message": "RA1, RA2, RA3, RA4 e RA5 estão em falta.",
+                    },
+                    {
+                        "severity": "warning",
+                        "criterion": "Clareza pedagógica",
+                        "message": "Explicitar melhor a transição entre atividades.",
+                    },
+                ],
+                revision_instructions="Rever a cobertura e a transição.",
+                metadata={"provider": "Teste", "model": "critic-fake"},
+            )
+
+    reviewed = verify_stage_with_ai(
+        create_session(_course()),
+        "resources",
+        critic=DeterministicHallucinationCritic(),
+    )
+    review = reviewed["ai_reviews"]["resources"][-1]
+
+    assert [item["criterion"] for item in review["findings"]] == [
+        "Clareza pedagógica"
+    ]
+    assert review["passed"]
+    assert review["metadata"]["ignored_deterministic_findings"][0][
+        "criterion"
+    ] == "assessment_coverage"
 
 
 def test_resource_selection_can_change_without_generation() -> None:

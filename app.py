@@ -87,6 +87,7 @@ from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
 from prism.workflow import (
     STAGE_LABELS,
     STAGE_ORDER,
+    ai_review_is_current,
     is_manual_first,
     revision_targets_for_state,
 )
@@ -2821,19 +2822,34 @@ class AGIRSoloInterface:
             if reviews:
                 latest = reviews[-1]
                 ui.separator().classes("my-2")
-                ui.label("ÚLTIMA VERIFICAÇÃO FACULTATIVA DA IA").classes("eyebrow")
-                findings = latest.get("findings", [])
-                if not findings:
-                    ui.label("A IA não assinalou problemas.").classes("text-sm")
-                for finding in findings:
-                    severity = "Bloqueante" if finding.get("severity") == "blocking" else "Aviso"
+                if not ai_review_is_current(state, stage, latest):
                     ui.label(
-                        f"{severity} — {finding.get('criterion', '')}: "
-                        f"{finding.get('message', '')}"
-                    ).classes("text-sm soft-surface p-2 w-full")
-                ui.label(
-                    "Este parecer não bloqueia a passagem à etapa seguinte."
-                ).classes("text-xs muted")
+                        "VERIFICAÇÃO FACULTATIVA DA IA DESATUALIZADA"
+                    ).classes("eyebrow")
+                    ui.label(
+                        "Os artefactos foram alterados depois deste parecer. Peça uma "
+                        "nova verificação para obter observações sobre a versão atual."
+                    ).classes("text-sm muted")
+                else:
+                    ui.label("ÚLTIMA VERIFICAÇÃO FACULTATIVA DA IA").classes(
+                        "eyebrow"
+                    )
+                    findings = latest.get("findings", [])
+                    if not findings:
+                        ui.label("A IA não assinalou problemas.").classes("text-sm")
+                    for finding in findings:
+                        severity = (
+                            "Bloqueante"
+                            if finding.get("severity") == "blocking"
+                            else "Aviso"
+                        )
+                        ui.label(
+                            f"{severity} — {finding.get('criterion', '')}: "
+                            f"{finding.get('message', '')}"
+                        ).classes("text-sm soft-surface p-2 w-full")
+                    ui.label(
+                        "Este parecer não bloqueia a passagem à etapa seguinte."
+                    ).classes("text-xs muted")
 
             current_index = STAGE_ORDER.index(stage)
             ui.separator().classes("my-2")

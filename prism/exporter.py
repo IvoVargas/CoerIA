@@ -36,6 +36,7 @@ from .models import (
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
 )
+from .quality import attach_quality_report
 
 
 LOGGER = logging.getLogger(__name__)
@@ -1536,7 +1537,7 @@ def export_resource_package(
 
     if state.get("status") != "completed":
         raise ValueError("A sessão deve estar concluída antes da exportação.")
-    resources = state.get("resources", {})
+    resources = attach_quality_report(state, state.get("resources", {}))
     quality = resources.get("quality", {})
     if not quality.get("passed"):
         raise ValueError("A validação automática detetou erros bloqueantes nos recursos.")
