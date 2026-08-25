@@ -99,6 +99,16 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertEqual(state["current_stage"], "final_validation")
         final_view = render_current_artifact(state)
         self.assertIn("Qualidade automática dos recursos", final_view)
+        self.assertIn("Correspondência dos recursos selecionados", final_view)
+        self.assertIn("A seleção foi respeitada.", final_view)
+        self.assertEqual(
+            state["final_validation"]["resource_quality_checks"],
+            state["resources"]["quality"]["checks"],
+        )
+        self.assertNotIn(
+            "Os recursos selecionados devem cumprir os controlos determinísticos.",
+            final_view,
+        )
 
     def test_document_image_is_approved_and_embedded_in_presentation(self) -> None:
         state = self._resource_state()

@@ -206,8 +206,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   evidências aprovadas, reservando à IA apenas a fundamentação pedagógica.
 - Executar verificações determinísticas sobre os recursos finais.
 - Calcular esses controlos durante a produção e a edição dos recursos, mas
-  apresentar o respetivo resultado consolidado apenas na etapa de validação
-  final, evitando um bloco de «Validação automática» na etapa de recursos.
+  apresentar cada controlo, respetivo estado `✅`/`⚠️`/`❌` e detalhe apenas na
+  etapa de validação final, evitando um bloco de «Validação automática» na
+  etapa de recursos.
 - Gerar e validar separadamente cada tipo de recurso selecionado.
 - Pedir ao fornecedor apenas o conteúdo do recurso corrente e derivar
   deterministicamente a seleção e os campos vazios dos restantes recursos.

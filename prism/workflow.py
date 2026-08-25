@@ -1477,13 +1477,13 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
     """Prepara o ecrã final sem delegar a decisão a um modelo."""
 
     structural_checks: list[dict[str, Any]] = []
-    current_resource_quality: dict[str, Any] = {}
+    resource_quality_checks: list[dict[str, Any]] = []
     for stage in AUTHORING_STAGES:
         artifact = state.get(stage, blank_artifact(stage, state))
         try:
             if stage == "resources":
                 quality = attach_quality_report(state, artifact).get("quality", {})
-                current_resource_quality = quality
+                resource_quality_checks = deepcopy(quality.get("checks", []))
                 if not quality.get("passed"):
                     raise ValueError(
                         f"{quality.get('summary', {}).get('errors', 0)} erro(s) de qualidade."
@@ -1506,7 +1506,6 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
     alignment_ok = bool(state.get("alignment_matrix")) and all(
         row.get("status") == "Coerente" for row in state["alignment_matrix"]
     )
-    resource_quality_ok = bool(current_resource_quality.get("passed"))
     selected_taxonomy = validate_taxonomy_choice(
         state.get("course", {}).get("taxonomy_type", "SOLO")
     )
@@ -1527,12 +1526,6 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
             "detail": "Todas as linhas devem estar assinaladas como Coerente.",
         },
         {
-            "id": "resources",
-            "label": "Qualidade automática dos recursos",
-            "passed": resource_quality_ok,
-            "detail": "Os recursos selecionados devem cumprir os controlos determinísticos.",
-        },
-        {
             "id": "taxonomy",
             "label": f"Uso exclusivo da Taxonomia {selected_taxonomy}",
             "passed": taxonomy_ok,
@@ -1540,8 +1533,10 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
         },
     ]
     return {
-        "passed": all(item["passed"] for item in checks),
+        "passed": all(item["passed"] for item in checks)
+        and all(item.get("status") != "error" for item in resource_quality_checks),
         "checks": checks,
+        "resource_quality_checks": resource_quality_checks,
         "message": (
             "Verificação global determinística. As observações de IA, quando "
             "pedidas, são facultativas e não substituem estes controlos."

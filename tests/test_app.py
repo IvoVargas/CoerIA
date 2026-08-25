@@ -325,11 +325,19 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.should_see("Pedir propostas à IA")
     await user.should_see("Conteúdos e objetivos curriculares")
     create_button = next(iter(user.find(marker="create-ai-version").elements))
+    assistance_heading = next(
+        iter(user.find(marker="ai-assistance-heading").elements)
+    )
     assistance_grid = next(
         iter(user.find(marker="ai-assistance-request").elements)
     )
     verify_button = next(iter(user.find(marker="verify-stage-with-ai").elements))
-    assert create_button.id < assistance_grid.id < verify_button.id
+    assert (
+        create_button.id
+        < assistance_heading.id
+        < assistance_grid.id
+        < verify_button.id
+    )
     user.find(marker="edit-artifact-content").click()
     await user.should_see("EDIÇÃO NA TABELA ATUAL")
     await user.should_see("Adicionar linha")
@@ -348,6 +356,14 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     user.find(marker="manual-stage-resources").click()
     await user.should_see("RECURSOS A PREPARAR", retries=20)
     await user.should_see("Guardar seleção de recursos", retries=20)
+    resource_settings_button = next(
+        iter(user.find("Guardar seleção de recursos").elements)
+    )
+    create_button = next(iter(user.find(marker="create-ai-version").elements))
+    assistance_heading = next(
+        iter(user.find(marker="ai-assistance-heading").elements)
+    )
+    assert resource_settings_button.id < create_button.id < assistance_heading.id
     user.find(marker="manual-stage-curriculum_analysis").click()
     await user.should_see("Objetivos gerais")
     await user.should_see("Criar etapa completa com IA")

@@ -22,6 +22,17 @@ def _table(headers: list[str], rows: list[list[Any]]) -> str:
     )
 
 
+def _validation_icon(item: dict[str, Any]) -> str:
+    status = str(item.get("status", ""))
+    if status == "warning":
+        return "⚠️"
+    if status == "error":
+        return "❌"
+    if status == "pass":
+        return "✅"
+    return "✅" if item.get("passed") else "❌"
+
+
 def _metadata_text(metadata: dict[str, Any] | None) -> str:
     if not metadata:
         return ""
@@ -307,18 +318,32 @@ def render_artifact(
     if stage == "final_validation":
         rows = [
             [
-                "✅" if item.get("passed") else "❌",
+                _validation_icon(item),
                 item.get("label", ""),
                 item.get("detail", ""),
             ]
             for item in artifact.get("checks", [])
         ]
-        return (
+        result = (
             header
             + artifact.get("message", "")
             + "\n\n"
             + _table(["", "Verificação final", "Detalhe"], rows)
         )
+        resource_rows = [
+            [
+                _validation_icon(item),
+                item.get("label", ""),
+                item.get("detail", ""),
+            ]
+            for item in artifact.get("resource_quality_checks", [])
+        ]
+        if resource_rows:
+            result += (
+                "\n\n## Qualidade automática dos recursos\n\n"
+                + _table(["", "Controlo", "Detalhe"], resource_rows)
+            )
+        return result
     return header
 
 
