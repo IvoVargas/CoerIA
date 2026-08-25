@@ -2051,6 +2051,8 @@ class AGIRSoloInterface:
         ).mark(
             "teacher-control"
         ):
+            ui.label("ASSISTÊNCIA COM IA").classes("eyebrow")
+
             if stage == "resources":
                 ui.label("RECURSOS A PREPARAR").classes("eyebrow")
                 ui.label(
@@ -2125,7 +2127,6 @@ class AGIRSoloInterface:
             )
 
             ui.separator().classes("my-2")
-            ui.label("ASSISTÊNCIA COM IA").classes("eyebrow")
             ui.label(
                 "Escolha exatamente a parte que pode ser proposta pela IA. O restante "
                 "artefacto não será aplicado nem substituído."

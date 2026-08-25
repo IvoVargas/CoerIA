@@ -62,10 +62,6 @@ def _metadata_text(metadata: dict[str, Any] | None) -> str:
     return "_" + " · ".join(details) + "._\n\n"
 
 
-def _quality_mark(status: str) -> str:
-    return {"pass": "✅", "warning": "⚠️", "error": "❌"}.get(status, "•")
-
-
 def _render_resources(artifact: dict[str, Any]) -> str:
     selected = artifact.get("selected_types", [])
     resource_rows: list[list[Any]] = []
@@ -94,17 +90,6 @@ def _render_resources(artifact: dict[str, Any]) -> str:
             "etapas",
         ])
 
-    quality = artifact.get("quality", {})
-    check_rows = []
-    for check in quality.get("checks", []):
-        if isinstance(check, str):
-            check_rows.append(["•", check, ""])
-        else:
-            check_rows.append([
-                _quality_mark(check.get("status", "")),
-                check.get("label", ""),
-                check.get("detail", ""),
-            ])
     visual_section = ""
     if "Apresentação PowerPoint" in selected:
         visual_rows = []
@@ -134,8 +119,6 @@ def _render_resources(artifact: dict[str, Any]) -> str:
         + "## Recursos produzidos\n\n"
         + _table(["Recurso", "Quantidade", "Unidade"], resource_rows)
         + visual_section
-        + f"\n\n## Validação automática — {quality.get('status', 'Não calculada')}\n\n"
-        + _table(["", "Verificação", "Resultado"], check_rows)
     )
 
 

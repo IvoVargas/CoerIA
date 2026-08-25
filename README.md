@@ -148,6 +148,11 @@ decisões numa única nova versão; rejeitar todas conserva o rascunho sem alter
 **Verificar esta etapa com IA**, apresentada no fim do cartão, guarda um parecer
 facultativo que nunca impede avançar.
 
+Os controlos determinísticos dos recursos são executados durante a produção e a
+edição da etapa **Recursos educativos**, mas o relatório consolidado não é
+apresentado nesse artefacto. O respetivo estado surge na etapa **Validação final
+da estrutura e do alinhamento**, em **Qualidade automática dos recursos**.
+
 Numa sessão concluída, a barra de etapas fica em modo de consulta. A reabertura
 exige o botão próprio, a seleção da etapa, um motivo e uma confirmação explícita.
 

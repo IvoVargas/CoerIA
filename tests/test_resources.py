@@ -33,6 +33,7 @@ from prism.models import (
     SUPPORTED_RESOURCE_TYPES,
 )
 from prism.persistence import SQLiteSessionStore
+from prism.presentation import render_current_artifact
 from prism.quality import evaluate_quality
 from prism.workflow import create_session, create_test_agent, review_current_stage
 
@@ -87,6 +88,17 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertTrue(resources["practical_activity"]["steps"])
         self.assertTrue(resources["quality"]["passed"])
         self.assertEqual(resources["quality"]["status"], "OK")
+
+    def test_resource_quality_is_presented_only_in_final_validation(self) -> None:
+        state = self._resource_state()
+
+        resource_view = render_current_artifact(state)
+        self.assertNotIn("Validação automática", resource_view)
+
+        state = review_current_stage(state, "approve", agent=self.agent)
+        self.assertEqual(state["current_stage"], "final_validation")
+        final_view = render_current_artifact(state)
+        self.assertIn("Qualidade automática dos recursos", final_view)
 
     def test_document_image_is_approved_and_embedded_in_presentation(self) -> None:
         state = self._resource_state()
