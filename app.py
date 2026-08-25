@@ -44,6 +44,8 @@ from prism.manual_editing import (
     TableSpec,
     assistance_scope_options,
     apply_editor_field_value,
+    apply_presentation_image_choice,
+    available_presentation_images,
     editor_field_value,
     editor_reference_options,
     editor_reference_value,
@@ -51,6 +53,7 @@ from prism.manual_editing import (
     editor_taxonomy_verb_options,
     editor_layout,
     new_table_row,
+    presentation_image_label,
     proposal_review_changes,
     value_at_path,
 )
@@ -274,6 +277,31 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .resource-tabs .q-tab { min-height: 48px; }
 .resource-tab-panels { background: transparent !important; }
 .resource-tab-panels .q-tab-panel { padding-top: 18px; }
+.presentation-slides { gap: 10px; }
+.presentation-slide {
+  border: 1px solid var(--agir-border) !important;
+  border-radius: 16px !important;
+  background: #fbfdfc !important;
+  overflow: hidden;
+}
+.presentation-slide .q-item { min-height: 58px; }
+.presentation-slide .q-item__label { color: var(--agir-ink); font-weight: 750; }
+.presentation-slide-grid {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(220px, .6fr);
+  gap: 12px; width: 100%;
+}
+.presentation-visual-card { padding: 16px; }
+.presentation-image-preview {
+  width: 100%; max-width: 360px; height: 190px;
+  object-fit: contain; background: #f4f7fa; border-radius: 12px;
+  border: 1px solid var(--agir-border);
+}
+.presentation-image-gallery {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px; width: 100%; max-height: 62vh; overflow-y: auto; padding: 2px;
+}
+.presentation-image-option { padding: 12px; min-width: 0; }
+.presentation-image-option .q-img { height: 155px; background: #f4f7fa; border-radius: 10px; }
 .ai-assistance-request {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, .34fr);
   align-items: stretch; gap: 10px; width: 100%;
@@ -310,6 +338,7 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   .brand-mark { width: 38px; height: 38px; border-radius: 12px; }
   .header-brand-copy { margin-left: 2px !important; }
   .header-tagline { display: none; }
+  .presentation-slide-grid { grid-template-columns: 1fr; }
 }
 """
 
@@ -1502,6 +1531,285 @@ class AGIRSoloInterface:
                     if section["id"] == "presentation":
                         self._render_selected_image_previews(state, artifact)
 
+    @staticmethod
+    def _presentation_image_asset(
+        state: dict[str, Any], identifier: str
+    ) -> dict[str, Any] | None:
+        for collection in ("source_images", "generated_images"):
+            for asset in state.get(collection, []):
+                if (
+                    isinstance(asset, dict)
+                    and str(asset.get("id", "")).strip() == identifier
+                ):
+                    return asset
+        return None
+
+    @staticmethod
+    def _render_presentation_image_thumbnail(
+        asset: dict[str, Any], *, gallery: bool = False
+    ) -> None:
+        encoded = str(
+            asset.get("thumbnail_base64") or asset.get("data_base64", "")
+        ).strip()
+        if not encoded:
+            with ui.element("div").classes(
+                "presentation-image-preview flex items-center justify-center"
+            ):
+                ui.icon("broken_image", size="2rem").classes("muted")
+            return
+        media_type = str(
+            asset.get("thumbnail_media_type") or asset.get("media_type", "image/png")
+        ).strip()
+        image = ui.image(f"data:{media_type};base64,{encoded}")
+        if gallery:
+            image.classes("w-full").props("fit=contain")
+        else:
+            image.classes("presentation-image-preview").props("fit=contain")
+
+    def _open_presentation_image_dialog(
+        self,
+        slide: dict[str, Any],
+        refresh_editor: Any,
+    ) -> None:
+        state = self.state or {}
+        assets = available_presentation_images(state)
+        current_identifier = str(slide.get("visual_asset_id", "")).strip()
+
+        with ui.dialog() as dialog, ui.card().classes(
+            "surface p-5 gap-4"
+        ).style("width: min(1120px, 96vw); max-width: 96vw;"):
+            with ui.row().classes("w-full items-start gap-3"):
+                with ui.column().classes("gap-1"):
+                    ui.label("SELECIONAR IMAGEM").classes("eyebrow")
+                    ui.label("Imagem associada ao slide").classes("section-title")
+                    ui.label(
+                        "Escolha através da miniatura. O CoerIA guarda automaticamente "
+                        "a origem documental ou os dados da geração por IA."
+                    ).classes("text-sm muted")
+                ui.space()
+                ui.button(icon="close", on_click=dialog.close).props(
+                    "flat round aria-label='Fechar seleção de imagem'"
+                )
+
+            if assets:
+                with ui.element("div").classes("presentation-image-gallery"):
+                    for asset in assets:
+                        identifier = str(asset.get("id", "")).strip()
+
+                        def choose_image(
+                            selected_asset: dict[str, Any] = asset,
+                        ) -> None:
+                            apply_presentation_image_choice(slide, selected_asset)
+                            dialog.close()
+                            refresh_editor()
+
+                        with ui.card().classes(
+                            "presentation-image-option soft-surface gap-2"
+                        ):
+                            self._render_presentation_image_thumbnail(
+                                asset, gallery=True
+                            )
+                            ui.label(presentation_image_label(asset)).classes(
+                                "text-sm font-semibold"
+                            )
+                            if asset.get("origin_type") == "ai_generated":
+                                ui.label("Imagem gerada por IA").classes(
+                                    "text-xs muted"
+                                )
+                            else:
+                                ui.label("Imagem extraída de documento").classes(
+                                    "text-xs muted"
+                                )
+                            button = ui.button(
+                                "Selecionada"
+                                if identifier == current_identifier
+                                else "Selecionar",
+                                icon="check_circle"
+                                if identifier == current_identifier
+                                else "add_photo_alternate",
+                                on_click=choose_image,
+                            ).props("unelevated no-caps").classes("w-full").mark(
+                                f"select-slide-image-{identifier}"
+                            )
+                            if identifier == current_identifier:
+                                button.props("color=positive")
+            else:
+                with ui.column().classes(
+                    "soft-surface w-full items-center text-center p-8 gap-2"
+                ):
+                    ui.icon("image_not_supported", size="2.4rem").classes("muted")
+                    ui.label("Não existem imagens disponíveis.").classes(
+                        "font-semibold"
+                    )
+                    ui.label(
+                        "Selecione imagens extraídas das fontes ou gere imagens por IA "
+                        "antes de as associar aos slides."
+                    ).classes("text-sm muted")
+
+            with ui.row().classes("w-full justify-end"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat no-caps")
+        dialog.open()
+
+    def _render_presentation_visual_editor(
+        self,
+        slide: dict[str, Any],
+        refresh_editor: Any,
+        slide_number: int,
+    ) -> None:
+        state = self.state or {}
+        identifier = str(slide.get("visual_asset_id", "")).strip()
+        asset = self._presentation_image_asset(state, identifier) if identifier else None
+        mode = str(slide.get("visual_mode", "diagrama")).strip() or "diagrama"
+
+        with ui.card().classes("presentation-visual-card soft-surface w-full gap-3"):
+            with ui.row().classes("w-full items-center gap-2"):
+                ui.label("Elemento visual").classes("font-semibold")
+                ui.space()
+                if asset is not None:
+                    label = (
+                        "Imagem gerada por IA"
+                        if asset.get("origin_type") == "ai_generated"
+                        else "Imagem documental"
+                    )
+                    ui.badge(label, color="primary")
+                elif mode == "ia":
+                    ui.badge("Imagem por gerar", color="warning")
+                else:
+                    ui.badge("Diagrama editável", color="secondary")
+
+            if asset is not None:
+                self._render_presentation_image_thumbnail(asset)
+                ui.label(presentation_image_label(asset)).classes(
+                    "text-xs muted"
+                )
+            elif mode == "ia":
+                ui.label(
+                    "A imagem ainda não foi gerada. A instrução abaixo será usada "
+                    "numa nova geração da etapa com IA."
+                ).classes("text-sm muted")
+            else:
+                ui.label(
+                    "O PowerPoint criará este elemento com formas e texto editáveis."
+                ).classes("text-sm muted")
+
+            with ui.row().classes("w-full gap-2 flex-wrap"):
+                ui.button(
+                    "Escolher imagem",
+                    icon="photo_library",
+                    on_click=lambda: self._open_presentation_image_dialog(
+                        slide, refresh_editor
+                    ),
+                ).props("outline no-caps").classes("secondary-action").mark(
+                    f"choose-slide-image-{slide_number}"
+                )
+                if asset is not None or mode == "ia":
+
+                    def use_diagram() -> None:
+                        apply_presentation_image_choice(slide, None)
+                        refresh_editor()
+
+                    ui.button(
+                        "Usar diagrama editável",
+                        icon="account_tree",
+                        on_click=use_diagram,
+                    ).props("flat no-caps").classes("secondary-action")
+
+            self._render_manual_field(
+                slide,
+                FieldSpec("visual_title", "Título do elemento visual"),
+            )
+            if mode == "ia" and asset is None:
+                self._render_manual_field(
+                    slide,
+                    FieldSpec("visual_prompt", "Instrução para gerar a imagem", "long"),
+                )
+            elif asset is None:
+                self._render_manual_field(
+                    slide,
+                    FieldSpec(
+                        "visual_items",
+                        "Elementos do diagrama — um por linha",
+                        "lines",
+                    ),
+                )
+            self._render_manual_field(
+                slide,
+                FieldSpec("alt_text", "Descrição acessível da imagem ou diagrama", "long"),
+            )
+
+    def _render_presentation_editor(
+        self,
+        artifact: dict[str, Any],
+        table: TableSpec,
+    ) -> None:
+        slides = value_at_path(artifact, table.path)
+        if not isinstance(slides, list):
+            raise ValueError("A apresentação não possui slides editáveis.")
+
+        @ui.refreshable
+        def render_slides() -> None:
+            if not slides:
+                ui.label(
+                    "A apresentação está vazia. Adicione o primeiro slide."
+                ).classes("text-sm muted")
+                return
+            with ui.column().classes("presentation-slides w-full"):
+                for index, slide in enumerate(slides):
+                    title = str(slide.get("title", "")).strip() or "Sem título"
+                    with ui.expansion(
+                        f"Slide {index + 1} — {title}",
+                        icon="slideshow",
+                        value=index == 0,
+                    ).props('group="presentation-slides"').classes(
+                        "presentation-slide w-full"
+                    ).mark(f"presentation-slide-{index + 1}"):
+                        with ui.row().classes("w-full justify-end"):
+
+                            def remove_slide(slide_index: int = index) -> None:
+                                slides.pop(slide_index)
+                                render_slides.refresh()
+
+                            ui.button(
+                                "Remover slide",
+                                icon="delete",
+                                on_click=remove_slide,
+                            ).props("flat no-caps color=negative")
+                        with ui.element("div").classes("presentation-slide-grid"):
+                            self._render_manual_field(
+                                slide, FieldSpec("title", "Título do slide")
+                            )
+                            self._render_manual_field(
+                                slide, FieldSpec("outcome_id", "Resultado de aprendizagem")
+                            )
+                        self._render_manual_field(
+                            slide,
+                            FieldSpec("bullets", "Conteúdo — um ponto por linha", "lines"),
+                        )
+                        self._render_presentation_visual_editor(
+                            slide,
+                            render_slides.refresh,
+                            index + 1,
+                        )
+
+        def add_slide() -> None:
+            row = new_table_row(table, self.state, slides)
+            slides.append(row)
+            render_slides.refresh()
+
+        with ui.column().classes("w-full gap-3"):
+            with ui.row().classes("w-full items-center gap-3"):
+                with ui.column().classes("gap-0"):
+                    ui.label("Slides da apresentação").classes("text-lg font-bold")
+                    ui.label(
+                        "Abra um slide de cada vez. Os dados técnicos da imagem são "
+                        "preenchidos automaticamente."
+                    ).classes("text-sm muted")
+                ui.space()
+                ui.button("Adicionar slide", icon="add", on_click=add_slide).props(
+                    "outline no-caps"
+                ).classes("secondary-action")
+            render_slides()
+
     def _render_resource_editor_tabs(
         self,
         state: dict[str, Any],
@@ -1547,7 +1855,10 @@ class AGIRSoloInterface:
                             )
                         for table in layout.tables:
                             if table.path[0] == root_path:
-                                self._render_manual_table(artifact, table)
+                                if tab_id == "presentation":
+                                    self._render_presentation_editor(artifact, table)
+                                else:
+                                    self._render_manual_table(artifact, table)
                         if tab_id == "presentation":
                             self._render_selected_image_previews(state, artifact)
 

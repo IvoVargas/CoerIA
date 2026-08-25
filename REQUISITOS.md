@@ -238,8 +238,12 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   da etapa **Recursos educativos**, antes de qualquer geração, sem repetir essa
   decisão no formulário inicial nem nas linhas da matriz de alinhamento.
 - Apresentar cada tipo de recurso selecionado num separador próprio, tanto em
-  consulta como em edição, preservando dentro dele todos os campos e tabelas do
-  recurso correspondente.
+  consulta como em edição, preservando dentro dele todo o conteúdo pedagógico
+  editável do recurso correspondente.
+- Editar a apresentação por slide, sem expor como colunas os identificadores e
+  metadados técnicos dos elementos visuais.
+- Selecionar a imagem associada através de uma janela com miniaturas, mostrar a
+  miniatura escolhida no editor e derivar automaticamente a sua proveniência.
 
 Gerar efetivamente cada tipo selecionado pelo docente:
 

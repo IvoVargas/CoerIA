@@ -558,6 +558,22 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
         state = review_current_stage(state, "approve", agent=agent)
     assert state["current_stage"] == "resources"
     state["orchestration"]["mode"] = "manual-first"
+    state["source_images"] = [
+        {
+            "id": "document-ui-test",
+            "origin_type": "document",
+            "source_file": "apoio.pdf",
+            "source_location": "Página 2",
+            "media_type": "image/png",
+            "thumbnail_media_type": "image/png",
+            "thumbnail_base64": (
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+                "YAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+            ),
+            "approved": False,
+        }
+    ]
+    state["selected_source_image_ids"] = ["document-ui-test"]
 
     @ui.page("/_test_resource_tabs")
     def resource_tabs_page():
@@ -583,6 +599,14 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
         assert len(user.find(marker=f"resource-edit-tab-{tab_id}").elements) == 1
 
     await user.should_see("Slides da apresentação")
+    await user.should_see("Slide 1 —")
+    await user.should_not_see("Origem visual")
+    await user.should_not_see("Modo visual")
+    user.find(marker="choose-slide-image-1").click()
+    await user.should_see("Imagem associada ao slide")
+    await user.should_see("apoio.pdf — Página 2")
+    user.find(marker="select-slide-image-document-ui-test").click()
+    await user.should_see("Imagem documental")
     user.find(marker="resource-edit-tab-worksheet").click()
     await user.should_see("Ficha — enquadramento")
     user.find(marker="resource-edit-tab-test").click()

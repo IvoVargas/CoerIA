@@ -1,7 +1,9 @@
 from prism.manual_editing import (
     FieldSpec,
     apply_editor_field_value,
+    apply_presentation_image_choice,
     assistance_scope_options,
+    available_presentation_images,
     editor_field_value,
     editor_reference_options,
     editor_reference_value,
@@ -82,6 +84,66 @@ def test_ai_assistance_scopes_omit_technical_id_fields() -> None:
         ]
 
         assert all("campo ID" not in label for label in labels)
+
+
+def test_presentation_assistance_omits_internal_visual_fields() -> None:
+    state = _completed_state()
+
+    labels = [
+        option["label"]
+        for option in assistance_scope_options("resources", state["resources"])
+    ]
+
+    assert all("Origem visual" not in label for label in labels)
+    assert all("Imagem associada" not in label for label in labels)
+    assert all("Tipo visual" not in label for label in labels)
+
+
+def test_presentation_image_choice_derives_visual_provenance() -> None:
+    slide = {
+        "visual_mode": "diagrama",
+        "visual_asset_id": "",
+        "visual_prompt": "",
+        "visual_source": "Diagrama nativo.",
+        "alt_text": "Descrição existente.",
+    }
+    document = {
+        "id": "document-1",
+        "origin_type": "document",
+        "source_file": "apoio.pdf",
+        "source_location": "Página 3",
+        "alt_text": "Figura do documento.",
+    }
+
+    apply_presentation_image_choice(slide, document)
+
+    assert slide["visual_mode"] == "documento"
+    assert slide["visual_asset_id"] == "document-1"
+    assert slide["visual_source"] == "Imagem extraída de apoio.pdf, Página 3."
+    assert slide["alt_text"] == "Figura do documento."
+
+    apply_presentation_image_choice(slide, None)
+    assert slide["visual_mode"] == "diagrama"
+    assert slide["visual_asset_id"] == ""
+    assert slide["visual_source"].startswith("Diagrama nativo gerado pelo CoerIA")
+
+
+def test_available_presentation_images_include_only_selected_documents_and_ai() -> None:
+    state = {
+        "selected_source_image_ids": ["document-selected"],
+        "source_images": [
+            {"id": "document-selected", "origin_type": "document"},
+            {"id": "document-hidden", "origin_type": "document"},
+        ],
+        "generated_images": [
+            {"id": "ai-generated", "origin_type": "ai_generated"}
+        ],
+    }
+
+    assert [asset["id"] for asset in available_presentation_images(state)] == [
+        "document-selected",
+        "ai-generated",
+    ]
 
 
 def test_proposal_review_preserves_ids_and_applies_only_accepted_cells() -> None:

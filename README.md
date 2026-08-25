@@ -89,7 +89,11 @@ aula, teste com chave de correção e atividade prática. As apresentações dev
 integrar imagens, diagramas, tabelas, gráficos ou outros elementos visuais com
 finalidade pedagógica. Na etapa **Recursos educativos**, cada tipo selecionado
 tem um separador próprio tanto na consulta como na edição, evitando apresentar
-slides, secções, questões e critérios numa única sequência extensa. Depois da
+slides, secções, questões e critérios numa única sequência extensa. No separador
+da apresentação, a edição é organizada por slide e mostra apenas
+os campos pedagógicos aplicáveis. A imagem associada é escolhida numa galeria de
+miniaturas; a proveniência e o identificador técnico são preenchidos
+automaticamente, e a miniatura escolhida fica visível no próprio slide. Depois da
 aprovação final, a aplicação exporta um ZIP com
 o programa da UC, os ficheiros selecionados, matriz de alinhamento, auditoria,
 manifesto e estado completo da sessão. Antes de preparar o pacote, o docente

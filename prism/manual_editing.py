@@ -662,6 +662,89 @@ REFERENCE_FIELDS = {
 }
 
 
+PRESENTATION_INTERNAL_FIELDS = {
+    "visual_asset_id",
+    "visual_kind",
+    "visual_source",
+}
+
+
+def available_presentation_images(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Lista as imagens que o docente pode associar manualmente a um slide."""
+
+    selected_source_ids = {
+        str(item).strip()
+        for item in state.get("selected_source_image_ids", [])
+        if str(item).strip()
+    }
+    assets: list[dict[str, Any]] = []
+    for asset in state.get("source_images", []):
+        if not isinstance(asset, dict):
+            continue
+        identifier = str(asset.get("id", "")).strip()
+        if identifier and identifier in selected_source_ids:
+            assets.append(asset)
+    for asset in state.get("generated_images", []):
+        if not isinstance(asset, dict) or not str(asset.get("id", "")).strip():
+            continue
+        assets.append(asset)
+    return assets
+
+
+def presentation_image_label(asset: dict[str, Any]) -> str:
+    """Cria uma descrição humana da proveniência sem expor o ID técnico."""
+
+    if asset.get("origin_type") == "ai_generated":
+        provider = str(asset.get("provider", "IA")).strip() or "IA"
+        model = str(asset.get("model", "")).strip()
+        return f"Gerada por IA — {provider}" + (f" — {model}" if model else "")
+    source = str(asset.get("source_file", "")).strip() or "Documento de referência"
+    location = str(asset.get("source_location", "")).strip()
+    return source + (f" — {location}" if location else "")
+
+
+def apply_presentation_image_choice(
+    slide: dict[str, Any],
+    asset: dict[str, Any] | None,
+) -> None:
+    """Associa uma imagem e deriva automaticamente os metadados técnicos."""
+
+    if asset is None:
+        slide["visual_mode"] = "diagrama"
+        slide["visual_asset_id"] = ""
+        slide["visual_prompt"] = ""
+        slide["visual_source"] = (
+            "Diagrama nativo gerado pelo CoerIA a partir dos artefactos aprovados."
+        )
+        return
+
+    identifier = str(asset.get("id", "")).strip()
+    if not identifier:
+        raise ValueError("A imagem selecionada não possui um identificador válido.")
+    is_ai = asset.get("origin_type") == "ai_generated" or identifier.startswith("ai-")
+    slide["visual_mode"] = "ia" if is_ai else "documento"
+    slide["visual_asset_id"] = identifier
+    if is_ai:
+        provider = str(asset.get("provider", "IA")).strip() or "IA"
+        model = str(asset.get("model", "")).strip()
+        slide["visual_prompt"] = str(asset.get("prompt", "")).strip()
+        slide["visual_source"] = (
+            f"Imagem gerada por IA — {provider}" + (f", modelo {model}." if model else ".")
+        )
+    else:
+        source_file = str(asset.get("source_file", "")).strip() or "documento fornecido"
+        source_location = str(asset.get("source_location", "")).strip()
+        slide["visual_prompt"] = ""
+        slide["visual_source"] = f"Imagem extraída de {source_file}"
+        if source_location:
+            slide["visual_source"] += f", {source_location}"
+        slide["visual_source"] += "."
+
+    asset_alt_text = str(asset.get("alt_text", "")).strip()
+    if asset_alt_text:
+        slide["alt_text"] = asset_alt_text
+
+
 def editor_reference_options(
     state: dict[str, Any],
     field: FieldSpec,
@@ -676,37 +759,9 @@ def editor_reference_options(
         }
     if field.key == "visual_asset_id":
         options = {"": "Sem imagem documental"}
-        selected_source_ids = {
-            str(item).strip()
-            for item in state.get("selected_source_image_ids", [])
-            if str(item).strip()
-        }
-        for asset in state.get("source_images", []):
-            if not isinstance(asset, dict):
-                continue
+        for asset in available_presentation_images(state):
             identifier = str(asset.get("id", "")).strip()
-            if not identifier or identifier not in selected_source_ids:
-                continue
-            source_file = str(asset.get("source_file", "")).strip()
-            location = str(asset.get("source_location", "")).strip()
-            filename = str(asset.get("filename", "")).strip()
-            description = source_file
-            if location:
-                description += f" — {location}"
-            if filename and filename != source_file:
-                description += f" — {filename}"
-            options[identifier] = description or identifier
-        for asset in state.get("generated_images", []):
-            if not isinstance(asset, dict):
-                continue
-            identifier = str(asset.get("id", "")).strip()
-            if not identifier:
-                continue
-            provider = str(asset.get("provider", "IA")).strip()
-            model = str(asset.get("model", "")).strip()
-            options[identifier] = (
-                f"Gerada por IA — {provider}" + (f" — {model}" if model else "")
-            )
+            options[identifier] = presentation_image_label(asset)
         return options
 
     source = REFERENCE_FIELDS.get(field.key)
@@ -769,7 +824,11 @@ def assistance_scope_options(stage: str, artifact: Any) -> list[dict[str, Any]]:
             )
             if isinstance(row, dict):
                 for field in table.fields:
-                    if field.key in row and field.key != "id":
+                    if (
+                        field.key in row
+                        and field.key != "id"
+                        and field.key not in PRESENTATION_INTERNAL_FIELDS
+                    ):
                         options.append(
                             {
                                 "label": f"{row_label} — campo {field.label}",
