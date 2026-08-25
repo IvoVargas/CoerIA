@@ -100,6 +100,17 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertIn("Chave de correção", sections[0]["content"])
         self.assertNotIn("Atividade prática", sections[0]["content"])
 
+    def test_presentation_detail_omits_the_redundant_source_column(self) -> None:
+        state = self._resource_state()
+        resources = deepcopy(state["resources"])
+        resources["selected_types"] = [RESOURCE_PRESENTATION]
+
+        sections = render_resource_detail_sections(resources)
+
+        self.assertEqual([item["id"] for item in sections], ["presentation"])
+        self.assertIn("| Modo visual |", sections[0]["content"])
+        self.assertNotIn("| Fonte |", sections[0]["content"])
+
     def test_resource_quality_is_presented_only_in_final_validation(self) -> None:
         state = self._resource_state()
 

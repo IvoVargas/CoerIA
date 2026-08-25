@@ -90,7 +90,9 @@ integrar imagens, diagramas, tabelas, gráficos ou outros elementos visuais com
 finalidade pedagógica. Na etapa **Recursos educativos**, cada tipo selecionado
 tem um separador próprio tanto na consulta como na edição, evitando apresentar
 slides, secções, questões e critérios numa única sequência extensa. No separador
-da apresentação, a edição é organizada por slide e mostra apenas
+da apresentação, a consulta integra a miniatura da imagem associada na coluna
+**Modo visual**, sem repetir a proveniência, avisos técnicos ou uma galeria
+separada. A edição é organizada por slide e mostra apenas
 os campos pedagógicos aplicáveis. A imagem associada é escolhida numa galeria de
 miniaturas; a proveniência e o identificador técnico são preenchidos
 automaticamente, e a miniatura escolhida fica visível no próprio slide. Depois da

@@ -244,6 +244,11 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   metadados técnicos dos elementos visuais.
 - Selecionar a imagem associada através de uma janela com miniaturas, mostrar a
   miniatura escolhida no editor e derivar automaticamente a sua proveniência.
+- Na consulta da apresentação, integrar a miniatura da imagem associada na coluna
+  «Modo visual» e omitir a coluna de proveniência, os avisos visuais e a galeria
+  redundante de imagens selecionadas.
+- Manter aberto o slide em edição depois de selecionar ou remover a respetiva
+  imagem.
 
 Gerar efetivamente cada tipo selecionado pelo docente:
 

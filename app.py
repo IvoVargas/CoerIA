@@ -302,6 +302,13 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 }
 .presentation-image-option { padding: 12px; min-width: 0; }
 .presentation-image-option .q-img { height: 155px; background: #f4f7fa; border-radius: 10px; }
+.presentation-view-table { min-width: 980px !important; }
+.presentation-view-content { min-width: 220px; white-space: normal; }
+.presentation-view-visual-cell { min-width: 150px; }
+.presentation-mode-thumbnail {
+  width: 132px; height: 82px; object-fit: contain; background: #f4f7fa;
+  border: 1px solid var(--agir-border); border-radius: 9px; margin-bottom: 6px;
+}
 .ai-assistance-request {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, .34fr);
   align-items: stretch; gap: 10px; width: 100%;
@@ -1380,108 +1387,85 @@ class AGIRSoloInterface:
                     ).classes("mt-1")
         return controls
 
-    def _render_selected_image_previews(
+    def _render_presentation_resource_view(
         self,
         state: dict[str, Any],
-        resources: dict[str, Any] | None = None,
+        artifact: dict[str, Any],
     ) -> None:
-        """Mostra ao docente as imagens selecionadas antes da aprovação."""
+        """Mostra os slides com a miniatura integrada na coluna visual."""
 
-        resource_artifact = resources or state.get("resources", {})
-        slides = resource_artifact.get("presentation_outline", [])
-        assets: dict[str, dict[str, Any]] = {}
-        for collection in ("source_images", "generated_images"):
-            for asset in state.get(collection, []):
-                if not isinstance(asset, dict):
-                    continue
-                identifier = str(asset.get("id", "")).strip()
-                if identifier:
-                    assets[identifier] = asset
-
-        selected: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
-        for index, slide in enumerate(slides, start=1):
-            if not isinstance(slide, dict) or slide.get("visual_mode") not in {
-                "documento",
-                "ia",
-            }:
-                continue
-            asset = assets.get(str(slide.get("visual_asset_id", "")).strip())
-            if asset is not None:
-                selected.append((index, slide, asset))
-        warnings = [
-            (index, str(slide.get("visual_warning", "")).strip())
-            for index, slide in enumerate(slides, start=1)
-            if isinstance(slide, dict) and str(slide.get("visual_warning", "")).strip()
-        ]
-        if not selected and not warnings:
-            return
-
-        ui.separator().classes("my-4")
-        if warnings:
-            ui.label("AVISOS VISUAIS").classes("eyebrow")
-            with ui.column().classes("w-full gap-2 mb-3"):
-                for slide_number, warning in warnings:
-                    ui.label(f"Slide {slide_number}: {warning}").classes(
-                        "text-sm text-orange-900 bg-orange-50 rounded p-2 w-full"
-                    )
-        if not selected:
-            return
-        ui.label("IMAGENS SELECIONADAS").classes("eyebrow")
-        ui.label(
-            "Confirme visualmente estas imagens antes de aprovar os recursos. "
-            "As imagens geradas por IA apresentam também fornecedor, modelo e "
-            "instrução utilizada."
-        ).classes("text-sm muted mb-3")
-        with ui.row().classes("w-full gap-3 items-stretch flex-wrap"):
-            for slide_number, slide, asset in selected:
-                encoded = str(asset.get("data_base64", "")).strip()
-                media_type = str(asset.get("media_type", "image/png")).strip()
-                is_ai = asset.get("origin_type") == "ai_generated"
-                with ui.card().classes("surface p-3").style(
-                    "width: min(100%, 340px);"
-                ):
-                    if encoded:
-                        ui.image(
-                            f"data:{media_type};base64,{encoded}"
-                        ).classes("w-full rounded").style(
-                            "height: 190px; object-fit: contain; background: #f4f7fa;"
+        slides = artifact.get("presentation_outline", [])
+        ui.label(f"{len(slides)} slides").classes("font-semibold mb-3")
+        headers = (
+            "Slide",
+            "Título",
+            "Resultado",
+            "Conteúdo",
+            "Modo visual",
+            "Elemento visual",
+            "Texto alternativo",
+        )
+        with ui.element("div").classes(
+            "artifact-markdown presentation-view-table-wrap overflow-x-auto"
+        ):
+            with ui.element("table").classes("presentation-view-table"):
+                with ui.element("thead"):
+                    with ui.element("tr"):
+                        for header in headers:
+                            with ui.element("th"):
+                                ui.label(header)
+                with ui.element("tbody"):
+                    for index, slide in enumerate(slides, start=1):
+                        identifier = str(slide.get("visual_asset_id", "")).strip()
+                        asset = (
+                            self._presentation_image_asset(state, identifier)
+                            if identifier
+                            else None
                         )
-                    ui.label(
-                        f"Slide {slide_number} — {slide.get('title', '')}"
-                    ).classes("font-semibold text-sm")
-                    if is_ai:
-                        provider = str(asset.get("provider", "IA")).strip()
-                        model = str(asset.get("model", "")).strip()
-                        ui.label(
-                            f"Gerada por IA · {provider}" + (f" · {model}" if model else "")
-                        ).classes("text-xs muted")
-                        size = str(asset.get("size", "")).strip()
-                        quality = str(asset.get("quality", "")).strip()
-                        if size or quality:
-                            detail = " · ".join(
-                                part for part in (size, f"qualidade {quality}" if quality else "")
-                                if part
-                            )
-                            ui.label(detail).classes("text-xs muted")
-                        prompt = str(asset.get("prompt", "")).strip()
-                        if prompt:
-                            ui.label("Instrução utilizada:").classes(
-                                "text-xs font-semibold mt-1"
-                            )
-                            ui.label(prompt).classes("text-xs muted")
-                    else:
-                        source = str(asset.get("source_file", "")).strip()
-                        location = str(asset.get("source_location", "")).strip()
-                        if location:
-                            source += f" · {location}"
-                        ui.label(source or "Origem documental").classes(
-                            "text-xs muted"
-                        )
-                    ui.label(
-                        "Aprovada"
-                        if asset.get("approved") is True
-                        else "A aguardar aprovação dos recursos"
-                    ).classes("text-xs font-semibold mt-1")
+                        mode = str(slide.get("visual_mode", "diagrama")).strip()
+                        with ui.element("tr"):
+                            with ui.element("td"):
+                                ui.label(str(index))
+                            with ui.element("td"):
+                                ui.label(str(slide.get("title", "")))
+                            with ui.element("td"):
+                                ui.label(str(slide.get("outcome_id", "") or "—"))
+                            with ui.element("td"):
+                                ui.label(
+                                    " · ".join(
+                                        str(item)
+                                        for item in slide.get("bullets", [])
+                                        if str(item).strip()
+                                    )
+                                ).classes("presentation-view-content")
+                            with ui.element("td").classes(
+                                "presentation-view-visual-cell"
+                            ).mark(f"presentation-view-visual-{index}"):
+                                if asset is not None:
+                                    thumbnail = self._render_presentation_image_thumbnail(
+                                        asset, compact=True
+                                    )
+                                    thumbnail.mark(
+                                        f"presentation-view-thumbnail-{index}"
+                                    )
+                                    ui.label(
+                                        "Imagem gerada por IA"
+                                        if asset.get("origin_type") == "ai_generated"
+                                        else "Imagem documental"
+                                    ).classes("text-xs font-semibold")
+                                else:
+                                    ui.icon("account_tree", size="1.6rem").classes(
+                                        "muted"
+                                    )
+                                    ui.label(
+                                        "Imagem por gerar"
+                                        if mode == "ia"
+                                        else "Diagrama editável"
+                                    ).classes("text-xs font-semibold")
+                            with ui.element("td"):
+                                ui.label(str(slide.get("visual_title", "")))
+                            with ui.element("td"):
+                                ui.label(str(slide.get("alt_text", "")))
 
     @staticmethod
     def _selected_resource_tab_config(
@@ -1525,11 +1509,12 @@ class AGIRSoloInterface:
         ):
             for section in sections:
                 with ui.tab_panel(tab_by_id[section["id"]]).classes("px-0"):
-                    ui.markdown(
-                        section["content"], extras=["tables"]
-                    ).classes("artifact-markdown overflow-x-auto")
                     if section["id"] == "presentation":
-                        self._render_selected_image_previews(state, artifact)
+                        self._render_presentation_resource_view(state, artifact)
+                    else:
+                        ui.markdown(
+                            section["content"], extras=["tables"]
+                        ).classes("artifact-markdown overflow-x-auto")
 
     @staticmethod
     def _presentation_image_asset(
@@ -1546,25 +1531,34 @@ class AGIRSoloInterface:
 
     @staticmethod
     def _render_presentation_image_thumbnail(
-        asset: dict[str, Any], *, gallery: bool = False
-    ) -> None:
+        asset: dict[str, Any], *, gallery: bool = False, compact: bool = False
+    ) -> Any:
         encoded = str(
             asset.get("thumbnail_base64") or asset.get("data_base64", "")
         ).strip()
         if not encoded:
-            with ui.element("div").classes(
-                "presentation-image-preview flex items-center justify-center"
-            ):
+            placeholder = ui.element("div").classes(
+                (
+                    "presentation-mode-thumbnail"
+                    if compact
+                    else "presentation-image-preview"
+                )
+                + " flex items-center justify-center"
+            )
+            with placeholder:
                 ui.icon("broken_image", size="2rem").classes("muted")
-            return
+            return placeholder
         media_type = str(
             asset.get("thumbnail_media_type") or asset.get("media_type", "image/png")
         ).strip()
         image = ui.image(f"data:{media_type};base64,{encoded}")
-        if gallery:
+        if compact:
+            image.classes("presentation-mode-thumbnail").props("fit=contain")
+        elif gallery:
             image.classes("w-full").props("fit=contain")
         else:
             image.classes("presentation-image-preview").props("fit=contain")
+        return image
 
     def _open_presentation_image_dialog(
         self,
@@ -1745,6 +1739,7 @@ class AGIRSoloInterface:
         slides = value_at_path(artifact, table.path)
         if not isinstance(slides, list):
             raise ValueError("A apresentação não possui slides editáveis.")
+        expanded_slide = {"index": 0}
 
         @ui.refreshable
         def render_slides() -> None:
@@ -1756,17 +1751,34 @@ class AGIRSoloInterface:
             with ui.column().classes("presentation-slides w-full"):
                 for index, slide in enumerate(slides):
                     title = str(slide.get("title", "")).strip() or "Sem título"
-                    with ui.expansion(
+                    expansion = ui.expansion(
                         f"Slide {index + 1} — {title}",
                         icon="slideshow",
-                        value=index == 0,
+                        value=index == expanded_slide["index"],
                     ).props('group="presentation-slides"').classes(
                         "presentation-slide w-full"
-                    ).mark(f"presentation-slide-{index + 1}"):
+                    ).mark(f"presentation-slide-{index + 1}")
+
+                    def remember_expanded_slide(
+                        event: Any, slide_index: int = index
+                    ) -> None:
+                        if event.value:
+                            expanded_slide["index"] = slide_index
+
+                    expansion.on_value_change(remember_expanded_slide)
+
+                    def refresh_current_slide(slide_index: int = index) -> None:
+                        expanded_slide["index"] = slide_index
+                        render_slides.refresh()
+
+                    with expansion:
                         with ui.row().classes("w-full justify-end"):
 
                             def remove_slide(slide_index: int = index) -> None:
                                 slides.pop(slide_index)
+                                expanded_slide["index"] = min(
+                                    slide_index, max(len(slides) - 1, 0)
+                                )
                                 render_slides.refresh()
 
                             ui.button(
@@ -1787,13 +1799,14 @@ class AGIRSoloInterface:
                         )
                         self._render_presentation_visual_editor(
                             slide,
-                            render_slides.refresh,
+                            refresh_current_slide,
                             index + 1,
                         )
 
         def add_slide() -> None:
             row = new_table_row(table, self.state, slides)
             slides.append(row)
+            expanded_slide["index"] = len(slides) - 1
             render_slides.refresh()
 
         with ui.column().classes("w-full gap-3"):
@@ -1859,10 +1872,6 @@ class AGIRSoloInterface:
                                     self._render_presentation_editor(artifact, table)
                                 else:
                                     self._render_manual_table(artifact, table)
-                        if tab_id == "presentation":
-                            self._render_selected_image_previews(state, artifact)
-
-
     def _render_stage_preview(self, state: dict[str, Any], stage: str) -> None:
         """Mostra uma etapa anterior sem a tornar corrente nem a invalidar."""
 

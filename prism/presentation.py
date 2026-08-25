@@ -141,7 +141,6 @@ def render_resource_detail_sections(
                     " · ".join(str(item) for item in slide.get("bullets", [])),
                     mode_label,
                     slide.get("visual_title", ""),
-                    slide.get("visual_source", ""),
                     slide.get("alt_text", ""),
                 ]
             )
@@ -160,7 +159,6 @@ def render_resource_detail_sections(
                             "Conteúdo",
                             "Modo visual",
                             "Elemento visual",
-                            "Fonte",
                             "Texto alternativo",
                         ],
                         rows,

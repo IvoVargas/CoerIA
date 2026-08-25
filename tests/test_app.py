@@ -574,6 +574,17 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
         }
     ]
     state["selected_source_image_ids"] = ["document-ui-test"]
+    assert len(state["resources"]["presentation_outline"]) >= 5
+    fifth_slide = state["resources"]["presentation_outline"][4]
+    fifth_slide["visual_mode"] = "documento"
+    fifth_slide["visual_asset_id"] = "document-ui-test"
+    fifth_slide["visual_title"] = "Visual exclusivo do slide 5"
+    fifth_slide["visual_source"] = "Imagem extraída de apoio.pdf, Página 2."
+    fifth_slide["visual_warning"] = "Aviso técnico que não deve aparecer na etapa."
+    active_resource_version = int(state["active_versions"]["resources"])
+    state["versions"]["resources"][active_resource_version - 1] = deepcopy(
+        state["resources"]
+    )
 
     @ui.page("/_test_resource_tabs")
     def resource_tabs_page():
@@ -584,6 +595,10 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
     await user.open("/_test_resource_tabs")
 
     await user.should_see("CONTEÚDO DOS RECURSOS")
+    await user.should_see("Modo visual")
+    await user.should_not_see("AVISOS VISUAIS")
+    await user.should_not_see("IMAGENS SELECIONADAS")
+    assert len(user.find(marker="presentation-view-thumbnail-5").elements) == 1
     for tab_id in ("presentation", "worksheet", "test", "practical"):
         assert len(user.find(marker=f"resource-view-tab-{tab_id}").elements) == 1
 
@@ -602,11 +617,17 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
     await user.should_see("Slide 1 —")
     await user.should_not_see("Origem visual")
     await user.should_not_see("Modo visual")
-    user.find(marker="choose-slide-image-1").click()
+    fifth_expansion = next(
+        iter(user.find(marker="presentation-slide-5").elements)
+    )
+    fifth_expansion.value = True
+    await user.should_see("Visual exclusivo do slide 5")
+    user.find(marker="choose-slide-image-5").click()
     await user.should_see("Imagem associada ao slide")
     await user.should_see("apoio.pdf — Página 2")
     user.find(marker="select-slide-image-document-ui-test").click()
     await user.should_see("Imagem documental")
+    await user.should_see("Visual exclusivo do slide 5")
     user.find(marker="resource-edit-tab-worksheet").click()
     await user.should_see("Ficha — enquadramento")
     user.find(marker="resource-edit-tab-test").click()
