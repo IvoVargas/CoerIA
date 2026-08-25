@@ -55,7 +55,10 @@ from prism.manual_editing import (
     value_at_path,
 )
 from prism.models import (
+    RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
+    RESOURCE_TEST,
+    RESOURCE_WORKSHEET,
     SEMESTER_OPTIONS,
     SUPPORTED_RESOURCE_TYPES,
 )
@@ -67,6 +70,7 @@ from prism.presentation import (
     history_choices,
     render_current_artifact,
     render_history_artifact,
+    render_resource_detail_sections,
     render_stage_artifact,
 )
 from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
@@ -82,6 +86,12 @@ SESSION_STORE = SQLiteSessionStore()
 SERVICE = ApplicationService(SESSION_STORE)
 LOGIN_THROTTLE = LoginThrottle()
 RESOURCE_TYPES = list(SUPPORTED_RESOURCE_TYPES)
+RESOURCE_TAB_CONFIG = (
+    (RESOURCE_PRESENTATION, "presentation", "Apresentação", "slideshow", "presentation_outline"),
+    (RESOURCE_WORKSHEET, "worksheet", "Ficha de aula", "description", "lesson_worksheet"),
+    (RESOURCE_TEST, "test", "Teste", "quiz", "test"),
+    (RESOURCE_PRACTICAL, "practical", "Atividade prática", "construction", "practical_activity"),
+)
 LATEX_PDF_ENABLED = latex_pdf_compilation_enabled()
 EXPORT_DOCUMENT_FORMAT_CHOICES = (
     {
@@ -260,6 +270,10 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .decision-card { padding: 22px; }
 .teacher-control-card { padding: 16px 18px; gap: 8px; }
 .teacher-control-card .secondary-action { min-height: 38px; }
+.resource-tabs { border-bottom: 1px solid var(--agir-border); }
+.resource-tabs .q-tab { min-height: 48px; }
+.resource-tab-panels { background: transparent !important; }
+.resource-tab-panels .q-tab-panel { padding-top: 18px; }
 .ai-assistance-request {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, .34fr);
   align-items: stretch; gap: 10px; width: 100%;
@@ -1338,11 +1352,14 @@ class AGIRSoloInterface:
         return controls
 
     def _render_selected_image_previews(
-        self, state: dict[str, Any]
+        self,
+        state: dict[str, Any],
+        resources: dict[str, Any] | None = None,
     ) -> None:
         """Mostra ao docente as imagens selecionadas antes da aprovação."""
 
-        slides = state.get("resources", {}).get("presentation_outline", [])
+        resource_artifact = resources or state.get("resources", {})
+        slides = resource_artifact.get("presentation_outline", [])
         assets: dict[str, dict[str, Any]] = {}
         for collection in ("source_images", "generated_images"):
             for asset in state.get(collection, []):
@@ -1437,6 +1454,103 @@ class AGIRSoloInterface:
                         else "A aguardar aprovação dos recursos"
                     ).classes("text-xs font-semibold mt-1")
 
+    @staticmethod
+    def _selected_resource_tab_config(
+        state: dict[str, Any],
+        artifact: dict[str, Any],
+    ) -> list[tuple[str, str, str, str, str]]:
+        selected = set(
+            artifact.get("selected_types") or state.get("resource_types", [])
+        )
+        return [
+            config for config in RESOURCE_TAB_CONFIG if config[0] in selected
+        ]
+
+    def _render_resource_detail_tabs(
+        self,
+        state: dict[str, Any],
+        artifact: dict[str, Any],
+    ) -> None:
+        sections = render_resource_detail_sections(artifact)
+        if not sections:
+            ui.label(
+                "Ainda não existem recursos selecionados para visualizar."
+            ).classes("text-sm muted mt-4")
+            return
+
+        ui.label("CONTEÚDO DOS RECURSOS").classes("eyebrow mt-4")
+        with ui.tabs().props("no-caps align=left").classes(
+            "resource-tabs w-full"
+        ) as tabs:
+            tab_by_id = {
+                section["id"]: ui.tab(
+                    section["id"],
+                    label=section["label"],
+                    icon=section["icon"],
+                ).mark(f"resource-view-tab-{section['id']}")
+                for section in sections
+            }
+        first_tab = tab_by_id[sections[0]["id"]]
+        with ui.tab_panels(tabs, value=first_tab).classes(
+            "resource-tab-panels w-full"
+        ):
+            for section in sections:
+                with ui.tab_panel(tab_by_id[section["id"]]).classes("px-0"):
+                    ui.markdown(
+                        section["content"], extras=["tables"]
+                    ).classes("artifact-markdown overflow-x-auto")
+                    if section["id"] == "presentation":
+                        self._render_selected_image_previews(state, artifact)
+
+    def _render_resource_editor_tabs(
+        self,
+        state: dict[str, Any],
+        artifact: dict[str, Any],
+        layout: Any,
+    ) -> None:
+        resource_configs = self._selected_resource_tab_config(state, artifact)
+        if not resource_configs:
+            ui.label(
+                "Selecione primeiro pelo menos um recurso em «Recursos a preparar»."
+            ).classes("text-sm muted")
+            return
+
+        with ui.tabs().props("no-caps align=left").classes(
+            "resource-tabs w-full"
+        ) as tabs:
+            tab_by_id = {
+                tab_id: ui.tab(
+                    tab_id,
+                    label=label,
+                    icon=icon,
+                ).mark(f"resource-edit-tab-{tab_id}")
+                for _, tab_id, label, icon, _ in resource_configs
+            }
+        first_tab = tab_by_id[resource_configs[0][1]]
+        with ui.tab_panels(tabs, value=first_tab).classes(
+            "resource-tab-panels w-full"
+        ):
+            for _, tab_id, _, _, root_path in resource_configs:
+                with ui.tab_panel(tab_by_id[tab_id]).classes("px-0"):
+                    with ui.column().classes("w-full gap-4"):
+                        for scalar in layout.fields:
+                            if scalar.path[0] != root_path:
+                                continue
+                            parent = value_at_path(artifact, scalar.path[:-1])
+                            self._render_manual_field(
+                                parent,
+                                FieldSpec(
+                                    scalar.path[-1],
+                                    scalar.label,
+                                    scalar.kind,
+                                ),
+                            )
+                        for table in layout.tables:
+                            if table.path[0] == root_path:
+                                self._render_manual_table(artifact, table)
+                        if tab_id == "presentation":
+                            self._render_selected_image_previews(state, artifact)
+
 
     def _render_stage_preview(self, state: dict[str, Any], stage: str) -> None:
         """Mostra uma etapa anterior sem a tornar corrente nem a invalidar."""
@@ -1496,7 +1610,10 @@ class AGIRSoloInterface:
                     extras=["tables"],
                 ).classes("artifact-markdown")
                 if stage == "resources":
-                    self._render_selected_image_previews(state)
+                    self._render_resource_detail_tabs(
+                        state,
+                        active_stage_artifact(state, stage),
+                    )
 
     def _render_manual_field(
         self,
@@ -1661,12 +1778,21 @@ class AGIRSoloInterface:
         if artifact is None:
             raise ValueError("Não existe uma edição manual ativa.")
         layout = editor_layout(stage)
-        ui.label("EDIÇÃO NA TABELA ATUAL").classes("eyebrow")
+        ui.label(
+            "EDIÇÃO DOS RECURSOS"
+            if stage == "resources"
+            else "EDIÇÃO NA TABELA ATUAL"
+        ).classes("eyebrow")
         ui.label(STAGE_LABELS[stage]).classes("section-title mb-2")
         ui.label(
             "Edite os campos abaixo ou adicione e remova linhas. Enquanto não "
             "guardar, a versão ativa e os passos seguintes permanecem intactos."
         ).classes("text-sm muted mb-4")
+        if stage == "resources":
+            self._render_resource_editor_tabs(
+                self.state or {}, artifact, layout
+            )
+            return
         with ui.column().classes("w-full gap-4"):
             for scalar in layout.fields:
                 parent = (
@@ -2038,7 +2164,7 @@ class AGIRSoloInterface:
                             "artifact-markdown"
                         )
                     if stage == "resources":
-                        self._render_selected_image_previews(state)
+                        self._render_resource_detail_tabs(state, state[stage])
 
     def _render_manual_authoring_card(
         self,

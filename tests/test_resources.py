@@ -33,7 +33,7 @@ from prism.models import (
     SUPPORTED_RESOURCE_TYPES,
 )
 from prism.persistence import SQLiteSessionStore
-from prism.presentation import render_current_artifact
+from prism.presentation import render_current_artifact, render_resource_detail_sections
 from prism.quality import evaluate_quality
 from prism.workflow import create_session, create_test_agent, review_current_stage
 
@@ -88,6 +88,17 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertTrue(resources["practical_activity"]["steps"])
         self.assertTrue(resources["quality"]["passed"])
         self.assertEqual(resources["quality"]["status"], "OK")
+
+    def test_resource_detail_sections_include_only_selected_resources(self) -> None:
+        state = self._resource_state()
+        resources = deepcopy(state["resources"])
+        resources["selected_types"] = [RESOURCE_TEST]
+
+        sections = render_resource_detail_sections(resources)
+
+        self.assertEqual([item["id"] for item in sections], ["test"])
+        self.assertIn("Chave de correção", sections[0]["content"])
+        self.assertNotIn("Atividade prática", sections[0]["content"])
 
     def test_resource_quality_is_presented_only_in_final_validation(self) -> None:
         state = self._resource_state()

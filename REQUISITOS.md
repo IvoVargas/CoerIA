@@ -237,6 +237,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Apresentar a seleção dos tipos de recursos e das imagens documentais no início
   da etapa **Recursos educativos**, antes de qualquer geração, sem repetir essa
   decisão no formulário inicial nem nas linhas da matriz de alinhamento.
+- Apresentar cada tipo de recurso selecionado num separador próprio, tanto em
+  consulta como em edição, preservando dentro dele todos os campos e tabelas do
+  recurso correspondente.
 
 Gerar efetivamente cada tipo selecionado pelo docente:
 

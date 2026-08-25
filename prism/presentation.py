@@ -6,6 +6,12 @@ from copy import deepcopy
 from typing import Any
 
 from .curriculum import taxonomy_level_label
+from .models import (
+    RESOURCE_PRACTICAL,
+    RESOURCE_PRESENTATION,
+    RESOURCE_TEST,
+    RESOURCE_WORKSHEET,
+)
 from .workflow import STAGE_LABELS, STAGE_ORDER
 
 
@@ -101,9 +107,23 @@ def _render_resources(artifact: dict[str, Any]) -> str:
             "etapas",
         ])
 
-    visual_section = ""
-    if "Apresentação PowerPoint" in selected:
-        visual_rows = []
+    return (
+        f"**Tipos selecionados:** {', '.join(selected) or 'nenhum'}\n\n"
+        + "## Recursos produzidos\n\n"
+        + _table(["Recurso", "Quantidade", "Unidade"], resource_rows)
+    )
+
+
+def render_resource_detail_sections(
+    artifact: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Devolve o conteúdo integral de cada recurso selecionado para a UI."""
+
+    selected = set(artifact.get("selected_types", []))
+    sections: list[dict[str, str]] = []
+
+    if RESOURCE_PRESENTATION in selected:
+        rows = []
         for index, slide in enumerate(artifact.get("presentation_outline", []), start=1):
             mode = str(slide.get("visual_mode", "diagrama"))
             mode_label = (
@@ -113,24 +133,152 @@ def _render_resources(artifact: dict[str, Any]) -> str:
                 if mode == "ia"
                 else "Diagrama nativo"
             )
-            visual_rows.append([
-                index,
-                slide.get("title", ""),
-                mode_label,
-                slide.get("visual_source", ""),
-            ])
-        if visual_rows:
-            visual_section = (
-                "\n\n## Elementos visuais da apresentação\n\n"
-                + _table(["Slide", "Título", "Modo", "Fonte"], visual_rows)
+            rows.append(
+                [
+                    index,
+                    slide.get("title", ""),
+                    slide.get("outcome_id", "—"),
+                    " · ".join(str(item) for item in slide.get("bullets", [])),
+                    mode_label,
+                    slide.get("visual_title", ""),
+                    slide.get("visual_source", ""),
+                    slide.get("alt_text", ""),
+                ]
             )
+        sections.append(
+            {
+                "id": "presentation",
+                "label": "Apresentação",
+                "icon": "slideshow",
+                "content": (
+                    f"**{len(rows)} slides**\n\n"
+                    + _table(
+                        [
+                            "Slide",
+                            "Título",
+                            "Resultado",
+                            "Conteúdo",
+                            "Modo visual",
+                            "Elemento visual",
+                            "Fonte",
+                            "Texto alternativo",
+                        ],
+                        rows,
+                    )
+                ),
+            }
+        )
 
-    return (
-        f"**Tipos selecionados:** {', '.join(selected) or 'nenhum'}\n\n"
-        + "## Recursos produzidos\n\n"
-        + _table(["Recurso", "Quantidade", "Unidade"], resource_rows)
-        + visual_section
-    )
+    if RESOURCE_WORKSHEET in selected:
+        worksheet = artifact.get("lesson_worksheet", {})
+        rows = [
+            [
+                index,
+                item.get("heading", ""),
+                ", ".join(str(value) for value in item.get("outcome_ids", [])),
+                item.get("content", ""),
+                item.get("activity", ""),
+            ]
+            for index, item in enumerate(worksheet.get("sections", []), start=1)
+        ]
+        sections.append(
+            {
+                "id": "worksheet",
+                "label": "Ficha de aula",
+                "icon": "description",
+                "content": (
+                    f"## {worksheet.get('title') or 'Ficha de aula'}\n\n"
+                    f"**Enquadramento:** {worksheet.get('overview') or '—'}\n\n"
+                    f"**Instruções:** {worksheet.get('instructions') or '—'}\n\n"
+                    + _table(
+                        ["Secção", "Título", "Resultados", "Conteúdo", "Atividade"],
+                        rows,
+                    )
+                ),
+            }
+        )
+
+    if RESOURCE_TEST in selected:
+        test = artifact.get("test", {})
+        rows = [
+            [
+                item.get("id", index),
+                item.get("outcome_id", "—"),
+                item.get("question_type", ""),
+                item.get("points", 0),
+                item.get("prompt", ""),
+                item.get("answer_key", ""),
+            ]
+            for index, item in enumerate(test.get("questions", []), start=1)
+        ]
+        sections.append(
+            {
+                "id": "test",
+                "label": "Teste",
+                "icon": "quiz",
+                "content": (
+                    f"## {test.get('title') or 'Teste'}\n\n"
+                    f"**Instruções:** {test.get('instructions') or '—'}\n\n"
+                    f"**Cotação total:** {test.get('total_points', 0)} pontos\n\n"
+                    + _table(
+                        [
+                            "ID",
+                            "Resultado",
+                            "Tipo",
+                            "Pontos",
+                            "Enunciado",
+                            "Chave de correção",
+                        ],
+                        rows,
+                    )
+                ),
+            }
+        )
+
+    if RESOURCE_PRACTICAL in selected:
+        practical = artifact.get("practical_activity", {})
+        step_rows = [
+            [
+                item.get("order", index),
+                ", ".join(str(value) for value in item.get("outcome_ids", [])),
+                item.get("instruction", ""),
+            ]
+            for index, item in enumerate(practical.get("steps", []), start=1)
+        ]
+        criterion_rows = [
+            [
+                item.get("criterion", ""),
+                item.get("description", ""),
+                f"{item.get('weight', 0)}%",
+            ]
+            for item in practical.get("criteria", [])
+        ]
+        materials = " · ".join(
+            str(item) for item in practical.get("materials", [])
+        ) or "—"
+        deliverables = " · ".join(
+            str(item) for item in practical.get("deliverables", [])
+        ) or "—"
+        sections.append(
+            {
+                "id": "practical",
+                "label": "Atividade prática",
+                "icon": "construction",
+                "content": (
+                    f"## {practical.get('title') or 'Atividade prática'}\n\n"
+                    f"**Contexto:** {practical.get('context') or '—'}\n\n"
+                    f"**Duração:** {practical.get('duration_minutes', 0)} minutos\n\n"
+                    f"**Materiais:** {materials}\n\n"
+                    f"**Entregáveis:** {deliverables}\n\n"
+                    "### Etapas\n\n"
+                    + _table(["Ordem", "Resultados", "Instrução"], step_rows)
+                    + "\n\n### Critérios\n\n"
+                    + _table(["Critério", "Descrição", "Peso"], criterion_rows)
+                ),
+            }
+        )
+
+    return sections
 
 
 def render_artifact(

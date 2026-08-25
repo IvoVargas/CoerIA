@@ -14,6 +14,7 @@ from prism.models import (
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
+    RESOURCE_WORKSHEET,
 )
 from prism.persistence import SQLiteSessionStore
 from prism.workflow import (
@@ -533,6 +534,61 @@ async def test_first_resource_generation_requires_explicit_confirmation(
         "Crie uma versão completa desta etapa com base no contexto da "
         "unidade curricular, no rascunho atual e nos artefactos anteriores.",
     )
+
+
+@pytest.mark.asyncio
+async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
+    user: User,
+) -> None:
+    agent = create_test_agent()
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        ),
+        resource_types=[
+            RESOURCE_PRESENTATION,
+            RESOURCE_WORKSHEET,
+            RESOURCE_TEST,
+            RESOURCE_PRACTICAL,
+        ],
+        agent=agent,
+    )
+    for _ in range(6):
+        state = review_current_stage(state, "approve", agent=agent)
+    assert state["current_stage"] == "resources"
+    state["orchestration"]["mode"] = "manual-first"
+
+    @ui.page("/_test_resource_tabs")
+    def resource_tabs_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_resource_tabs")
+
+    await user.should_see("CONTEÚDO DOS RECURSOS")
+    for tab_id in ("presentation", "worksheet", "test", "practical"):
+        assert len(user.find(marker=f"resource-view-tab-{tab_id}").elements) == 1
+
+    user.find(marker="resource-view-tab-worksheet").click()
+    await user.should_see("Enquadramento:")
+    user.find(marker="resource-view-tab-test").click()
+    await user.should_see("Chave de correção")
+    user.find(marker="resource-view-tab-practical").click()
+    await user.should_see("Entregáveis:")
+
+    user.find(marker="edit-artifact-content").click()
+    for tab_id in ("presentation", "worksheet", "test", "practical"):
+        assert len(user.find(marker=f"resource-edit-tab-{tab_id}").elements) == 1
+
+    await user.should_see("Slides da apresentação")
+    user.find(marker="resource-edit-tab-worksheet").click()
+    await user.should_see("Ficha — enquadramento")
+    user.find(marker="resource-edit-tab-test").click()
+    await user.should_see("Teste — cotação total")
+    user.find(marker="resource-edit-tab-practical").click()
+    await user.should_see("Critérios da atividade prática")
 
 
 @pytest.mark.asyncio

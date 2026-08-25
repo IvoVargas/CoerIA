@@ -87,7 +87,10 @@ os recursos são produzidos posteriormente com base nesse alinhamento.
 Podem ser produzidos quatro tipos de recurso: apresentação PowerPoint, ficha de
 aula, teste com chave de correção e atividade prática. As apresentações devem
 integrar imagens, diagramas, tabelas, gráficos ou outros elementos visuais com
-finalidade pedagógica. Depois da aprovação final, a aplicação exporta um ZIP com
+finalidade pedagógica. Na etapa **Recursos educativos**, cada tipo selecionado
+tem um separador próprio tanto na consulta como na edição, evitando apresentar
+slides, secções, questões e critérios numa única sequência extensa. Depois da
+aprovação final, a aplicação exporta um ZIP com
 o programa da UC, os ficheiros selecionados, matriz de alinhamento, auditoria,
 manifesto e estado completo da sessão. Antes de preparar o pacote, o docente
 escolhe se os documentos editáveis — programa da UC, ficha de aula, teste e
