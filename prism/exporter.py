@@ -1653,10 +1653,13 @@ def export_resource_package(
                                 "height_px", "image_mode", "approved",
                             )
                         },
-                        "selected_for_llm": str(asset.get("id", ""))
+                        "available_to_llm": asset.get("origin_type")
+                        != "user_uploaded",
+                        "used_in_presentation": str(asset.get("id", ""))
                         in {
-                            str(item)
-                            for item in state.get("selected_source_image_ids", [])
+                            str(slide.get("visual_asset_id", ""))
+                            for slide in resources.get("presentation_outline", [])
+                            if isinstance(slide, dict)
                         },
                     }
                     for asset in state.get("source_images", [])

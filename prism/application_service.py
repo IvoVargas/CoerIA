@@ -24,7 +24,6 @@ from .ingestion import (
 )
 from .models import (
     CourseInput,
-    RESOURCE_PRESENTATION,
     SEMESTER_OPTIONS,
     validate_resource_types,
 )
@@ -269,14 +268,12 @@ class ApplicationService:
         self,
         state: dict[str, Any] | None,
         resource_types: list[str],
-        selected_source_image_ids: list[str] | None = None,
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
         updated = update_manual_resource_settings(
             state,
             resource_types,
-            selected_source_image_ids,
         )
         return self._persist(updated), "Seleção de recursos guardada sem executar a IA."
 
@@ -424,7 +421,6 @@ class ApplicationService:
         feedback: str = "",
         revision_stage: str | None = None,
         resource_types: list[str] | None = None,
-        selected_source_image_ids: list[str] | None = None,
         progress_callback: Callable[[str], None] | None = None,
     ) -> tuple[dict[str, Any], str]:
         if not state:
@@ -443,47 +439,6 @@ class ApplicationService:
         elif resource_types is not None:
             raise ValueError(
                 "A seleção de recursos só pode ser alterada na etapa Recursos educativos."
-            )
-
-        if selected_source_image_ids is not None:
-            if state.get("current_stage") != "resources":
-                raise ValueError(
-                    "A seleção de imagens documentais pertence à etapa Recursos educativos."
-                )
-            if working_state is state:
-                working_state = deepcopy(state)
-            available_ids = {
-                str(item.get("id", "")).strip()
-                for item in working_state.get("source_images", [])
-                if isinstance(item, dict)
-                and str(item.get("id", "")).strip()
-                and item.get("origin_type") != "user_uploaded"
-            }
-            requested_ids = [
-                str(item).strip()
-                for item in selected_source_image_ids
-                if str(item).strip()
-            ]
-            requested_ids = list(dict.fromkeys(requested_ids))
-            unknown = [item for item in requested_ids if item not in available_ids]
-            if unknown:
-                raise ValueError(
-                    "A seleção contém imagens que já não estão disponíveis: "
-                    + ", ".join(unknown)
-                )
-            presentation_selected = RESOURCE_PRESENTATION in working_state.get(
-                "resource_types", []
-            )
-            content_slide_capacity = len(working_state.get("learning_outcomes", []))
-            if presentation_selected and len(requested_ids) > content_slide_capacity:
-                raise ValueError(
-                    "Foram selecionadas mais imagens documentais do que os slides de "
-                    "conteúdo previstos. Selecione no máximo "
-                    f"{content_slide_capacity} imagem(ns) para garantir que todas são "
-                    "usadas na apresentação."
-                )
-            working_state["selected_source_image_ids"] = (
-                requested_ids if presentation_selected else []
             )
 
         try:

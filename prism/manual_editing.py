@@ -672,21 +672,11 @@ PRESENTATION_INTERNAL_FIELDS = {
 def available_presentation_images(state: dict[str, Any]) -> list[dict[str, Any]]:
     """Lista as imagens que o docente pode associar manualmente a um slide."""
 
-    selected_source_ids = {
-        str(item).strip()
-        for item in state.get("selected_source_image_ids", [])
-        if str(item).strip()
-    }
     assets: list[dict[str, Any]] = []
     for asset in state.get("source_images", []):
-        if not isinstance(asset, dict):
+        if not isinstance(asset, dict) or not str(asset.get("id", "")).strip():
             continue
-        identifier = str(asset.get("id", "")).strip()
-        if identifier and (
-            identifier in selected_source_ids
-            or asset.get("origin_type") == "user_uploaded"
-        ):
-            assets.append(asset)
+        assets.append(asset)
     for asset in state.get("generated_images", []):
         if not isinstance(asset, dict) or not str(asset.get("id", "")).strip():
             continue

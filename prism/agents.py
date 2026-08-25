@@ -750,17 +750,10 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         "resource_types", []
     ):
         source_images = []
-        selected_source_ids = {
-            str(item).strip()
-            for item in state.get("selected_source_image_ids", [])
-            if str(item).strip()
-        }
         for asset in state.get("source_images", []):
             if not isinstance(asset, dict) or not str(asset.get("id", "")).strip():
                 continue
             if asset.get("origin_type") == "user_uploaded":
-                continue
-            if str(asset.get("id", "")).strip() not in selected_source_ids:
                 continue
             source_images.append(
                 {
@@ -1264,23 +1257,23 @@ def _canonicalize_resource_practical(
     return normalized_artifact, corrections
 
 
-def _selected_source_image_multimodal_input(
+def _source_image_multimodal_input(
     state: dict[str, Any],
     request_context: dict[str, Any],
 ) -> list[dict[str, Any]] | None:
-    """Constrói entrada multimodal OpenAI para imagens escolhidas pelo docente.
+    """Constrói entrada multimodal OpenAI para imagens documentais candidatas.
 
     Usa apenas miniaturas persistidas, nunca ficheiros externos. O texto mantém o
     contexto estruturado habitual e cada imagem é precedida pelo respetivo ID para
-    permitir ao modelo associar semanticamente a figura a um slide.
+    permitir ao modelo avaliar a sua adequação e associá-la a um slide.
     """
 
-    selected_ids = [
-        str(item).strip()
-        for item in state.get("selected_source_image_ids", [])
-        if str(item).strip()
+    candidate_ids = [
+        str(item.get("id", "")).strip()
+        for item in request_context.get("source_image_catalogue", [])
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
     ]
-    if not selected_ids:
+    if not candidate_ids:
         return None
 
     assets = {
@@ -1295,7 +1288,7 @@ def _selected_source_image_multimodal_input(
         }
     ]
     image_count = 0
-    for identifier in selected_ids:
+    for identifier in candidate_ids:
         asset = assets.get(identifier)
         if asset is None or asset.get("origin_type") == "user_uploaded":
             continue
@@ -1311,12 +1304,15 @@ def _selected_source_image_multimodal_input(
         ).strip()
         source_file = str(asset.get("source_file", "")).strip()
         source_location = str(asset.get("source_location", "")).strip()
-        label = f"Imagem documental selecionada pelo docente: ID={identifier}"
+        label = f"Imagem documental candidata: ID={identifier}"
         if source_file:
             label += f"; ficheiro={source_file}"
         if source_location:
             label += f"; origem={source_location}"
-        label += ". Analisa visualmente esta imagem e associa-a ao slide de conteúdo mais adequado."
+        label += (
+            ". Analisa visualmente a sua adequação pedagógica. Usa-a apenas se apoiar "
+            "semanticamente um slide de conteúdo."
+        )
         content.append({"type": "input_text", "text": label})
         content.append(
             {
@@ -1338,9 +1334,8 @@ def _canonicalize_resource_visuals(
     """Completa e valida deterministicamente a especificação visual dos slides.
 
     Os diagramas nativos continuam sempre disponíveis como fallback editável. Uma
-    imagem documental só usa IDs realmente escolhidos pelo docente. Se o fornecedor
-    não utilizar todas as imagens selecionadas, um guardrail determinístico associa as
-    imagens em falta a slides de conteúdo. A capa e o slide final permanecem com
+    imagem documental só usa IDs existentes no catálogo extraído; as imagens são
+    candidatas e não são impostas aos slides. A capa e o slide final permanecem com
     diagrama nativo para preservar a composição institucional da apresentação.
     """
 
@@ -1371,17 +1366,12 @@ def _canonicalize_resource_visuals(
         for item in state.get("learning_outcomes", [])
         if item.get("id")
     }
-    selected_source_ids = {
-        str(item).strip()
-        for item in state.get("selected_source_image_ids", [])
-        if str(item).strip()
-    }
     source_assets = {
         str(item.get("id", "")): item
         for item in state.get("source_images", [])
         if isinstance(item, dict)
         and str(item.get("id", "")).strip()
-        and str(item.get("id", "")).strip() in selected_source_ids
+        and item.get("origin_type") != "user_uploaded"
     }
 
     def clean_text(value: Any) -> str:
@@ -1547,75 +1537,6 @@ def _canonicalize_resource_visuals(
         normalized_slides.append({**slide, **canonical})
         if changes:
             corrections.append({"slide": offset + 1, "changes": changes})
-
-    # A seleção humana significa "usar", não apenas disponibilizar. Preservamos
-    # associações documentais válidas devolvidas pelo modelo e colocamos qualquer
-    # imagem selecionada ainda não usada num slide de conteúdo disponível.
-    used_document_ids = {
-        str(slide.get("visual_asset_id", "")).strip()
-        for slide in normalized_slides[1:-1]
-        if isinstance(slide, dict) and slide.get("visual_mode") == "documento"
-    }
-    missing_document_ids = [
-        identifier
-        for identifier in state.get("selected_source_image_ids", [])
-        if identifier in source_assets and identifier not in used_document_ids
-    ]
-    if missing_document_ids:
-        candidate_indices = [
-            index
-            for index in range(1, max(len(normalized_slides) - 1, 1))
-            if isinstance(normalized_slides[index], dict)
-            and normalized_slides[index].get("visual_mode") != "documento"
-        ]
-        # Se o modelo repetiu a mesma imagem, esses slides também podem ser
-        # reutilizados para garantir cobertura de todas as escolhas humanas.
-        if len(candidate_indices) < len(missing_document_ids):
-            seen_document_ids: set[str] = set()
-            for index in range(1, max(len(normalized_slides) - 1, 1)):
-                slide = normalized_slides[index]
-                if not isinstance(slide, dict) or slide.get("visual_mode") != "documento":
-                    continue
-                identifier = str(slide.get("visual_asset_id", "")).strip()
-                if identifier in seen_document_ids and index not in candidate_indices:
-                    candidate_indices.append(index)
-                seen_document_ids.add(identifier)
-
-        for identifier, slide_index in zip(missing_document_ids, candidate_indices):
-            asset = source_assets[identifier]
-            slide = dict(normalized_slides[slide_index])
-            source_file = clean_text(asset.get("source_file")) or "documento fornecido"
-            source_location = clean_text(asset.get("source_location"))
-            source = f"Imagem extraída de {source_file}"
-            if source_location:
-                source += f", {source_location}"
-            source += "."
-            title = clean_text(slide.get("visual_title")) or clean_text(slide.get("title"))
-            replacement = {
-                "visual_mode": "documento",
-                "visual_asset_id": identifier,
-                "visual_prompt": "",
-                "visual_source": source,
-                "alt_text": (
-                    f"Imagem documental selecionada pelo docente para apoiar {title}. "
-                    f"Origem: {source_file}"
-                    + (f", {source_location}." if source_location else ".")
-                ),
-            }
-            changes = {
-                field: {"received": slide.get(field), "used": value}
-                for field, value in replacement.items()
-                if slide.get(field) != value
-            }
-            normalized_slides[slide_index] = {**slide, **replacement}
-            if changes:
-                corrections.append(
-                    {
-                        "slide": slide_index + 1,
-                        "reason": "imagem_documental_selecionada_pelo_docente",
-                        "changes": changes,
-                    }
-                )
 
     return {**artifact, "presentation_outline": normalized_slides}, corrections
 
@@ -2337,21 +2258,21 @@ class OpenAIPedagogicalAgent:
                     " Para cada slide, visual_mode pode ser diagrama, documento ou ia. "
                     "Capa e síntese final devem usar diagrama. "
                 )
-                if state.get("selected_source_image_ids"):
+                if any(
+                    isinstance(asset, dict)
+                    and str(asset.get("id", "")).strip()
+                    and asset.get("origin_type") != "user_uploaded"
+                    for asset in state.get("source_images", [])
+                ):
                     instructions += (
-                        "Todas as imagens presentes em source_image_catalogue foram escolhidas "
-                        "explicitamente pelo docente para serem usadas. Usa cada ID exatamente "
-                        "uma vez num slide de conteúdo, escolhendo o slide semanticamente mais "
-                        "adequado. As miniaturas podem estar anexadas como input_image quando o "
-                        "fornecedor suporta visão. Copia exatamente o id para visual_asset_id, "
+                        "source_image_catalogue contém imagens documentais candidatas. As "
+                        "miniaturas podem estar anexadas como input_image quando o fornecedor "
+                        "suporta visão. Avalia cada imagem e usa-a apenas quando for "
+                        "semanticamente adequada ao conteúdo do slide; não tens de usar todas. "
+                        "Para uma imagem adequada, copia exatamente o id para visual_asset_id, "
                         "define visual_mode=documento e deixa visual_prompt vazio. Não inventes "
-                        "IDs. A seleção humana tem prioridade sobre diagramas e imagens geradas "
-                        "por IA. "
-                    )
-                elif state.get("source_images"):
-                    instructions += (
-                        "Existem imagens documentais candidatas, mas nenhuma foi escolhida pelo "
-                        "docente; nunca uses documento e não inventes visual_asset_id. "
+                        "IDs nem uses uma imagem meramente decorativa. Uma imagem documental "
+                        "adequada tem prioridade sobre gerar uma imagem por IA. "
                     )
                 else:
                     instructions += (
@@ -2361,7 +2282,8 @@ class OpenAIPedagogicalAgent:
                 if state.get("ai_image_generation_enabled"):
                     instructions += (
                         "A geração de imagens por IA foi autorizada. Podes usar ia apenas em "
-                        "slides de conteúdo onde uma ilustração acrescente valor pedagógico real; "
+                        "slides de conteúdo onde uma ilustração acrescente valor pedagógico real "
+                        "e nenhuma imagem documental adequada esteja disponível; "
                         "nesse caso deixa visual_asset_id vazio e escreve em visual_prompt uma "
                         "instrução visual específica, sem pedir texto decorativo dentro da imagem. "
                     )
@@ -2442,7 +2364,7 @@ class OpenAIPedagogicalAgent:
                     and scoped_resource_type in {None, RESOURCE_PRESENTATION}
                     and self.provider_name == "OpenAI Responses API"
                 ):
-                    multimodal_input = _selected_source_image_multimodal_input(
+                    multimodal_input = _source_image_multimodal_input(
                         state, request_context
                     )
                     if multimodal_input is not None:

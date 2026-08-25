@@ -79,9 +79,10 @@ interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
 Os prefixos são atribuídos automaticamente e tornam inequívocas as referências
 apresentadas na matriz de alinhamento.
 
-A seleção dos recursos e das imagens documentais é feita no início da etapa
-**Recursos educativos**. A matriz permanece dedicada às relações entre
-resultados, conteúdos, atividades de ensino-aprendizagem e tarefas de avaliação;
+A seleção dos recursos é feita no início da etapa **Recursos educativos**. As
+imagens extraídas dos documentos ficam reunidas no seletor visual de cada slide,
+sem uma galeria duplicada no cartão da etapa. A matriz permanece dedicada às
+relações entre resultados, conteúdos, atividades de ensino-aprendizagem e tarefas de avaliação;
 os recursos são produzidos posteriormente com base nesse alinhamento.
 
 Podem ser produzidos quatro tipos de recurso: apresentação PowerPoint, ficha de
@@ -95,7 +96,9 @@ da apresentação, a consulta integra a miniatura da imagem associada na coluna
 separada. A edição é organizada por slide e mostra apenas
 os campos pedagógicos aplicáveis. A imagem associada é escolhida numa galeria de
 miniaturas; a proveniência e o identificador técnico são preenchidos
-automaticamente, e a miniatura escolhida fica visível no próprio slide. O mesmo
+automaticamente, e a miniatura escolhida fica visível no próprio slide. A galeria
+inclui todas as imagens documentais candidatas, além das imagens carregadas pelo
+docente ou geradas durante a edição. O mesmo
 seletor permite gerar, por pedido explícito, até duas imagens adicionais: a IA
 textual pode sugerir uma instrução baseada no slide, que o docente revê antes de
 usar a Image API. Também é possível carregar uma imagem do computador; essa
@@ -215,18 +218,18 @@ documental disponível. Nos PDFs, todas as páginas são examinadas antes de apl
 o limite do catálogo visual; imagens pequenas e fragmentos são filtrados, os
 candidatos são normalizados para PNG/JPEG RGB e distribuídos entre páginas.
 Objetos raster próximos que formem uma figura composta são renderizados como um
-recorte único. Antes de o LLM criar a apresentação, o docente vê miniaturas e
-escolhe explicitamente quais imagens documentais devem ser usadas na apresentação.
-Quando o fornecedor é OpenAI, as miniaturas selecionadas são enviadas como entrada
-visual para permitir a associação semântica ao slide mais adequado; um guardrail
-determinístico garante que cada imagem escolhida é usada pelo menos uma vez num
-slide de conteúdo. A possibilidade de gerar imagens por IA fica ativa por defeito
+recorte único. Todas as imagens documentais candidatas ficam disponíveis no popup
+de seleção de cada slide. Quando o fornecedor é OpenAI, as respetivas miniaturas
+são também fornecidas ao modelo durante a criação da apresentação: o modelo avalia
+a adequação pedagógica, pode associar uma candidata ao slide semanticamente mais
+adequado e não é obrigado a usar imagens irrelevantes. Uma imagem documental
+adequada tem prioridade sobre a geração de uma nova imagem por IA. A possibilidade
+de gerar imagens por IA fica ativa por defeito
 nas novas sessões; cada imagem gerada continua identificada e sujeita à revisão e
 aprovação do docente. Os bytes gerados são validados pelo Pillow e qualquer
-fallback para diagrama é apresentado como aviso explícito.
-A entrada direta de ficheiros de imagem isolados não faz parte do âmbito do
-protótipo; essas imagens podem ser acrescentadas posteriormente ao PowerPoint
-editável.
+fallback para diagrama é apresentado como aviso explícito. Durante a edição da
+apresentação, o docente pode ainda carregar uma imagem isolada a partir do seu
+computador; esta é processada localmente e não é enviada ao LLM.
 
 ## Configuração do fornecedor de IA
 

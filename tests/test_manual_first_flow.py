@@ -483,7 +483,7 @@ def test_ai_review_discards_deterministic_coverage_claims() -> None:
 def test_resource_selection_can_change_without_generation() -> None:
     state = navigate_to_stage(create_session(_course()), "resources")
     state["alignment_matrix"] = [{"outcome_id": "RA1"}]
-    updated = update_manual_resource_settings(state, [RESOURCE_TEST], [])
+    updated = update_manual_resource_settings(state, [RESOURCE_TEST])
 
     assert updated["resource_types"] == [RESOURCE_TEST]
     assert updated["resources"]["selected_types"] == [RESOURCE_TEST]
@@ -493,7 +493,7 @@ def test_resource_selection_can_change_without_generation() -> None:
 
 def test_resource_selection_is_restricted_to_the_resources_stage() -> None:
     with pytest.raises(ValueError, match="pertence à etapa Recursos educativos"):
-        update_manual_resource_settings(create_session(_course()), [RESOURCE_TEST], [])
+        update_manual_resource_settings(create_session(_course()), [RESOURCE_TEST])
 
 
 def test_final_deterministic_validation_is_mandatory() -> None:

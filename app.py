@@ -1340,72 +1340,6 @@ class AGIRSoloInterface:
                 ).props("unelevated no-caps").classes("primary-action")
         dialog.open()
 
-    def _render_source_image_selector(
-        self, state: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Mostra miniaturas para seleção humana antes de gerar a apresentação."""
-
-        assets = [
-            asset
-            for asset in state.get("source_images", [])
-            if isinstance(asset, dict)
-            and str(asset.get("id", "")).strip()
-            and asset.get("origin_type") != "user_uploaded"
-        ]
-        if not assets:
-            return {}
-
-        selected_ids = {
-            str(item).strip()
-            for item in state.get("selected_source_image_ids", [])
-            if str(item).strip()
-        }
-        controls: dict[str, Any] = {}
-        ui.separator().classes("my-3")
-        ui.label("IMAGENS DOCUMENTAIS CANDIDATAS").classes("eyebrow")
-        ui.label(
-            "Selecione as imagens que devem ser usadas na apresentação. O CoerIA envia "
-            "as miniaturas ao modelo para escolher o slide mais adequado e garante que "
-            "cada imagem selecionada é usada pelo menos uma vez num slide de conteúdo."
-        ).classes("text-sm muted mb-3")
-        with ui.row().classes("w-full gap-3 items-stretch flex-wrap"):
-            for asset in assets:
-                identifier = str(asset.get("id", "")).strip()
-                thumbnail = str(
-                    asset.get("thumbnail_base64") or asset.get("data_base64", "")
-                ).strip()
-                media_type = str(
-                    asset.get("thumbnail_media_type") or asset.get("media_type", "image/png")
-                ).strip()
-                with ui.card().classes("surface p-3").style("width: min(100%, 300px);"):
-                    if thumbnail:
-                        ui.image(f"data:{media_type};base64,{thumbnail}").classes(
-                            "w-full rounded"
-                        ).style(
-                            "height: 160px; object-fit: contain; background: #f4f7fa;"
-                        )
-                    source = str(asset.get("source_file", "")).strip()
-                    location = str(asset.get("source_location", "")).strip()
-                    ui.label(source or "Documento de referência").classes(
-                        "font-semibold text-sm"
-                    )
-                    if location:
-                        ui.label(location).classes("text-xs muted")
-                    kind = str(asset.get("candidate_kind", "embedded"))
-                    if kind == "composite_render":
-                        ui.label("Figura composta · recorte renderizado").classes(
-                            "text-xs muted"
-                        )
-                    width = asset.get("width_px")
-                    height = asset.get("height_px")
-                    if width and height:
-                        ui.label(f"{width}×{height} px · RGB").classes("text-xs muted")
-                    controls[identifier] = ui.checkbox(
-                        "Usar na apresentação",
-                        value=identifier in selected_ids,
-                    ).classes("mt-1")
-        return controls
-
     def _render_presentation_resource_view(
         self,
         state: dict[str, Any],
@@ -2681,6 +2615,12 @@ class AGIRSoloInterface:
                 ui.label(
                     "Escolha os recursos desta etapa. Guardar a seleção não executa a IA."
                 ).classes("text-sm muted")
+                if state.get("source_images"):
+                    ui.label(
+                        "As imagens extraídas dos documentos ficam disponíveis no "
+                        "seletor de cada slide. Ao criar a apresentação, a IA analisa-as "
+                        "e reutiliza as que forem adequadas antes de propor novas imagens."
+                    ).classes("text-sm muted")
                 selected_resources = set(state.get("resource_types", []))
                 resource_checks = {
                     resource_type: ui.checkbox(
@@ -2689,7 +2629,6 @@ class AGIRSoloInterface:
                     )
                     for resource_type in RESOURCE_TYPES
                 }
-                source_image_checks = self._render_source_image_selector(state)
 
                 async def save_resource_settings() -> None:
                     selected = [
@@ -2697,21 +2636,11 @@ class AGIRSoloInterface:
                         for name, checkbox in resource_checks.items()
                         if checkbox.value
                     ]
-                    selected_image_ids = (
-                        [
-                            identifier
-                            for identifier, checkbox in source_image_checks.items()
-                            if checkbox.value
-                        ]
-                        if RESOURCE_PRESENTATION in selected
-                        else []
-                    )
                     try:
                         self.state, message = await run.io_bound(
                             self.service.update_resource_settings,
                             self.state,
                             selected,
-                            selected_image_ids,
                         )
                         self.show_workspace(message)
                         self.refresh_sessions()
@@ -3161,7 +3090,6 @@ class AGIRSoloInterface:
                     "" if final else str(feedback.value or ""),
                     state["current_stage"],
                     None,
-                    None,
                 )
 
             ui.button(
@@ -3176,7 +3104,6 @@ class AGIRSoloInterface:
         feedback: str,
         revision_stage: str,
         resource_types: list[str] | None,
-        selected_source_image_ids: list[str] | None = None,
     ) -> None:
         progress_updates: SimpleQueue[str] = SimpleQueue()
         if decision == "revise":
@@ -3207,7 +3134,6 @@ class AGIRSoloInterface:
                 feedback,
                 revision_stage,
                 resource_types,
-                selected_source_image_ids,
                 progress_updates.put,
             )
             self.viewed_stage = None

@@ -128,9 +128,8 @@ def test_presentation_image_choice_derives_visual_provenance() -> None:
     assert slide["visual_source"].startswith("Diagrama nativo gerado pelo CoerIA")
 
 
-def test_available_presentation_images_include_only_selected_documents_and_ai() -> None:
+def test_available_presentation_images_include_all_documents_uploads_and_ai() -> None:
     state = {
-        "selected_source_image_ids": ["document-selected"],
         "source_images": [
             {"id": "document-selected", "origin_type": "document"},
             {"id": "document-hidden", "origin_type": "document"},
@@ -147,6 +146,7 @@ def test_available_presentation_images_include_only_selected_documents_and_ai() 
 
     assert [asset["id"] for asset in available_presentation_images(state)] == [
         "document-selected",
+        "document-hidden",
         "upload-visible",
         "ai-generated",
     ]

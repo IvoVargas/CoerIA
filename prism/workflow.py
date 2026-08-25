@@ -61,7 +61,6 @@ class PrismState(TypedDict, total=False):
     source_input_text: str
     source_original_text: str
     source_images: list[dict[str, Any]]
-    selected_source_image_ids: list[str]
     source_reduction: dict[str, Any]
     generated_images: list[dict[str, Any]]
     ai_image_generation_enabled: bool
@@ -1161,7 +1160,6 @@ def reopen_completed_manual_session(
 def update_manual_resource_settings(
     state: PrismState,
     resource_types: list[str],
-    selected_source_image_ids: list[str] | None = None,
 ) -> PrismState:
     """Atualiza escolhas de recursos sem gerar conteúdo nem avançar a sessão."""
 
@@ -1172,38 +1170,6 @@ def update_manual_resource_settings(
         raise ValueError("A seleção de recursos pertence à etapa Recursos educativos.")
     selected = validate_resource_types(resource_types)
     updated["resource_types"] = selected
-
-    if selected_source_image_ids is not None:
-        available_ids = {
-            str(item.get("id", "")).strip()
-            for item in updated.get("source_images", [])
-            if isinstance(item, dict)
-            and str(item.get("id", "")).strip()
-            and item.get("origin_type") != "user_uploaded"
-        }
-        requested = list(
-            dict.fromkeys(
-                str(item).strip()
-                for item in selected_source_image_ids
-                if str(item).strip()
-            )
-        )
-        unknown = [item for item in requested if item not in available_ids]
-        if unknown:
-            raise ValueError(
-                "A seleção contém imagens que já não estão disponíveis: "
-                + ", ".join(unknown)
-            )
-        if RESOURCE_PRESENTATION in selected and len(requested) > len(
-            updated.get("learning_outcomes", [])
-        ):
-            raise ValueError(
-                "Foram selecionadas mais imagens documentais do que resultados de "
-                "aprendizagem disponíveis para os slides de conteúdo."
-            )
-        updated["selected_source_image_ids"] = (
-            requested if RESOURCE_PRESENTATION in selected else []
-        )
 
     resources = deepcopy(updated["resources"])
     resources["selected_types"] = list(selected)
@@ -1526,7 +1492,6 @@ def ai_review_context_signature(state: PrismState, target_stage: str) -> str:
     relevant = {
         "course": state.get("course"),
         "resource_types": state.get("resource_types", []),
-        "selected_source_image_ids": state.get("selected_source_image_ids", []),
         "artifacts": artifacts,
     }
     serialized = json.dumps(
@@ -2445,7 +2410,6 @@ def create_session(
         "ai_reviews": {},
         "resource_types": selected_resource_types,
         "generated_images": [],
-        "selected_source_image_ids": [],
         "source_reduction": deepcopy(source_reduction or {}),
         "ai_image_generation_enabled": bool(ai_image_generation_enabled),
         "ai_provider": validate_ai_provider(

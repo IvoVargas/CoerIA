@@ -187,7 +187,6 @@ class ResourceGenerationTests(unittest.TestCase):
                 "approved": False,
             }
         ]
-        state["selected_source_image_ids"] = [asset_id]
         slide = state["resources"]["presentation_outline"][1]
         slide["visual_mode"] = "documento"
         slide["visual_asset_id"] = asset_id
@@ -242,7 +241,6 @@ class ResourceGenerationTests(unittest.TestCase):
                 "approved": False,
             }
         ]
-        state["selected_source_image_ids"] = []
         slide = state["resources"]["presentation_outline"][1]
         slide["visual_mode"] = "documento"
         slide["visual_asset_id"] = asset_id

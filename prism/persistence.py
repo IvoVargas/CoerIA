@@ -39,7 +39,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         {"mode": "bounded-generator-critic", "human_approval_required": True},
     )
     state.setdefault("source_images", [])
-    state.setdefault("selected_source_image_ids", [])
     state.setdefault("source_reduction", {})
     state.setdefault(
         "source_original_text",

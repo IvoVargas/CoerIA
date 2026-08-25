@@ -471,7 +471,6 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("stage_statuses", restored)
         self.assertIn("active_versions", restored)
         self.assertIn("revision_snapshots", restored)
-        self.assertEqual(restored["selected_source_image_ids"], [])
 
     def test_schema_16_session_is_migrated_to_biggs_stage_dependencies(self) -> None:
         state = create_session(self.course, agent=self.agent)

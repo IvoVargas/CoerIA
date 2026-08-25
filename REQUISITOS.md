@@ -240,9 +240,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir avaliações formativas e sumativas, mas nunca uma finalidade mista.
 - Não obrigar à existência de avaliação formativa.
 - Estruturar atividades de ensino-aprendizagem com prática, acompanhamento e estratégia de feedback.
-- Apresentar a seleção dos tipos de recursos e das imagens documentais no início
-  da etapa **Recursos educativos**, antes de qualquer geração, sem repetir essa
-  decisão no formulário inicial nem nas linhas da matriz de alinhamento.
+- Apresentar a seleção dos tipos de recursos no início da etapa **Recursos
+  educativos**, antes de qualquer geração, sem repetir essa decisão no formulário
+  inicial nem nas linhas da matriz de alinhamento.
 - Apresentar cada tipo de recurso selecionado num separador próprio, tanto em
   consulta como em edição, preservando dentro dele todo o conteúdo pedagógico
   editável do recurso correspondente.
@@ -250,6 +250,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   metadados técnicos dos elementos visuais.
 - Selecionar a imagem associada através de uma janela com miniaturas, mostrar a
   miniatura escolhida no editor e derivar automaticamente a sua proveniência.
+- Reunir nessa janela todas as imagens documentais candidatas, sem apresentar uma
+  galeria ou seleção preliminar redundante no cartão da etapa.
 - Na consulta da apresentação, integrar a miniatura da imagem associada na coluna
   «Modo visual» e omitir a coluna de proveniência, os avisos visuais e a galeria
   redundante de imagens selecionadas.
@@ -297,19 +299,19 @@ tamanho e qualidade de geração. A extração de PDF deve examinar todas as pá
 antes de aplicar o limite do catálogo, eliminar imagens pequenas ou fragmentárias,
 normalizar os candidatos para PNG/JPEG RGB, equilibrar a seleção entre páginas e,
 quando objetos próximos constituam uma figura composta, preferir um recorte
-renderizado da figura completa. O docente deve selecionar, através de miniaturas,
-as imagens documentais que devem ser usadas antes da criação da apresentação. O
-pipeline deve garantir que cada imagem selecionada é usada pelo menos uma vez num
-slide de conteúdo; quando o fornecedor suporta visão, as miniaturas devem ser
-fornecidas ao modelo para melhorar a associação semântica entre imagem e slide. Os
+renderizado da figura completa. Todas as imagens documentais candidatas devem ficar
+disponíveis no seletor visual de cada slide. Quando o fornecedor suporta visão, as
+miniaturas devem ser fornecidas ao modelo durante a criação da apresentação para
+que este avalie a sua adequação pedagógica e associe apenas as imagens pertinentes.
+Uma imagem documental adequada deve ter prioridade sobre a geração de uma nova
+imagem por IA; nenhuma candidata é de utilização obrigatória. Os
 bytes devolvidos por um gerador de imagens devem ser validados
 com Pillow; qualquer rejeição ou fallback para diagrama deve produzir um aviso
 explícito. O docente deve poder rever a imagem antes da aprovação do recurso.
 Não é permitido descarregar silenciosamente imagens da Web
-sem proveniência e condições de utilização conhecidas. A entrada direta de
-ficheiros de imagem isolados fica fora do âmbito do protótipo, uma vez que o
-PowerPoint final permanece editável e permite ao docente acrescentar esses
-ficheiros após a exportação.
+sem proveniência e condições de utilização conhecidas. O carregamento explícito
+de uma imagem isolada pelo docente deve permanecer disponível durante a edição da
+apresentação, com processamento local e sem envio dessa imagem ao LLM.
 
 ### RF06 — Persistência, versões e rastreabilidade
 
@@ -463,5 +465,5 @@ ficheiros após a exportação.
   elementos visuais pedagogicamente relevantes.
 - Uma apresentação pode utilizar imagens extraídas das fontes documentais ou
   geradas por IA, mantendo proveniência, texto alternativo e validação humana em
-  ambas as modalidades; ficheiros de imagem isolados podem ser acrescentados pelo
-  docente ao PowerPoint editável após a exportação.
+  ambas as modalidades; ficheiros de imagem isolados podem ser carregados pelo
+  docente durante a edição da apresentação.

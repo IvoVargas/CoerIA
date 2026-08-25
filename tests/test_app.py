@@ -573,7 +573,6 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
             "approved": False,
         }
     ]
-    state["selected_source_image_ids"] = ["document-ui-test"]
     assert len(state["resources"]["presentation_outline"]) >= 5
     fifth_slide = state["resources"]["presentation_outline"][4]
     fifth_slide["visual_mode"] = "documento"
@@ -607,6 +606,7 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
     await user.open("/_test_resource_tabs")
 
     await user.should_see("CONTEÚDO DOS RECURSOS")
+    await user.should_not_see("IMAGENS DOCUMENTAIS CANDIDATAS")
     await user.should_see("VERIFICAÇÃO FACULTATIVA DA IA DESATUALIZADA")
     await user.should_not_see(
         "Parecer antigo que já não corresponde aos artefactos."
