@@ -17,7 +17,8 @@ SUPPORTED_SOURCE_SUFFIXES = {".txt", ".md", ".tex", ".pdf", ".docx", ".pptx"}
 DIRECT_SOURCE_MARKER = "[Texto introduzido pelo docente]"
 DEFAULT_MAX_SOURCE_CHARS = 120_000
 DEFAULT_MAX_RAW_SOURCE_CHARS = 2_000_000
-DEFAULT_MAX_FILE_BYTES = 12 * 1024 * 1024
+DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024
+DEFAULT_MAX_TOTAL_UPLOAD_BYTES = 100 * 1024 * 1024
 DEFAULT_MAX_EXTRACTED_IMAGE_BYTES = 5 * 1024 * 1024
 DEFAULT_MAX_EXTRACTED_IMAGES = 30
 DEFAULT_MIN_EXTRACTED_IMAGE_WIDTH = 240
@@ -42,6 +43,20 @@ def _configured_limit(suffix: str, default: int) -> int:
     if value <= 0:
         raise SourceIngestionError(f"A variável {name} deve ser superior a zero.")
     return value
+
+
+def configured_max_file_bytes() -> int:
+    """Limite por ficheiro partilhado pela interface e pela ingestão."""
+
+    return _configured_limit("MAX_FILE_BYTES", DEFAULT_MAX_FILE_BYTES)
+
+
+def configured_max_total_upload_bytes() -> int:
+    """Orçamento acumulado dos ficheiros escolhidos antes de iniciar a sessão."""
+
+    return _configured_limit(
+        "MAX_TOTAL_UPLOAD_BYTES", DEFAULT_MAX_TOTAL_UPLOAD_BYTES
+    )
 
 
 def _read_plain_text(path: Path) -> str:
@@ -528,7 +543,7 @@ def extract_file_text(path_value: str | Path) -> str:
         formats = ", ".join(sorted(SUPPORTED_SOURCE_SUFFIXES))
         raise SourceIngestionError(f"Formato não suportado. Utilize: {formats}.")
 
-    max_bytes = _configured_limit("MAX_FILE_BYTES", DEFAULT_MAX_FILE_BYTES)
+    max_bytes = configured_max_file_bytes()
     if path.stat().st_size > max_bytes:
         raise SourceIngestionError(
             f"O ficheiro {path.name} excede o limite de {max_bytes // (1024 * 1024)} MB."

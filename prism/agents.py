@@ -758,6 +758,8 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         for asset in state.get("source_images", []):
             if not isinstance(asset, dict) or not str(asset.get("id", "")).strip():
                 continue
+            if asset.get("origin_type") == "user_uploaded":
+                continue
             if str(asset.get("id", "")).strip() not in selected_source_ids:
                 continue
             source_images.append(
@@ -1295,7 +1297,7 @@ def _selected_source_image_multimodal_input(
     image_count = 0
     for identifier in selected_ids:
         asset = assets.get(identifier)
-        if asset is None:
+        if asset is None or asset.get("origin_type") == "user_uploaded":
             continue
         encoded = str(
             asset.get("thumbnail_base64") or asset.get("data_base64") or ""

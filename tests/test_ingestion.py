@@ -13,6 +13,9 @@ from prism.ingestion import (
     SourceIngestionError,
     build_raw_source_text,
     build_source_text,
+    configured_max_file_bytes,
+    configured_max_total_upload_bytes,
+    extract_file_text,
     extract_source_images,
     recover_direct_source_text,
 )
@@ -75,6 +78,18 @@ class SourceIngestionTests(unittest.TestCase):
             path.write_text("a,b", encoding="utf-8")
             with self.assertRaises(SourceIngestionError):
                 build_source_text("", [path])
+
+    def test_default_upload_limits_accept_a_33_mb_support_file(self) -> None:
+        self.assertEqual(configured_max_file_bytes(), 50 * 1024 * 1024)
+        self.assertEqual(configured_max_total_upload_bytes(), 100 * 1024 * 1024)
+        with TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "apoio-grande.pdf"
+            with path.open("wb") as stream:
+                stream.truncate(33 * 1024 * 1024)
+            with patch("prism.ingestion._read_pdf", return_value="Conteúdo válido"):
+                result = extract_file_text(path)
+
+        self.assertEqual(result, "Conteúdo válido")
 
     def test_pdf_docx_and_pptx_text_is_extracted(self) -> None:
         with TemporaryDirectory() as temporary_directory:

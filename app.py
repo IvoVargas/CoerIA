@@ -34,10 +34,17 @@ from prism.exporter import (
     DOCUMENT_FORMAT_WORD,
     latex_pdf_compilation_enabled,
 )
+from prism.image_generation import (
+    ImageGenerationError,
+    configured_max_additional_editor_images,
+    configured_presentation_image_upload_bytes,
+    manual_editor_image_count,
+)
 from prism.ingestion import (
-    DEFAULT_MAX_FILE_BYTES,
     SUPPORTED_SOURCE_SUFFIXES,
     SourceIngestionError,
+    configured_max_file_bytes,
+    configured_max_total_upload_bytes,
 )
 from prism.manual_editing import (
     FieldSpec,
@@ -111,7 +118,12 @@ EXPORT_DOCUMENT_FORMAT_CHOICES = (
 )
 _history_choices = history_choices  # compatibilidade para consulta programática
 
-USER_ERRORS = (ValueError, SourceIngestionError, AgentGenerationError)
+USER_ERRORS = (
+    ValueError,
+    SourceIngestionError,
+    AgentGenerationError,
+    ImageGenerationError,
+)
 LOGGER = logging.getLogger(__name__)
 UNRESTRICTED_PAGE_ROUTES = {"/favicon.ico", "/login"}
 ERROR_NOTIFICATION_TIMEOUT_SECONDS = 12
@@ -661,12 +673,14 @@ class AGIRSoloInterface:
             "em função dos resultados de aprendizagem."
         ).classes("text-xs muted")
         accepted = ",".join(sorted(SUPPORTED_SOURCE_SUFFIXES))
+        maximum_file_bytes = configured_max_file_bytes()
+        maximum_total_bytes = configured_max_total_upload_bytes()
         self.uploader = ui.upload(
             label="Adicionar ficheiros de apoio",
             multiple=True,
             auto_upload=True,
-            max_file_size=DEFAULT_MAX_FILE_BYTES,
-            max_total_size=DEFAULT_MAX_FILE_BYTES * 5,
+            max_file_size=maximum_file_bytes,
+            max_total_size=maximum_total_bytes,
             on_upload=self.handle_upload,
             on_rejected=lambda: ui.notify(
                 "Um ficheiro excede o limite permitido.",
@@ -676,7 +690,9 @@ class AGIRSoloInterface:
         self.upload_list = ui.row().classes("upload-list w-full gap-2 mt-2")
         self.render_upload_list()
         ui.label(
-            "Formatos aceites: " + ", ".join(sorted(SUPPORTED_SOURCE_SUFFIXES))
+            "Formatos aceites: "
+            + ", ".join(sorted(SUPPORTED_SOURCE_SUFFIXES))
+            + f" · máximo {maximum_file_bytes // (1024 * 1024)} MB por ficheiro"
         ).classes("text-xs muted")
 
     def _build_characterization_step(self) -> None:
@@ -1331,7 +1347,9 @@ class AGIRSoloInterface:
         assets = [
             asset
             for asset in state.get("source_images", [])
-            if isinstance(asset, dict) and str(asset.get("id", "")).strip()
+            if isinstance(asset, dict)
+            and str(asset.get("id", "")).strip()
+            and asset.get("origin_type") != "user_uploaded"
         ]
         if not assets:
             return {}
@@ -1451,6 +1469,8 @@ class AGIRSoloInterface:
                                     ui.label(
                                         "Imagem gerada por IA"
                                         if asset.get("origin_type") == "ai_generated"
+                                        else "Imagem carregada pelo docente"
+                                        if asset.get("origin_type") == "user_uploaded"
                                         else "Imagem documental"
                                     ).classes("text-xs font-semibold")
                                 else:
@@ -1564,10 +1584,15 @@ class AGIRSoloInterface:
         self,
         slide: dict[str, Any],
         refresh_editor: Any,
+        slide_number: int,
     ) -> None:
         state = self.state or {}
         assets = available_presentation_images(state)
         current_identifier = str(slide.get("visual_asset_id", "")).strip()
+        maximum_additional = configured_max_additional_editor_images()
+        maximum_upload_bytes = configured_presentation_image_upload_bytes()
+        generated_during_edit = manual_editor_image_count(state)
+        remaining_generations = max(0, maximum_additional - generated_during_edit)
 
         with ui.dialog() as dialog, ui.card().classes(
             "surface p-5 gap-4"
@@ -1577,68 +1602,219 @@ class AGIRSoloInterface:
                     ui.label("SELECIONAR IMAGEM").classes("eyebrow")
                     ui.label("Imagem associada ao slide").classes("section-title")
                     ui.label(
-                        "Escolha através da miniatura. O CoerIA guarda automaticamente "
-                        "a origem documental ou os dados da geração por IA."
+                        "Escolha uma imagem disponível, gere uma nova proposta visual "
+                        "ou carregue uma imagem do seu computador."
                     ).classes("text-sm muted")
                 ui.space()
                 ui.button(icon="close", on_click=dialog.close).props(
                     "flat round aria-label='Fechar seleção de imagem'"
                 )
 
-            if assets:
-                with ui.element("div").classes("presentation-image-gallery"):
-                    for asset in assets:
-                        identifier = str(asset.get("id", "")).strip()
+            with ui.tabs().props("no-caps align=left").classes("w-full") as image_tabs:
+                available_tab = ui.tab(
+                    "available", label="Imagens disponíveis", icon="photo_library"
+                ).mark("presentation-image-tab-available")
+                generate_tab = ui.tab(
+                    "generate", label="Gerar com IA", icon="auto_awesome"
+                ).mark("presentation-image-tab-generate")
+                upload_tab = ui.tab(
+                    "upload", label="Carregar do computador", icon="upload"
+                ).mark("presentation-image-tab-upload")
 
-                        def choose_image(
-                            selected_asset: dict[str, Any] = asset,
-                        ) -> None:
-                            apply_presentation_image_choice(slide, selected_asset)
-                            dialog.close()
-                            refresh_editor()
+            with ui.tab_panels(image_tabs, value=available_tab).classes("w-full"):
+                with ui.tab_panel(available_tab).classes("px-0"):
+                    if assets:
+                        with ui.element("div").classes("presentation-image-gallery"):
+                            for asset in assets:
+                                identifier = str(asset.get("id", "")).strip()
 
-                        with ui.card().classes(
-                            "presentation-image-option soft-surface gap-2"
+                                def choose_image(
+                                    selected_asset: dict[str, Any] = asset,
+                                ) -> None:
+                                    apply_presentation_image_choice(slide, selected_asset)
+                                    dialog.close()
+                                    refresh_editor()
+
+                                with ui.card().classes(
+                                    "presentation-image-option soft-surface gap-2"
+                                ):
+                                    self._render_presentation_image_thumbnail(
+                                        asset, gallery=True
+                                    )
+                                    ui.label(presentation_image_label(asset)).classes(
+                                        "text-sm font-semibold"
+                                    )
+                                    if asset.get("origin_type") == "ai_generated":
+                                        ui.label("Imagem gerada por IA").classes(
+                                            "text-xs muted"
+                                        )
+                                    elif asset.get("origin_type") == "user_uploaded":
+                                        ui.label("Imagem carregada pelo docente").classes(
+                                            "text-xs muted"
+                                        )
+                                    else:
+                                        ui.label("Imagem extraída de documento").classes(
+                                            "text-xs muted"
+                                        )
+                                    button = ui.button(
+                                        "Selecionada"
+                                        if identifier == current_identifier
+                                        else "Selecionar",
+                                        icon="check_circle"
+                                        if identifier == current_identifier
+                                        else "add_photo_alternate",
+                                        on_click=choose_image,
+                                    ).props("unelevated no-caps").classes("w-full").mark(
+                                        f"select-slide-image-{identifier}"
+                                    )
+                                    if identifier == current_identifier:
+                                        button.props("color=positive")
+                    else:
+                        with ui.column().classes(
+                            "soft-surface w-full items-center text-center p-8 gap-2"
                         ):
-                            self._render_presentation_image_thumbnail(
-                                asset, gallery=True
+                            ui.icon("image_not_supported", size="2.4rem").classes(
+                                "muted"
                             )
-                            ui.label(presentation_image_label(asset)).classes(
-                                "text-sm font-semibold"
+                            ui.label("Não existem imagens disponíveis.").classes(
+                                "font-semibold"
                             )
-                            if asset.get("origin_type") == "ai_generated":
-                                ui.label("Imagem gerada por IA").classes(
-                                    "text-xs muted"
+                            ui.label(
+                                "Use os outros separadores para gerar ou carregar uma imagem."
+                            ).classes("text-sm muted")
+
+                with ui.tab_panel(generate_tab).classes("px-0"):
+                    with ui.column().classes("w-full gap-3"):
+                        ui.label(
+                            f"Pode gerar mais {remaining_generations} de "
+                            f"{maximum_additional} imagens adicionais nesta sessão."
+                        ).classes("text-sm font-semibold")
+                        ui.label(
+                            "A sugestão usa o fornecedor textual escolhido. A geração "
+                            "da imagem usa a OpenAI Image API e pode ter custo."
+                        ).classes("text-sm muted")
+                        prompt_input = ui.textarea(
+                            "Instrução para gerar a imagem",
+                            value=str(slide.get("visual_prompt", "")).strip(),
+                            placeholder=(
+                                "Descreva a composição visual pretendida ou peça uma "
+                                "sugestão baseada neste slide."
+                            ),
+                        ).props("outlined autogrow").classes("w-full").mark(
+                            f"slide-image-prompt-{slide_number}"
+                        )
+
+                        async def suggest_prompt() -> None:
+                            self._show_busy("A IA está a sugerir uma instrução visual…")
+                            try:
+                                suggestion = await run.io_bound(
+                                    self.service.suggest_presentation_image_prompt,
+                                    self.state,
+                                    deepcopy(slide),
+                                    slide_number,
                                 )
-                            else:
-                                ui.label("Imagem extraída de documento").classes(
-                                    "text-xs muted"
+                                prompt_input.set_value(suggestion)
+                                ui.notify(
+                                    "Sugestão recebida. Pode editá-la antes de gerar.",
+                                    type="positive",
                                 )
-                            button = ui.button(
-                                "Selecionada"
-                                if identifier == current_identifier
-                                else "Selecionar",
-                                icon="check_circle"
-                                if identifier == current_identifier
-                                else "add_photo_alternate",
-                                on_click=choose_image,
-                            ).props("unelevated no-caps").classes("w-full").mark(
-                                f"select-slide-image-{identifier}"
+                            except USER_ERRORS as error:
+                                self._show_error(error)
+                            finally:
+                                self._hide_busy()
+
+                        async def generate_image() -> None:
+                            self._show_busy("A gerar uma imagem para este slide…")
+                            try:
+                                updated_state, asset = await run.io_bound(
+                                    self.service.generate_presentation_editor_image,
+                                    self.state,
+                                    deepcopy(slide),
+                                    slide_number,
+                                    str(prompt_input.value or ""),
+                                )
+                                self.state = updated_state
+                                apply_presentation_image_choice(slide, asset)
+                                dialog.close()
+                                refresh_editor()
+                                self.refresh_sessions()
+                                ui.notify(
+                                    "Imagem gerada e associada ao slide.",
+                                    type="positive",
+                                )
+                            except USER_ERRORS as error:
+                                self._show_error(error)
+                            finally:
+                                self._hide_busy()
+
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            suggest_button = ui.button(
+                                "Sugerir instrução com IA",
+                                icon="lightbulb",
+                                on_click=suggest_prompt,
+                            ).props("outline no-caps").mark(
+                                f"suggest-slide-image-prompt-{slide_number}"
                             )
-                            if identifier == current_identifier:
-                                button.props("color=positive")
-            else:
-                with ui.column().classes(
-                    "soft-surface w-full items-center text-center p-8 gap-2"
-                ):
-                    ui.icon("image_not_supported", size="2.4rem").classes("muted")
-                    ui.label("Não existem imagens disponíveis.").classes(
-                        "font-semibold"
-                    )
-                    ui.label(
-                        "Selecione imagens extraídas das fontes ou gere imagens por IA "
-                        "antes de as associar aos slides."
-                    ).classes("text-sm muted")
+                            generate_button = ui.button(
+                                "Gerar e associar imagem",
+                                icon="auto_awesome",
+                                on_click=generate_image,
+                            ).props("unelevated no-caps").mark(
+                                f"generate-slide-image-{slide_number}"
+                            )
+                            if remaining_generations == 0:
+                                suggest_button.disable()
+                                generate_button.disable()
+
+                with ui.tab_panel(upload_tab).classes("px-0"):
+                    with ui.column().classes("w-full gap-3"):
+                        ui.label(
+                            "A imagem é processada localmente, normalizada e guardada "
+                            "na sessão. Não é enviada ao LLM."
+                        ).classes("text-sm muted")
+
+                        async def upload_image(event: events.UploadEventArguments) -> None:
+                            self._show_busy("A validar e guardar a imagem…")
+                            try:
+                                image_data = await event.file.read()
+                                updated_state, asset = await run.io_bound(
+                                    self.service.add_presentation_uploaded_image,
+                                    self.state,
+                                    event.file.name,
+                                    image_data,
+                                )
+                                self.state = updated_state
+                                apply_presentation_image_choice(slide, asset)
+                                dialog.close()
+                                refresh_editor()
+                                self.refresh_sessions()
+                                ui.notify(
+                                    "Imagem carregada e associada ao slide.",
+                                    type="positive",
+                                )
+                            except USER_ERRORS as error:
+                                self._show_error(error)
+                            finally:
+                                self._hide_busy()
+
+                        ui.upload(
+                            label="Selecionar imagem do computador",
+                            auto_upload=True,
+                            max_file_size=maximum_upload_bytes,
+                            on_upload=upload_image,
+                            on_rejected=lambda: ui.notify(
+                                "A imagem excede o limite permitido ou não é suportada.",
+                                type="warning",
+                            ),
+                        ).props(
+                            "accept=.png,.jpg,.jpeg,.webp flat bordered"
+                        ).classes("w-full").mark(
+                            f"upload-slide-image-{slide_number}"
+                        )
+                        ui.label(
+                            "Formatos aceites: PNG, JPEG e WebP · máximo "
+                            f"{maximum_upload_bytes // (1024 * 1024)} MB"
+                        ).classes("text-xs muted")
 
             with ui.row().classes("w-full justify-end"):
                 ui.button("Cancelar", on_click=dialog.close).props("flat no-caps")
@@ -1663,6 +1839,8 @@ class AGIRSoloInterface:
                     label = (
                         "Imagem gerada por IA"
                         if asset.get("origin_type") == "ai_generated"
+                        else "Imagem carregada pelo docente"
+                        if asset.get("origin_type") == "user_uploaded"
                         else "Imagem documental"
                     )
                     ui.badge(label, color="primary")
@@ -1691,7 +1869,7 @@ class AGIRSoloInterface:
                     "Escolher imagem",
                     icon="photo_library",
                     on_click=lambda: self._open_presentation_image_dialog(
-                        slide, refresh_editor
+                        slide, refresh_editor, slide_number
                     ),
                 ).props("outline no-caps").classes("secondary-action").mark(
                     f"choose-slide-image-{slide_number}"

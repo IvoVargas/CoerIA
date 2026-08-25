@@ -369,7 +369,10 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             for item in state.get("source_images", [])
             if isinstance(item, dict)
             and str(item.get("id", "")).strip()
-            and str(item.get("id", "")).strip() in selected_source_ids
+            and (
+                str(item.get("id", "")).strip() in selected_source_ids
+                or item.get("origin_type") == "user_uploaded"
+            )
         }
         generated_assets = {
             str(item.get("id", "")): item

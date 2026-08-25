@@ -249,6 +249,13 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   redundante de imagens selecionadas.
 - Manter aberto o slide em edição depois de selecionar ou remover a respetiva
   imagem.
+- No seletor da imagem do slide, permitir gerar até duas imagens adicionais por
+  pedido explícito do docente, com uma instrução sugerida pela IA a partir do slide
+  atual e sempre editável antes da geração.
+- Permitir carregar uma imagem do computador durante a edição da apresentação,
+  normalizá-la localmente e não a enviar ao LLM.
+- Aceitar ficheiros de apoio até 50 MB por ficheiro, com um limite acumulado de
+  100 MB antes de iniciar o desenho curricular.
 
 Gerar efetivamente cada tipo selecionado pelo docente:
 

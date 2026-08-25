@@ -187,6 +187,81 @@ class ResourceGenerationTests(unittest.TestCase):
         finally:
             presentation_path.unlink(missing_ok=True)
 
+    def test_uploaded_image_is_valid_without_document_selection(self) -> None:
+        state = self._resource_state()
+        image_buffer = BytesIO()
+        Image.new("RGB", (320, 180), (45, 125, 85)).save(
+            image_buffer, format="PNG"
+        )
+        asset_id = "upload-test-image"
+        state["source_images"] = [
+            {
+                "id": asset_id,
+                "origin_type": "user_uploaded",
+                "source_file": "imagem-local.png",
+                "source_location": "Carregada pelo docente",
+                "filename": "imagem-local.png",
+                "media_type": "image/png",
+                "data_base64": base64.b64encode(image_buffer.getvalue()).decode(
+                    "ascii"
+                ),
+                "alt_text": "Imagem local usada para explicar o conteúdo.",
+                "approved": False,
+            }
+        ]
+        state["selected_source_image_ids"] = []
+        slide = state["resources"]["presentation_outline"][1]
+        slide["visual_mode"] = "documento"
+        slide["visual_asset_id"] = asset_id
+        slide["visual_source"] = "Imagem fornecida pelo docente — imagem-local.png."
+        slide["alt_text"] = "Imagem local usada para explicar o conteúdo."
+
+        quality = evaluate_quality(state, state["resources"])
+
+        self.assertTrue(quality["passed"])
+
+    def test_manual_editor_image_generation_has_an_independent_limit(self) -> None:
+        state = self._resource_state()
+        slide = state["resources"]["presentation_outline"][1]
+
+        class FakeGenerator:
+            def generate(self, *, prompt, slide_number, alt_text):
+                return {
+                    "id": f"ai-manual-{slide_number}",
+                    "origin_type": "ai_generated",
+                    "provider": "Fornecedor de teste",
+                    "model": "modelo-teste",
+                    "prompt": prompt,
+                    "alt_text": alt_text,
+                    "approved": False,
+                }
+
+        with TemporaryDirectory() as temporary_directory, patch.dict(
+            environ,
+            {"COERIA_OPENAI_IMAGE_MAX_ADDITIONAL_EDITOR": "1"},
+            clear=False,
+        ):
+            service = ApplicationService(
+                SQLiteSessionStore(Path(temporary_directory) / "manual-images.db")
+            )
+            updated, asset = service.generate_presentation_editor_image(
+                state,
+                slide,
+                2,
+                "Representar visualmente o processo sem texto.",
+                generator=FakeGenerator(),
+            )
+            self.assertEqual(asset["generation_mode"], "manual_editor")
+            self.assertEqual(len(updated["generated_images"]), 1)
+            with self.assertRaisesRegex(ValueError, "limite de 1 imagem"):
+                service.generate_presentation_editor_image(
+                    updated,
+                    slide,
+                    2,
+                    "Gerar uma segunda imagem.",
+                    generator=FakeGenerator(),
+                )
+
     def test_ai_generated_image_is_approved_and_embedded_in_presentation(self) -> None:
         state = self._resource_state()
         image_buffer = BytesIO()

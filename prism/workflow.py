@@ -1174,7 +1174,9 @@ def update_manual_resource_settings(
         available_ids = {
             str(item.get("id", "")).strip()
             for item in updated.get("source_images", [])
-            if isinstance(item, dict) and str(item.get("id", "")).strip()
+            if isinstance(item, dict)
+            and str(item.get("id", "")).strip()
+            and item.get("origin_type") != "user_uploaded"
         }
         requested = list(
             dict.fromkeys(

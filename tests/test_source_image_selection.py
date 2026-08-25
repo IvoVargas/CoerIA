@@ -19,7 +19,7 @@ class SourceImageSelectionTests(unittest.TestCase):
             "course": {"unit_name": "UC", "taxonomy_type": "SOLO"},
             "feedback": {},
             "resource_types": [RESOURCE_PRESENTATION],
-            "selected_source_image_ids": ["document-selected"],
+            "selected_source_image_ids": ["document-selected", "upload-local"],
             "source_images": [
                 {
                     "id": "document-selected",
@@ -41,6 +41,15 @@ class SourceImageSelectionTests(unittest.TestCase):
                     "width_px": 800,
                     "height_px": 600,
                 },
+                {
+                    "id": "upload-local",
+                    "origin_type": "user_uploaded",
+                    "source_file": "imagem-local.png",
+                    "filename": "imagem-local.png",
+                    "media_type": "image/png",
+                    "width_px": 800,
+                    "height_px": 450,
+                },
             ],
             "ai_image_generation_enabled": False,
         }
@@ -59,7 +68,7 @@ class SourceImageSelectionTests(unittest.TestCase):
         )
         encoded = base64.b64encode(image_buffer.getvalue()).decode("ascii")
         state = {
-            "selected_source_image_ids": ["document-selected"],
+            "selected_source_image_ids": ["document-selected", "upload-local"],
             "source_images": [
                 {
                     "id": "document-selected",
@@ -68,7 +77,15 @@ class SourceImageSelectionTests(unittest.TestCase):
                     "media_type": "image/png",
                     "thumbnail_media_type": "image/png",
                     "thumbnail_base64": encoded,
-                }
+                },
+                {
+                    "id": "upload-local",
+                    "origin_type": "user_uploaded",
+                    "source_file": "imagem-local.png",
+                    "media_type": "image/png",
+                    "thumbnail_media_type": "image/png",
+                    "thumbnail_base64": encoded,
+                },
             ],
         }
 

@@ -682,7 +682,10 @@ def available_presentation_images(state: dict[str, Any]) -> list[dict[str, Any]]
         if not isinstance(asset, dict):
             continue
         identifier = str(asset.get("id", "")).strip()
-        if identifier and identifier in selected_source_ids:
+        if identifier and (
+            identifier in selected_source_ids
+            or asset.get("origin_type") == "user_uploaded"
+        ):
             assets.append(asset)
     for asset in state.get("generated_images", []):
         if not isinstance(asset, dict) or not str(asset.get("id", "")).strip():
@@ -698,6 +701,9 @@ def presentation_image_label(asset: dict[str, Any]) -> str:
         provider = str(asset.get("provider", "IA")).strip() or "IA"
         model = str(asset.get("model", "")).strip()
         return f"Gerada por IA — {provider}" + (f" — {model}" if model else "")
+    if asset.get("origin_type") == "user_uploaded":
+        source = str(asset.get("source_file", "")).strip() or "Imagem local"
+        return f"Carregada pelo docente — {source}"
     source = str(asset.get("source_file", "")).strip() or "Documento de referência"
     location = str(asset.get("source_location", "")).strip()
     return source + (f" — {location}" if location else "")
@@ -731,6 +737,10 @@ def apply_presentation_image_choice(
         slide["visual_source"] = (
             f"Imagem gerada por IA — {provider}" + (f", modelo {model}." if model else ".")
         )
+    elif asset.get("origin_type") == "user_uploaded":
+        source_file = str(asset.get("source_file", "")).strip() or "imagem local"
+        slide["visual_prompt"] = ""
+        slide["visual_source"] = f"Imagem fornecida pelo docente — {source_file}."
     else:
         source_file = str(asset.get("source_file", "")).strip() or "documento fornecido"
         source_location = str(asset.get("source_location", "")).strip()

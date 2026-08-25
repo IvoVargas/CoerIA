@@ -624,6 +624,16 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
     await user.should_see("Visual exclusivo do slide 5")
     user.find(marker="choose-slide-image-5").click()
     await user.should_see("Imagem associada ao slide")
+    assert len(user.find(marker="presentation-image-tab-available").elements) == 1
+    assert len(user.find(marker="presentation-image-tab-generate").elements) == 1
+    assert len(user.find(marker="presentation-image-tab-upload").elements) == 1
+    user.find(marker="presentation-image-tab-generate").click()
+    await user.should_see("Pode gerar mais 2 de 2 imagens adicionais")
+    assert len(user.find(marker="suggest-slide-image-prompt-5").elements) == 1
+    assert len(user.find(marker="generate-slide-image-5").elements) == 1
+    user.find(marker="presentation-image-tab-upload").click()
+    assert len(user.find(marker="upload-slide-image-5").elements) == 1
+    user.find(marker="presentation-image-tab-available").click()
     await user.should_see("apoio.pdf — Página 2")
     user.find(marker="select-slide-image-document-ui-test").click()
     await user.should_see("Imagem documental")

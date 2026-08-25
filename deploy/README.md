@@ -168,7 +168,7 @@ Não imprimir o conteúdo integral de `/etc/coeria/coeria.env`, porque contém s
 Para verificar apenas se as variáveis relevantes existem:
 
 ```bash
-sudo grep -E '^(OPENAI_API_KEY|COERIA_OPENAI_IMAGE_MODEL|COERIA_OPENAI_IMAGE_SIZE|COERIA_OPENAI_IMAGE_QUALITY|COERIA_OPENAI_IMAGE_MAX_PER_PRESENTATION)=' /etc/coeria/coeria.env | sed 's/=.*/=<configurado>/'
+sudo grep -E '^(OPENAI_API_KEY|COERIA_OPENAI_IMAGE_MODEL|COERIA_OPENAI_IMAGE_SIZE|COERIA_OPENAI_IMAGE_QUALITY|COERIA_OPENAI_IMAGE_MAX_PER_PRESENTATION|COERIA_OPENAI_IMAGE_MAX_ADDITIONAL_EDITOR)=' /etc/coeria/coeria.env | sed 's/=.*/=<configurado>/'
 ```
 
 Configuração recomendada para o A3:
@@ -178,9 +178,16 @@ COERIA_OPENAI_IMAGE_MODEL=gpt-image-2
 COERIA_OPENAI_IMAGE_SIZE=1536x864
 COERIA_OPENAI_IMAGE_QUALITY=low
 COERIA_OPENAI_IMAGE_MAX_PER_PRESENTATION=2
+COERIA_OPENAI_IMAGE_MAX_ADDITIONAL_EDITOR=2
+COERIA_PRESENTATION_IMAGE_UPLOAD_MAX_BYTES=20971520
 ```
 
 A mesma `OPENAI_API_KEY` é usada pelas chamadas OpenAI de texto e de imagem. Nunca guardar a chave real no Git.
+
+Os ficheiros de apoio aceitam até 50 MB por ficheiro e 100 MB no conjunto com
+`COERIA_MAX_FILE_BYTES=52428800` e
+`COERIA_MAX_TOTAL_UPLOAD_BYTES=104857600`. O proxy Nginx mantém
+`client_max_body_size 64m`, suficiente para o limite individual.
 
 ### 2.6 Configurar a compilação LaTeX para PDF
 

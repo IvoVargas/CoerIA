@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 from datetime import UTC, datetime
 from typing import Any, Callable
@@ -10,12 +11,20 @@ from uuid import uuid4
 
 from .branding import APP_NAME, config_value
 from .image_utils import ImageValidationError, build_thumbnail, normalise_image_bytes
+from .providers import (
+    AI_PROVIDER_IAEDU,
+    IAeduResponsesAdapter,
+    validate_ai_provider,
+)
 
 
 DEFAULT_IMAGE_MODEL = "gpt-image-2"
 DEFAULT_IMAGE_SIZE = "1536x864"
 DEFAULT_IMAGE_QUALITY = "low"
 DEFAULT_MAX_IMAGES_PER_PRESENTATION = 2
+DEFAULT_MAX_ADDITIONAL_EDITOR_IMAGES = 2
+DEFAULT_PRESENTATION_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024
+DEFAULT_PROMPT_MODEL = "gpt-4o-mini"
 
 
 class ImageGenerationError(RuntimeError):
@@ -39,6 +48,172 @@ def configured_max_images() -> int:
         )
     except (TypeError, ValueError):
         return DEFAULT_MAX_IMAGES_PER_PRESENTATION
+
+
+def configured_max_additional_editor_images() -> int:
+    """Limite separado para gerações pedidas explicitamente durante a edição."""
+
+    try:
+        return max(
+            0,
+            int(
+                config_value(
+                    "OPENAI_IMAGE_MAX_ADDITIONAL_EDITOR",
+                    str(DEFAULT_MAX_ADDITIONAL_EDITOR_IMAGES),
+                )
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_ADDITIONAL_EDITOR_IMAGES
+
+
+def manual_editor_image_count(state: dict[str, Any]) -> int:
+    return sum(
+        1
+        for asset in state.get("generated_images", [])
+        if isinstance(asset, dict)
+        and asset.get("generation_mode") == "manual_editor"
+    )
+
+
+def configured_presentation_image_upload_bytes() -> int:
+    try:
+        return max(
+            1,
+            int(
+                config_value(
+                    "PRESENTATION_IMAGE_UPLOAD_MAX_BYTES",
+                    str(DEFAULT_PRESENTATION_IMAGE_UPLOAD_BYTES),
+                )
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_PRESENTATION_IMAGE_UPLOAD_BYTES
+
+
+def build_uploaded_image_asset(data: bytes, filename: str) -> dict[str, Any]:
+    """Valida e normaliza uma imagem carregada pelo docente durante a edição."""
+
+    maximum = configured_presentation_image_upload_bytes()
+    if len(data) > maximum:
+        raise ImageGenerationError(
+            "A imagem excede o limite permitido de "
+            f"{maximum // (1024 * 1024)} MB."
+        )
+    try:
+        normalized = normalise_image_bytes(data, filename=filename)
+    except ImageValidationError as error:
+        raise ImageGenerationError(str(error)) from error
+    normalized_bytes = bytes(normalized["data"])
+    return {
+        "id": f"upload-{uuid4().hex[:20]}",
+        "origin_type": "user_uploaded",
+        "candidate_kind": "user_upload",
+        "source_file": str(filename).strip() or str(normalized["filename"]),
+        "source_location": "Carregada pelo docente durante a edição da apresentação",
+        "filename": str(normalized["filename"]),
+        "media_type": str(normalized["media_type"]),
+        "data_base64": base64.b64encode(normalized_bytes).decode("ascii"),
+        "width_px": int(normalized["width_px"]),
+        "height_px": int(normalized["height_px"]),
+        "image_mode": "RGB",
+        "alt_text": "",
+        "approved": False,
+        "created_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        **build_thumbnail(normalized_bytes),
+    }
+
+
+def suggest_image_prompt(
+    state: dict[str, Any],
+    slide: dict[str, Any],
+    slide_number: int,
+    *,
+    client_factory: Callable[[], Any] | None = None,
+) -> str:
+    """Pede ao fornecedor textual da sessão uma instrução visual curta e editável."""
+
+    provider = validate_ai_provider(state.get("ai_provider"))
+    api_key_env = "IAEDU_API_KEY" if provider == AI_PROVIDER_IAEDU else "OPENAI_API_KEY"
+    if client_factory is None and not os.getenv(api_key_env):
+        raise ImageGenerationError(
+            f"{api_key_env} não está disponível para sugerir a instrução da imagem."
+        )
+
+    if client_factory is None:
+        if provider == AI_PROVIDER_IAEDU:
+            client_factory = IAeduResponsesAdapter
+        else:
+            try:
+                from openai import OpenAI
+            except ImportError as error:
+                raise ImageGenerationError(
+                    "A sugestão de instruções requer a biblioteca OpenAI instalada."
+                ) from error
+
+            client_factory = lambda: OpenAI(
+                timeout=float(config_value("OPENAI_TIMEOUT_SECONDS", "120")),
+                max_retries=int(config_value("OPENAI_MAX_RETRIES", "2")),
+            )
+
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"prompt": {"type": "string"}},
+        "required": ["prompt"],
+    }
+    course = state.get("course", {})
+    request_context = {
+        "unidade_curricular": str(course.get("unit_name", "")),
+        "publico": str(course.get("audience", "")),
+        "numero_slide": slide_number,
+        "titulo_slide": str(slide.get("title", "")),
+        "resultado_aprendizagem": str(slide.get("outcome_id", "")),
+        "conteudo": [
+            str(item) for item in slide.get("bullets", []) if str(item).strip()
+        ],
+        "finalidade_visual": str(slide.get("visual_title", "")),
+    }
+    instructions = (
+        "És um assistente de design visual educativo. Propõe em português europeu "
+        "uma instrução específica para gerar uma única ilustração horizontal 16:9 "
+        "que ajude a compreender este slide. Descreve composição, objetos, relações "
+        "e estilo visual. Evita texto dentro da imagem, logótipos, marcas de água e "
+        "pormenores não sustentados pelo conteúdo. A instrução será editada e aprovada "
+        "pelo docente antes da geração."
+    )
+    try:
+        client = client_factory()
+        response = client.responses.create(
+            model=(
+                config_value("IAEDU_AGENT_NAME", "Agente IAedu")
+                if provider == AI_PROVIDER_IAEDU
+                else config_value("OPENAI_MODEL", DEFAULT_PROMPT_MODEL)
+            ),
+            instructions=instructions,
+            input=json.dumps(request_context, ensure_ascii=False),
+            max_output_tokens=700,
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "coeria_image_prompt",
+                    "strict": True,
+                    "schema": schema,
+                }
+            },
+        )
+        suggestion = str(json.loads(response.output_text).get("prompt", "")).strip()
+    except ImageGenerationError:
+        raise
+    except Exception as error:
+        raise ImageGenerationError(
+            f"Não foi possível sugerir a instrução da imagem: {error}"
+        ) from error
+    if len(suggestion) < 20:
+        raise ImageGenerationError(
+            "O fornecedor não devolveu uma instrução visual suficientemente detalhada."
+        )
+    return suggestion
 
 
 def build_image_prompt(

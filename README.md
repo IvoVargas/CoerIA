@@ -95,8 +95,12 @@ da apresentação, a consulta integra a miniatura da imagem associada na coluna
 separada. A edição é organizada por slide e mostra apenas
 os campos pedagógicos aplicáveis. A imagem associada é escolhida numa galeria de
 miniaturas; a proveniência e o identificador técnico são preenchidos
-automaticamente, e a miniatura escolhida fica visível no próprio slide. Depois da
-aprovação final, a aplicação exporta um ZIP com
+automaticamente, e a miniatura escolhida fica visível no próprio slide. O mesmo
+seletor permite gerar, por pedido explícito, até duas imagens adicionais: a IA
+textual pode sugerir uma instrução baseada no slide, que o docente revê antes de
+usar a Image API. Também é possível carregar uma imagem do computador; essa
+imagem é processada localmente e não é enviada ao LLM. Depois da aprovação final,
+a aplicação exporta um ZIP com
 o programa da UC, os ficheiros selecionados, matriz de alinhamento, auditoria,
 manifesto e estado completo da sessão. Antes de preparar o pacote, o docente
 escolhe se os documentos editáveis — programa da UC, ficha de aula, teste e

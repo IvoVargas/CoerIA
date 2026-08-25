@@ -9,7 +9,10 @@ from io import BytesIO
 from prism.image_generation import (
     OpenAIImageGenerator,
     build_image_prompt,
+    build_uploaded_image_asset,
     enrich_presentation_with_ai_images,
+    manual_editor_image_count,
+    suggest_image_prompt,
 )
 
 
@@ -28,6 +31,25 @@ class _FakeImages:
 class _FakeClient:
     def __init__(self, encoded: str) -> None:
         self.images = _FakeImages(encoded)
+
+
+class _FakeResponses:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return SimpleNamespace(
+            output_text=(
+                '{"prompt":"Representar um percurso visual com três objetos '
+                'interligados, composição horizontal e sem texto."}'
+            )
+        )
+
+
+class _FakePromptClient:
+    def __init__(self) -> None:
+        self.responses = _FakeResponses()
 
 
 class ImageGenerationTests(unittest.TestCase):
@@ -152,6 +174,48 @@ class ImageGenerationTests(unittest.TestCase):
         slide = artifact["presentation_outline"][1]
         self.assertEqual(slide["visual_mode"], "diagrama")
         self.assertEqual(slide["visual_asset_id"], "")
+
+    def test_prompt_suggestion_uses_the_current_slide_context(self) -> None:
+        fake_client = _FakePromptClient()
+        state = self._state()
+        state["ai_provider"] = "OpenAI"
+
+        suggestion = suggest_image_prompt(
+            state,
+            self._artifact()["presentation_outline"][1],
+            2,
+            client_factory=lambda: fake_client,
+        )
+
+        self.assertIn("três objetos", suggestion)
+        request = fake_client.responses.calls[0]
+        self.assertIn("Conceito", request["input"])
+        self.assertIn("RA1", request["input"])
+
+    def test_uploaded_image_is_normalized_and_keeps_local_provenance(self) -> None:
+        raw = base64.b64decode(self._encoded_png())
+
+        asset = build_uploaded_image_asset(raw, "figura-local.png")
+
+        self.assertEqual(asset["origin_type"], "user_uploaded")
+        self.assertEqual(asset["source_file"], "figura-local.png")
+        self.assertTrue(asset["data_base64"])
+        self.assertTrue(asset["thumbnail_base64"])
+        self.assertFalse(asset["approved"])
+
+    def test_only_manual_editor_generations_count_towards_extra_limit(self) -> None:
+        state = {
+            "generated_images": [
+                {"id": "automatic", "origin_type": "ai_generated"},
+                {
+                    "id": "manual-1",
+                    "origin_type": "ai_generated",
+                    "generation_mode": "manual_editor",
+                },
+            ]
+        }
+
+        self.assertEqual(manual_editor_image_count(state), 1)
 
 
 if __name__ == "__main__":

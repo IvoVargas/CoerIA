@@ -134,6 +134,11 @@ def test_available_presentation_images_include_only_selected_documents_and_ai() 
         "source_images": [
             {"id": "document-selected", "origin_type": "document"},
             {"id": "document-hidden", "origin_type": "document"},
+            {
+                "id": "upload-visible",
+                "origin_type": "user_uploaded",
+                "source_file": "imagem.png",
+            },
         ],
         "generated_images": [
             {"id": "ai-generated", "origin_type": "ai_generated"}
@@ -142,8 +147,30 @@ def test_available_presentation_images_include_only_selected_documents_and_ai() 
 
     assert [asset["id"] for asset in available_presentation_images(state)] == [
         "document-selected",
+        "upload-visible",
         "ai-generated",
     ]
+
+
+def test_uploaded_presentation_image_has_teacher_provenance() -> None:
+    slide = {
+        "visual_mode": "diagrama",
+        "visual_asset_id": "",
+        "visual_prompt": "",
+        "visual_source": "Diagrama nativo.",
+        "alt_text": "",
+    }
+    asset = {
+        "id": "upload-visible",
+        "origin_type": "user_uploaded",
+        "source_file": "imagem.png",
+    }
+
+    apply_presentation_image_choice(slide, asset)
+
+    assert slide["visual_mode"] == "documento"
+    assert slide["visual_asset_id"] == "upload-visible"
+    assert slide["visual_source"] == "Imagem fornecida pelo docente — imagem.png."
 
 
 def test_proposal_review_preserves_ids_and_applies_only_accepted_cells() -> None:

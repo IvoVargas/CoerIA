@@ -9,6 +9,14 @@ from typing import Any, Callable
 from .assistance import build_initial_form_assistant, validate_initial_fields
 from .auth import normalize_user_id
 from .exporter import export_resource_package, normalize_document_formats
+from .image_generation import (
+    OpenAIImageGenerator,
+    build_image_prompt,
+    build_uploaded_image_asset,
+    configured_max_additional_editor_images,
+    manual_editor_image_count,
+    suggest_image_prompt,
+)
 from .ingestion import (
     build_raw_source_text,
     extract_source_images,
@@ -271,6 +279,92 @@ class ApplicationService:
         )
         return self._persist(updated), "Seleção de recursos guardada sem executar a IA."
 
+    @staticmethod
+    def suggest_presentation_image_prompt(
+        state: dict[str, Any] | None,
+        slide: dict[str, Any],
+        slide_number: int,
+    ) -> str:
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        return suggest_image_prompt(state, slide, slide_number)
+
+    def generate_presentation_editor_image(
+        self,
+        state: dict[str, Any] | None,
+        slide: dict[str, Any],
+        slide_number: int,
+        requested_prompt: str,
+        *,
+        generator: OpenAIImageGenerator | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Gera e guarda uma imagem adicional pedida explicitamente pelo docente."""
+
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        clean_prompt = str(requested_prompt).strip()
+        if not clean_prompt:
+            raise ValueError("Escreva ou peça uma instrução antes de gerar a imagem.")
+        maximum = configured_max_additional_editor_images()
+        if manual_editor_image_count(state) >= maximum:
+            raise ValueError(
+                "Já foi atingido o limite de "
+                f"{maximum} imagem"
+                + ("" if maximum == 1 else "s")
+                + " adicional"
+                + ("" if maximum == 1 else "is")
+                + " gerada"
+                + ("" if maximum == 1 else "s")
+                + " durante a edição."
+            )
+
+        working = deepcopy(state)
+        requested_slide = deepcopy(slide)
+        requested_slide["visual_prompt"] = clean_prompt
+        final_prompt = build_image_prompt(working, requested_slide, slide_number)
+        image_generator = generator or OpenAIImageGenerator()
+        asset = image_generator.generate(
+            prompt=final_prompt,
+            slide_number=slide_number,
+            alt_text=str(slide.get("alt_text", "")).strip()
+            or f"Ilustração educativa associada ao slide {slide_number}.",
+        )
+        asset["generation_mode"] = "manual_editor"
+        asset["requested_slide_number"] = int(slide_number)
+        working.setdefault("generated_images", []).append(asset)
+        working.setdefault("audit", []).append(
+            {
+                "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "stage": STAGE_LABELS["resources"],
+                "event": "Imagem adicional gerada por pedido explícito do docente.",
+                "feedback": f"Slide {slide_number}; modelo {asset.get('model', '—')}.",
+            }
+        )
+        return self._persist(working), deepcopy(asset)
+
+    def add_presentation_uploaded_image(
+        self,
+        state: dict[str, Any] | None,
+        filename: str,
+        data: bytes,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Guarda uma imagem local no catálogo da sessão sem a enviar para IA."""
+
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        asset = build_uploaded_image_asset(data, filename)
+        working = deepcopy(state)
+        working.setdefault("source_images", []).append(asset)
+        working.setdefault("audit", []).append(
+            {
+                "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "stage": STAGE_LABELS["resources"],
+                "event": "Imagem carregada pelo docente para a apresentação.",
+                "feedback": str(asset.get("source_file", "Imagem local")),
+            }
+        )
+        return self._persist(working), deepcopy(asset)
+
     def load_session(self, session_id: str | None) -> dict[str, Any]:
         if not session_id:
             raise ValueError("Selecione uma sessão para retomar.")
@@ -360,7 +454,9 @@ class ApplicationService:
             available_ids = {
                 str(item.get("id", "")).strip()
                 for item in working_state.get("source_images", [])
-                if isinstance(item, dict) and str(item.get("id", "")).strip()
+                if isinstance(item, dict)
+                and str(item.get("id", "")).strip()
+                and item.get("origin_type") != "user_uploaded"
             }
             requested_ids = [
                 str(item).strip()
