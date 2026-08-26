@@ -1,4 +1,5 @@
 import base64
+import json
 import unittest
 from copy import deepcopy
 from io import BytesIO
@@ -7,7 +8,7 @@ from PIL import Image
 
 from prism.agents import (
     _canonicalize_resource_visuals,
-    _source_image_multimodal_input,
+    _source_image_text_input,
     _upstream_context,
 )
 from prism.models import RESOURCE_PRESENTATION
@@ -62,51 +63,41 @@ class SourceImageSelectionTests(unittest.TestCase):
             ["document-selected", "document-not-selected"],
         )
         self.assertEqual(catalogue[0]["candidate_kind"], "composite_render")
+        self.assertIn("apoio.pdf", catalogue[0]["description"])
+        self.assertNotIn("thumbnail_base64", catalogue[0])
+        self.assertNotIn("data_base64", catalogue[0])
 
-    def test_document_candidate_thumbnail_is_sent_as_multimodal_openai_input(self) -> None:
+    def test_document_candidate_is_sent_as_text_without_image_bytes(self) -> None:
         image_buffer = BytesIO()
         Image.new("RGB", (160, 90), (30, 100, 160)).save(
             image_buffer, format="PNG"
         )
         encoded = base64.b64encode(image_buffer.getvalue()).decode("ascii")
-        state = {
-            "source_images": [
-                {
-                    "id": "document-selected",
-                    "source_file": "apoio.pdf",
-                    "source_location": "Página 2",
-                    "media_type": "image/png",
-                    "thumbnail_media_type": "image/png",
-                    "thumbnail_base64": encoded,
-                },
-                {
-                    "id": "upload-local",
-                    "origin_type": "user_uploaded",
-                    "source_file": "imagem-local.png",
-                    "media_type": "image/png",
-                    "thumbnail_media_type": "image/png",
-                    "thumbnail_base64": encoded,
-                },
-            ],
-        }
-
-        request_input = _source_image_multimodal_input(
-            state, {"source_image_catalogue": [{"id": "document-selected"}]}
+        request_input = _source_image_text_input(
+            {
+                "source_image_catalogue": [
+                    {
+                        "id": "document-selected",
+                        "source_file": "apoio.pdf",
+                        "source_location": "Página 2",
+                        "media_type": "image/png",
+                        "description": "Diagrama da estrutura do conceito.",
+                        "thumbnail_media_type": "image/png",
+                        "thumbnail_base64": encoded,
+                        "data_base64": encoded,
+                    }
+                ]
+            }
         )
 
-        self.assertIsNotNone(request_input)
-        content = request_input[0]["content"]
-        self.assertTrue(
-            any(
-                item.get("type") == "input_text"
-                and "ID=document-selected" in item.get("text", "")
-                for item in content
-            )
-        )
-        image_parts = [item for item in content if item.get("type") == "input_image"]
-        self.assertEqual(len(image_parts), 1)
-        self.assertTrue(image_parts[0]["image_url"].startswith("data:image/png;base64,"))
-        self.assertEqual(image_parts[0]["detail"], "low")
+        self.assertIsInstance(request_input, str)
+        request_payload = json.loads(request_input)
+        candidate = request_payload["source_image_catalogue"][0]
+        self.assertEqual(candidate["id"], "document-selected")
+        self.assertEqual(candidate["description"], "Diagrama da estrutura do conceito.")
+        self.assertNotIn("thumbnail_base64", candidate)
+        self.assertNotIn("data_base64", candidate)
+        self.assertNotIn(encoded, request_input)
 
     def test_document_candidate_is_not_forced_when_agent_returns_diagram(self) -> None:
         state = {

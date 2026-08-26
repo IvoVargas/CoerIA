@@ -310,9 +310,12 @@ antes de aplicar o limite do catálogo, eliminar imagens pequenas ou fragmentár
 normalizar os candidatos para PNG/JPEG RGB, equilibrar a seleção entre páginas e,
 quando objetos próximos constituam uma figura composta, preferir um recorte
 renderizado da figura completa. Todas as imagens documentais candidatas devem ficar
-disponíveis no seletor visual de cada slide. Quando o fornecedor suporta visão, as
-miniaturas devem ser fornecidas ao modelo durante a criação da apresentação para
-que este avalie a sua adequação pedagógica e associe apenas as imagens pertinentes.
+disponíveis no seletor visual de cada slide. O pedido ao fornecedor de IA deve
+conter apenas um catálogo textual com o identificador, a descrição disponível, a
+proveniência e as dimensões das candidatas; os bytes originais, `data_base64`,
+`thumbnail_base64` e entradas `input_image` não podem ser enviados. A associação
+automática só deve ocorrer quando a descrição textual for suficiente; a seleção
+visual final permanece sob controlo do docente.
 Uma imagem documental adequada deve ter prioridade sobre a geração de uma nova
 imagem por IA; nenhuma candidata é de utilização obrigatória. Os
 bytes devolvidos por um gerador de imagens devem ser validados

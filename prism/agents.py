@@ -674,6 +674,34 @@ def _schema_for_scope(
     }
 
 
+def _source_image_description(asset: dict[str, Any]) -> str:
+    """Descreve uma candidata documental sem expor os respetivos bytes."""
+
+    explicit_description = str(
+        asset.get("description") or asset.get("alt_text") or asset.get("caption") or ""
+    ).strip()
+    if explicit_description:
+        return explicit_description
+
+    kind = (
+        "figura composta reconstruída localmente"
+        if asset.get("candidate_kind") == "composite_render"
+        else "imagem incorporada no documento"
+    )
+    source_file = str(asset.get("source_file", "")).strip()
+    source_location = str(asset.get("source_location", "")).strip()
+    width = int(asset.get("width_px", 0) or 0)
+    height = int(asset.get("height_px", 0) or 0)
+    parts = [kind]
+    if source_file:
+        parts.append(f"extraída de {source_file}")
+    if source_location:
+        parts.append(f"em {source_location}")
+    if width and height:
+        parts.append(f"com dimensões {width} × {height} píxeis")
+    return "; ".join(parts) + "."
+
+
 def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     """Inclui apenas os dados pedagógicos relevantes na chamada ao modelo."""
 
@@ -765,6 +793,7 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                     "candidate_kind": str(asset.get("candidate_kind", "embedded")),
                     "width_px": int(asset.get("width_px", 0) or 0),
                     "height_px": int(asset.get("height_px", 0) or 0),
+                    "description": _source_image_description(asset),
                 }
             )
         context["source_image_catalogue"] = source_images
@@ -1257,75 +1286,33 @@ def _canonicalize_resource_practical(
     return normalized_artifact, corrections
 
 
-def _source_image_multimodal_input(
-    state: dict[str, Any],
-    request_context: dict[str, Any],
-) -> list[dict[str, Any]] | None:
-    """Constrói entrada multimodal OpenAI para imagens documentais candidatas.
+_SOURCE_IMAGE_TEXT_FIELDS = (
+    "id",
+    "description",
+    "source_file",
+    "source_location",
+    "filename",
+    "media_type",
+    "candidate_kind",
+    "width_px",
+    "height_px",
+)
 
-    Usa apenas miniaturas persistidas, nunca ficheiros externos. O texto mantém o
-    contexto estruturado habitual e cada imagem é precedida pelo respetivo ID para
-    permitir ao modelo avaliar a sua adequação e associá-la a um slide.
+
+def _source_image_text_input(request_context: dict[str, Any]) -> str:
+    """Serializa o contexto visual sem miniaturas nem imagens originais.
+
+    A lista explícita funciona como uma fronteira de privacidade: mesmo que um
+    campo binário seja acrescentado por engano ao catálogo, não chega ao pedido.
     """
 
-    candidate_ids = [
-        str(item.get("id", "")).strip()
+    sanitized_context = dict(request_context)
+    sanitized_context["source_image_catalogue"] = [
+        {key: item[key] for key in _SOURCE_IMAGE_TEXT_FIELDS if key in item}
         for item in request_context.get("source_image_catalogue", [])
-        if isinstance(item, dict) and str(item.get("id", "")).strip()
+        if isinstance(item, dict)
     ]
-    if not candidate_ids:
-        return None
-
-    assets = {
-        str(asset.get("id", "")).strip(): asset
-        for asset in state.get("source_images", [])
-        if isinstance(asset, dict) and str(asset.get("id", "")).strip()
-    }
-    content: list[dict[str, Any]] = [
-        {
-            "type": "input_text",
-            "text": json.dumps(request_context, ensure_ascii=False),
-        }
-    ]
-    image_count = 0
-    for identifier in candidate_ids:
-        asset = assets.get(identifier)
-        if asset is None or asset.get("origin_type") == "user_uploaded":
-            continue
-        encoded = str(
-            asset.get("thumbnail_base64") or asset.get("data_base64") or ""
-        ).strip()
-        if not encoded:
-            continue
-        media_type = str(
-            asset.get("thumbnail_media_type")
-            or asset.get("media_type")
-            or "image/png"
-        ).strip()
-        source_file = str(asset.get("source_file", "")).strip()
-        source_location = str(asset.get("source_location", "")).strip()
-        label = f"Imagem documental candidata: ID={identifier}"
-        if source_file:
-            label += f"; ficheiro={source_file}"
-        if source_location:
-            label += f"; origem={source_location}"
-        label += (
-            ". Analisa visualmente a sua adequação pedagógica. Usa-a apenas se apoiar "
-            "semanticamente um slide de conteúdo."
-        )
-        content.append({"type": "input_text", "text": label})
-        content.append(
-            {
-                "type": "input_image",
-                "image_url": f"data:{media_type};base64,{encoded}",
-                "detail": "low",
-            }
-        )
-        image_count += 1
-
-    if image_count == 0:
-        return None
-    return [{"role": "user", "content": content}]
+    return json.dumps(sanitized_context, ensure_ascii=False)
 
 
 def _canonicalize_resource_visuals(
@@ -2265,14 +2252,15 @@ class OpenAIPedagogicalAgent:
                     for asset in state.get("source_images", [])
                 ):
                     instructions += (
-                        "source_image_catalogue contém imagens documentais candidatas. As "
-                        "miniaturas podem estar anexadas como input_image quando o fornecedor "
-                        "suporta visão. Avalia cada imagem e usa-a apenas quando for "
-                        "semanticamente adequada ao conteúdo do slide; não tens de usar todas. "
-                        "Para uma imagem adequada, copia exatamente o id para visual_asset_id, "
+                        "source_image_catalogue contém apenas descrições textuais e metadados "
+                        "das imagens documentais candidatas; nenhuma imagem ou miniatura está "
+                        "anexada ao pedido. Usa uma candidata somente quando a descrição textual "
+                        "for claramente adequada ao conteúdo do slide; não assumes conteúdo "
+                        "visual que não esteja descrito e não tens de usar nenhuma. Para uma "
+                        "imagem adequada, copia exatamente o id para visual_asset_id, "
                         "define visual_mode=documento e deixa visual_prompt vazio. Não inventes "
                         "IDs nem uses uma imagem meramente decorativa. Uma imagem documental "
-                        "adequada tem prioridade sobre gerar uma imagem por IA. "
+                        "claramente adequada tem prioridade sobre gerar uma imagem por IA. "
                     )
                 else:
                     instructions += (
@@ -2340,10 +2328,16 @@ class OpenAIPedagogicalAgent:
                         str(repair_feedback.get("validation_error", "")),
                         state,
                     )
+                request_input = json.dumps(request_context, ensure_ascii=False)
+                if (
+                    stage == "resources"
+                    and scoped_resource_type in {None, RESOURCE_PRESENTATION}
+                ):
+                    request_input = _source_image_text_input(request_context)
                 request_options = {
                     "model": request_model,
                     "instructions": attempt_instructions,
-                    "input": json.dumps(request_context, ensure_ascii=False),
+                    "input": request_input,
                     "max_output_tokens": self.max_output_tokens,
                     "text": {
                         "format": {
@@ -2359,16 +2353,6 @@ class OpenAIPedagogicalAgent:
                         }
                     },
                 }
-                if (
-                    stage == "resources"
-                    and scoped_resource_type in {None, RESOURCE_PRESENTATION}
-                    and self.provider_name == "OpenAI Responses API"
-                ):
-                    multimodal_input = _source_image_multimodal_input(
-                        state, request_context
-                    )
-                    if multimodal_input is not None:
-                        request_options["input"] = multimodal_input
                 if supports_reasoning_effort(request_model):
                     request_options["reasoning"] = {
                         "effort": self.reasoning_effort

@@ -1069,6 +1069,21 @@ class WorkflowTests(unittest.TestCase):
         valid_state = review_current_stage(deepcopy(state), "approve", agent=self.agent)
         incomplete_artifact = deepcopy(valid_state["resources"])
         incomplete_artifact.pop("quality", None)
+        state["source_images"] = [
+            {
+                "id": "document-private-test",
+                "origin_type": "document",
+                "source_file": "apoio.pdf",
+                "source_location": "Página 3",
+                "filename": "figura.png",
+                "media_type": "image/png",
+                "candidate_kind": "embedded",
+                "width_px": 800,
+                "height_px": 450,
+                "thumbnail_base64": "PRIVATE_THUMBNAIL_BYTES",
+                "data_base64": "PRIVATE_ORIGINAL_BYTES",
+            }
+        ]
         for slide_index in (1, 3):
             slide = incomplete_artifact["presentation_outline"][slide_index]
             slide["visual_kind"] = "comparação"
@@ -1107,6 +1122,16 @@ class WorkflowTests(unittest.TestCase):
             result = OpenAIPedagogicalAgent().generate("resources", state)
 
         self.assertEqual(len(fake_responses.calls), 1)
+        request_input = fake_responses.calls[0]["input"]
+        self.assertIsInstance(request_input, str)
+        self.assertNotIn("PRIVATE_THUMBNAIL_BYTES", request_input)
+        self.assertNotIn("PRIVATE_ORIGINAL_BYTES", request_input)
+        self.assertNotIn("input_image", request_input)
+        request_context = json.loads(request_input)
+        self.assertEqual(
+            request_context["source_image_catalogue"][0]["id"],
+            "document-private-test",
+        )
         self.assertEqual(result.metadata["validation_attempts"], 1)
         self.assertEqual(len(result.metadata["guardrail_corrections"]), 2)
         for slide_index in (1, 3):
