@@ -270,6 +270,9 @@ def _format_table(table: Any, headers: list[str], widths_dxa: list[int]) -> None
                 run.font.color.rgb = RGBColor.from_string(PROGRAM_INK)
     _set_table_geometry(table, widths_dxa)
     for row in table.rows[1:]:
+        row_properties = row._tr.get_or_add_trPr()
+        if row_properties.find(qn("w:cantSplit")) is None:
+            row_properties.append(OxmlElement("w:cantSplit"))
         for cell in row.cells:
             for paragraph in cell.paragraphs:
                 paragraph.paragraph_format.space_after = DocxPt(2)
@@ -337,6 +340,7 @@ def _validate_program_export_state(state: dict[str, Any]) -> None:
         "curriculum_analysis",
         "assessment_activities",
         "teaching_activities",
+        "pedagogical_design",
         "alignment_matrix",
     )
     missing = [key for key in required if not state.get(key)]
@@ -637,18 +641,30 @@ def export_program_document(
     )
 
     document.add_heading("5. Atividades de ensino-aprendizagem", level=1)
-    table = document.add_table(rows=1, cols=5)
+    table = document.add_table(rows=1, cols=7)
     for activity in state.get("teaching_activities", []):
         cells = table.add_row().cells
         cells[0].text = str(activity.get("id", ""))
-        cells[1].text = str(activity.get("activity", ""))
-        cells[2].text = str(activity.get("method", ""))
-        cells[3].text = str(activity.get("feedback_strategy", ""))
-        cells[4].text = ", ".join(activity.get("outcome_ids", []))
+        cells[1].text = str(activity.get("learning_context", ""))
+        cells[2].text = str(activity.get("activity", ""))
+        cells[3].text = str(
+            activity.get("practice") or activity.get("method", "")
+        )
+        cells[4].text = str(activity.get("support", ""))
+        cells[5].text = str(activity.get("feedback_strategy", ""))
+        cells[6].text = ", ".join(activity.get("outcome_ids", []))
     _format_table(
         table,
-        ["ID", "Atividade", "Método", "Feedback", "Resultados"],
-        [700, 3000, 2360, 2500, 1400],
+        [
+            "ID",
+            "Contexto",
+            "Atividade",
+            "Prática",
+            "Acompanhamento",
+            "Feedback",
+            "Resultados",
+        ],
+        [500, 1250, 1900, 1550, 1900, 1500, 1360],
     )
 
     document.add_heading("6. Tarefas e critérios de avaliação", level=1)
@@ -667,7 +683,25 @@ def export_program_document(
         [650, 1200, 1400, 2800, 2510, 1400],
     )
 
-    document.add_heading("7. Matriz de alinhamento", level=1)
+    document.add_heading("7. Organização da sequência pedagógica", level=1)
+    pedagogical_design = state.get("pedagogical_design", {})
+    strategy = document.add_paragraph()
+    strategy.add_run("Estratégia pedagógica: ").bold = True
+    strategy.add_run(_display(pedagogical_design.get("strategy")))
+    table = document.add_table(rows=1, cols=4)
+    for item in pedagogical_design.get("sequence", []):
+        cells = table.add_row().cells
+        cells[0].text = str(item.get("outcome_id", ""))
+        cells[1].text = str(item.get("focus", ""))
+        cells[2].text = str(item.get("teaching_activity", ""))
+        cells[3].text = str(item.get("assessment", ""))
+    _format_table(
+        table,
+        ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Avaliação"],
+        [700, 3000, 3200, 3060],
+    )
+
+    document.add_heading("8. Matriz de alinhamento", level=1)
     table = document.add_table(rows=1, cols=6)
     for row in state.get("alignment_matrix", []):
         cells = table.add_row().cells
@@ -683,7 +717,7 @@ def export_program_document(
         [650, 1250, 1750, 1350, 1150, 3810],
     )
 
-    document.add_heading("8. Bibliografia", level=1)
+    document.add_heading("9. Bibliografia", level=1)
     bibliography = _bibliography_entries(course.get("bibliography"))
     if bibliography:
         for entry in bibliography:
@@ -779,18 +813,28 @@ def export_program_latex(
             ),
             r"\section{Atividades de ensino-aprendizagem}",
             _latex_table(
-                ["ID", "Atividade", "Método", "Feedback", "Resultados"],
+                [
+                    "ID",
+                    "Contexto",
+                    "Atividade",
+                    "Prática",
+                    "Acompanhamento",
+                    "Feedback",
+                    "Resultados",
+                ],
                 [
                     [
                         activity.get("id", ""),
+                        activity.get("learning_context", ""),
                         activity.get("activity", ""),
-                        activity.get("method", ""),
+                        activity.get("practice") or activity.get("method", ""),
+                        activity.get("support", ""),
                         activity.get("feedback_strategy", ""),
                         ", ".join(activity.get("outcome_ids", [])),
                     ]
                     for activity in state.get("teaching_activities", [])
                 ],
-                [0.06, 0.24, 0.19, 0.20, 0.13],
+                [0.045, 0.100, 0.170, 0.130, 0.160, 0.120, 0.095],
             ),
             r"\section{Tarefas e critérios de avaliação}",
             _latex_table(
@@ -807,6 +851,24 @@ def export_program_latex(
                     for assessment in state.get("assessment_activities", [])
                 ],
                 [0.05, 0.10, 0.12, 0.17, 0.20, 0.14],
+            ),
+            r"\section{Organização da sequência pedagógica}",
+            r"\textbf{Estratégia pedagógica:} "
+            + _latex_escape(
+                _display(state.get("pedagogical_design", {}).get("strategy"))
+            ),
+            _latex_table(
+                ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Avaliação"],
+                [
+                    [
+                        item.get("outcome_id", ""),
+                        item.get("focus", ""),
+                        item.get("teaching_activity", ""),
+                        item.get("assessment", ""),
+                    ]
+                    for item in state.get("pedagogical_design", {}).get("sequence", [])
+                ],
+                [0.06, 0.25, 0.27, 0.24],
             ),
             r"\clearpage",
             r"\section{Matriz de alinhamento}",

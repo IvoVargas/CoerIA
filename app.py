@@ -2033,10 +2033,13 @@ class AGIRSoloInterface:
                     slide,
                     FieldSpec(
                         "visual_items",
-                        "Elementos do diagrama — um por linha",
+                        "Elementos do diagrama — 2 a 4, um por linha",
                         "lines",
                     ),
                 )
+                ui.label(
+                    "Obrigatório para o diagrama: introduza entre 2 e 4 elementos não vazios."
+                ).classes("text-xs muted")
             self._render_manual_field(
                 slide,
                 FieldSpec("alt_text", "Descrição acessível da imagem ou diagrama", "long"),

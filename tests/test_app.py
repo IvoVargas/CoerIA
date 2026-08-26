@@ -726,6 +726,8 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
 
     await user.should_see("Slides da apresentação")
     await user.should_see("Slide 1 —")
+    await user.should_see("Elementos do diagrama — 2 a 4, um por linha")
+    await user.should_see("introduza entre 2 e 4 elementos não vazios")
     await user.should_not_see("Origem visual")
     await user.should_not_see("Modo visual")
     fifth_expansion = next(

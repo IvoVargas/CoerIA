@@ -15,12 +15,18 @@ from docx import Document
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
-from prism.agents import AgentGenerationError, GenerationResult
+from prism.agents import (
+    AgentGenerationError,
+    GenerationResult,
+    _schema_for,
+    validate_artifact,
+)
 from prism.application_service import ApplicationService
 from prism.exporter import (
     _latex_itemize,
     compile_latex_pdf,
     export_presentation,
+    export_program_document,
     export_program_latex,
     export_resource_package,
 )
@@ -36,6 +42,7 @@ from prism.persistence import SQLiteSessionStore
 from prism.presentation import render_current_artifact, render_resource_detail_sections
 from prism.quality import evaluate_quality
 from prism.workflow import (
+    build_final_validation,
     create_session,
     create_test_agent,
     navigate_to_stage,
@@ -387,6 +394,70 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertFalse(report["passed"])
         self.assertEqual(visual_check["status"], "error")
 
+    def test_quality_explains_the_visual_failure_for_each_slide(self) -> None:
+        state = self._resource_state()
+        visual_items_schema = _schema_for("resources", state)["properties"][
+            "artifact"
+        ]["properties"]["presentation_outline"]["items"]["properties"][
+            "visual_items"
+        ]
+        self.assertEqual(visual_items_schema["minItems"], 2)
+        self.assertEqual(visual_items_schema["maxItems"], 4)
+        tampered = deepcopy(state)
+        slide = tampered["resources"]["presentation_outline"][0]
+        slide["visual_items"] = ["A", "B", "C", "D", "E"]
+        report = evaluate_quality(tampered, tampered["resources"])
+        visual_check = next(
+            item for item in report["checks"] if item["id"] == "presentation_visuals"
+        )
+
+        self.assertEqual(visual_check["status"], "error")
+        self.assertIn("slide 1", visual_check["detail"])
+        self.assertIn(
+            "5 elementos; o diagrama admite 2 a 4",
+            visual_check["detail"],
+        )
+        with self.assertRaisesRegex(
+            AgentGenerationError,
+            "5 elementos; o diagrama admite 2 a 4",
+        ):
+            validate_artifact("resources", tampered["resources"], tampered)
+
+    def test_empty_artifacts_never_produce_misleading_green_checks(self) -> None:
+        state = self._resource_state()
+        tampered = deepcopy(state)
+        tampered["learning_outcomes"] = []
+        tampered["assessment_activities"] = []
+        tampered["teaching_activities"] = []
+        tampered["pedagogical_design"] = {"strategy": "", "sequence": []}
+        tampered["alignment_matrix"] = []
+
+        report = evaluate_quality(tampered, tampered["resources"])
+        checks = {item["id"]: item for item in report["checks"]}
+        affected = {
+            "taxonomy_outcomes",
+            "assessment_coverage",
+            "assessment_purposes",
+            "teaching_coverage",
+            "formative_activity_structure",
+            "alignment_coverage",
+            "alignment_consistency",
+            "alignment_links",
+        }
+        self.assertTrue(all(checks[item]["status"] != "pass" for item in affected))
+        self.assertEqual(checks["unique_outcomes"]["status"], "error")
+        self.assertGreater(report["summary"]["warnings"], 0)
+
+        final_validation = build_final_validation(tampered)
+        sequence_check = next(
+            item
+            for item in final_validation["checks"]
+            if item["id"] == "stage_pedagogical_design"
+        )
+        self.assertFalse(final_validation["passed"])
+        self.assertFalse(sequence_check["passed"])
+        self.assertIn("estratégia não vazia", sequence_check["detail"])
+
     def test_resources_with_blocking_quality_errors_cannot_be_approved(self) -> None:
         state = self._resource_state()
         state["resources"]["quality"]["passed"] = False
@@ -645,6 +716,60 @@ class ResourceGenerationTests(unittest.TestCase):
                     self.assertTrue(any(description.strip() for description in descriptions))
         finally:
             package_path.unlink(missing_ok=True)
+
+    def test_program_exports_manual_teaching_fields_and_pedagogical_sequence(self) -> None:
+        state = self._resource_state()
+        activity = state["teaching_activities"][0]
+        activity.pop("method", None)
+        activity["learning_context"] = "Presencial"
+        activity["practice"] = "Aplicação manual orientada."
+        activity["support"] = "Acompanhamento manual do docente."
+        strategy = state["pedagogical_design"]["strategy"]
+        sequence_focus = state["pedagogical_design"]["sequence"][0]["focus"]
+
+        with TemporaryDirectory() as temporary_directory:
+            word_path = Path(temporary_directory) / "programa.docx"
+            latex_path = Path(temporary_directory) / "programa.tex"
+            export_program_document(state, word_path)
+            export_program_latex(state, latex_path)
+
+            program = Document(word_path)
+            word_text = "\n".join(
+                [paragraph.text for paragraph in program.paragraphs]
+                + [
+                    cell.text
+                    for table in program.tables
+                    for row in table.rows
+                    for cell in row.cells
+                ]
+            )
+            self.assertIn("Contexto", word_text)
+            self.assertIn("Prática", word_text)
+            self.assertIn("Acompanhamento", word_text)
+            self.assertIn("Aplicação manual orientada.", word_text)
+            self.assertIn("Acompanhamento manual do docente.", word_text)
+            self.assertIn("7. Organização da sequência pedagógica", word_text)
+            self.assertIn(strategy, word_text)
+            self.assertIn(sequence_focus, word_text)
+
+            for table in program.tables[1:]:
+                for row in table.rows[1:]:
+                    row_properties = row._tr.get_or_add_trPr()
+                    self.assertIsNotNone(
+                        row_properties.find(
+                            "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}cantSplit"
+                        )
+                    )
+
+            latex = latex_path.read_text(encoding="utf-8")
+            self.assertIn(r"\textbf{Contexto}", latex)
+            self.assertIn(r"\textbf{Prática}", latex)
+            self.assertIn(r"\textbf{Acompanhamento}", latex)
+            self.assertIn("Aplicação manual orientada.", latex)
+            self.assertIn("Acompanhamento manual do docente.", latex)
+            self.assertIn(r"\section{Organização da sequência pedagógica}", latex)
+            self.assertIn(strategy, latex)
+            self.assertIn(sequence_focus, latex)
 
     def test_zip_package_respects_word_latex_or_both_document_formats(self) -> None:
         state = review_current_stage(self._resource_state(), "approve", agent=self.agent)

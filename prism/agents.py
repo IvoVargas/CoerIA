@@ -50,6 +50,7 @@ from .providers import (
     IAeduResponsesAdapter,
     validate_ai_provider,
 )
+from .quality import presentation_visual_issues
 from .relationships import content_ids_for_outcome
 
 
@@ -435,7 +436,12 @@ def _schema_for(
                                 "enum": ["capa", "conceito", "processo", "comparacao", "sintese"],
                             },
                             "visual_title": string,
-                            "visual_items": {"type": "array", "items": string},
+                            "visual_items": {
+                                "type": "array",
+                                "items": string,
+                                "minItems": 2,
+                                "maxItems": 4,
+                            },
                             "visual_source": string,
                             "alt_text": string,
                         },
@@ -1803,7 +1809,23 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             )
 
     if stage == "pedagogical_design":
+        if not isinstance(artifact, dict):
+            raise AgentGenerationError(
+                "A organização da sequência pedagógica deve ser um objeto estruturado."
+            )
+        if not str(artifact.get("strategy", "")).strip():
+            raise AgentGenerationError(
+                "A organização da sequência pedagógica deve incluir uma estratégia não vazia."
+            )
         expected = {item["id"] for item in state["learning_outcomes"]}
+        if not expected:
+            raise AgentGenerationError(
+                "A sequência pedagógica só pode ser validada depois de definir resultados de aprendizagem."
+            )
+        if not artifact.get("sequence"):
+            raise AgentGenerationError(
+                "A sequência pedagógica deve conter pelo menos uma linha."
+            )
         _require_exact_coverage(
             artifact.get("sequence", []),
             expected,
@@ -1842,73 +1864,17 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 )
 
         if "Apresentação PowerPoint" in requested:
-            allowed_visual_kinds = {
-                "capa",
-                "conceito",
-                "processo",
-                "comparacao",
-                "sintese",
-            }
-            source_asset_ids = {
-                str(item.get("id", ""))
-                for item in state.get("source_images", [])
-                if isinstance(item, dict) and str(item.get("id", "")).strip()
-            }
-            generated_assets = {
-                str(item.get("id", "")): item
-                for item in state.get("generated_images", [])
-                if isinstance(item, dict) and str(item.get("id", "")).strip()
-            }
-            generated_asset_ids = set(generated_assets)
-            pending_ai_allowed = bool(
-                state.get("resource_generation_scope")
-                and state.get("ai_image_generation_enabled")
-            )
-            invalid_slides = []
+            invalid_slides: list[str] = []
             for index, slide in enumerate(artifact["presentation_outline"], start=1):
-                visual_items = slide.get("visual_items", [])
-                valid_items = (
-                    2 <= len(visual_items) <= 4
-                    and all(str(item).strip() for item in visual_items)
-                )
-                visual_mode = str(slide.get("visual_mode", ""))
-                visual_asset_id = str(slide.get("visual_asset_id", "")).strip()
-                visual_prompt = str(slide.get("visual_prompt", "")).strip()
-                valid_mode = visual_mode in {"diagrama", "documento", "ia"}
-                valid_asset = (
-                    visual_mode == "diagrama" and not visual_asset_id
-                ) or (
-                    visual_mode == "documento"
-                    and visual_asset_id in source_asset_ids
-                ) or (
-                    visual_mode == "ia"
-                    and bool(state.get("ai_image_generation_enabled"))
-                    and (
-                        (
-                            visual_asset_id in generated_asset_ids
-                            and bool(str(generated_assets[visual_asset_id].get("prompt", "")).strip())
-                        )
-                        or (
-                            pending_ai_allowed
-                            and not visual_asset_id
-                            and bool(visual_prompt)
-                        )
+                issues = presentation_visual_issues(state, slide)
+                if issues:
+                    invalid_slides.append(
+                        f"slide {index}: " + "; ".join(issues)
                     )
-                )
-                if (
-                    slide.get("visual_kind") not in allowed_visual_kinds
-                    or not str(slide.get("visual_title", "")).strip()
-                    or not valid_items
-                    or not str(slide.get("visual_source", "")).strip()
-                    or not str(slide.get("alt_text", "")).strip()
-                    or not valid_mode
-                    or not valid_asset
-                ):
-                    invalid_slides.append(str(index))
             if invalid_slides:
                 raise AgentGenerationError(
-                    "A especificação visual está incompleta nos slides: "
-                    + ", ".join(invalid_slides)
+                    "A especificação visual está incompleta — "
+                    + " | ".join(invalid_slides)
                     + "."
                 )
 

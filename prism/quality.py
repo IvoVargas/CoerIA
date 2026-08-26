@@ -44,6 +44,20 @@ def _coverage_check(
     items: list[dict[str, Any]],
     key: str = "outcome_id",
 ) -> dict[str, str]:
+    if not expected:
+        return _check(
+            check_id,
+            label,
+            "warning",
+            "Não existem resultados de aprendizagem; a cobertura não pode ser avaliada.",
+        )
+    if not items:
+        return _check(
+            check_id,
+            label,
+            "error",
+            "Não existem linhas para cobrir os resultados de aprendizagem.",
+        )
     received_list = _ids(items, key)
     received = set(received_list)
     duplicates = sorted(item for item, count in Counter(received_list).items() if item and count > 1)
@@ -67,6 +81,20 @@ def _many_to_many_coverage_check(
     expected: set[str],
     items: list[dict[str, Any]],
 ) -> dict[str, str]:
+    if not expected:
+        return _check(
+            check_id,
+            label,
+            "warning",
+            "Não existem resultados de aprendizagem; a cobertura não pode ser avaliada.",
+        )
+    if not items:
+        return _check(
+            check_id,
+            label,
+            "error",
+            "Não existem atividades para cobrir os resultados de aprendizagem.",
+        )
     received = {
         str(identifier)
         for item in items
@@ -96,6 +124,85 @@ def _many_to_many_coverage_check(
         "pass",
         f"Cobertura muitos-para-muitos de {len(expected)} resultados.",
     )
+
+
+def presentation_visual_issues(
+    state: dict[str, Any],
+    slide: dict[str, Any],
+) -> list[str]:
+    """Explica cada falha da especificação visual de um slide."""
+
+    issues: list[str] = []
+    allowed_visual_kinds = {
+        "capa",
+        "conceito",
+        "processo",
+        "comparacao",
+        "sintese",
+    }
+    visual_kind = str(slide.get("visual_kind", "")).strip()
+    visual_title = str(slide.get("visual_title", "")).strip()
+    raw_visual_items = slide.get("visual_items", [])
+    visual_items = raw_visual_items if isinstance(raw_visual_items, list) else []
+    visual_mode = str(slide.get("visual_mode", "")).strip()
+    visual_asset_id = str(slide.get("visual_asset_id", "")).strip()
+    visual_prompt = str(slide.get("visual_prompt", "")).strip()
+
+    if visual_kind not in allowed_visual_kinds:
+        issues.append("tipo visual ausente ou inválido")
+    if not visual_title:
+        issues.append("título do elemento visual em falta")
+    if not isinstance(raw_visual_items, list) or not 2 <= len(visual_items) <= 4:
+        issues.append(
+            f"{len(visual_items)} elementos; o diagrama admite 2 a 4"
+        )
+    else:
+        empty_positions = [
+            str(index)
+            for index, item in enumerate(visual_items, start=1)
+            if not str(item).strip()
+        ]
+        if empty_positions:
+            issues.append(
+                "elementos vazios nas posições " + ", ".join(empty_positions)
+            )
+    if not str(slide.get("visual_source", "")).strip():
+        issues.append("origem visual em falta")
+    if not str(slide.get("alt_text", "")).strip():
+        issues.append("descrição acessível em falta")
+
+    source_asset_ids = {
+        str(item.get("id", ""))
+        for item in state.get("source_images", [])
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    }
+    generated_assets = {
+        str(item.get("id", "")): item
+        for item in state.get("generated_images", [])
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    }
+    pending_ai_allowed = bool(
+        state.get("resource_generation_scope")
+        and state.get("ai_image_generation_enabled")
+    )
+    if visual_mode not in {"diagrama", "documento", "ia"}:
+        issues.append("modo visual ausente ou inválido")
+    elif visual_mode == "diagrama" and visual_asset_id:
+        issues.append("um diagrama editável não pode ter uma imagem associada")
+    elif visual_mode == "documento" and visual_asset_id not in source_asset_ids:
+        issues.append("imagem documental ausente ou desconhecida")
+    elif visual_mode == "ia":
+        generated_asset = generated_assets.get(visual_asset_id)
+        generated_ready = bool(
+            generated_asset
+            and str(generated_asset.get("prompt", "")).strip()
+        )
+        pending_generation = bool(
+            pending_ai_allowed and not visual_asset_id and visual_prompt
+        )
+        if not (generated_ready or pending_generation):
+            issues.append("imagem de IA ausente ou sem instrução válida")
+    return issues
 
 
 def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -152,9 +259,11 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         _check(
             "taxonomy_outcomes",
             f"Coerência entre Taxonomia {selected_taxonomy} e resultados",
-            "error" if taxonomy_issues else "pass",
+            "warning" if not outcomes else "error" if taxonomy_issues else "pass",
             (
-                "; ".join(taxonomy_issues)
+                "Não existem resultados de aprendizagem; a coerência taxonómica não pode ser avaliada."
+                if not outcomes
+                else "; ".join(taxonomy_issues)
                 if taxonomy_issues
                 else "Resultados, níveis e verbos mantêm-se coerentes."
             ),
@@ -178,9 +287,17 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         _check(
             "assessment_purposes",
             "Finalidade das avaliações",
-            "error" if invalid_assessment_purposes else "pass",
             (
-                "Finalidade inválida em: "
+                "warning"
+                if not state.get("assessment_activities", [])
+                else "error"
+                if invalid_assessment_purposes
+                else "pass"
+            ),
+            (
+                "Não existem tarefas de avaliação; a finalidade não pode ser avaliada."
+                if not state.get("assessment_activities", [])
+                else "Finalidade inválida em: "
                 + ", ".join(invalid_assessment_purposes)
                 if invalid_assessment_purposes
                 else "Cada avaliação é exclusivamente Formativa ou Sumativa."
@@ -206,9 +323,17 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         _check(
             "formative_activity_structure",
             "Estrutura das atividades de ensino-aprendizagem",
-            "error" if incomplete_formative_activities else "pass",
             (
-                "Estrutura incompleta em: "
+                "warning"
+                if not state.get("teaching_activities", [])
+                else "error"
+                if incomplete_formative_activities
+                else "pass"
+            ),
+            (
+                "Não existem atividades de ensino-aprendizagem; a estrutura não pode ser avaliada."
+                if not state.get("teaching_activities", [])
+                else "Estrutura incompleta em: "
                 + ", ".join(incomplete_formative_activities)
                 if incomplete_formative_activities
                 else "Prática, acompanhamento e feedback estão explícitos."
@@ -234,9 +359,17 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         _check(
             "alignment_consistency",
             "Consistência interna da matriz",
-            "error" if inconsistent_rows else "pass",
             (
-                "Estado incompatível nas linhas: " + ", ".join(inconsistent_rows)
+                "warning"
+                if not state.get("alignment_matrix", [])
+                else "error"
+                if inconsistent_rows
+                else "pass"
+            ),
+            (
+                "A matriz está vazia; a consistência interna não pode ser avaliada."
+                if not state.get("alignment_matrix", [])
+                else "Estado incompatível nas linhas: " + ", ".join(inconsistent_rows)
                 if inconsistent_rows
                 else "Os estados correspondem às evidências declaradas."
             ),
@@ -301,9 +434,17 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         _check(
             "alignment_links",
             "Ligações explícitas da matriz",
-            "error" if divergent_links else "pass",
             (
-                "Ligações divergentes nas linhas: " + ", ".join(divergent_links)
+                "warning"
+                if not state.get("alignment_matrix", [])
+                else "error"
+                if divergent_links
+                else "pass"
+            ),
+            (
+                "A matriz está vazia; as ligações não podem ser avaliadas."
+                if not state.get("alignment_matrix", [])
+                else "Ligações divergentes nas linhas: " + ", ".join(divergent_links)
                 if divergent_links
                 else "Conteúdos, avaliações e atividades correspondem aos artefactos aprovados."
             ),
@@ -351,65 +492,14 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         )
 
     if RESOURCE_PRESENTATION in requested:
-        allowed_visual_kinds = {
-            "capa",
-            "conceito",
-            "processo",
-            "comparacao",
-            "sintese",
-        }
         presentation_slides = resource_data.get("presentation_outline", [])
-        source_asset_ids = {
-            str(item.get("id", ""))
-            for item in state.get("source_images", [])
-            if isinstance(item, dict)
-            and str(item.get("id", "")).strip()
-        }
-        generated_assets = {
-            str(item.get("id", "")): item
-            for item in state.get("generated_images", [])
-            if isinstance(item, dict) and str(item.get("id", "")).strip()
-        }
-        generated_asset_ids = set(generated_assets)
-        pending_ai_allowed = bool(
-            state.get("resource_generation_scope")
-            and state.get("ai_image_generation_enabled")
-        )
-        invalid_visual_slides = []
+        invalid_visual_slides: list[str] = []
         for index, slide in enumerate(presentation_slides, start=1):
-            visual_items = slide.get("visual_items", [])
-            visual_mode = str(slide.get("visual_mode", ""))
-            visual_asset_id = str(slide.get("visual_asset_id", "")).strip()
-            visual_prompt = str(slide.get("visual_prompt", "")).strip()
-            valid_asset = (
-                visual_mode == "diagrama" and not visual_asset_id
-            ) or (
-                visual_mode == "documento" and visual_asset_id in source_asset_ids
-            ) or (
-                visual_mode == "ia"
-                and (
-                    (
-                        visual_asset_id in generated_asset_ids
-                        and bool(str(generated_assets[visual_asset_id].get("prompt", "")).strip())
-                    )
-                    or (
-                        pending_ai_allowed
-                        and not visual_asset_id
-                        and bool(visual_prompt)
-                    )
+            issues = presentation_visual_issues(state, slide)
+            if issues:
+                invalid_visual_slides.append(
+                    f"slide {index}: " + "; ".join(issues)
                 )
-            )
-            if (
-                slide.get("visual_kind") not in allowed_visual_kinds
-                or not str(slide.get("visual_title", "")).strip()
-                or not 2 <= len(visual_items) <= 4
-                or any(not str(item).strip() for item in visual_items)
-                or not str(slide.get("visual_source", "")).strip()
-                or not str(slide.get("alt_text", "")).strip()
-                or visual_mode not in {"diagrama", "documento", "ia"}
-                or not valid_asset
-            ):
-                invalid_visual_slides.append(str(index))
         checks.append(
             _check(
                 "presentation_visuals",
@@ -420,8 +510,8 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                     "editável, imagem documental ou imagem gerada por IA), com fonte "
                     "e texto alternativo."
                     if presentation_slides and not invalid_visual_slides
-                    else "Especificação visual incompleta nos slides: "
-                    + (", ".join(invalid_visual_slides) or "todos")
+                    else "Especificação visual incompleta — "
+                    + (" | ".join(invalid_visual_slides) or "não existem slides")
                     + "."
                 ),
             )
@@ -451,13 +541,22 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
     }
     for resource_type in requested:
         covered = resource_outcomes.get(resource_type, set())
+        coverage_status = (
+            "warning"
+            if not expected_ids
+            else "pass"
+            if covered == expected_ids
+            else "error"
+        )
         checks.append(
             _check(
                 "coverage_" + _normalise(resource_type).replace(" ", "_"),
                 f"Resultados cobertos por {resource_type}",
-                "pass" if covered == expected_ids else "error",
+                coverage_status,
                 (
-                    "Todos os resultados estão associados ao recurso."
+                    "Não existem resultados de aprendizagem; a cobertura do recurso não pode ser avaliada."
+                    if not expected_ids
+                    else "Todos os resultados estão associados ao recurso."
                     if covered == expected_ids
                     else f"Esperados: {sorted(expected_ids)}; cobertos: {sorted(covered)}."
                 ),

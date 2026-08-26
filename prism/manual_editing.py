@@ -228,7 +228,11 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     _field("visual_prompt", "Instrução da imagem IA", "long"),
                     _field("visual_kind", "Tipo visual"),
                     _field("visual_title", "Título visual"),
-                    _field("visual_items", "Itens visuais — um por linha", "lines"),
+                    _field(
+                        "visual_items",
+                        "Elementos do diagrama — 2 a 4, um por linha",
+                        "lines",
+                    ),
                     _field("visual_source", "Origem visual", "long"),
                     _field("alt_text", "Texto alternativo", "long"),
                 ),
