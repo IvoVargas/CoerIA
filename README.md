@@ -152,8 +152,8 @@ O botão de edição encontra-se no canto superior direito do cartão do conteú
 **Etapa seguinte** navega sem executar a IA.
 Cada cartão da barra conserva também uma cor de fundo própria para o respetivo
 estado — por preencher, rascunho, verificado, concluído, pendente ou a rever — e
-mantém o estado escrito. O ponto atual é assinalado por um contorno adicional,
-sem substituir a cor do seu estado.
+mantém o estado escrito. As cores são claras e distinguem-se do fundo geral da
+página; o ponto atual conserva o fundo verde em gradiente já usado na seleção.
 
 **Criar etapa completa com IA** é a primeira ação apresentada na zona de IA e
 pede uma proposta para toda a etapa, considerando o rascunho atual; o conteúdo

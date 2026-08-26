@@ -57,6 +57,25 @@ def test_unknown_stage_status_uses_the_pending_background() -> None:
     assert app._stage_status_css_class("legacy-status") == "stage-status-pending"
 
 
+def test_stage_status_colors_preserve_the_original_selected_background() -> None:
+    assert "--agir-bg: #f3f7f6;" in app.APP_CSS
+    assert (
+        ".stage-item.stage-status-empty { background: #ffffff; "
+        "border-color: #c6d7d4; }"
+        in app.APP_CSS
+    )
+    assert (
+        ".stage-item.stage-status-approved { background: #d9efe4; "
+        "border-color: #82c2a3; }"
+        in app.APP_CSS
+    )
+    assert (
+        ".stage-item.current { color: white; background: linear-gradient(135deg, "
+        "var(--agir-primary), var(--agir-secondary)); border-color: transparent;"
+        in app.APP_CSS
+    )
+
+
 @pytest.mark.parametrize(
     ("phase", "elapsed_seconds", "expected"),
     [

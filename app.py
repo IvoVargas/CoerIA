@@ -272,16 +272,16 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   width: 100%; overflow-x: auto; padding: 4px 2px 12px;
 }
 .stage-item { min-width: 126px; border-radius: 14px; padding: 12px; border: 1px solid var(--agir-border); background: white; color: inherit; text-align: left; transition: transform .15s ease, box-shadow .15s ease; }
-.stage-item.stage-status-empty { background: #f3f5f6; border-color: #c8d3d5; color: #3d5358; }
-.stage-item.stage-status-pending { background: #edf1f7; border-color: #b9c7d9; color: #3a4e68; }
-.stage-item.stage-status-draft { background: #e6f2fb; border-color: #98c3df; color: #174f6b; }
-.stage-item.stage-status-checked { background: #eeeafb; border-color: #b9ace2; color: #493773; }
-.stage-item.stage-status-approved { background: #e4f5eb; border-color: #9bd2b3; color: #185d3b; }
+.stage-item.stage-status-empty { background: #ffffff; border-color: #c6d7d4; }
+.stage-item.stage-status-pending { background: #eef2f8; border-color: #afbed3; }
+.stage-item.stage-status-draft { background: #dceef8; border-color: #7fb6d3; }
+.stage-item.stage-status-checked { background: #e8e3f4; border-color: #ad9acb; }
+.stage-item.stage-status-approved { background: #d9efe4; border-color: #82c2a3; }
 .stage-item.stage-status-needs-review,
-.stage-item.stage-status-stale { background: #fff0d2; border-color: #dda83d; color: #674406; }
-.stage-item.stage-status-awaiting-review { background: #e0f4f2; border-color: #7fc5bf; color: #135a55; }
-.stage-item.stage-status-generating { background: #f2e8fa; border-color: #c19adb; color: #58326f; }
-.stage-item.current { outline: 3px solid var(--agir-primary); outline-offset: 2px; box-shadow: 0 8px 20px rgba(13, 118, 110, .18); }
+.stage-item.stage-status-stale { background: #ffedc7; border-color: #d59f33; }
+.stage-item.stage-status-awaiting-review { background: #d9eeeb; border-color: #74bdb6; }
+.stage-item.stage-status-generating { background: #eadcf3; border-color: #b387cb; }
+.stage-item.current { color: white; background: linear-gradient(135deg, var(--agir-primary), var(--agir-secondary)); border-color: transparent; box-shadow: 0 8px 20px rgba(13, 118, 110, .2); }
 .stage-item.selectable { cursor: pointer; font: inherit; }
 .stage-item.selectable:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(31, 71, 75, .11); }
 .stage-item.viewing { outline: 3px solid var(--agir-accent); outline-offset: 2px; }
