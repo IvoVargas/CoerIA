@@ -42,6 +42,22 @@ def test_busy_elapsed_duration_is_readable(
 
 
 @pytest.mark.parametrize(
+    ("status", "css_class"),
+    list(app.STAGE_STATUS_CSS_CLASSES.items()),
+)
+def test_each_stage_status_has_a_specific_background_class(
+    status: str,
+    css_class: str,
+) -> None:
+    assert app._stage_status_css_class(status) == css_class
+    assert f".stage-item.{css_class}" in app.APP_CSS
+
+
+def test_unknown_stage_status_uses_the_pending_background() -> None:
+    assert app._stage_status_css_class("legacy-status") == "stage-status-pending"
+
+
+@pytest.mark.parametrize(
     ("phase", "elapsed_seconds", "expected"),
     [
         (
@@ -373,6 +389,9 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
 
     await user.open("/_test_manual_first_workspace")
 
+    await user.should_see("Ponto atual · Rascunho")
+    assert user.find(marker="stage-status-draft").elements
+    assert user.find(marker="stage-status-empty").elements
     await user.should_not_see("Autoria manual com IA facultativa")
     await user.should_see("Etapa seguinte")
     await user.should_not_see("Continuar sem executar a IA")

@@ -405,6 +405,9 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
 ### RNF03 — Usabilidade e acessibilidade
 
 - A etapa, o progresso, a decisão pendente e os erros são sempre visíveis.
+- Na barra de etapas, atribuir uma cor de fundo consistente a cada estado e manter
+  simultaneamente a designação textual; assinalar o ponto atual com um contorno
+  que não esconda a cor do estado.
 - Durante operações demoradas, indicar a etapa de destino, a fase de execução e
   o tempo decorrido, mantendo um único indicador indeterminado e sem inventar uma
   percentagem que o fornecedor não disponibilize.

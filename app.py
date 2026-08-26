@@ -128,6 +128,17 @@ USER_ERRORS = (
 LOGGER = logging.getLogger(__name__)
 UNRESTRICTED_PAGE_ROUTES = {"/favicon.ico", "/login"}
 ERROR_NOTIFICATION_TIMEOUT_SECONDS = 12
+STAGE_STATUS_CSS_CLASSES = {
+    "empty": "stage-status-empty",
+    "pending": "stage-status-pending",
+    "draft": "stage-status-draft",
+    "checked": "stage-status-checked",
+    "approved": "stage-status-approved",
+    "needs_review": "stage-status-needs-review",
+    "stale": "stage-status-stale",
+    "awaiting_review": "stage-status-awaiting-review",
+    "generating": "stage-status-generating",
+}
 
 
 def _replace_error_notification(current: Any | None, message: str) -> Any:
@@ -182,6 +193,15 @@ def _busy_phase_message(phase: str, phase_elapsed_seconds: float) -> str:
             "esta é normalmente a etapa mais demorada…"
         )
     return "O fornecedor continua a gerar a proposta; a operação está ativa…"
+
+
+def _stage_status_css_class(status: str | None) -> str:
+    """Converte estados persistidos numa classe visual controlada."""
+
+    return STAGE_STATUS_CSS_CLASSES.get(
+        str(status or "pending"),
+        STAGE_STATUS_CSS_CLASSES["pending"],
+    )
 
 
 @app.add_middleware
@@ -251,10 +271,17 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   gap: 8px;
   width: 100%; overflow-x: auto; padding: 4px 2px 12px;
 }
-.stage-item { min-width: 126px; border-radius: 14px; padding: 12px; border: 1px solid var(--agir-border); background: white; color: inherit; text-align: left; }
-.stage-item.done { background: #e8f5ef; border-color: #b9dfcd; }
-.stage-item.current { color: white; background: linear-gradient(135deg, var(--agir-primary), var(--agir-secondary)); border-color: transparent; box-shadow: 0 8px 20px rgba(13, 118, 110, .2); }
-.stage-item.stale { background: #fff6e5; border-color: #e8bd6a; color: #6f4c12; }
+.stage-item { min-width: 126px; border-radius: 14px; padding: 12px; border: 1px solid var(--agir-border); background: white; color: inherit; text-align: left; transition: transform .15s ease, box-shadow .15s ease; }
+.stage-item.stage-status-empty { background: #f3f5f6; border-color: #c8d3d5; color: #3d5358; }
+.stage-item.stage-status-pending { background: #edf1f7; border-color: #b9c7d9; color: #3a4e68; }
+.stage-item.stage-status-draft { background: #e6f2fb; border-color: #98c3df; color: #174f6b; }
+.stage-item.stage-status-checked { background: #eeeafb; border-color: #b9ace2; color: #493773; }
+.stage-item.stage-status-approved { background: #e4f5eb; border-color: #9bd2b3; color: #185d3b; }
+.stage-item.stage-status-needs-review,
+.stage-item.stage-status-stale { background: #fff0d2; border-color: #dda83d; color: #674406; }
+.stage-item.stage-status-awaiting-review { background: #e0f4f2; border-color: #7fc5bf; color: #135a55; }
+.stage-item.stage-status-generating { background: #f2e8fa; border-color: #c19adb; color: #58326f; }
+.stage-item.current { outline: 3px solid var(--agir-primary); outline-offset: 2px; box-shadow: 0 8px 20px rgba(13, 118, 110, .18); }
 .stage-item.selectable { cursor: pointer; font: inherit; }
 .stage-item.selectable:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(31, 71, 75, .11); }
 .stage-item.viewing { outline: 3px solid var(--agir-accent); outline-offset: 2px; }
@@ -1284,15 +1311,8 @@ class AGIRSoloInterface:
                         if index == current_index
                         else "pending"
                     )
-                visual_status = (
-                    "done"
-                    if stored_status == "approved"
-                    else "current"
-                    if stored_status in {"awaiting_review", "generating"}
-                    else "stale"
-                    if stored_status == "stale"
-                    else "pending"
-                )
+                current = stage == state["current_stage"]
+                status_class = _stage_status_css_class(stored_status)
                 returns_to_current = (
                     stage == state["current_stage"] and self.viewed_stage is not None
                 )
@@ -1301,14 +1321,17 @@ class AGIRSoloInterface:
                 )
                 viewing = stage == self.viewed_stage
                 item = ui.element("button" if selectable else "div").classes(
-                    f"stage-item {visual_status}"
+                    f"stage-item {status_class}"
+                    + (" current" if current else "")
                     + (" selectable" if selectable else "")
                     + (" viewing" if viewing else "")
                 )
+                item_markers = [status_class]
+                if returns_to_current:
+                    item_markers.append("return-current-stage")
+                item.mark(*item_markers)
                 if selectable:
                     item.props("type=button")
-                    if returns_to_current:
-                        item.mark("return-current-stage")
                     item.on(
                         "click",
                         lambda _event,
@@ -1322,10 +1345,13 @@ class AGIRSoloInterface:
                 with item:
                     ui.label(f"{index + 1:02d}").classes("stage-number")
                     ui.label(STAGE_LABELS[stage]).classes("stage-label")
+                    base_status_label = status_labels.get(stored_status, stored_status)
                     stage_status_label = (
-                        "Ponto atual · selecionar para voltar"
+                        f"Ponto atual · {base_status_label} · selecionar para voltar"
                         if returns_to_current
-                        else status_labels.get(stored_status, stored_status)
+                        else f"Ponto atual · {base_status_label}"
+                        if current
+                        else base_status_label
                     )
                     ui.label(stage_status_label).classes("stage-state")
 
@@ -1346,20 +1372,14 @@ class AGIRSoloInterface:
             for index, stage in enumerate(STAGE_ORDER):
                 stored_status = stored_statuses.get(stage, "empty")
                 current = stage == state.get("current_stage")
-                visual_status = (
-                    "current"
-                    if current
-                    else "done"
-                    if stored_status in {"draft", "checked", "approved"}
-                    else "stale"
-                    if stored_status == "needs_review"
-                    else "pending"
-                )
+                status_class = _stage_status_css_class(stored_status)
                 selectable = not current and not completed
                 item = ui.element("button" if selectable else "div").classes(
-                    f"stage-item {visual_status}" + (" selectable" if selectable else "")
+                    f"stage-item {status_class}"
+                    + (" current" if current else "")
+                    + (" selectable" if selectable else "")
                 )
-                item.mark(f"manual-stage-{stage}")
+                item.mark(f"manual-stage-{stage}", status_class)
                 if selectable:
                     item.props("type=button")
                     item.on(
@@ -1371,12 +1391,13 @@ class AGIRSoloInterface:
                 with item:
                     ui.label(f"{index + 1:02d}").classes("stage-number")
                     ui.label(STAGE_LABELS[stage]).classes("stage-label")
+                    base_status_label = status_labels.get(stored_status, stored_status)
                     ui.label(
-                        "Sessão concluída"
+                        f"Sessão concluída · {base_status_label}"
                         if completed
-                        else "Ponto atual"
+                        else f"Ponto atual · {base_status_label}"
                         if current
-                        else status_labels.get(stored_status, stored_status)
+                        else base_status_label
                     ).classes("stage-state")
 
     async def _navigate_manual_stage(self, target_stage: str) -> None:

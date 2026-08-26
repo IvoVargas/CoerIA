@@ -150,6 +150,10 @@ ocorrer antes de artefactos já preenchidos, esses artefactos são preservados e
 assinalados como **Rever após alterações anteriores**.
 O botão de edição encontra-se no canto superior direito do cartão do conteúdo;
 **Etapa seguinte** navega sem executar a IA.
+Cada cartão da barra conserva também uma cor de fundo própria para o respetivo
+estado — por preencher, rascunho, verificado, concluído, pendente ou a rever — e
+mantém o estado escrito. O ponto atual é assinalado por um contorno adicional,
+sem substituir a cor do seu estado.
 
 **Criar etapa completa com IA** é a primeira ação apresentada na zona de IA e
 pede uma proposta para toda a etapa, considerando o rascunho atual; o conteúdo
