@@ -21,6 +21,8 @@ from .ingestion import (
     build_raw_source_text,
     extract_source_images,
     recover_direct_source_text,
+    replace_direct_source_text,
+    source_file_names,
 )
 from .models import (
     CourseInput,
@@ -44,6 +46,7 @@ from .workflow import (
     restore_stage_version,
     review_current_stage,
     revision_impact,
+    update_initial_context,
     update_manual_resource_settings,
     version_restore_impact,
     verify_stage_with_ai,
@@ -180,6 +183,123 @@ class ApplicationService:
             progress_callback("A guardar a sessão e as estruturas de autoria manual…")
         return self._persist(state)
 
+    def update_session_initial_data(
+        self,
+        state: dict[str, Any] | None,
+        form: dict[str, Any],
+        source_files: list[str] | str | None = None,
+        removed_source_files: list[str] | None = None,
+        progress_callback: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
+        """Guarda alterações iniciais e conserva o trabalho pedagógico existente."""
+
+        if not state:
+            raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        if progress_callback is not None:
+            progress_callback("A validar as alterações aos dados iniciais…")
+
+        direct_source = str(form.get("source_text", "") or "").strip()
+        selected_provider = str(
+            form.get("ai_provider", state.get("ai_provider", configured_ai_provider()))
+            or configured_ai_provider()
+        )
+        old_direct_source = str(
+            state.get("source_input_text")
+            if state.get("source_input_text") is not None
+            else recover_direct_source_text(str(state.get("source_original_text", "")))
+        ).strip()
+        has_new_files = bool(source_files)
+        removed_sources = {
+            str(name).strip()
+            for name in (removed_source_files or [])
+            if str(name).strip()
+        }
+        sources_changed = (
+            direct_source != old_direct_source or has_new_files or bool(removed_sources)
+        )
+        if sources_changed:
+            raw_source = replace_direct_source_text(
+                str(state.get("source_original_text", "")),
+                direct_source,
+                source_files,
+                removed_sources,
+            )
+            reduction = reduce_source_text(
+                raw_source,
+                provider=selected_provider,
+                progress_callback=progress_callback,
+                allow_ai=False,
+            )
+            consolidated_source = reduction.text
+            reduction_metadata = reduction.metadata
+        else:
+            raw_source = str(
+                state.get("source_original_text")
+                or state.get("course", {}).get("source_text", "")
+            )
+            consolidated_source = str(state.get("course", {}).get("source_text", ""))
+            reduction_metadata = deepcopy(state.get("source_reduction", {}))
+
+        contact_hours = float(form.get("contact_hours", 0) or 0)
+        autonomous_hours = float(form.get("autonomous_hours", 0) or 0)
+        calculated_duration = contact_hours + autonomous_hours
+        duration_hours = (
+            calculated_duration
+            if calculated_duration > 0
+            else float(
+                form.get("duration_hours")
+                or state.get("course", {}).get("duration_hours", 0)
+                or 0
+            )
+        )
+        course = CourseInput.create(
+            str(form.get("unit_name", "") or ""),
+            consolidated_source,
+            str(form.get("program_type") or form.get("audience") or "Ensino superior"),
+            duration_hours,
+            taxonomy_type=str(form.get("taxonomy_type", "SOLO") or "SOLO"),
+            program_name=str(form.get("program_name", "") or ""),
+            program_type=str(form.get("program_type", "") or ""),
+            academic_year=str(form.get("academic_year", "") or ""),
+            semester=str(form.get("semester", "") or ""),
+            cnaef_code=str(form.get("cnaef_code", "") or ""),
+            cnaef_name=str(form.get("cnaef_name", "") or ""),
+            ects_credits=float(form.get("ects_credits", 0) or 0),
+            contact_hours=contact_hours,
+            autonomous_hours=autonomous_hours,
+            general_aims=str(form.get("general_aims", "") or ""),
+            bibliography=str(form.get("bibliography", "") or ""),
+        )
+        source_images = [
+            deepcopy(asset)
+            for asset in state.get("source_images", [])
+            if not isinstance(asset, dict)
+            or str(asset.get("source_file", "")).strip() not in removed_sources
+        ]
+        if has_new_files:
+            known_ids = {
+                str(asset.get("id", ""))
+                for asset in source_images
+                if isinstance(asset, dict)
+            }
+            for asset in extract_source_images(source_files):
+                if str(asset.get("id", "")) not in known_ids:
+                    source_images.append(asset)
+                    known_ids.add(str(asset.get("id", "")))
+
+        updated = update_initial_context(
+            state,
+            course,
+            ai_provider=selected_provider,
+            source_input_text=direct_source,
+            source_original_text=raw_source,
+            source_reduction=reduction_metadata,
+            source_images=source_images,
+        )
+        if progress_callback is not None:
+            progress_callback("A guardar os dados e a assinalar as etapas para revisão…")
+        return self._persist(updated)
+
     def navigate_session(
         self,
         state: dict[str, Any] | None,
@@ -240,11 +360,18 @@ class ApplicationService:
         proposal_id: str,
         accept: bool,
         selections: list[dict[str, Any]] | None = None,
+        edited_after: Any = None,
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
         updated = self._persist(
-            decide_ai_proposal(state, proposal_id, accept, selections)
+            decide_ai_proposal(
+                state,
+                proposal_id,
+                accept,
+                selections,
+                edited_after=edited_after,
+            )
         )
         return (
             updated,
@@ -413,6 +540,12 @@ class ApplicationService:
                 state.get("ai_image_generation_enabled", False)
             ),
         }
+
+    @staticmethod
+    def restored_source_file_names(state: dict[str, Any]) -> list[str]:
+        """Devolve as fontes já incorporadas, pela ordem original."""
+
+        return source_file_names(str(state.get("source_original_text", "")))
 
     def review_session(
         self,

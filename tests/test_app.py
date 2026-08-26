@@ -217,6 +217,63 @@ async def test_application_opens_on_home_before_starting_a_new_session(
 
 
 @pytest.mark.asyncio
+async def test_existing_session_can_return_to_and_update_initial_data(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "edit-initial.db"))
+    state = create_session(
+        CourseInput.create(
+            "Introdução às Pescas",
+            "Ecossistemas aquáticos, gestão sustentável, segurança e técnicas de captura.",
+        )
+    )
+    state["source_input_text"] = state["course"]["source_text"]
+    state["source_original_text"] = (
+        "[Texto introduzido pelo docente]\n"
+        + state["source_input_text"]
+        + "\n\n[Ficheiro: 00_programa.pdf]\nPrograma documental anterior."
+    )
+    state["source_images"] = [
+        {"id": "source-image-1", "source_file": "00_programa.pdf"}
+    ]
+    state = service._persist(state)
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_edit_initial_session")
+    def edit_initial_session_page():
+        interface = app.AGIRSoloInterface(service=service)
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_edit_initial_session")
+
+    user.find(marker="edit-initial-session-data").click()
+    await user.should_see("Reveja o ponto de partida")
+    await user.should_see("Guardar alterações iniciais")
+    await user.should_see("Incorporado: programa.pdf")
+    assert interfaces[-1].initial_view.visible
+    assert interfaces[-1].state is not None
+    assert interfaces[-1]._form_data()["unit_name"] == "Introdução às Pescas"
+
+    interfaces[-1].fields["unit_name"].set_value("Introdução às Pescas Costeiras")
+    user.find(marker="toggle-existing-source").click()
+    await user.should_see("programa.pdf — será removido")
+    user.find(marker="create-pedagogical-session").click()
+
+    await user.should_see("Dados iniciais atualizados")
+    await user.should_see("Introdução às Pescas Costeiras")
+    assert interfaces[-1].workspace_view.visible
+    assert not interfaces[-1].editing_initial_session
+    assert interfaces[-1].state["course"]["unit_name"] == (
+        "Introdução às Pescas Costeiras"
+    )
+    assert "[Ficheiro: 00_programa.pdf]" not in interfaces[-1].state["source_original_text"]
+    assert interfaces[-1].state["source_images"] == []
+
+
+@pytest.mark.asyncio
 async def test_workspace_uses_a_notification_instead_of_a_status_banner(user: User) -> None:
     state = create_session(
         CourseInput.create(
@@ -740,6 +797,85 @@ async def test_manual_first_workspace_renders_a_pending_ai_proposal(
     )
     assert interfaces[-1].state["ai_proposals"][-1]["status"] == "partially_accepted"
     assert len(interfaces[-1].state["versions"]["learning_outcomes"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_complete_resource_proposal_reuses_editor_and_hides_unselected_resources(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    agent = create_test_agent()
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        ),
+        resource_types=[RESOURCE_PRESENTATION],
+        agent=agent,
+    )
+    for _ in range(6):
+        state = review_current_stage(state, "approve", agent=agent)
+    assert state["current_stage"] == "resources"
+    before = deepcopy(state["resources"])
+    proposed = deepcopy(before)
+    proposed["presentation_outline"][0]["title"] = "Apresentação proposta"
+    proposed["lesson_worksheet"] = {
+        "title": "Ficha que não foi selecionada",
+        "overview": "Não deve aparecer.",
+        "instructions": "Não deve aparecer.",
+        "sections": [
+            {
+                "heading": "Secção indevida",
+                "content": "Conteúdo indevido.",
+                "outcome_ids": ["RA1"],
+                "activity": "Atividade indevida.",
+            }
+        ],
+    }
+    state["ai_proposals"] = [
+        {
+            "id": "P1",
+            "stage": "resources",
+            "scope_path": [],
+            "scope_label": "Toda a etapa",
+            "instruction": "Criar a etapa completa.",
+            "before": before,
+            "after": proposed,
+            "status": "pending",
+            "metadata": {"provider": "Teste"},
+            "generated_images": [],
+        }
+    ]
+
+    interfaces: list[app.AGIRSoloInterface] = []
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "resource-proposal.db"))
+
+    @ui.page("/_test_complete_resource_proposal")
+    def complete_resource_proposal_page():
+        interface = app.AGIRSoloInterface(service=service)
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_complete_resource_proposal")
+
+    assert user.find(marker="resource-ai-proposal-review").elements
+    assert len(user.find(marker="resource-edit-tab-presentation").elements) == 1
+    await user.should_see("Slides da apresentação")
+    await user.should_see("Slide 1 — Apresentação proposta")
+    await user.should_not_see("Ficha que não foi selecionada")
+
+    user.find(marker="apply-edited-resource-proposal").click()
+    await user.should_not_see("REVISÃO DA PROPOSTA DA IA")
+
+    applied = interfaces[-1].state
+    assert applied["resources"]["presentation_outline"][0]["title"] == (
+        "Apresentação proposta"
+    )
+    assert applied["resources"]["lesson_worksheet"]["sections"] == []
+    assert applied["ai_proposals"][-1]["review_mode"] == (
+        "edited_complete_resource"
+    )
 
 
 def test_export_format_choice_maps_to_requested_document_formats() -> None:

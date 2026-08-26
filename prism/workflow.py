@@ -704,6 +704,87 @@ def ensure_manual_artifacts(state: PrismState) -> PrismState:
     return state
 
 
+def update_initial_context(
+    state: PrismState,
+    course: CourseInput,
+    *,
+    ai_provider: str,
+    source_input_text: str,
+    source_original_text: str,
+    source_reduction: dict[str, Any],
+    source_images: list[dict[str, Any]],
+) -> PrismState:
+    """Atualiza a configuração inicial sem eliminar artefactos já produzidos."""
+
+    updated = ensure_manual_artifacts(deepcopy(state))
+    previous_course = deepcopy(updated.get("course", {}))
+    previous_provider = str(updated.get("ai_provider", ""))
+    previous_source_input = str(updated.get("source_input_text", ""))
+    previous_source_original = str(updated.get("source_original_text", ""))
+    previous_source_images = deepcopy(updated.get("source_images", []))
+
+    updated["course"] = course.to_dict()
+    updated["ai_provider"] = validate_ai_provider(ai_provider)
+    updated["source_input_text"] = source_input_text.strip()
+    updated["source_original_text"] = source_original_text.strip()
+    updated["source_reduction"] = deepcopy(source_reduction)
+    updated["source_images"] = deepcopy(source_images)
+
+    course_changed = previous_course != updated["course"]
+    sources_changed = (
+        previous_source_input != updated["source_input_text"]
+        or previous_source_original != updated["source_original_text"]
+        or previous_source_images != updated["source_images"]
+    )
+    provider_changed = previous_provider != updated["ai_provider"]
+    if not any((course_changed, sources_changed, provider_changed)):
+        raise ValueError("Não foram detetadas alterações nos dados iniciais.")
+
+    changed_labels: list[str] = []
+    if course_changed:
+        changed_labels.append("caracterização da unidade curricular")
+    if sources_changed:
+        changed_labels.append("texto de base ou fontes")
+    if provider_changed:
+        changed_labels.append("fornecedor de IA")
+
+    if course_changed or sources_changed:
+        statuses = dict(updated.get("stage_statuses", {}))
+        for stage in AUTHORING_STAGES:
+            statuses[stage] = (
+                "needs_review" if artifact_has_content(updated.get(stage)) else "empty"
+            )
+        statuses["final_validation"] = "pending"
+        updated["stage_statuses"] = statuses
+        updated.pop("final_validation", None)
+        updated.get("active_versions", {}).pop("final_validation", None)
+        if updated.get("current_stage") not in AUTHORING_STAGES:
+            updated["current_stage"] = AUTHORING_STAGES[0]
+        updated["status"] = "drafting"
+        updated["review"] = {
+            "stage": updated["current_stage"],
+            "label": STAGE_LABELS[updated["current_stage"]],
+            "message": (
+                "Os dados iniciais foram alterados. Os artefactos existentes foram "
+                "preservados e devem ser revistos."
+            ),
+        }
+        for proposal in updated.get("ai_proposals", []):
+            if isinstance(proposal, dict) and proposal.get("status") == "pending":
+                proposal["status"] = "superseded"
+                proposal["decision"] = "invalidada_por_alteracao_inicial"
+
+    updated.setdefault("audit", []).append(
+        {
+            "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "stage": "Configuração inicial",
+            "event": "Docente alterou os dados iniciais da sessão.",
+            "feedback": ", ".join(changed_labels),
+        }
+    )
+    return updated
+
+
 def artifact_has_content(artifact: Any, *, root: bool = True) -> bool:
     if isinstance(artifact, str):
         return bool(artifact.strip())
@@ -918,7 +999,18 @@ def save_manual_draft(
     if edited_artifact == updated.get(target_stage):
         raise ValueError("Não foram detetadas alterações para guardar.")
     if target_stage == "resources":
-        edited_artifact["selected_types"] = list(updated.get("resource_types", []))
+        selected_types = validate_resource_types(updated.get("resource_types", []))
+        blank_resources = blank_artifact("resources", updated)
+        resource_fields = {
+            RESOURCE_PRESENTATION: "presentation_outline",
+            RESOURCE_WORKSHEET: "lesson_worksheet",
+            RESOURCE_TEST: "test",
+            RESOURCE_PRACTICAL: "practical_activity",
+        }
+        edited_artifact["selected_types"] = list(selected_types)
+        for resource_type, field in resource_fields.items():
+            if resource_type not in selected_types:
+                edited_artifact[field] = deepcopy(blank_resources[field])
         edited_artifact = attach_quality_report(updated, edited_artifact)
 
     clean_reason = reason.strip() or "Conteúdo alterado diretamente pelo docente."
@@ -1317,6 +1409,8 @@ def decide_ai_proposal(
     proposal_id: str,
     accept: bool,
     selections: list[dict[str, Any]] | None = None,
+    *,
+    edited_after: Any = None,
 ) -> PrismState:
     """Aceita ou rejeita explicitamente uma proposta previamente guardada."""
 
@@ -1348,7 +1442,21 @@ def decide_ai_proposal(
             "trabalho mais recente, rejeite-a e peça uma nova proposta."
         )
 
-    if selections is None:
+    if edited_after is not None:
+        if selections is not None:
+            raise ValueError(
+                "A revisão editada não pode ser combinada com decisões por célula."
+            )
+        if stage != "resources" or scope_path:
+            raise ValueError(
+                "A revisão editada completa aplica-se apenas à etapa Recursos educativos."
+            )
+        if not isinstance(edited_after, dict):
+            raise ValueError("A proposta editada deve conservar a estrutura dos recursos.")
+        artifact = deepcopy(edited_after)
+        proposal["reviewed_after"] = deepcopy(edited_after)
+        proposal["review_mode"] = "edited_complete_resource"
+    elif selections is None:
         artifact = _replace_at_scope(
             working[stage],
             scope_path,

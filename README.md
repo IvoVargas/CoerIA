@@ -133,6 +133,14 @@ inicial: são formulados ou introduzidos apenas na etapa **Conteúdos e objetivo
 curriculares**, evitando duplicação e mantendo essa etapa disponível para uma
 primeira proposta completa por IA.
 
+Depois de iniciar o desenho curricular, **Editar dados iniciais** permite regressar
+ao mesmo formulário para corrigir a identificação, a taxonomia, o fornecedor, o
+texto de base e a caracterização. As fontes documentais já incorporadas são
+listadas e podem ser mantidas ou removidas; também podem ser adicionados novos
+ficheiros. A gravação preserva os artefactos existentes, invalida propostas de IA
+pendentes baseadas no contexto anterior e assinala as etapas preenchidas para
+revisão antes de uma nova validação final.
+
 A barra de etapas permite abrir qualquer ponto de autoria desde a criação da
 sessão. A navegação não chama a IA, não exige completude e não apaga dados. Em
 qualquer etapa, **Editar campos e tabelas** ativa a edição no próprio artefacto;
@@ -148,7 +156,9 @@ pede uma proposta para toda a etapa, considerando o rascunho atual; o conteúdo
 só se torna uma nova versão depois da revisão do docente. Em **Recursos
 educativos**, esta ação apresenta primeiro uma confirmação explícita, porque
 pode executar uma chamada por tipo de recurso e chamadas adicionais para gerar
-imagens da apresentação.
+imagens da apresentação. A proposta resultante reutiliza os mesmos separadores e
+o mesmo editor da edição manual, mostra apenas os recursos selecionados e permite
+ajustar o conteúdo antes de aplicar a proposta editada como uma única versão.
 
 Depois, no bloco **Assistência com IA**, **Pedir propostas à IA** permite pedidos
 dirigidos e exige a escolha prévia do âmbito e uma instrução. Para uma célula,

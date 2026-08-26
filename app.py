@@ -400,7 +400,9 @@ class AGIRSoloInterface:
         self.manual_edit_stage: str | None = None
         self.manual_edit_artifact: Any = None
         self.uploaded_files: dict[str, bytes] = {}
+        self.removed_source_files: set[str] = set()
         self.fields: dict[str, Any] = {}
+        self.editing_initial_session = False
         self.export_document_format = "word"
         self.error_notification: Any | None = None
         self.busy_started_at: float | None = None
@@ -580,11 +582,11 @@ class AGIRSoloInterface:
 
     def _build_initial_view(self) -> None:
         with ui.column().classes("gap-2 pt-4"):
-            ui.label("NOVA SESSÃO PEDAGÓGICA").classes("eyebrow")
-            ui.label("Configure o ponto de partida").classes(
+            self.initial_eyebrow = ui.label("NOVA SESSÃO PEDAGÓGICA").classes("eyebrow")
+            self.initial_title = ui.label("Configure o ponto de partida").classes(
                 "text-3xl font-extrabold tracking-tight"
             )
-            ui.label(
+            self.initial_copy = ui.label(
                 "Indique o contexto, as fontes e a caracterização da unidade "
                 "curricular antes de criar a sessão."
             ).classes("muted")
@@ -631,15 +633,23 @@ class AGIRSoloInterface:
             self._build_sources_step()
             ui.separator().classes("my-5")
             self._build_characterization_step()
-            with ui.row().classes("w-full justify-end mt-6"):
-                create_session_button = ui.button(
+            with ui.row().classes("w-full justify-between items-center gap-3 mt-6"):
+                self.cancel_initial_edit_button = ui.button(
+                    "Cancelar e voltar à sessão",
+                    icon="arrow_back",
+                    on_click=self.cancel_initial_session_edit,
+                ).props("outline no-caps").classes("secondary-action")
+                self.cancel_initial_edit_button.mark("cancel-initial-session-edit")
+                self.cancel_initial_edit_button.set_visibility(False)
+                ui.space()
+                self.create_session_button = ui.button(
                     "Iniciar desenho curricular alinhado",
                     icon="play_arrow",
                     on_click=self.handle_start_session,
                 ).props("unelevated no-caps size=lg icon-right").classes(
                     "primary-action px-6"
                 )
-                create_session_button.mark("create-pedagogical-session")
+                self.create_session_button.mark("create-pedagogical-session")
 
     def _build_context_step(self) -> None:
         ui.label("Identificação e opções pedagógicas").classes("section-title mb-3")
@@ -660,7 +670,7 @@ class AGIRSoloInterface:
         ui.label("Texto de base e fontes de referência").classes("section-title")
         ui.label(
             "Pode combinar texto direto com documentos. Os ficheiros são "
-            "processados apenas quando iniciar o desenho curricular alinhado."
+            "processados quando iniciar o desenho curricular ou guardar alterações iniciais."
         ).classes("muted mb-3")
         self.fields["source_text"] = ui.textarea(
             "Informação de referência para a unidade curricular",
@@ -673,6 +683,11 @@ class AGIRSoloInterface:
             "Os conteúdos programáticos formais serão definidos posteriormente, "
             "em função dos resultados de aprendizagem."
         ).classes("text-xs muted")
+        self.existing_sources_notice = ui.label(
+            "As fontes documentais já incorporadas serão preservadas. Pode adicionar "
+            "novos ficheiros abaixo."
+        ).classes("text-xs text-primary font-semibold mt-2")
+        self.existing_sources_notice.set_visibility(False)
         accepted = ",".join(sorted(SUPPORTED_SOURCE_SUFFIXES))
         maximum_file_bytes = configured_max_file_bytes()
         maximum_total_bytes = configured_max_total_upload_bytes()
@@ -745,9 +760,44 @@ class AGIRSoloInterface:
     def render_upload_list(self) -> None:
         self.upload_list.clear()
         with self.upload_list:
-            if not self.uploaded_files:
+            existing_files = (
+                self.service.restored_source_file_names(self.state)
+                if self.editing_initial_session and self.state
+                else []
+            )
+            if not existing_files and not self.uploaded_files:
                 ui.label("Nenhum ficheiro adicionado.").classes("text-sm muted")
                 return
+            for filename in existing_files:
+                removed = filename in self.removed_source_files
+                prefix, separator, remainder = filename.partition("_")
+                display_filename = (
+                    remainder if separator and len(prefix) == 2 and prefix.isdigit() else filename
+                )
+                with ui.chip(icon="undo" if removed else "description").classes(
+                    "info-chip" if not removed else "bg-grey-6 text-white"
+                ):
+                    ui.label(
+                        f"{display_filename} — será removido"
+                        if removed
+                        else f"Incorporado: {display_filename}"
+                    )
+                    source_action = ui.button(
+                        icon="undo" if removed else "close",
+                        on_click=lambda _e, name=filename, is_removed=removed: (
+                            self.restore_existing_source(name)
+                            if is_removed
+                            else self.remove_existing_source(name)
+                        ),
+                    ).props(
+                        "flat round dense size=sm "
+                        + (
+                            "aria-label='Manter ficheiro incorporado'"
+                            if removed
+                            else "aria-label='Remover ficheiro incorporado'"
+                        )
+                    )
+                    source_action.mark("toggle-existing-source")
             for filename in self.uploaded_files:
                 with ui.chip(icon="description").classes("info-chip"):
                     ui.label(filename)
@@ -758,6 +808,14 @@ class AGIRSoloInterface:
 
     def remove_upload(self, filename: str) -> None:
         self.uploaded_files.pop(filename, None)
+        self.render_upload_list()
+
+    def remove_existing_source(self, filename: str) -> None:
+        self.removed_source_files.add(filename)
+        self.render_upload_list()
+
+    def restore_existing_source(self, filename: str) -> None:
+        self.removed_source_files.discard(filename)
         self.render_upload_list()
 
     def _form_data(self) -> dict[str, Any]:
@@ -826,7 +884,11 @@ class AGIRSoloInterface:
     async def handle_start_session(self) -> None:
         progress_updates: SimpleQueue[str] = SimpleQueue()
         self._show_busy(
-            "A criar a sessão de autoria manual…",
+            (
+                "A guardar as alterações aos dados iniciais…"
+                if self.editing_initial_session
+                else "A criar a sessão de autoria manual…"
+            ),
             progress_updates,
             "A preparar localmente os dados e as fontes…",
         )
@@ -838,17 +900,36 @@ class AGIRSoloInterface:
                     path = Path(temporary_directory) / f"{index:02d}_{safe_name}"
                     path.write_bytes(content)
                     source_paths.append(str(path))
-                self.state = await run.io_bound(
-                    self.service.start_session,
-                    self._form_data(),
-                    source_paths,
-                    progress_updates.put,
-                )
+                if self.editing_initial_session:
+                    self.state = await run.io_bound(
+                        self.service.update_session_initial_data,
+                        self.state,
+                        self._form_data(),
+                        source_paths,
+                        sorted(self.removed_source_files),
+                        progress_updates.put,
+                    )
+                else:
+                    self.state = await run.io_bound(
+                        self.service.start_session,
+                        self._form_data(),
+                        source_paths,
+                        progress_updates.put,
+                    )
             self.viewed_stage = None
             self.manual_edit_stage = None
             self.manual_edit_artifact = None
+            editing_existing = self.editing_initial_session
+            self.editing_initial_session = False
+            self.uploaded_files.clear()
+            self.removed_source_files.clear()
+            self.uploader.reset()
+            self.render_upload_list()
             self.show_workspace(
-                "Sessão iniciada sem executar a IA. Pode editar ou abrir qualquer etapa."
+                "Dados iniciais atualizados. O conteúdo existente foi preservado e as "
+                "etapas afetadas ficaram assinaladas para revisão, quando aplicável."
+                if editing_existing
+                else "Sessão iniciada sem executar a IA. Pode editar ou abrir qualquer etapa."
             )
             self.refresh_sessions()
         except USER_ERRORS as error:
@@ -908,6 +989,7 @@ class AGIRSoloInterface:
         self.busy_dialog.close()
 
     def show_home(self) -> None:
+        self._set_initial_view_mode(False)
         self.state = None
         self.viewed_stage = None
         self.manual_edit_stage = None
@@ -919,6 +1001,7 @@ class AGIRSoloInterface:
         self.drawer.hide()
 
     def show_new_session(self) -> None:
+        self._set_initial_view_mode(False)
         self.state = None
         self.viewed_stage = None
         self.manual_edit_stage = None
@@ -943,6 +1026,7 @@ class AGIRSoloInterface:
             }
         )
         self.uploaded_files.clear()
+        self.removed_source_files.clear()
         self.uploader.reset()
         self.render_upload_list()
         self.assistance_status.set_visibility(False)
@@ -951,6 +1035,62 @@ class AGIRSoloInterface:
         self.workspace_view.set_visibility(False)
         self.initial_view.set_visibility(True)
         self.drawer.hide()
+
+    def _set_initial_view_mode(self, editing: bool) -> None:
+        self.editing_initial_session = editing
+        if not hasattr(self, "create_session_button"):
+            return
+        self.initial_eyebrow.set_text(
+            "EDITAR DADOS INICIAIS" if editing else "NOVA SESSÃO PEDAGÓGICA"
+        )
+        self.initial_title.set_text(
+            "Reveja o ponto de partida" if editing else "Configure o ponto de partida"
+        )
+        self.initial_copy.set_text(
+            (
+                "Altere a identificação, as fontes ou a caracterização. O trabalho já "
+                "produzido será preservado e assinalado para revisão."
+            )
+            if editing
+            else (
+                "Indique o contexto, as fontes e a caracterização da unidade curricular "
+                "antes de criar a sessão."
+            )
+        )
+        self.create_session_button.set_text(
+            "Guardar alterações iniciais"
+            if editing
+            else "Iniciar desenho curricular alinhado"
+        )
+        self.cancel_initial_edit_button.set_visibility(editing)
+        self.existing_sources_notice.set_visibility(editing)
+
+    def show_initial_session_editor(self) -> None:
+        if not self.state:
+            return
+        self._set_initial_view_mode(True)
+        self._set_form_data(self.service.restored_initial_fields(self.state))
+        self.uploaded_files.clear()
+        self.removed_source_files.clear()
+        self.uploader.reset()
+        self.render_upload_list()
+        self.assistance_status.set_visibility(False)
+        self.header_context.set_text("Editar dados iniciais")
+        self.home_view.set_visibility(False)
+        self.workspace_view.set_visibility(False)
+        self.initial_view.set_visibility(True)
+        self.drawer.hide()
+
+    def cancel_initial_session_edit(self) -> None:
+        if not self.state:
+            self.show_home()
+            return
+        self.uploaded_files.clear()
+        self.removed_source_files.clear()
+        self.uploader.reset()
+        self.render_upload_list()
+        self._set_initial_view_mode(False)
+        self.show_workspace("Alterações aos dados iniciais canceladas.")
 
     def refresh_sessions(self) -> None:
         self.session_list.clear()
@@ -1046,6 +1186,7 @@ class AGIRSoloInterface:
             )
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.uploaded_files.clear()
+            self.removed_source_files.clear()
             self.uploader.reset()
             self.render_upload_list()
             self.show_workspace(
@@ -1060,6 +1201,7 @@ class AGIRSoloInterface:
     def show_workspace(self, message: str = "") -> None:
         if not self.state:
             return
+        self._set_initial_view_mode(False)
         self.home_view.set_visibility(False)
         self.initial_view.set_visibility(False)
         self.workspace_view.set_visibility(True)
@@ -1089,6 +1231,13 @@ class AGIRSoloInterface:
                             state.get("course", {}).get("taxonomy_type", "SOLO"),
                             icon="account_tree",
                         ).classes("info-chip")
+                ui.space()
+                edit_initial_button = ui.button(
+                    "Editar dados iniciais",
+                    icon="settings",
+                    on_click=self.show_initial_session_editor,
+                ).props("outline no-caps").classes("secondary-action")
+                edit_initial_button.mark("edit-initial-session-data")
 
             self._render_stage_track(state)
 
@@ -1484,6 +1633,32 @@ class AGIRSoloInterface:
                     return asset
         return None
 
+    def _presentation_editor_state(
+        self,
+        image_state: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Combina imagens da proposta em revisão com alterações já persistidas."""
+
+        if image_state is None:
+            return self.state or {}
+        merged = deepcopy(image_state)
+        current = self.state or {}
+        for collection in ("source_images", "generated_images"):
+            assets = [
+                deepcopy(item)
+                for item in merged.get(collection, [])
+                if isinstance(item, dict)
+            ]
+            known_ids = {str(item.get("id", "")) for item in assets}
+            assets.extend(
+                deepcopy(item)
+                for item in current.get(collection, [])
+                if isinstance(item, dict)
+                and str(item.get("id", "")) not in known_ids
+            )
+            merged[collection] = assets
+        return merged
+
     @staticmethod
     def _render_presentation_image_thumbnail(
         asset: dict[str, Any], *, gallery: bool = False, compact: bool = False
@@ -1520,8 +1695,9 @@ class AGIRSoloInterface:
         slide: dict[str, Any],
         refresh_editor: Any,
         slide_number: int,
+        image_state: dict[str, Any] | None = None,
     ) -> None:
-        state = self.state or {}
+        state = self._presentation_editor_state(image_state)
         assets = available_presentation_images(state)
         current_identifier = str(slide.get("visual_asset_id", "")).strip()
         maximum_additional = configured_max_additional_editor_images()
@@ -1760,8 +1936,9 @@ class AGIRSoloInterface:
         slide: dict[str, Any],
         refresh_editor: Any,
         slide_number: int,
+        image_state: dict[str, Any] | None = None,
     ) -> None:
-        state = self.state or {}
+        state = self._presentation_editor_state(image_state)
         identifier = str(slide.get("visual_asset_id", "")).strip()
         asset = self._presentation_image_asset(state, identifier) if identifier else None
         mode = str(slide.get("visual_mode", "diagrama")).strip() or "diagrama"
@@ -1804,7 +1981,7 @@ class AGIRSoloInterface:
                     "Escolher imagem",
                     icon="photo_library",
                     on_click=lambda: self._open_presentation_image_dialog(
-                        slide, refresh_editor, slide_number
+                        slide, refresh_editor, slide_number, image_state
                     ),
                 ).props("outline no-caps").classes("secondary-action").mark(
                     f"choose-slide-image-{slide_number}"
@@ -1848,6 +2025,7 @@ class AGIRSoloInterface:
         self,
         artifact: dict[str, Any],
         table: TableSpec,
+        image_state: dict[str, Any] | None = None,
     ) -> None:
         slides = value_at_path(artifact, table.path)
         if not isinstance(slides, list):
@@ -1914,6 +2092,7 @@ class AGIRSoloInterface:
                             slide,
                             refresh_current_slide,
                             index + 1,
+                            image_state,
                         )
 
         def add_slide() -> None:
@@ -1982,7 +2161,11 @@ class AGIRSoloInterface:
                         for table in layout.tables:
                             if table.path[0] == root_path:
                                 if tab_id == "presentation":
-                                    self._render_presentation_editor(artifact, table)
+                                    self._render_presentation_editor(
+                                        artifact,
+                                        table,
+                                        state,
+                                    )
                                 else:
                                     self._render_manual_table(artifact, table)
     def _render_stage_preview(self, state: dict[str, Any], stage: str) -> None:
@@ -2328,6 +2511,10 @@ class AGIRSoloInterface:
     ) -> None:
         """Mostra as sugestões da IA junto das células atuais, sem as aplicar."""
 
+        if stage == "resources" and not proposal.get("scope_path"):
+            self._render_complete_resource_ai_proposal_review(state, proposal)
+            return
+
         artifact = state[stage]
         changes = proposal_review_changes(
             stage,
@@ -2548,6 +2735,72 @@ class AGIRSoloInterface:
                     apply_button.disable()
                 ui.button(
                     "Rejeitar todas as alterações",
+                    icon="close",
+                    on_click=lambda: self._handle_ai_proposal(
+                        str(proposal["id"]), False
+                    ),
+                ).props("outline no-caps").classes("secondary-action")
+
+    def _render_complete_resource_ai_proposal_review(
+        self,
+        state: dict[str, Any],
+        proposal: dict[str, Any],
+    ) -> None:
+        """Revê uma proposta completa de recursos na mesma UI da edição manual."""
+
+        proposed_artifact = deepcopy(proposal.get("after"))
+        if not isinstance(proposed_artifact, dict):
+            ui.label(
+                "A proposta recebida não possui uma estrutura de recursos editável."
+            ).classes("soft-surface p-3 text-sm")
+            return
+        proposed_artifact["selected_types"] = list(
+            state.get("resource_types", [])
+        )
+        preview_state = deepcopy(state)
+        preview_images = [
+            deepcopy(item)
+            for item in preview_state.get("generated_images", [])
+            if isinstance(item, dict)
+        ]
+        known_ids = {str(item.get("id", "")) for item in preview_images}
+        preview_images.extend(
+            deepcopy(item)
+            for item in proposal.get("generated_images", [])
+            if isinstance(item, dict) and str(item.get("id", "")) not in known_ids
+        )
+        preview_state["generated_images"] = preview_images
+
+        with ui.column().classes("w-full gap-4").mark(
+            "resource-ai-proposal-review"
+        ):
+            ui.label("REVISÃO DA PROPOSTA DA IA").classes("eyebrow")
+            ui.label("Recursos educativos propostos").classes("section-title")
+            ui.label(
+                "A proposta usa a mesma organização da edição manual. Reveja e edite "
+                "os recursos selecionados antes de aplicar; os restantes não são "
+                "apresentados nem guardados."
+            ).classes("text-sm muted")
+            self._render_resource_editor_tabs(
+                preview_state,
+                proposed_artifact,
+                editor_layout("resources"),
+            )
+
+            with ui.row().classes("w-full gap-2 flex-wrap mt-2"):
+                ui.button(
+                    "Aplicar proposta editada",
+                    icon="check",
+                    on_click=lambda: self._handle_ai_proposal(
+                        str(proposal["id"]),
+                        True,
+                        edited_after=proposed_artifact,
+                    ),
+                ).props("unelevated no-caps").classes("primary-action").mark(
+                    "apply-edited-resource-proposal"
+                )
+                ui.button(
+                    "Rejeitar toda a proposta",
                     icon="close",
                     on_click=lambda: self._handle_ai_proposal(
                         str(proposal["id"]), False
@@ -2875,6 +3128,8 @@ class AGIRSoloInterface:
         proposal_id: str,
         accept: bool,
         selections: list[dict[str, Any]] | None = None,
+        *,
+        edited_after: Any = None,
     ) -> None:
         try:
             self.state, message = await run.io_bound(
@@ -2883,6 +3138,7 @@ class AGIRSoloInterface:
                 proposal_id,
                 accept,
                 selections,
+                edited_after,
             )
             self.show_workspace(message)
             self.refresh_sessions()

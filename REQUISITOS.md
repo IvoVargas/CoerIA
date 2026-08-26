@@ -56,6 +56,13 @@ materiais produzidos.
 - Não pedir objetivos gerais na criação da sessão; estes são formulados ou
   introduzidos uma única vez na etapa de conteúdos e objetivos curriculares.
 - Exigir a escolha exclusiva entre SOLO e Bloom; nunca combinar as duas numa sessão.
+- Permitir regressar ao preenchimento inicial depois de iniciar ou retomar a sessão,
+  corrigir os campos e guardar sem criar uma sessão nova nem apagar artefactos.
+- Ao editar os dados iniciais, listar as fontes documentais já incorporadas e
+  permitir mantê-las, removê-las ou acrescentar novos ficheiros.
+- Quando a caracterização ou as fontes forem alteradas, preservar o conteúdo das
+  etapas, invalidar propostas de IA ainda pendentes e assinalar os artefactos
+  preenchidos para revisão antes de repetir a validação final.
 
 ### RF02 — Fluxo pedagógico orientado por uma taxonomia
 
@@ -154,6 +161,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   de recurso selecionados, pode efetuar várias chamadas ao fornecedor e exige
   confirmação explícita antes de iniciar, incluindo o aviso sobre eventual
   geração de imagens para a apresentação.
+- Rever a proposta completa da etapa de recursos nos mesmos separadores e com o
+  mesmo editor da edição manual, mostrando exclusivamente os tipos selecionados
+  e permitindo editar a proposta antes da sua aplicação explícita.
 - Permitir pedir assistência de IA apenas depois de o docente escolher o âmbito
   exato — etapa, tabela, linha ou campo — e escrever uma instrução.
 - Excluir os identificadores técnicos próprios de cada linha dos âmbitos ao nível
@@ -244,8 +254,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   educativos**, antes de qualquer geração, sem repetir essa decisão no formulário
   inicial nem nas linhas da matriz de alinhamento.
 - Apresentar cada tipo de recurso selecionado num separador próprio, tanto em
-  consulta como em edição, preservando dentro dele todo o conteúdo pedagógico
-  editável do recurso correspondente.
+  consulta, edição e revisão de uma proposta completa da IA, preservando dentro
+  dele todo o conteúdo pedagógico editável do recurso correspondente.
 - Editar a apresentação por slide, sem expor como colunas os identificadores e
   metadados técnicos dos elementos visuais.
 - Selecionar a imagem associada através de uma janela com miniaturas, mostrar a

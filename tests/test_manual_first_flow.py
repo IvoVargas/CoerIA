@@ -540,6 +540,41 @@ def test_long_sources_can_start_manual_authoring_without_ai_reduction() -> None:
     assert result.metadata["deferred"] is True
 
 
+def test_initial_data_update_preserves_artifacts_and_requires_review(tmp_path) -> None:
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "initial-edit.db"))
+    state = create_session(_course())
+    state["learning_outcomes"] = [
+        {
+            "id": "RA1",
+            "statement": "Analisar estruturas de controlo.",
+            "verb": "Analisar",
+            "level": "Relacional - SOLO 4",
+            "outcome_type": "Conhecimentos",
+        }
+    ]
+    state["stage_statuses"]["learning_outcomes"] = "draft"
+    state["current_stage"] = "alignment_matrix"
+    state["ai_proposals"] = [{"id": "P1", "status": "pending"}]
+    state = service._persist(state)
+    original_outcomes = deepcopy(state["learning_outcomes"])
+    form = service.restored_initial_fields(state)
+    form["unit_name"] = "Programação corrigida"
+
+    updated = service.update_session_initial_data(state, form)
+
+    assert updated["course"]["unit_name"] == "Programação corrigida"
+    assert updated["learning_outcomes"] == original_outcomes
+    assert updated["current_stage"] == "alignment_matrix"
+    assert updated["stage_statuses"]["learning_outcomes"] == "needs_review"
+    assert updated["stage_statuses"]["final_validation"] == "pending"
+    assert updated["status"] == "drafting"
+    assert updated["ai_proposals"][0]["status"] == "superseded"
+    assert updated["audit"][-1]["stage"] == "Configuração inicial"
+    assert service.load_session(updated["session_id"])["course"]["unit_name"] == (
+        "Programação corrigida"
+    )
+
+
 def test_deferred_source_reduction_runs_before_first_ai_request(
     tmp_path,
 ) -> None:

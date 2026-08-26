@@ -18,6 +18,7 @@ from prism.ingestion import (
     extract_file_text,
     extract_source_images,
     recover_direct_source_text,
+    replace_direct_source_text,
 )
 
 
@@ -71,6 +72,38 @@ class SourceIngestionTests(unittest.TestCase):
             recover_direct_source_text("[Ficheiro: apoio.md]\nApenas ficheiro."),
             "",
         )
+
+    def test_direct_text_can_be_replaced_without_losing_existing_documents(self) -> None:
+        combined = (
+            "[Texto introduzido pelo docente]\nTexto inicial.\n\n"
+            "[Ficheiro: apoio.md]\nConteúdo documental preservado."
+        )
+        with TemporaryDirectory() as temporary_directory:
+            new_path = Path(temporary_directory) / "novo.txt"
+            new_path.write_text("Nova fonte documental.", encoding="utf-8")
+            updated = replace_direct_source_text(
+                combined,
+                "Texto direto corrigido pelo docente.",
+                [new_path],
+            )
+
+        self.assertEqual(
+            recover_direct_source_text(updated),
+            "Texto direto corrigido pelo docente.",
+        )
+        self.assertIn("[Ficheiro: apoio.md]", updated)
+        self.assertIn("Conteúdo documental preservado.", updated)
+        self.assertIn("[Ficheiro: novo.txt]", updated)
+        self.assertIn("Nova fonte documental.", updated)
+
+        removed = replace_direct_source_text(
+            updated,
+            "Texto direto corrigido pelo docente.",
+            removed_file_names=["apoio.md"],
+        )
+        self.assertNotIn("[Ficheiro: apoio.md]", removed)
+        self.assertNotIn("Conteúdo documental preservado.", removed)
+        self.assertIn("[Ficheiro: novo.txt]", removed)
 
     def test_unsupported_files_are_rejected(self) -> None:
         with TemporaryDirectory() as temporary_directory:

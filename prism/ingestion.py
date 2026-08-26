@@ -609,6 +609,57 @@ def build_raw_source_text(
     return combined
 
 
+def replace_direct_source_text(
+    combined_text: str,
+    source_text: str,
+    file_paths: str | Path | Iterable[str | Path] | None = None,
+    removed_file_names: Iterable[str] | None = None,
+) -> str:
+    """Atualiza o texto direto sem perder documentos já incorporados.
+
+    O estado persistido guarda o texto extraído dos documentos, não os ficheiros
+    originais. Ao editar a configuração inicial de uma sessão, esta função
+    conserva essas secções e acrescenta eventuais novos ficheiros.
+    """
+
+    existing = (combined_text or "").strip()
+    removed = {str(name).strip() for name in (removed_file_names or []) if str(name).strip()}
+    file_marker = re.compile(r"(?m)^\[Ficheiro: (?P<name>[^\]]+)\]\s*$")
+    matches = list(file_marker.finditer(existing))
+    preserved_sections: list[str] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(existing)
+        if match.group("name").strip() not in removed:
+            preserved_sections.append(existing[match.start() : end].strip())
+    preserved_files = "\n\n".join(preserved_sections)
+    updated = _combine_source_text(source_text, file_paths)
+    combined = "\n\n".join(
+        part for part in (updated, preserved_files) if part
+    ).strip()
+    max_chars = _configured_limit(
+        "MAX_RAW_SOURCE_CHARS", DEFAULT_MAX_RAW_SOURCE_CHARS
+    )
+    if len(combined) > max_chars:
+        raise SourceIngestionError(
+            f"As fontes contêm {len(combined):,} caracteres e excedem o limite absoluto "
+            f"de ingestão de {max_chars:,}. Remova documentos redundantes ou aumente "
+            "COERIA_MAX_RAW_SOURCE_CHARS de forma consciente."
+        )
+    return combined
+
+
+def source_file_names(combined_text: str) -> list[str]:
+    """Lista os nomes das fontes documentais incorporadas no texto bruto."""
+
+    return [
+        match.group("name").strip()
+        for match in re.finditer(
+            r"(?m)^\[Ficheiro: (?P<name>[^\]]+)\]\s*$",
+            combined_text or "",
+        )
+    ]
+
+
 def build_source_text(
     source_text: str,
     file_paths: str | Path | Iterable[str | Path] | None = None,
