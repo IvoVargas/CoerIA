@@ -159,7 +159,7 @@ autoria requer uma ação separada, etapa, motivo e confirmação explícita.
 ## Recursos e imagens
 
 Os tipos de recurso e as imagens documentais são selecionados no início da
-etapa **Recursos educativos**. Esta configuração pertence ao artefacto de
+etapa **Geração de recursos educativos**. Esta configuração pertence ao artefacto de
 recursos. A geração recebe diretamente os resultados, conteúdos, atividades de
 ensino-aprendizagem e tarefas de avaliação como contexto de alinhamento.
 

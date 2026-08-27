@@ -41,6 +41,7 @@ from prism.persistence import SQLiteSessionStore
 from prism.relationships import derive_alignment_rows
 from prism.workflow import (
     STAGE_ORDER,
+    STAGE_LABELS,
     apply_manual_edit,
     create_session,
     create_test_agent,
@@ -62,6 +63,12 @@ class WorkflowTests(unittest.TestCase):
             duration_hours=24,
         )
         self.agent = create_test_agent()
+
+    def test_resources_stage_uses_the_generation_title(self) -> None:
+        self.assertEqual(
+            STAGE_LABELS["resources"],
+            "Geração de recursos educativos",
+        )
 
     def test_reduced_sources_require_explicit_curriculum_coverage(self) -> None:
         reduction = {

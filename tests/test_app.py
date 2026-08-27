@@ -81,17 +81,17 @@ def test_stage_status_colors_preserve_the_original_selected_background() -> None
     ("phase", "elapsed_seconds", "expected"),
     [
         (
-            "A gerar e validar «Recursos educativos»…",
+            "A gerar e validar «Geração de recursos educativos»…",
             7,
-            "A gerar e validar «Recursos educativos»…",
+            "A gerar e validar «Geração de recursos educativos»…",
         ),
         (
-            "A gerar e validar «Recursos educativos»…",
+            "A gerar e validar «Geração de recursos educativos»…",
             8,
             "A aguardar a resposta do fornecedor de IA…",
         ),
         (
-            "A gerar e validar «Recursos educativos»…",
+            "A gerar e validar «Geração de recursos educativos»…",
             30,
             "O fornecedor continua a gerar os recursos educativos; "
             "esta é normalmente a etapa mais demorada…",

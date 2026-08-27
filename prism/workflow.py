@@ -99,7 +99,7 @@ STAGE_LABELS = {
     "teaching_activities": "Atividades de ensino-aprendizagem",
     "assessment_activities": "Tarefas e critérios de avaliação",
     "pedagogical_design": "Organização da sequência pedagógica",
-    "resources": "Recursos educativos",
+    "resources": "Geração de recursos educativos",
     "final_validation": "Validação final da estrutura e do alinhamento",
 }
 
@@ -1180,7 +1180,9 @@ def update_manual_resource_settings(
         raise ValueError("Esta operação aplica-se apenas ao fluxo de autoria manual.")
     updated = ensure_manual_artifacts(deepcopy(state))
     if updated.get("current_stage") != "resources":
-        raise ValueError("A seleção de recursos pertence à etapa Recursos educativos.")
+        raise ValueError(
+            "A seleção de recursos pertence à etapa Geração de recursos educativos."
+        )
     selected = validate_resource_types(resource_types)
     updated["resource_types"] = selected
 
@@ -1370,7 +1372,8 @@ def decide_ai_proposal(
             )
         if stage != "resources" or scope_path:
             raise ValueError(
-                "A revisão editada completa aplica-se apenas à etapa Recursos educativos."
+                "A revisão editada completa aplica-se apenas à etapa "
+                "Geração de recursos educativos."
             )
         if not isinstance(edited_after, dict):
             raise ValueError("A proposta editada deve conservar a estrutura dos recursos.")

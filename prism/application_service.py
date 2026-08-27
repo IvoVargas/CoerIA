@@ -567,11 +567,13 @@ class ApplicationService:
             selected = validate_resource_types(resource_types)
             if selected != state.get("resource_types", []):
                 raise ValueError(
-                    "Guarde a seleção na etapa Recursos educativos antes de gerar conteúdo."
+                    "Guarde a seleção na etapa Geração de recursos educativos antes "
+                    "de gerar conteúdo."
                 )
         elif resource_types is not None:
             raise ValueError(
-                "A seleção de recursos só pode ser alterada na etapa Recursos educativos."
+                "A seleção de recursos só pode ser alterada na etapa "
+                "Geração de recursos educativos."
             )
 
         try:

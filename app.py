@@ -195,7 +195,7 @@ def _busy_phase_message(phase: str, phase_elapsed_seconds: float) -> str:
         return phase
     if elapsed < 30:
         return "A aguardar a resposta do fornecedor de IA…"
-    if "Recursos educativos" in phase:
+    if "Geração de recursos educativos" in phase:
         return (
             "O fornecedor continua a gerar os recursos educativos; "
             "esta é normalmente a etapa mais demorada…"

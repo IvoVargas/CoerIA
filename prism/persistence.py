@@ -459,7 +459,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 "A matriz deixou de ser uma etapa editável. As ligações de alinhamento "
                 "passaram a ser verificadas automaticamente a partir dos artefactos. "
                 + (
-                    "Pode continuar na etapa de recursos educativos."
+                    "Pode continuar na etapa de geração de recursos educativos."
                     if manual_first
                     else "Confirme a sequência pedagógica para gerar os recursos."
                 )

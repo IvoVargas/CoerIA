@@ -84,7 +84,7 @@ etapas navegáveis e editáveis:
 5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
 6. organização da sequência pedagógica, articulando em cada resultado o foco,
    a atividade de ensino-aprendizagem e a tarefa de avaliação;
-7. recursos educativos selecionados;
+7. geração dos recursos educativos selecionados;
 8. verificação global determinística da estrutura e do alinhamento.
 
 O alinhamento segue Biggs e Tang: os resultados de aprendizagem são o elemento

@@ -512,7 +512,10 @@ def test_resource_selection_can_change_without_generation() -> None:
 
 
 def test_resource_selection_is_restricted_to_the_resources_stage() -> None:
-    with pytest.raises(ValueError, match="pertence à etapa Recursos educativos"):
+    with pytest.raises(
+        ValueError,
+        match="pertence à etapa Geração de recursos educativos",
+    ):
         update_manual_resource_settings(create_session(_course()), [RESOURCE_TEST])
 
 

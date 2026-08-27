@@ -25,7 +25,7 @@ determinística, não de uma decisão declarada pelo modelo.
 4. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
 6. organização da sequência pedagógica;
-7. recursos educativos e validação automática;
+7. geração de recursos educativos e validação automática;
 8. validação final da estrutura e do alinhamento.
 
 Seguindo o alinhamento construtivo de Biggs e Tang em *Teaching for Quality
@@ -81,7 +81,7 @@ interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
 Os prefixos são atribuídos automaticamente e tornam inequívocas as referências
 usadas na verificação automática do alinhamento.
 
-A seleção dos recursos é feita no início da etapa **Recursos educativos**. As
+A seleção dos recursos é feita no início da etapa **Geração de recursos educativos**. As
 imagens extraídas dos documentos ficam reunidas no seletor visual de cada slide,
 sem uma galeria duplicada no cartão da etapa. Os recursos são produzidos com
 base nas relações já registadas entre resultados, conteúdos, atividades de
@@ -90,7 +90,7 @@ ensino-aprendizagem e tarefas de avaliação.
 Podem ser produzidos quatro tipos de recurso: apresentação PowerPoint, ficha de
 aula, teste com chave de correção e atividade prática. As apresentações devem
 integrar imagens, diagramas, tabelas, gráficos ou outros elementos visuais com
-finalidade pedagógica. Na etapa **Recursos educativos**, cada tipo selecionado
+finalidade pedagógica. Na etapa **Geração de recursos educativos**, cada tipo selecionado
 tem um separador próprio tanto na consulta como na edição, evitando apresentar
 slides, secções, questões e critérios numa única sequência extensa. No separador
 da apresentação, a consulta integra a miniatura da imagem associada na coluna
@@ -212,7 +212,7 @@ desatualizado até o docente pedir uma nova verificação. Alegações da IA sob
 cobertura ou somas não substituem nem contradizem os controlos determinísticos.
 
 Os controlos determinísticos dos recursos são executados durante a produção e a
-edição da etapa **Recursos educativos**, mas o relatório consolidado não é
+edição da etapa **Geração de recursos educativos**, mas o relatório consolidado não é
 apresentado nesse artefacto. O respetivo estado surge na etapa **Validação final
 da estrutura e do alinhamento**, em **Qualidade automática dos recursos**, com
 cartões selecionáveis que abrem a etapa, recurso, slide ou linha correspondente, e
