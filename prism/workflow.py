@@ -51,7 +51,7 @@ from .manual_editing import (
     apply_proposal_review_changes,
     proposal_review_changes,
 )
-from .relationships import content_ids_for_outcome
+from .relationships import derive_alignment_rows
 
 
 class PrismState(TypedDict, total=False):
@@ -74,7 +74,6 @@ class PrismState(TypedDict, total=False):
     assessment_activities: list[dict[str, Any]]
     pedagogical_design: dict[str, Any]
     teaching_activities: list[dict[str, Any]]
-    alignment_matrix: list[dict[str, Any]]
     resources: dict[str, Any]
     final_validation: dict[str, Any]
     current_stage: str
@@ -99,7 +98,6 @@ STAGE_LABELS = {
     "teaching_activities": "Atividades de ensino-aprendizagem",
     "assessment_activities": "Tarefas e critérios de avaliação",
     "pedagogical_design": "Organização da sequência pedagógica",
-    "alignment_matrix": "Matriz de alinhamento",
     "resources": "Recursos educativos",
     "final_validation": "Validação final da estrutura e do alinhamento",
 }
@@ -110,7 +108,6 @@ STAGE_ORDER = (
     "teaching_activities",
     "assessment_activities",
     "pedagogical_design",
-    "alignment_matrix",
     "resources",
     "final_validation",
 )
@@ -134,7 +131,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -391,72 +388,6 @@ def propose_teaching_activities(state: PrismState) -> dict[str, Any]:
     }
 
 
-def validate_alignment(state: PrismState) -> dict[str, Any]:
-    feedback = _feedback(state, "alignment_matrix")
-    assessments_by_outcome = {
-        outcome["id"]: [
-            item["id"] for item in state["assessment_activities"]
-            if outcome["id"] in item.get("outcome_ids", [item.get("outcome_id")])
-        ]
-        for outcome in state["learning_outcomes"]
-    }
-    teaching_by_outcome = {
-        outcome["id"]: [
-            item["id"] for item in state["teaching_activities"]
-            if outcome["id"] in item.get("outcome_ids", [item.get("outcome_id")])
-        ]
-        for outcome in state["learning_outcomes"]
-    }
-    taxonomy_type = validate_taxonomy_choice(
-        state["course"].get("taxonomy_type", "SOLO")
-    )
-    assessment_purposes_by_outcome = {
-        outcome["id"]: sorted(
-            {
-                item["assessment_purpose"]
-                for item in state["assessment_activities"]
-                if outcome["id"] in item.get("outcome_ids", [item.get("outcome_id")])
-            }
-        )
-        for outcome in state["learning_outcomes"]
-    }
-    matrix = [
-        {
-            "outcome_id": outcome["id"],
-            "result": outcome["statement"],
-            "content_ids": content_ids_for_outcome(state, outcome["id"]),
-            "taxonomy": taxonomy_type,
-            "taxonomy_level": outcome["taxonomy_level"],
-            "assessment_ids": assessments_by_outcome[outcome["id"]],
-            "assessment_purposes": assessment_purposes_by_outcome[outcome["id"]],
-            "teaching_activity_ids": teaching_by_outcome[outcome["id"]],
-            "assessment": "Sim" if assessments_by_outcome[outcome["id"]] else "Não",
-            "teaching_activity": "Sim" if teaching_by_outcome[outcome["id"]] else "Não",
-            "status": (
-                "Coerente"
-                if assessments_by_outcome[outcome["id"]] and teaching_by_outcome[outcome["id"]]
-                else "Requer revisão"
-            ),
-            "rationale": (
-                "Existem uma tarefa de avaliação e uma atividade de ensino-aprendizagem "
-                "associadas ao resultado."
-                if assessments_by_outcome[outcome["id"]] and teaching_by_outcome[outcome["id"]]
-                else "Falta pelo menos uma evidência necessária ao alinhamento."
-            ),
-        }
-        for outcome in state["learning_outcomes"]
-    ]
-    return {
-        "alignment_matrix": matrix,
-        **_audit_update(
-            state,
-            "alignment_matrix",
-            "Matriz de alinhamento validada.",
-            feedback,
-        ),
-    }
-
-
 def generate_resources(state: PrismState) -> dict[str, Any]:
     feedback = _feedback(state, "resources")
     course = state["course"]
@@ -654,8 +585,6 @@ def blank_artifact(stage: str, state: PrismState) -> Any:
     if stage == "pedagogical_design":
         return {"strategy": "", "sequence": []}
     if stage == "teaching_activities":
-        return []
-    if stage == "alignment_matrix":
         return []
     if stage == "resources":
         return {
@@ -987,15 +916,6 @@ def save_manual_draft(
             updated.get(target_stage),
             edited_artifact,
         )
-        if (
-            any(before != after for before, after in id_mapping.items())
-            and "alignment_matrix" in updated
-        ):
-            updated["alignment_matrix"] = _remap_list_references(
-                updated["alignment_matrix"],
-                reference_field,
-                id_mapping,
-            )
     if edited_artifact == updated.get(target_stage):
         raise ValueError("Não foram detetadas alterações para guardar.")
     if target_stage == "resources":
@@ -1540,9 +1460,7 @@ def verify_stage_with_ai(
         "assessment_purposes",
         "teaching_coverage",
         "formative_activity_structure",
-        "alignment_coverage",
-        "alignment_consistency",
-        "alignment_links",
+        "constructive_alignment",
         "resource_selection",
         "presentation_visuals",
         "test_points",
@@ -1655,8 +1573,9 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
             }
         )
 
-    alignment_ok = bool(state.get("alignment_matrix")) and all(
-        row.get("status") == "Coerente" for row in state["alignment_matrix"]
+    alignment_rows = derive_alignment_rows(state)
+    alignment_ok = bool(alignment_rows) and all(
+        row.get("status") == "Coerente" for row in alignment_rows
     )
     selected_taxonomy = validate_taxonomy_choice(
         state.get("course", {}).get("taxonomy_type", "SOLO")
@@ -1675,7 +1594,10 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
             "id": "alignment",
             "label": "Estrutura e alinhamento pedagógico",
             "passed": alignment_ok,
-            "detail": "Todas as linhas devem estar assinaladas como Coerente.",
+            "detail": (
+                "Cada resultado deve estar ligado a conteúdo, atividade de "
+                "ensino-aprendizagem e tarefa de avaliação."
+            ),
         },
         {
             "id": "taxonomy",
@@ -1710,7 +1632,6 @@ DETERMINISTIC_GENERATORS = {
     "teaching_activities": lambda state: propose_teaching_activities(state)[
         "teaching_activities"
     ],
-    "alignment_matrix": lambda state: validate_alignment(state)["alignment_matrix"],
     "resources": lambda state: generate_resources(state)["resources"],
 }
 
@@ -1721,7 +1642,6 @@ GENERATION_EVENTS = {
     "teaching_activities": "Atividades de ensino-aprendizagem propostas.",
     "assessment_activities": "Tarefas e critérios de avaliação propostos.",
     "pedagogical_design": "Sequência pedagógica organizada.",
-    "alignment_matrix": "Matriz de alinhamento validada.",
     "resources": "Recursos educativos e verificação automática de qualidade gerados.",
 }
 
@@ -2164,7 +2084,6 @@ def build_stage_executor(agent: PedagogicalAgent):
         "assessment_activities": "propose_assessment_activities",
         "pedagogical_design": "create_pedagogical_design",
         "teaching_activities": "propose_teaching_activities",
-        "alignment_matrix": "validate_alignment",
         "resources": "generate_resources",
     }
     for stage, node_name in node_by_stage.items():

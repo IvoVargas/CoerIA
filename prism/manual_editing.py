@@ -169,38 +169,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
             ),
         )
     ),
-    "alignment_matrix": EditorLayout(
-        tables=(
-            TableSpec(
-                "Matriz de alinhamento",
-                (),
-                (
-                    _field("outcome_id", "Resultado"),
-                    _field("content_ids", "Conteúdos", "csv"),
-                    _field("taxonomy_level", "Nível", "taxonomy_level"),
-                    _field("assessment_ids", "Avaliações", "csv"),
-                    _field("assessment_purposes", "Finalidade", "csv"),
-                    _field("teaching_activity_ids", "Atividades de ensino-aprendizagem", "csv"),
-                    _field("status", "Alinhamento", "alignment_status"),
-                    _field("rationale", "Justificação", "long"),
-                ),
-                {
-                    "outcome_id": "",
-                    "result": "",
-                    "content_ids": [],
-                    "taxonomy": "",
-                    "taxonomy_level": "",
-                    "assessment_ids": [],
-                    "assessment_purposes": [],
-                    "teaching_activity_ids": [],
-                    "assessment": "Não",
-                    "teaching_activity": "Não",
-                    "status": "Requer revisão",
-                    "rationale": "",
-                },
-            ),
-        )
-    ),
     "resources": EditorLayout(
         fields=(
             ScalarSpec(("lesson_worksheet", "title"), "Ficha — título"),

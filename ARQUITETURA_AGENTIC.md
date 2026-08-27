@@ -4,7 +4,7 @@
 
 O CoerIA adota um fluxo **manual-first**. O estado pedagógico, as versões e a
 navegação pertencem à aplicação; um LLM nunca controla a transição entre
-etapas. Criar uma sessão inicializa estruturas editáveis vazias para as sete
+etapas. Criar uma sessão inicializa estruturas editáveis vazias para as seis
 etapas de autoria. O docente pode abrir, preencher e guardar qualquer uma sem
 chave de API.
 
@@ -21,7 +21,7 @@ fluxo do CoerIA.
 A nomenclatura técnica preserva a distinção conceptual da mesma referência e
 localiza-a para a interface portuguesa: `RA<n>` para resultados de aprendizagem,
 `AE<n>` para atividades de ensino-aprendizagem e `TA<n>` para tarefas de
-avaliação. A separação entre `AE` e `TA` evita a ambiguidade na matriz de
+avaliação. A separação entre `AE` e `TA` evita ambiguidades nas relações de
 alinhamento e mantém estes identificadores estáveis ao longo da autoria e das
 versões.
 
@@ -116,9 +116,9 @@ continuar independentemente de o parecer conter avisos ou problemas.
 
 ## Verificação global obrigatória
 
-Ao abrir a oitava etapa, o CoerIA executa localmente os validadores das sete
-etapas de autoria, a compatibilidade entre taxonomia, nível e verbo, o estado da
-matriz e a qualidade dos recursos. O relatório identifica cada controlo e só
+Ao abrir a sétima etapa, o CoerIA executa localmente os validadores das seis
+etapas de autoria, a compatibilidade entre taxonomia, nível e verbo, a cobertura
+automática do alinhamento e a qualidade dos recursos. O relatório identifica cada controlo e só
 permite concluir quando todos passam. Pedir ou não uma segunda opinião a um LLM
 não altera este resultado.
 
@@ -131,8 +131,8 @@ autoria requer uma ação separada, etapa, motivo e confirmação explícita.
 
 Os tipos de recurso e as imagens documentais são selecionados no início da
 etapa **Recursos educativos**. Esta configuração pertence ao artefacto de
-recursos e não é repetida em cada linha da matriz; a geração recebe a matriz
-completa como contexto de alinhamento.
+recursos. A geração recebe diretamente os resultados, conteúdos, atividades de
+ensino-aprendizagem e tarefas de avaliação como contexto de alinhamento.
 
 Quando a assistência abrange toda a etapa de recursos, cada tipo selecionado
 continua a ser gerado e validado separadamente. Num âmbito inferior, a IA devolve

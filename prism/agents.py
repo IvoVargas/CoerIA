@@ -26,7 +26,6 @@ from .curriculum import (
     MIN_OUTCOMES,
     OUTCOME_TYPES,
     SOLO_LEVELS,
-    TAXONOMY_CHOICES,
     TAXONOMY_LEVELS,
     TAXONOMY_VERBS,
     taxonomy_catalogue_for_prompt,
@@ -51,7 +50,6 @@ from .providers import (
     validate_ai_provider,
 )
 from .quality import presentation_visual_issues
-from .relationships import content_ids_for_outcome
 
 
 DEFAULT_MODEL = "gpt-4o-mini"
@@ -118,7 +116,6 @@ STAGE_ROLES = {
     "teaching_activities": "especialista em atividades de ensino-aprendizagem",
     "assessment_activities": "especialista em tarefas e critérios de avaliação",
     "pedagogical_design": "especialista em organização da sequência pedagógica",
-    "alignment_matrix": "especialista em alinhamento construtivo",
     "resources": "especialista em recursos educativos",
 }
 
@@ -156,13 +153,6 @@ STAGE_REQUIREMENTS = {
         "activity, method, practice, support, feedback_strategy}. Os IDs são "
         "obrigatoriamente AE1, AE2, ... pela ordem das linhas; o conjunto deve "
         "cobrir todos os resultados e explicitar prática, acompanhamento e feedback."
-    ),
-    "alignment_matrix": (
-        "Lista de objetos {outcome_id, result, content_ids, taxonomy, "
-        "taxonomy_level, assessment_ids, assessment_purposes, teaching_activity_ids, "
-        "assessment, teaching_activity, status, rationale}. "
-        "assessment e teaching_activity devem ser Sim ou Não; status deve indicar "
-        "Coerente ou Requer revisão."
     ),
     "resources": (
         "Objeto com selected_types, presentation_outline, lesson_worksheet, test e "
@@ -361,53 +351,6 @@ def _schema_for(
                     "id", "outcome_id", "outcome_ids",
                     "learning_context", "activity", "method", "practice",
                     "support", "feedback_strategy"
-                ],
-            },
-        },
-        "alignment_matrix": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "outcome_id": string,
-                    "result": string,
-                    "content_ids": {"type": "array", "items": string},
-                    "taxonomy": {
-                        "type": "string",
-                        "enum": list(TAXONOMY_CHOICES),
-                    },
-                    "taxonomy_level": {"type": "string", "enum": target_levels},
-                    "assessment_ids": {"type": "array", "items": string},
-                    "assessment_purposes": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "enum": list(ASSESSMENT_PURPOSES),
-                        },
-                    },
-                    "teaching_activity_ids": {"type": "array", "items": string},
-                    "assessment": {"type": "string", "enum": ["Sim", "Não"]},
-                    "teaching_activity": {"type": "string", "enum": ["Sim", "Não"]},
-                    "status": {
-                        "type": "string",
-                        "enum": ["Coerente", "Requer revisão"],
-                    },
-                    "rationale": string,
-                },
-                "required": [
-                    "outcome_id",
-                    "result",
-                    "content_ids",
-                    "taxonomy",
-                    "taxonomy_level",
-                    "assessment_ids",
-                    "assessment_purposes",
-                    "teaching_activity_ids",
-                    "assessment",
-                    "teaching_activity",
-                    "status",
-                    "rationale",
                 ],
             },
         },
@@ -717,7 +660,6 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         "teaching_activities",
         "assessment_activities",
         "pedagogical_design",
-        "alignment_matrix",
         "resources",
     )
     stage_index = stage_order.index(stage)
@@ -776,10 +718,6 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
             "allowed_purposes": list(ASSESSMENT_PURPOSES),
             "mixed_purpose_forbidden": True,
         }
-    if stage == "alignment_matrix":
-        context["required_alignment_mapping"] = list(
-            _expected_alignment_rows(state).values()
-        )
     if stage == "resources" and "Apresentação PowerPoint" in state.get(
         "resource_types", []
     ):
@@ -936,91 +874,6 @@ def _canonicalize_learning_outcomes(
                     "outcome_id": corrected.get("id", ""),
                     "changes": changes,
                 }
-            )
-    return normalized, corrections
-
-
-def _expected_alignment_rows(
-    state: dict[str, Any]
-) -> dict[str, dict[str, Any]]:
-    outcomes = {
-        item["id"]: item for item in state.get("learning_outcomes", [])
-    }
-    selected_taxonomy = validate_taxonomy_choice(
-        state.get("course", {}).get("taxonomy_type", "SOLO")
-    )
-    rows: dict[str, dict[str, Any]] = {}
-    for outcome_id, outcome in outcomes.items():
-        assessment_items = [
-            item
-            for item in state.get("assessment_activities", [])
-            if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
-        ]
-        teaching_items = [
-            item
-            for item in state.get("teaching_activities", [])
-            if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
-        ]
-        assessment_ids = sorted(item["id"] for item in assessment_items)
-        teaching_ids = sorted(item["id"] for item in teaching_items)
-        has_assessment = bool(assessment_ids)
-        has_teaching = bool(teaching_ids)
-        rows[outcome_id] = {
-            "outcome_id": outcome_id,
-            "result": outcome["statement"],
-            "content_ids": content_ids_for_outcome(state, outcome_id),
-            "taxonomy": selected_taxonomy,
-            "taxonomy_level": outcome.get("taxonomy_level", ""),
-            "assessment_ids": assessment_ids,
-            "assessment_purposes": sorted(
-                {item["assessment_purpose"] for item in assessment_items}
-            ),
-            "teaching_activity_ids": teaching_ids,
-            "assessment": "Sim" if has_assessment else "Não",
-            "teaching_activity": "Sim" if has_teaching else "Não",
-            "status": "Coerente" if has_assessment and has_teaching else "Requer revisão",
-        }
-    return rows
-
-
-def _canonicalize_alignment_matrix(
-    artifact: Any, state: dict[str, Any]
-) -> tuple[Any, list[dict[str, Any]]]:
-    """Substitui campos derivados por ligações calculadas dos artefactos aprovados."""
-
-    if not isinstance(artifact, list):
-        return artifact, []
-    expected = _expected_alignment_rows(state)
-    normalized: list[Any] = []
-    corrections: list[dict[str, Any]] = []
-    for item in artifact:
-        if not isinstance(item, dict) or item.get("outcome_id") not in expected:
-            normalized.append(item)
-            continue
-        canonical = expected[item["outcome_id"]]
-        rationale = str(item.get("rationale", "")).strip() or (
-            "Estado calculado a partir das avaliações e atividades de ensino-aprendizagem "
-            "associadas ao resultado."
-        )
-        corrected = {
-            **{key: value for key, value in item.items() if key != "resource_types"},
-            **canonical,
-            "rationale": rationale,
-        }
-        changes = {
-            field: {"received": item.get(field), "used": value}
-            for field, value in canonical.items()
-            if item.get(field) != value
-        }
-        if "resource_types" in item:
-            changes["resource_types"] = {
-                "received": item.get("resource_types"),
-                "used": None,
-            }
-        normalized.append(corrected)
-        if changes:
-            corrections.append(
-                {"outcome_id": item["outcome_id"], "changes": changes}
             )
     return normalized, corrections
 
@@ -1646,7 +1499,6 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         "learning_outcomes",
         "assessment_activities",
         "teaching_activities",
-        "alignment_matrix",
     }:
         if not isinstance(artifact, list) or not artifact:
             raise AgentGenerationError("O agente devolveu uma lista vazia para esta etapa.")
@@ -1744,68 +1596,6 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             raise AgentGenerationError(
                 "Cada atividade de ensino-aprendizagem deve explicitar prática, "
                 "acompanhamento e feedback."
-            )
-
-    if stage == "alignment_matrix":
-        expected = {item["id"] for item in state["learning_outcomes"]}
-        _require_exact_coverage(
-            artifact, expected, "outcome_id",
-            "A matriz não cobre exatamente os resultados de aprendizagem definidos."
-        )
-
-        inconsistent = [
-            item["outcome_id"]
-            for item in artifact
-            if (
-                item["assessment"] == "Sim" and item["teaching_activity"] == "Sim"
-            )
-            != (item["status"] == "Coerente")
-        ]
-        if inconsistent:
-            raise AgentGenerationError(
-                "A matriz contém estados incompatíveis com as evidências de alinhamento: "
-                + ", ".join(inconsistent)
-            )
-        selected_taxonomy = validate_taxonomy_choice(
-            state["course"].get("taxonomy_type", "SOLO")
-        )
-        outcome_by_id = {item["id"]: item for item in state["learning_outcomes"]}
-        assessment_by_outcome = {
-            outcome_id: sorted(
-                item["id"] for item in state["assessment_activities"]
-                if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
-            )
-            for outcome_id in expected
-        }
-        teaching_by_outcome = {
-            outcome_id: sorted(
-                item["id"] for item in state["teaching_activities"]
-                if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
-            )
-            for outcome_id in expected
-        }
-        divergent = [
-            row["outcome_id"] for row in artifact
-            if sorted(row["content_ids"])
-            != sorted(content_ids_for_outcome(state, row["outcome_id"]))
-            or row["taxonomy"] != selected_taxonomy
-            or row["taxonomy_level"]
-            != outcome_by_id[row["outcome_id"]]["taxonomy_level"]
-            or sorted(row["assessment_ids"]) != assessment_by_outcome[row["outcome_id"]]
-            or sorted(row["assessment_purposes"])
-            != sorted(
-                {
-                    item["assessment_purpose"]
-                    for item in state["assessment_activities"]
-                    if row["outcome_id"]
-                    in item.get("outcome_ids", [item.get("outcome_id")])
-                }
-            )
-            or sorted(row["teaching_activity_ids"]) != teaching_by_outcome[row["outcome_id"]]
-        ]
-        if divergent:
-            raise AgentGenerationError(
-                "A matriz diverge das ligações reais em: " + ", ".join(divergent)
             )
 
     if stage == "pedagogical_design":
@@ -2193,13 +1983,6 @@ class OpenAIPedagogicalAgent:
                 "e outcome_id tem de ser uma cópia exata do primeiro elemento de "
                 "outcome_ids. Usa apenas os IDs indicados em assessment_link_rules."
             )
-        if stage == "alignment_matrix":
-            instructions += (
-                " Todos os campos factuais da matriz estão calculados em "
-                "required_alignment_mapping. Copia-os exatamente e acrescenta apenas "
-                "uma rationale pedagógica clara para cada linha. O status é Coerente "
-                "somente quando assessment e teaching_activity são ambos Sim."
-            )
         if stage == "resources":
             outcome_ids = [item["id"] for item in state.get("learning_outcomes", [])]
             instructions += (
@@ -2356,10 +2139,6 @@ class OpenAIPedagogicalAgent:
                 elif stage == "teaching_activities":
                     artifact, guardrail_corrections = (
                         _canonicalize_teaching_activities(artifact)
-                    )
-                elif stage == "alignment_matrix":
-                    artifact, guardrail_corrections = (
-                        _canonicalize_alignment_matrix(artifact, state)
                     )
                 elif stage == "resources":
                     artifact, test_corrections = _canonicalize_resource_test(
@@ -2771,7 +2550,6 @@ class AgenticPedagogicalTeam:
         "learning_outcomes",
         "teaching_activities",
         "assessment_activities",
-        "alignment_matrix",
     )
 
     def __init__(

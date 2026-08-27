@@ -427,29 +427,6 @@ def test_learning_outcome_verb_options_follow_the_level_in_the_same_row() -> Non
     assert editor_reference_value(row, verb_field) is None
 
 
-def test_alignment_editor_omits_redundant_taxonomy_and_numbers_levels() -> None:
-    state = _completed_state()
-    table = editor_layout("alignment_matrix").tables[0]
-    level_field = next(
-        field for field in table.fields if field.key == "taxonomy_level"
-    )
-
-    assert "Taxonomia" not in [field.label for field in table.fields]
-    options = editor_taxonomy_level_options(state, level_field)
-    assert options is not None
-    assert options["Uni-estrutural"] == "Uni-estrutural — SOLO 2"
-    assert options["Abstrato expandido"] == "Abstrato expandido — SOLO 5"
-
-    first_row = state["alignment_matrix"][0]
-    expected_level = taxonomy_level_label(
-        first_row["taxonomy"], first_row["taxonomy_level"]
-    )
-    rendered = render_stage_artifact(state, "alignment_matrix")
-    assert "| Resultado | Conteúdos | Nível |" in rendered
-    assert "| Taxonomia |" not in rendered
-    assert expected_level in rendered
-
-
 def test_new_learning_outcome_row_inherits_the_first_allowed_level() -> None:
     state = _completed_state()
     table = editor_layout("learning_outcomes").tables[0]

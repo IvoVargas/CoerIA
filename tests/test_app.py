@@ -446,8 +446,8 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     )
     assert id_control._props.get("readonly") is True
     user.find("Cancelar edição").click()
-    user.find(marker="manual-stage-alignment_matrix").click()
-    await user.should_see("Matriz de alinhamento — versão 1", retries=20)
+    user.find(marker="manual-stage-pedagogical_design").click()
+    await user.should_see("Organização da sequência pedagógica — versão 1", retries=20)
     await user.should_not_see("RECURSOS A PREPARAR")
     user.find(marker="manual-stage-resources").click()
     await user.should_see("RECURSOS A PREPARAR", retries=20)
@@ -649,7 +649,7 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
         ],
         agent=agent,
     )
-    for _ in range(6):
+    for _ in range(5):
         state = review_current_stage(state, "approve", agent=agent)
     assert state["current_stage"] == "resources"
     state["orchestration"]["mode"] = "manual-first"
@@ -853,7 +853,7 @@ async def test_complete_resource_proposal_reuses_editor_and_hides_unselected_res
         resource_types=[RESOURCE_PRESENTATION],
         agent=agent,
     )
-    for _ in range(6):
+    for _ in range(5):
         state = review_current_stage(state, "approve", agent=agent)
     assert state["current_stage"] == "resources"
     before = deepcopy(state["resources"])

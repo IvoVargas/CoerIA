@@ -21,7 +21,7 @@ from .models import (
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
 )
-from .relationships import content_ids_for_outcome
+from .relationships import derive_alignment_rows
 
 
 def _normalise(value: str) -> str:
@@ -31,48 +31,6 @@ def _normalise(value: str) -> str:
 
 def _check(check_id: str, label: str, status: str, detail: str) -> dict[str, str]:
     return {"id": check_id, "label": label, "status": status, "detail": detail}
-
-
-def _ids(items: list[dict[str, Any]], key: str = "outcome_id") -> list[str]:
-    return [str(item.get(key, "")) for item in items]
-
-
-def _coverage_check(
-    check_id: str,
-    label: str,
-    expected: set[str],
-    items: list[dict[str, Any]],
-    key: str = "outcome_id",
-) -> dict[str, str]:
-    if not expected:
-        return _check(
-            check_id,
-            label,
-            "warning",
-            "Não existem resultados de aprendizagem; a cobertura não pode ser avaliada.",
-        )
-    if not items:
-        return _check(
-            check_id,
-            label,
-            "error",
-            "Não existem linhas para cobrir os resultados de aprendizagem.",
-        )
-    received_list = _ids(items, key)
-    received = set(received_list)
-    duplicates = sorted(item for item, count in Counter(received_list).items() if item and count > 1)
-    missing = sorted(expected - received)
-    extra = sorted(received - expected)
-    if missing or extra or duplicates:
-        details = []
-        if missing:
-            details.append("em falta: " + ", ".join(missing))
-        if extra:
-            details.append("desconhecidos: " + ", ".join(extra))
-        if duplicates:
-            details.append("duplicados: " + ", ".join(duplicates))
-        return _check(check_id, label, "error", "; ".join(details))
-    return _check(check_id, label, "pass", f"Cobertura exata de {len(expected)} resultados.")
 
 
 def _many_to_many_coverage_check(
@@ -340,113 +298,40 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             ),
         )
     )
-    checks.append(
-        _coverage_check(
-            "alignment_coverage",
-            "Cobertura da matriz de alinhamento",
-            expected_ids,
-            state.get("alignment_matrix", []),
-        )
-    )
-
-    inconsistent_rows = [
-        row.get("outcome_id", "?")
-        for row in state.get("alignment_matrix", [])
-        if (row.get("assessment") == "Sim" and row.get("teaching_activity") == "Sim")
-        != (row.get("status") == "Coerente")
-    ]
+    alignment_rows = derive_alignment_rows(state)
+    incomplete_alignment = []
+    for row in alignment_rows:
+        missing_links = []
+        if not row.get("content_ids"):
+            missing_links.append("conteúdo")
+        if not row.get("teaching_activity_ids"):
+            missing_links.append("atividade de ensino-aprendizagem")
+        if not row.get("assessment_ids"):
+            missing_links.append("tarefa de avaliação")
+        if missing_links:
+            incomplete_alignment.append(
+                f"{row.get('outcome_id', '?')}: " + ", ".join(missing_links)
+            )
     checks.append(
         _check(
-            "alignment_consistency",
-            "Consistência interna da matriz",
+            "constructive_alignment",
+            "Cobertura do alinhamento pedagógico",
             (
                 "warning"
-                if not state.get("alignment_matrix", [])
+                if not expected_ids
                 else "error"
-                if inconsistent_rows
+                if incomplete_alignment
                 else "pass"
             ),
             (
-                "A matriz está vazia; a consistência interna não pode ser avaliada."
-                if not state.get("alignment_matrix", [])
-                else "Estado incompatível nas linhas: " + ", ".join(inconsistent_rows)
-                if inconsistent_rows
-                else "Os estados correspondem às evidências declaradas."
-            ),
-        )
-    )
-
-    assessment_by_outcome = {
-        outcome_id: sorted(
-            str(item.get("id", ""))
-            for item in state.get("assessment_activities", [])
-            if outcome_id in (item.get("outcome_ids") or [item.get("outcome_id")])
-        )
-        for outcome_id in expected_ids
-    }
-    teaching_by_outcome = {
-        outcome_id: sorted(
-            str(item.get("id", ""))
-            for item in state.get("teaching_activities", [])
-            if outcome_id in (item.get("outcome_ids") or [item.get("outcome_id")])
-        )
-        for outcome_id in expected_ids
-    }
-    classification_by_outcome = {
-        str(item.get("id", "")): {
-            "taxonomy": selected_taxonomy,
-            "level": item.get("taxonomy_level", ""),
-        }
-        for item in outcomes
-    }
-    purposes_by_outcome = {
-        outcome_id: sorted(
-            {
-                str(item.get("assessment_purpose", ""))
-                for item in state.get("assessment_activities", [])
-                if outcome_id
-                in (item.get("outcome_ids") or [item.get("outcome_id")])
-            }
-        )
-        for outcome_id in expected_ids
-    }
-    divergent_links = [
-        str(row.get("outcome_id", "?"))
-        for row in state.get("alignment_matrix", [])
-        if sorted(row.get("content_ids", []))
-        != sorted(content_ids_for_outcome(state, str(row.get("outcome_id", ""))))
-        or sorted(row.get("assessment_ids", []))
-        != assessment_by_outcome.get(str(row.get("outcome_id", "")), [])
-        or sorted(row.get("assessment_purposes", []))
-        != purposes_by_outcome.get(str(row.get("outcome_id", "")), [])
-        or row.get("taxonomy")
-        != classification_by_outcome.get(
-            str(row.get("outcome_id", "")), {}
-        ).get("taxonomy")
-        or row.get("taxonomy_level")
-        != classification_by_outcome.get(
-            str(row.get("outcome_id", "")), {}
-        ).get("level")
-        or sorted(row.get("teaching_activity_ids", []))
-        != teaching_by_outcome.get(str(row.get("outcome_id", "")), [])
-    ]
-    checks.append(
-        _check(
-            "alignment_links",
-            "Ligações explícitas da matriz",
-            (
-                "warning"
-                if not state.get("alignment_matrix", [])
-                else "error"
-                if divergent_links
-                else "pass"
-            ),
-            (
-                "A matriz está vazia; as ligações não podem ser avaliadas."
-                if not state.get("alignment_matrix", [])
-                else "Ligações divergentes nas linhas: " + ", ".join(divergent_links)
-                if divergent_links
-                else "Conteúdos, avaliações e atividades correspondem aos artefactos aprovados."
+                "Não existem resultados de aprendizagem; o alinhamento não pode ser avaliado."
+                if not expected_ids
+                else "Ligações em falta — " + "; ".join(incomplete_alignment)
+                if incomplete_alignment
+                else (
+                    "Todos os resultados estão ligados a conteúdo, atividade de "
+                    "ensino-aprendizagem e tarefa de avaliação."
+                )
             ),
         )
     )

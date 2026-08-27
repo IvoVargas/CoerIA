@@ -37,6 +37,7 @@ from .models import (
     RESOURCE_WORKSHEET,
 )
 from .quality import attach_quality_report
+from .relationships import derive_alignment_rows
 
 
 LOGGER = logging.getLogger(__name__)
@@ -341,7 +342,6 @@ def _validate_program_export_state(state: dict[str, Any]) -> None:
         "assessment_activities",
         "teaching_activities",
         "pedagogical_design",
-        "alignment_matrix",
     )
     missing = [key for key in required if not state.get(key)]
     if missing:
@@ -596,6 +596,7 @@ def export_program_document(
     """Constrói o programa editável da UC a partir de artefactos já aprovados."""
 
     _validate_program_export_state(state)
+    alignment_rows = derive_alignment_rows(state)
 
     course = state.get("course", {})
     analysis = state.get("curriculum_analysis", {})
@@ -701,9 +702,9 @@ def export_program_document(
         [700, 3000, 3200, 3060],
     )
 
-    document.add_heading("8. Matriz de alinhamento", level=1)
+    document.add_heading("8. Síntese automática do alinhamento", level=1)
     table = document.add_table(rows=1, cols=6)
-    for row in state.get("alignment_matrix", []):
+    for row in alignment_rows:
         cells = table.add_row().cells
         cells[0].text = str(row.get("outcome_id", ""))
         cells[1].text = ", ".join(row.get("content_ids", []))
@@ -744,6 +745,7 @@ def export_program_latex(
     """Constrói em LaTeX o mesmo programa da UC disponibilizado em Word."""
 
     _validate_program_export_state(state)
+    alignment_rows = derive_alignment_rows(state)
     course = state.get("course", {})
     analysis = state.get("curriculum_analysis", {})
     total_hours = float(course.get("contact_hours", 0) or 0) + float(
@@ -871,7 +873,7 @@ def export_program_latex(
                 [0.06, 0.25, 0.27, 0.24],
             ),
             r"\clearpage",
-            r"\section{Matriz de alinhamento}",
+            r"\section{Síntese automática do alinhamento}",
             _latex_table(
                 ["RA", "Conteúdos", "Ensino-aprendizagem", "Avaliação", "Estado", "Fundamentação"],
                 [
@@ -883,7 +885,7 @@ def export_program_latex(
                         row.get("status", ""),
                         row.get("rationale", ""),
                     ]
-                    for row in state.get("alignment_matrix", [])
+                    for row in alignment_rows
                 ],
                 [0.05, 0.12, 0.17, 0.12, 0.10, 0.29],
             ),
@@ -1667,7 +1669,7 @@ def export_resource_package(
                 _export_practical_activity_latex(state, path)
                 _register_latex_document(generated, path, compiled_pdfs)
 
-        alignment_rows = [
+        alignment_csv_rows = [
             [
                 row.get("outcome_id", ""),
                 row.get("result", ""),
@@ -1680,7 +1682,7 @@ def export_resource_package(
                 row.get("status", ""),
                 row.get("rationale", ""),
             ]
-            for row in state.get("alignment_matrix", [])
+            for row in derive_alignment_rows(state)
         ]
         audit_rows = [
             [item.get("timestamp", ""), item.get("stage", ""), item.get("event", ""), item.get("feedback", "")]
@@ -1750,7 +1752,7 @@ def export_resource_package(
             for path, archive_name in generated:
                 archive.write(path, archive_name)
             archive.writestr(
-                "matriz_alinhamento.csv",
+                "sintese_alinhamento.csv",
                 _csv_bytes(
                     [
                         "Resultado", "Descrição", "Conteúdos",
@@ -1758,7 +1760,7 @@ def export_resource_package(
                         "Atividades de ensino-aprendizagem", "Estado",
                         "Justificação"
                     ],
-                    alignment_rows,
+                    alignment_csv_rows,
                 ),
             )
             archive.writestr(

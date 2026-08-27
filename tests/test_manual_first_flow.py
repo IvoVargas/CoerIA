@@ -122,21 +122,12 @@ def test_all_stages_can_be_opened_without_generation_or_validation() -> None:
 
 def test_earlier_edit_preserves_later_work_and_marks_it_for_review() -> None:
     state = create_session(_course())
-    alignment = [
-        {
-            "outcome_id": "RA1",
-            "content_ids": ["C1"],
-            "taxonomy_level": "Uni-estrutural",
-            "assessment_ids": [],
-            "assessment_purposes": [],
-            "teaching_activity_ids": [],
-            "resource_types": [],
-            "status": "Requer revisão",
-            "rationale": "Rascunho do docente.",
-        }
-    ]
-    state = save_manual_draft(state, "alignment_matrix", alignment)
-    preserved = deepcopy(state["alignment_matrix"])
+    design = {
+        "strategy": "Prática orientada.",
+        "sequence": [{"outcome_id": "RA1", "focus": "Aplicação"}],
+    }
+    state = save_manual_draft(state, "pedagogical_design", design)
+    preserved = deepcopy(state["pedagogical_design"])
 
     state = save_manual_draft(
         state,
@@ -144,8 +135,8 @@ def test_earlier_edit_preserves_later_work_and_marks_it_for_review() -> None:
         OutcomeProposalAgent().generate("learning_outcomes", state).artifact,
     )
 
-    assert state["alignment_matrix"] == preserved
-    assert state["stage_statuses"]["alignment_matrix"] == "needs_review"
+    assert state["pedagogical_design"] == preserved
+    assert state["stage_statuses"]["pedagogical_design"] == "needs_review"
 
 
 def test_historical_version_becomes_active_without_creating_a_new_version() -> None:
@@ -263,7 +254,6 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
         "strategy": "Prática orientada.",
         "sequence": [{"outcome_id": "RA3", "focus": "Testes"}],
     }
-    state["alignment_matrix"] = [{"outcome_id": "RA3", "content_ids": ["C1"]}]
     state["resources"]["test"]["questions"] = [
         {"id": "Q1", "outcome_ids": ["RA3"], "question": "Analise o caso."}
     ]
@@ -297,7 +287,6 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
     assert accepted["teaching_activities"][0]["outcome_ids"] == ["RA2"]
     assert accepted["assessment_activities"][0]["outcome_ids"] == ["RA2"]
     assert accepted["pedagogical_design"]["sequence"][0]["outcome_id"] == "RA2"
-    assert accepted["alignment_matrix"][0]["outcome_id"] == "RA2"
     assert accepted["resources"]["test"]["questions"][0]["outcome_ids"] == ["RA2"]
 
 
@@ -482,13 +471,11 @@ def test_ai_review_discards_deterministic_coverage_claims() -> None:
 
 def test_resource_selection_can_change_without_generation() -> None:
     state = navigate_to_stage(create_session(_course()), "resources")
-    state["alignment_matrix"] = [{"outcome_id": "RA1"}]
     updated = update_manual_resource_settings(state, [RESOURCE_TEST])
 
     assert updated["resource_types"] == [RESOURCE_TEST]
     assert updated["resources"]["selected_types"] == [RESOURCE_TEST]
     assert updated["resources"]["test"]["questions"] == []
-    assert all("resource_types" not in row for row in updated["alignment_matrix"])
 
 
 def test_resource_selection_is_restricted_to_the_resources_stage() -> None:
@@ -553,7 +540,7 @@ def test_initial_data_update_preserves_artifacts_and_requires_review(tmp_path) -
         }
     ]
     state["stage_statuses"]["learning_outcomes"] = "draft"
-    state["current_stage"] = "alignment_matrix"
+    state["current_stage"] = "resources"
     state["ai_proposals"] = [{"id": "P1", "status": "pending"}]
     state = service._persist(state)
     original_outcomes = deepcopy(state["learning_outcomes"])
@@ -564,7 +551,7 @@ def test_initial_data_update_preserves_artifacts_and_requires_review(tmp_path) -
 
     assert updated["course"]["unit_name"] == "Programação corrigida"
     assert updated["learning_outcomes"] == original_outcomes
-    assert updated["current_stage"] == "alignment_matrix"
+    assert updated["current_stage"] == "resources"
     assert updated["stage_statuses"]["learning_outcomes"] == "needs_review"
     assert updated["stage_statuses"]["final_validation"] == "pending"
     assert updated["status"] == "drafting"

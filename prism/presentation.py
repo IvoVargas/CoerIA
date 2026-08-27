@@ -433,32 +433,6 @@ def render_artifact(
             rows,
         )
 
-    if stage == "alignment_matrix":
-        rows = [
-            [
-                item["outcome_id"],
-                ", ".join(item.get("content_ids", [])),
-                taxonomy_level_label(
-                    item.get("taxonomy", "SOLO"),
-                    item.get("taxonomy_level", "—"),
-                ),
-                ", ".join(item.get("assessment_ids", [])),
-                ", ".join(item.get("assessment_purposes", [])),
-                ", ".join(item.get("teaching_activity_ids", [])),
-                item["status"],
-                item.get("rationale", ""),
-            ]
-            for item in artifact
-        ]
-        return header + _table(
-            [
-                "Resultado", "Conteúdos", "Nível",
-                "Avaliações", "Finalidade", "Atividades de ensino-aprendizagem",
-                "Alinhamento", "Justificação",
-            ],
-            rows,
-        )
-
     if stage == "resources":
         return header + _render_resources(artifact)
     if stage == "final_validation":

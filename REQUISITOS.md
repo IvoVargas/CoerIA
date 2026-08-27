@@ -77,15 +77,15 @@ etapas navegáveis e editáveis:
 4. autoria de tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
 5. organização da sequência pedagógica, articulando em cada resultado o foco,
    a atividade de ensino-aprendizagem e a tarefa de avaliação;
-6. matriz de alinhamento;
-7. recursos educativos selecionados;
-8. verificação global determinística da estrutura e do alinhamento.
+6. recursos educativos selecionados;
+7. verificação global determinística da estrutura e do alinhamento.
 
 O alinhamento segue Biggs e Tang: os resultados de aprendizagem são o elemento
 central; as atividades de ensino-aprendizagem e as tarefas de avaliação devem
 mobilizar as ações expressas nesses resultados, e os critérios de avaliação
-devem permitir julgar em que medida o desempenho esperado foi atingido. A
-matriz torna explícitas e verificáveis estas relações.
+devem permitir julgar em que medida o desempenho esperado foi atingido. O
+sistema deriva uma síntese automática destas relações para as tornar explícitas
+e verificáveis, sem criar uma etapa de autoria adicional.
 
 Cada artefacto deve possuir um formato estruturado e identificadores estáveis
 que permitam ligar temas, resultados, atividades, avaliação e recursos.
@@ -100,7 +100,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   tarefas de avaliação como `TA1`, `TA2`, …, localizando para português a
   distinção entre *Teaching/Learning Activities* e *Assessment Tasks* usada por
   Biggs e Tang. Atribuir estes IDs automaticamente, apresentá-los como campos não
-  editáveis e conservar as respetivas referências na matriz de alinhamento.
+  editáveis e conservar as respetivas referências nas relações estruturadas.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
   etapa curricular formal.
@@ -108,14 +108,14 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   conjunto das associações deve cobrir exatamente todos os resultados, sem linhas
   desligadas nem IDs desconhecidos.
 - Registar os objetivos gerais num único campo de texto livre, sem IDs e sem os
-  incluir como relação estrutural da matriz de alinhamento.
+  incluir como relação estrutural do alinhamento.
 - Classificar o tipo de cada resultado de aprendizagem.
 - Usar um único verbo de ação principal pertencente ao vocabulário controlado do nível declarado; infinitivos subordinados podem ser usados em complementos, mas não como ações principais coordenadas.
 - Na opção SOLO, não usar o nível pré-estrutural para formular resultados.
 - Integrar a classificação taxonómica na primeira etapa, como atributo de cada
   resultado, sem criar um ecrã autónomo para a classificação.
-- Nas tabelas de resultados de aprendizagem e da matriz de alinhamento, omitir a
-  coluna redundante da taxonomia e mostrar o nível num seletor com designação e número:
+- Na tabela de resultados de aprendizagem, omitir a coluna redundante da
+  taxonomia e mostrar o nível num seletor com designação e número:
   `SOLO 2`–`SOLO 5` ou `Bloom 1`–`Bloom 6`.
 - Não estabelecer uma equivalência rígida entre níveis SOLO e Bloom.
 - Permitir relações muitos-para-muitos entre conteúdos, resultados, avaliações
@@ -211,9 +211,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Normalizar as ligações de cada avaliação, garantindo que `outcome_id` coincide
   com o primeiro elemento não vazio de `outcome_ids`.
 - Verificar prática, acompanhamento e feedback nas atividades de ensino-aprendizagem.
-- Verificar a matriz de alinhamento relativamente aos artefactos produzidos.
-- Derivar os campos factuais e o estado de cada linha da matriz a partir das
-  evidências aprovadas, reservando à IA apenas a fundamentação pedagógica.
+- Verificar automaticamente o alinhamento relativamente aos artefactos produzidos.
+- Derivar uma síntese factual do alinhamento a partir das ligações aprovadas,
+  sem depender da IA ou de uma matriz preenchida pelo docente.
 - Executar verificações determinísticas sobre os recursos finais.
 - Recalcular a qualidade dos recursos ao abrir a validação final e imediatamente
   antes da exportação, substituindo qualquer relatório derivado desatualizado.
@@ -242,8 +242,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   registando todas as correções nos metadados.
 - Distinguir verificações aprovadas, avisos e erros bloqueantes.
 - Nunca aceitar como validação automática apenas uma declaração do modelo.
-- Na verificação global, executar deterministicamente os validadores de todas
-  as sete etapas de autoria e impedir a conclusão enquanto existir um erro.
+- Na verificação global, executar deterministicamente os validadores das seis
+  etapas de autoria e impedir a conclusão enquanto existir um erro.
 
 ### RF05 — Avaliação, atividades e recursos educativos
 
@@ -252,7 +252,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Estruturar atividades de ensino-aprendizagem com prática, acompanhamento e estratégia de feedback.
 - Apresentar a seleção dos tipos de recursos no início da etapa **Recursos
   educativos**, antes de qualquer geração, sem repetir essa decisão no formulário
-  inicial nem nas linhas da matriz de alinhamento.
+  inicial.
 - Apresentar cada tipo de recurso selecionado num separador próprio, tanto em
   consulta, edição e revisão de uma proposta completa da IA, preservando dentro
   dele todo o conteúdo pedagógico editável do recurso correspondente.
@@ -349,7 +349,7 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   construída a partir dos artefactos aprovados e sem nova geração por IA.
 - Incluir no programa identificação, carga de trabalho e ECTS, objetivos gerais,
   conteúdos, resultados de aprendizagem e classificação taxonómica, atividades
-  de ensino-aprendizagem, avaliação, matriz de alinhamento e bibliografia
+  de ensino-aprendizagem, avaliação, síntese automática do alinhamento e bibliografia
   fornecida ou validada pelo docente.
 - Antes de preparar o ZIP, permitir ao docente escolher Word (`.docx`), LaTeX
   (`.tex`) ou ambos para todos os documentos textuais exportáveis: programa da
@@ -366,7 +366,8 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   inválido.
 - Incluir apenas os recursos selecionados e registar no manifesto e na auditoria
   os formatos documentais escolhidos.
-- Incluir matriz de alinhamento, rasto de auditoria, manifesto e estado JSON.
+- Incluir a síntese automática do alinhamento, rasto de auditoria, manifesto e
+  estado JSON.
 - Produzir nomes de ficheiro seguros e independentes do sistema operativo.
 - Registar a exportação e a finalização da rastreabilidade na sessão.
 
@@ -469,12 +470,14 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
 - Todos os conteúdos estão ligados a pelo menos um resultado; todas as tarefas
   de avaliação usam IDs `TA<n>`, todas as atividades de ensino-aprendizagem usam
   IDs `AE<n>` e ambas possuem ligações explícitas.
-- A matriz assinala incoerências sem depender da opinião declarada pelo LLM.
+- A síntese automática assinala incoerências sem depender da opinião declarada
+  pelo LLM.
 - Cada tipo de recurso selecionado gera um ficheiro utilizável.
 - Uma sessão persistida pode ser retomada numa nova instância da aplicação.
 - A aplicação funciona nos testes sem chaves de API e falha explicitamente
   quando se tenta usar OpenAI ou IAedu sem a respetiva chave.
-- O pacote exportado contém recursos, matriz, auditoria e manifesto coerentes.
+- O pacote exportado contém recursos, síntese automática do alinhamento,
+  auditoria e manifesto coerentes.
 - A escolha Word, LaTeX ou ambos é respeitada para o programa da UC, ficha de
   aula, teste e atividade prática, sem alterar a exportação da apresentação.
 - O pacote exportado contém o programa da UC em português e apresentações com

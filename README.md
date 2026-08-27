@@ -24,9 +24,8 @@ determinística, não de uma decisão declarada pelo modelo.
 3. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 4. tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
 5. organização da sequência pedagógica;
-6. matriz de alinhamento;
-7. recursos educativos e validação automática;
-8. validação final da estrutura e do alinhamento.
+6. recursos educativos e validação automática;
+7. validação final da estrutura e do alinhamento.
 
 Seguindo o alinhamento construtivo de Biggs e Tang em *Teaching for Quality
 Learning at University*, os resultados de aprendizagem
@@ -44,8 +43,10 @@ aprendizagem, as atividades de ensino-aprendizagem e as tarefas e critérios de
 avaliação. Os verbos dos resultados funcionam como marcadores dessa coerência.
 O protótipo usa conteúdos com IDs estáveis, 4 a 10 resultados de aprendizagem
 (preferencialmente 5 a 7), tipos de resultado, verbos taxonómicos controlados e
-relações muitos-para-muitos. A matriz acrescenta os conteúdos a essa cadeia de
-alinhamento; os recursos selecionados são posteriormente produzidos a partir dela.
+relações muitos-para-muitos. A aplicação verifica essas relações diretamente e
+produz uma síntese automática do alinhamento, sem exigir uma etapa ou matriz
+editável adicional. Os recursos selecionados são posteriormente produzidos a
+partir dos artefactos aprovados.
 A `minutaProgramasUCs.xls` não é uma
 referência oficial do alinhamento ou do fluxo; permanece apenas como documento
 histórico ou institucional.
@@ -62,8 +63,8 @@ mostrada uma percentagem artificial, pois os fornecedores não disponibilizam
 progresso percentual fiável. A navegação e a edição manual não apresentam este
 estado porque não contactam o fornecedor.
 
-Na tabela dos resultados de aprendizagem e na matriz de alinhamento, a taxonomia
-escolhida não é repetida como coluna. O nível é apresentado e editado através de
+Na tabela dos resultados de aprendizagem, a taxonomia escolhida não é repetida
+como coluna. O nível é apresentado e editado através de
 um seletor numerado: `SOLO 2` a `SOLO 5` ou `Bloom 1` a `Bloom 6`. Assim, a
 classificação é validada logo na primeira etapa e não necessita de um ecrã
 autónomo. O valor canónico continua guardado no modelo para validação e
@@ -77,13 +78,13 @@ Biggs e Tang distinguem *Teaching/Learning Activities* e *Assessment Tasks*. Na
 interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
 (atividades de ensino-aprendizagem) e `TA1`, `TA2`, … (tarefas de avaliação).
 Os prefixos são atribuídos automaticamente e tornam inequívocas as referências
-apresentadas na matriz de alinhamento.
+usadas na verificação automática do alinhamento.
 
 A seleção dos recursos é feita no início da etapa **Recursos educativos**. As
 imagens extraídas dos documentos ficam reunidas no seletor visual de cada slide,
-sem uma galeria duplicada no cartão da etapa. A matriz permanece dedicada às
-relações entre resultados, conteúdos, atividades de ensino-aprendizagem e tarefas de avaliação;
-os recursos são produzidos posteriormente com base nesse alinhamento.
+sem uma galeria duplicada no cartão da etapa. Os recursos são produzidos com
+base nas relações já registadas entre resultados, conteúdos, atividades de
+ensino-aprendizagem e tarefas de avaliação.
 
 Podem ser produzidos quatro tipos de recurso: apresentação PowerPoint, ficha de
 aula, teste com chave de correção e atividade prática. As apresentações devem
@@ -104,7 +105,8 @@ textual pode sugerir uma instrução baseada no slide, que o docente revê antes
 usar a Image API. Também é possível carregar uma imagem do computador; essa
 imagem é processada localmente e não é enviada ao LLM. Depois da aprovação final,
 a aplicação exporta um ZIP com
-o programa da UC, os ficheiros selecionados, matriz de alinhamento, auditoria,
+o programa da UC, os ficheiros selecionados, síntese automática do alinhamento,
+auditoria,
 manifesto e estado completo da sessão. Antes de preparar o pacote, o docente
 escolhe se os documentos editáveis — programa da UC, ficha de aula, teste e
 atividade prática — são incluídos em Word (`.docx`), LaTeX (`.tex`) ou em ambos
@@ -194,7 +196,7 @@ exige o botão próprio, a seleção da etapa, um motivo e uma confirmação exp
 
 O card **Versões e rastreabilidade** permanece recolhido por defeito para reduzir
 a carga visual da área de trabalho. Depois de aberto, o separador **Versões**
-permite consultar e restaurar qualquer versão não ativa das sete etapas de
+permite consultar e restaurar qualquer versão não ativa das seis etapas de
 autoria. A ação de restauro surge à direita do seletor de
 etapa e versão. O restauro exige apenas confirmação e volta a tornar
 ativa a versão escolhida, sem criar uma nova versão nem apagar as restantes. Os

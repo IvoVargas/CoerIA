@@ -73,7 +73,7 @@ class ResourceGenerationTests(unittest.TestCase):
             resource_types=list(SUPPORTED_RESOURCE_TYPES),
             agent=self.agent,
         )
-        for _ in range(6):
+        for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
         self.assertEqual(state["current_stage"], "resources")
         return state
@@ -430,8 +430,6 @@ class ResourceGenerationTests(unittest.TestCase):
         tampered["assessment_activities"] = []
         tampered["teaching_activities"] = []
         tampered["pedagogical_design"] = {"strategy": "", "sequence": []}
-        tampered["alignment_matrix"] = []
-
         report = evaluate_quality(tampered, tampered["resources"])
         checks = {item["id"]: item for item in report["checks"]}
         affected = {
@@ -440,9 +438,7 @@ class ResourceGenerationTests(unittest.TestCase):
             "assessment_purposes",
             "teaching_coverage",
             "formative_activity_structure",
-            "alignment_coverage",
-            "alignment_consistency",
-            "alignment_links",
+            "constructive_alignment",
         }
         self.assertTrue(all(checks[item]["status"] != "pass" for item in affected))
         self.assertEqual(checks["unique_outcomes"]["status"], "error")
@@ -470,7 +466,7 @@ class ResourceGenerationTests(unittest.TestCase):
             resource_types=[RESOURCE_PRESENTATION, RESOURCE_TEST],
             agent=self.agent,
         )
-        for _ in range(5):
+        for _ in range(4):
             alignment_state = review_current_stage(
                 alignment_state, "approve", agent=self.agent
             )
@@ -561,7 +557,7 @@ class ResourceGenerationTests(unittest.TestCase):
             resource_types=list(SUPPORTED_RESOURCE_TYPES),
             agent=self.agent,
         )
-        for _ in range(5):
+        for _ in range(4):
             alignment_state = review_current_stage(
                 alignment_state,
                 "approve",
@@ -606,7 +602,7 @@ class ResourceGenerationTests(unittest.TestCase):
                     )
 
                 persisted = service.load_session(alignment_state["session_id"])
-                self.assertEqual(persisted["current_stage"], "alignment_matrix")
+                self.assertEqual(persisted["current_stage"], "pedagogical_design")
                 self.assertEqual(persisted["status"], "awaiting_review")
                 self.assertNotIn("resources", persisted)
                 self.assertEqual(
@@ -664,7 +660,7 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertTrue(any(name.endswith("_ficha_aula.docx") for name in names))
                 self.assertTrue(any(name.endswith("_teste.docx") for name in names))
                 self.assertTrue(any(name.endswith("_atividade_pratica.docx") for name in names))
-                self.assertIn("matriz_alinhamento.csv", names)
+                self.assertIn("sintese_alinhamento.csv", names)
                 self.assertIn("rastreabilidade.csv", names)
                 self.assertIn("manifesto.json", names)
                 manifest = json.loads(package.read("manifesto.json"))
@@ -685,11 +681,11 @@ class ResourceGenerationTests(unittest.TestCase):
                 )
                 self.assertIn("Programa da Unidade Curricular", program_text)
                 self.assertIn("Taxonomia selecionada", program_text)
-                self.assertIn("Matriz de alinhamento", program_text)
+                self.assertIn("Síntese automática do alinhamento", program_text)
                 self.assertIn("Tarefas e critérios de avaliação", program_text)
                 self.assertIn("Teaching for Quality Learning", program_text)
                 self.assertNotIn("Learning outcomes", program_text)
-                alignment_header = package.read("matriz_alinhamento.csv").decode(
+                alignment_header = package.read("sintese_alinhamento.csv").decode(
                     "utf-8-sig"
                 ).splitlines()[0]
                 self.assertIn("Conteúdos", alignment_header)
@@ -809,9 +805,14 @@ class ResourceGenerationTests(unittest.TestCase):
                                 r"\section{Tarefas e critérios de avaliação}",
                                 program,
                             )
-                            self.assertIn(r"\section{Matriz de alinhamento}", program)
                             self.assertIn(
-                                r"\clearpage" "\n" r"\section{Matriz de alinhamento}",
+                                r"\section{Síntese automática do alinhamento}",
+                                program,
+                            )
+                            self.assertIn(
+                                r"\clearpage"
+                                "\n"
+                                r"\section{Síntese automática do alinhamento}",
                                 normalized_program,
                             )
                             self.assertIn(r"Biggs, J., \& Tang", program)

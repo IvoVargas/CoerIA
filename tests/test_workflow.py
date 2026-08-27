@@ -38,6 +38,7 @@ from prism.models import (
     SUPPORTED_RESOURCE_TYPES,
 )
 from prism.persistence import SQLiteSessionStore
+from prism.relationships import derive_alignment_rows
 from prism.workflow import (
     STAGE_ORDER,
     apply_manual_edit,
@@ -46,7 +47,6 @@ from prism.workflow import (
     reopen_stage,
     review_current_stage,
     revision_impact,
-    validate_alignment,
 )
 
 
@@ -195,14 +195,13 @@ class WorkflowTests(unittest.TestCase):
 
     def test_workflow_stops_at_each_human_review(self) -> None:
         self.assertEqual(
-            STAGE_ORDER[:6],
+            STAGE_ORDER[:5],
             (
                 "learning_outcomes",
                 "curriculum_analysis",
                 "teaching_activities",
                 "assessment_activities",
                 "pedagogical_design",
-                "alignment_matrix",
             ),
         )
         state = create_session(self.course, agent=self.agent)
@@ -214,7 +213,6 @@ class WorkflowTests(unittest.TestCase):
             "teaching_activities",
             "assessment_activities",
             "pedagogical_design",
-            "alignment_matrix",
             "resources",
             "final_validation",
         ):
@@ -222,7 +220,9 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(state["current_stage"], expected_stage)
             self.assertEqual(state["status"], "awaiting_review")
 
-        self.assertTrue(all(row["status"] == "Coerente" for row in state["alignment_matrix"]))
+        self.assertTrue(
+            all(row["status"] == "Coerente" for row in derive_alignment_rows(state))
+        )
         self.assertTrue(
             all("assessment_ids" not in item for item in state["teaching_activities"])
         )
@@ -305,11 +305,11 @@ class WorkflowTests(unittest.TestCase):
             learning_outcome_audit["feedback"], "Usar verbos mais observáveis."
         )
 
-    def test_alignment_feedback_returns_to_selected_component(self) -> None:
+    def test_resources_feedback_returns_to_selected_component(self) -> None:
         state = create_session(self.course, agent=self.agent)
         for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
-        self.assertEqual(state["current_stage"], "alignment_matrix")
+        self.assertEqual(state["current_stage"], "resources")
 
         state = review_current_stage(
             state,
@@ -457,7 +457,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 20)
+        self.assertEqual(restored["schema_version"], 21)
         self.assertEqual(restored["migrated_from_schema_version"], 1)
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
@@ -488,7 +488,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 20)
+        self.assertEqual(restored["schema_version"], 21)
         self.assertNotIn("assessment_ids", restored["teaching_activities"][0])
         self.assertNotIn(
             "assessment_ids",
@@ -515,7 +515,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 20)
+        self.assertEqual(restored["schema_version"], 21)
         self.assertTrue(
             all(
                 item["teaching_activity"].strip()
@@ -555,9 +555,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(restored["versions"]["assessment_activities"])
         self.assertTrue(restored["versions"]["pedagogical_design"])
 
-    def test_schema_19_localizes_activity_ids_and_simplifies_alignment(self) -> None:
+    def test_schema_19_localizes_activity_ids_and_removes_legacy_alignment(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        while state["current_stage"] != "alignment_matrix":
+        while state["current_stage"] != "resources":
             state = review_current_stage(state, "approve", agent=self.agent)
         state["schema_version"] = 19
 
@@ -569,40 +569,19 @@ class WorkflowTests(unittest.TestCase):
                 mapping[old] = row["id"]
             return mapping
 
-        assessment_map = use_legacy_ids(state["assessment_activities"], "AT")
-        teaching_map = use_legacy_ids(state["teaching_activities"], "TLA")
-        version_assessment_map = use_legacy_ids(
-            state["versions"]["assessment_activities"][-1], "AT"
-        )
-        version_teaching_map = use_legacy_ids(
-            state["versions"]["teaching_activities"][-1], "TLA"
-        )
-        for row in state["alignment_matrix"]:
-            row["resource_types"] = list(state["resource_types"])
-            row["assessment_ids"] = [
-                assessment_map.get(identifier, identifier)
-                for identifier in row["assessment_ids"]
-            ]
-            row["teaching_activity_ids"] = [
-                teaching_map.get(identifier, identifier)
-                for identifier in row["teaching_activity_ids"]
-            ]
-        for row in state["versions"]["alignment_matrix"][-1]:
-            row["resource_types"] = list(state["resource_types"])
-            row["assessment_ids"] = [
-                version_assessment_map.get(identifier, identifier)
-                for identifier in row["assessment_ids"]
-            ]
-            row["teaching_activity_ids"] = [
-                version_teaching_map.get(identifier, identifier)
-                for identifier in row["teaching_activity_ids"]
-            ]
+        use_legacy_ids(state["assessment_activities"], "AT")
+        use_legacy_ids(state["teaching_activities"], "TLA")
+        use_legacy_ids(state["versions"]["assessment_activities"][-1], "AT")
+        use_legacy_ids(state["versions"]["teaching_activities"][-1], "TLA")
+        legacy_matrix = derive_alignment_rows(state)
+        state["alignment_matrix"] = deepcopy(legacy_matrix)
+        state["versions"]["alignment_matrix"] = [deepcopy(legacy_matrix)]
         state["revision_snapshots"] = [
             {
                 "artifacts": {
                     "assessment_activities": deepcopy(state["assessment_activities"]),
                     "teaching_activities": deepcopy(state["teaching_activities"]),
-                    "alignment_matrix": deepcopy(state["alignment_matrix"]),
+                    "alignment_matrix": deepcopy(legacy_matrix),
                 }
             }
         ]
@@ -614,8 +593,8 @@ class WorkflowTests(unittest.TestCase):
             },
             {
                 "stage": "alignment_matrix",
-                "before": deepcopy(state["alignment_matrix"]),
-                "after": deepcopy(state["alignment_matrix"]),
+                "before": deepcopy(legacy_matrix),
+                "after": deepcopy(legacy_matrix),
             },
         ]
 
@@ -624,7 +603,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(state)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 20)
+        self.assertEqual(restored["schema_version"], 21)
         self.assertEqual(restored["migrated_from_schema_version"], 19)
         self.assertTrue(
             all(
@@ -642,26 +621,11 @@ class WorkflowTests(unittest.TestCase):
                 )
             )
         )
-        for matrix in (
-            restored["alignment_matrix"],
-            restored["versions"]["alignment_matrix"][-1],
-            restored["revision_snapshots"][0]["artifacts"]["alignment_matrix"],
-        ):
-            self.assertTrue(
-                all(
-                    identifier.startswith("AE")
-                    for row in matrix
-                    for identifier in row["teaching_activity_ids"]
-                )
-            )
-            self.assertTrue(
-                all(
-                    identifier.startswith("TA")
-                    for row in matrix
-                    for identifier in row["assessment_ids"]
-                )
-            )
-            self.assertTrue(all("resource_types" not in row for row in matrix))
+        self.assertNotIn("alignment_matrix", restored)
+        self.assertNotIn("alignment_matrix", restored["versions"])
+        self.assertNotIn(
+            "alignment_matrix", restored["revision_snapshots"][0]["artifacts"]
+        )
         teaching_proposal = restored["ai_proposals"][0]
         self.assertTrue(
             all(
@@ -669,13 +633,86 @@ class WorkflowTests(unittest.TestCase):
                 for item in teaching_proposal["before"] + teaching_proposal["after"]
             )
         )
-        alignment_proposal = restored["ai_proposals"][1]
-        self.assertTrue(
-            all(
-                "resource_types" not in row
-                for row in alignment_proposal["before"] + alignment_proposal["after"]
-            )
+        self.assertEqual(len(restored["ai_proposals"]), 1)
+
+    def test_schema_20_sequential_session_at_removed_alignment_stage_reopens_sequence(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        for _ in range(5):
+            state = review_current_stage(state, "approve", agent=self.agent)
+        legacy = deepcopy(state)
+        legacy["schema_version"] = 20
+        legacy["current_stage"] = "alignment_matrix"
+        legacy["status"] = "awaiting_review"
+        legacy_matrix = derive_alignment_rows(legacy)
+        legacy["alignment_matrix"] = deepcopy(legacy_matrix)
+        legacy["versions"]["alignment_matrix"] = [deepcopy(legacy_matrix)]
+        legacy["active_versions"]["alignment_matrix"] = 1
+        legacy["stage_statuses"]["alignment_matrix"] = "draft"
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(legacy)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], 21)
+        self.assertEqual(restored["current_stage"], "pedagogical_design")
+        self.assertEqual(restored["status"], "awaiting_review")
+        self.assertEqual(
+            restored["stage_statuses"]["pedagogical_design"], "awaiting_review"
         )
+        self.assertNotIn("alignment_matrix", restored)
+        self.assertNotIn("alignment_matrix", restored["versions"])
+        self.assertIn("verificadas automaticamente", restored["review"]["message"])
+
+    def test_schema_20_manual_session_at_removed_alignment_stage_moves_to_resources(self) -> None:
+        legacy = create_session(self.course)
+        legacy["schema_version"] = 20
+        legacy["current_stage"] = "alignment_matrix"
+        legacy["status"] = "drafting"
+        legacy["alignment_matrix"] = []
+        legacy["versions"]["alignment_matrix"] = [[]]
+        legacy["active_versions"]["alignment_matrix"] = 1
+        legacy["stage_statuses"]["alignment_matrix"] = "draft"
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(legacy)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], 21)
+        self.assertEqual(restored["current_stage"], "resources")
+        self.assertEqual(restored["status"], "drafting")
+        self.assertEqual(restored["stage_statuses"]["resources"], "draft")
+        self.assertNotIn("alignment_matrix", restored)
+
+    def test_schema_20_completed_session_rebuilds_final_validation_without_matrix(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        while state["status"] != "completed":
+            state = review_current_stage(state, "approve", agent=self.agent)
+        legacy = deepcopy(state)
+        legacy["schema_version"] = 20
+        legacy_matrix = derive_alignment_rows(legacy)
+        legacy["alignment_matrix"] = deepcopy(legacy_matrix)
+        legacy["versions"]["alignment_matrix"] = [deepcopy(legacy_matrix)]
+        legacy["final_validation"]["checks"].append(
+            {
+                "id": "stage_alignment_matrix",
+                "label": "Matriz de alinhamento",
+                "passed": True,
+                "detail": "Controlo legado.",
+            }
+        )
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(legacy)
+            restored = store.load(session_id)
+
+        check_ids = {item["id"] for item in restored["final_validation"]["checks"]}
+        self.assertEqual(restored["status"], "completed")
+        self.assertNotIn("alignment_matrix", restored)
+        self.assertNotIn("stage_alignment_matrix", check_ids)
+        self.assertIn("alignment", check_ids)
 
     def test_legacy_session_at_the_old_first_stage_moves_to_outcomes(self) -> None:
         state = create_session(self.course, agent=self.agent)
@@ -699,7 +736,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 20)
+        self.assertEqual(restored["schema_version"], 21)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(restored["status"], "drafting")
         self.assertTrue(restored["learning_outcomes"])
@@ -737,7 +774,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 20)
+        self.assertEqual(restored["schema_version"], 21)
         self.assertEqual(
             restored["curriculum_analysis"]["objectives"],
             "Desenvolver conhecimentos fundamentais.",
@@ -772,7 +809,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_schema_12_session_converts_objective_list_without_reopening_flow(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        while state["current_stage"] != "alignment_matrix":
+        while state["current_stage"] != "resources":
             state = review_current_stage(state, "approve", agent=self.agent)
         legacy = deepcopy(state)
         legacy["schema_version"] = 12
@@ -792,9 +829,6 @@ class WorkflowTests(unittest.TestCase):
         legacy["versions"]["curriculum_analysis"][-1]["objectives"] = deepcopy(
             legacy_objectives
         )
-        for row in legacy["alignment_matrix"]:
-            row["objective_ids"] = ["OG1"]
-
         with TemporaryDirectory() as temporary_directory:
             store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
             session_id = store.save(legacy)
@@ -804,17 +838,15 @@ class WorkflowTests(unittest.TestCase):
             "Compreender os fundamentos da programação.\n"
             "Aplicar os conhecimentos em problemas concretos."
         )
-        self.assertEqual(restored["schema_version"], 20)
-        self.assertEqual(restored["current_stage"], "alignment_matrix")
+        self.assertEqual(restored["schema_version"], 21)
+        self.assertEqual(restored["current_stage"], "resources")
         self.assertEqual(restored["status"], "drafting")
         self.assertEqual(restored["curriculum_analysis"]["objectives"], expected_text)
         self.assertEqual(
             restored["versions"]["curriculum_analysis"][-1]["objectives"],
             expected_text,
         )
-        self.assertTrue(
-            all("objective_ids" not in row for row in restored["alignment_matrix"])
-        )
+        self.assertNotIn("alignment_matrix", restored)
 
     def test_schema_13_session_at_removed_taxonomy_stage_reopens_outcomes(self) -> None:
         state = create_session(self.course, agent=self.agent)
@@ -849,7 +881,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["schema_version"], 20)
+        self.assertEqual(restored["schema_version"], 21)
         self.assertEqual(restored["current_stage"], "learning_outcomes")
         self.assertEqual(
             restored["stage_statuses"]["learning_outcomes"], "draft"
@@ -869,7 +901,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_schema_13_session_after_removed_stage_keeps_its_current_stage(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        while state["current_stage"] != "alignment_matrix":
+        while state["current_stage"] != "resources":
             state = review_current_stage(state, "approve", agent=self.agent)
         legacy = deepcopy(state)
         legacy["schema_version"] = 13
@@ -894,7 +926,7 @@ class WorkflowTests(unittest.TestCase):
             session_id = store.save(legacy)
             restored = store.load(session_id)
 
-        self.assertEqual(restored["current_stage"], "alignment_matrix")
+        self.assertEqual(restored["current_stage"], "resources")
         self.assertEqual(restored["status"], "drafting")
         self.assertNotIn("outcome_taxonomy", restored)
         self.assertNotIn("outcome_taxonomy", restored["active_versions"])
@@ -1597,47 +1629,18 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertTrue(result.metadata["guardrail_corrections"])
 
-    def test_alignment_guardrail_derives_status_from_approved_evidence(self) -> None:
+    def test_alignment_synthesis_is_derived_from_approved_evidence(self) -> None:
         state = create_session(self.course, agent=self.agent)
         for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
-        valid_artifact = validate_alignment(state)["alignment_matrix"]
-        invalid_artifact = [
-            {
-                **row,
-                "assessment": "Não",
-                "teaching_activity": "Não",
-                "status": "Coerente",
-                "assessment_ids": [],
-                "teaching_activity_ids": [],
-            }
-            for row in valid_artifact
-        ]
-        fake_module = SimpleNamespace(
-            OpenAI=lambda **_kwargs: SimpleNamespace(
-                responses=SimpleNamespace(
-                    create=lambda **_kwargs: SimpleNamespace(
-                        output_text=json.dumps({"artifact": invalid_artifact}),
-                        id="alignment-response",
-                        usage=SimpleNamespace(
-                            input_tokens=10,
-                            output_tokens=20,
-                            total_tokens=30,
-                        ),
-                    )
-                )
-            )
-        )
-        with patch.dict(environ, {"OPENAI_API_KEY": "test-key"}), patch.dict(
-            sys.modules, {"openai": fake_module}
-        ):
-            result = OpenAIPedagogicalAgent().generate("alignment_matrix", state)
 
-        self.assertEqual(result.artifact, valid_artifact)
-        self.assertEqual(
-            len(result.metadata["guardrail_corrections"]),
-            len(valid_artifact),
-        )
+        rows = derive_alignment_rows(state)
+
+        self.assertEqual(len(rows), len(state["learning_outcomes"]))
+        self.assertTrue(all(row["content_ids"] for row in rows))
+        self.assertTrue(all(row["teaching_activity_ids"] for row in rows))
+        self.assertTrue(all(row["assessment_ids"] for row in rows))
+        self.assertTrue(all(row["status"] == "Coerente" for row in rows))
 
     def test_at_least_one_resource_type_is_required(self) -> None:
         with self.assertRaises(ValueError):
@@ -1766,15 +1769,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(
             any(len(item["outcome_ids"]) > 1 for item in state["assessment_activities"])
         )
-        self.assertTrue(
-            all(row["content_ids"] for row in state["alignment_matrix"])
-        )
-        self.assertTrue(
-            all(row["assessment_ids"] for row in state["alignment_matrix"])
-        )
-        self.assertTrue(
-            all("resource_types" not in row for row in state["alignment_matrix"])
-        )
+        alignment_rows = derive_alignment_rows(state)
+        self.assertTrue(all(row["content_ids"] for row in alignment_rows))
+        self.assertTrue(all(row["assessment_ids"] for row in alignment_rows))
+        self.assertTrue(all(row["teaching_activity_ids"] for row in alignment_rows))
 
     def test_teaching_and_assessment_identifiers_are_unambiguous(self) -> None:
         state = create_session(self.course, agent=self.agent)
@@ -1955,11 +1953,7 @@ class WorkflowTests(unittest.TestCase):
         )
 
         state = review_current_stage(state, "approve", agent=self.agent)
-        alignment_schema = _schema_for("alignment_matrix", state)
-        alignment_properties = alignment_schema["properties"]["artifact"]["items"][
-            "properties"
-        ]
-        self.assertNotIn("resource_types", alignment_properties)
+        self.assertEqual(state["current_stage"], "resources")
 
     def test_agentic_team_revises_once_and_preserves_human_control(self) -> None:
         class FakeGenerator:

@@ -18,7 +18,6 @@ from .curriculum import (
     validate_taxonomy_choice,
 )
 from .providers import AI_PROVIDER_OPENAI, validate_ai_provider
-from .relationships import content_ids_for_outcome
 
 
 DEFAULT_DATABASE_PATH = Path(__file__).resolve().parents[1] / "data" / "prism.db"
@@ -28,9 +27,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 20:
+    if previous_version < 21:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 20
+    state["schema_version"] = 21
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -348,91 +347,17 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         state.get("teaching_activities"),
         "AE",
     )
-    assessment_version_maps = [
-        canonicalize_activity_ids(version, "TA")
-        for version in version_map.get("assessment_activities", [])
-    ] if isinstance(version_map, dict) else []
-    teaching_version_maps = [
-        canonicalize_activity_ids(version, "AE")
-        for version in version_map.get("teaching_activities", [])
-    ] if isinstance(version_map, dict) else []
-
-    def remap_alignment_activity_ids(
-        matrix: Any,
-        assessment_mapping: dict[str, str],
-        teaching_mapping: dict[str, str],
-    ) -> None:
-        rows = [matrix] if isinstance(matrix, dict) else matrix
-        if not isinstance(rows, list):
-            return
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            row.pop("resource_types", None)
-            if isinstance(row.get("assessment_ids"), list):
-                row["assessment_ids"] = [
-                    assessment_mapping.get(str(identifier), str(identifier))
-                    for identifier in row["assessment_ids"]
-                ]
-            if isinstance(row.get("teaching_activity_ids"), list):
-                row["teaching_activity_ids"] = [
-                    teaching_mapping.get(str(identifier), str(identifier))
-                    for identifier in row["teaching_activity_ids"]
-                ]
-
-    remap_alignment_activity_ids(
-        state.get("alignment_matrix"),
-        assessment_id_map,
-        teaching_id_map,
-    )
-    alignment_versions = (
-        version_map.get("alignment_matrix", [])
-        if isinstance(version_map, dict)
-        else []
-    )
-    alignment_dependencies = state.get("version_dependencies", {}).get(
-        "alignment_matrix", []
-    )
-    for index, matrix_version in enumerate(alignment_versions):
-        dependencies = (
-            alignment_dependencies[index]
-            if index < len(alignment_dependencies)
-            and isinstance(alignment_dependencies[index], dict)
-            else {}
-        )
-        assessment_version = int(dependencies.get("assessment_activities", 0) or 0)
-        teaching_version = int(dependencies.get("teaching_activities", 0) or 0)
-        version_assessment_map = (
-            assessment_version_maps[assessment_version - 1]
-            if 0 < assessment_version <= len(assessment_version_maps)
-            else assessment_id_map
-        )
-        version_teaching_map = (
-            teaching_version_maps[teaching_version - 1]
-            if 0 < teaching_version <= len(teaching_version_maps)
-            else teaching_id_map
-        )
-        remap_alignment_activity_ids(
-            matrix_version,
-            version_assessment_map,
-            version_teaching_map,
-        )
     for snapshot in state.get("revision_snapshots", []):
         if not isinstance(snapshot, dict) or not isinstance(snapshot.get("artifacts"), dict):
             continue
         artifacts = snapshot["artifacts"]
-        snapshot_assessment_map = canonicalize_activity_ids(
+        canonicalize_activity_ids(
             artifacts.get("assessment_activities"),
             "TA",
         )
-        snapshot_teaching_map = canonicalize_activity_ids(
+        canonicalize_activity_ids(
             artifacts.get("teaching_activities"),
             "AE",
-        )
-        remap_alignment_activity_ids(
-            artifacts.get("alignment_matrix"),
-            snapshot_assessment_map,
-            snapshot_teaching_map,
         )
 
     def remap_own_activity_ids(value: Any, mapping: dict[str, str]) -> None:
@@ -459,19 +384,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             elif proposal_stage == "teaching_activities":
                 remap_own_activity_ids(proposal.get("before"), teaching_id_map)
                 remap_own_activity_ids(proposal.get("after"), teaching_id_map)
-            elif proposal_stage == "alignment_matrix":
-                remap_alignment_activity_ids(
-                    proposal.get("before"),
-                    assessment_id_map,
-                    teaching_id_map,
-                )
-                remap_alignment_activity_ids(
-                    proposal.get("after"),
-                    assessment_id_map,
-                    teaching_id_map,
-                )
-
-    assessments = state.get("assessment_activities", [])
 
     def migrate_pedagogical_sequence(
         design: Any,
@@ -517,53 +429,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             artifacts.get("teaching_activities"),
         )
 
-    outcome_by_id = {
-        str(item.get("id", "")): item
-        for item in state.get("learning_outcomes", [])
-    }
-    for row in state.get("alignment_matrix", []):
-        outcome_id = str(row.get("outcome_id", ""))
-        row.pop("objective_ids", None)
-        row.setdefault(
-            "content_ids",
-            content_ids_for_outcome(state, outcome_id),
-        )
-        row.setdefault(
-            "assessment_ids",
-            [
-                item.get("id", "") for item in assessments
-                if outcome_id in item.get("outcome_ids", [])
-            ],
-        )
-        row.setdefault(
-            "assessment_purposes",
-            sorted(
-                {
-                    item.get("assessment_purpose", "Sumativa")
-                    for item in assessments
-                    if outcome_id in item.get("outcome_ids", [])
-                }
-            ),
-        )
-        row.setdefault(
-            "taxonomy",
-            selected_taxonomy,
-        )
-        row.setdefault(
-            "taxonomy_level",
-            outcome_by_id.get(outcome_id, {}).get(
-                "taxonomy_level", TAXONOMY_LEVELS[selected_taxonomy][0]
-            ),
-        )
-        row.setdefault(
-            "teaching_activity_ids",
-            [
-                item.get("id", "") for item in state.get("teaching_activities", [])
-                if outcome_id in item.get("outcome_ids", [])
-            ],
-        )
-        row.pop("resource_types", None)
-
     if state.get("current_stage") == "solo_taxonomy":
         state["current_stage"] = "learning_outcomes"
     versions = state.setdefault("versions", {})
@@ -572,9 +437,65 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         STAGE_LABELS,
         STAGE_ORDER,
         artifact_has_content,
+        build_final_validation,
         ensure_manual_artifacts,
         formulate_learning_outcomes,
     )
+
+    removed_alignment_stage_was_current = (
+        previous_version < 21 and state.get("current_stage") == "alignment_matrix"
+    )
+    if removed_alignment_stage_was_current:
+        manual_first = (
+            state.get("orchestration", {}).get("mode") == MANUAL_FIRST_MODE
+        )
+        target_stage = "resources" if manual_first else "pedagogical_design"
+        state["current_stage"] = target_stage
+        state["status"] = "drafting" if manual_first else "awaiting_review"
+        state["review"] = {
+            "stage": target_stage,
+            "label": STAGE_LABELS[target_stage],
+            "message": (
+                "A matriz deixou de ser uma etapa editável. As ligações de alinhamento "
+                "passaram a ser verificadas automaticamente a partir dos artefactos. "
+                + (
+                    "Pode continuar na etapa de recursos educativos."
+                    if manual_first
+                    else "Confirme a sequência pedagógica para gerar os recursos."
+                )
+            ),
+        }
+
+    if previous_version < 21:
+        state.pop("alignment_matrix", None)
+        state.setdefault("feedback", {}).pop("alignment_matrix", None)
+        for mapping_name in (
+            "versions",
+            "generation_metadata",
+            "version_dependencies",
+            "active_versions",
+            "stage_statuses",
+            "ai_reviews",
+        ):
+            mapping = state.get(mapping_name)
+            if isinstance(mapping, dict):
+                mapping.pop("alignment_matrix", None)
+        dependencies_by_stage = state.get("version_dependencies", {})
+        if isinstance(dependencies_by_stage, dict):
+            for dependencies in dependencies_by_stage.values():
+                if isinstance(dependencies, list):
+                    for dependency in dependencies:
+                        if isinstance(dependency, dict):
+                            dependency.pop("alignment_matrix", None)
+        state["ai_proposals"] = [
+            proposal
+            for proposal in state.get("ai_proposals", [])
+            if not isinstance(proposal, dict)
+            or proposal.get("stage") != "alignment_matrix"
+        ]
+        for snapshot in state.get("revision_snapshots", []):
+            if isinstance(snapshot, dict) and isinstance(snapshot.get("artifacts"), dict):
+                snapshot["artifacts"].pop("alignment_matrix", None)
 
     removed_stage_was_current = (
         previous_version < 14 and state.get("current_stage") == "outcome_taxonomy"
@@ -636,7 +557,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         and state.get("current_stage") in {
             "assessment_activities",
             "pedagogical_design",
-            "alignment_matrix",
             "resources",
             "final_validation",
         }
@@ -676,6 +596,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     )
     existing_stage_statuses = state.setdefault("stage_statuses", {})
     existing_stage_statuses.pop("outcome_taxonomy", None)
+    existing_stage_statuses.pop("alignment_matrix", None)
     stage_statuses = (
         {}
         if previous_version < 12
@@ -696,21 +617,30 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             stage_statuses[stage] = "stale"
         else:
             stage_statuses[stage] = "pending"
+    if removed_alignment_stage_was_current:
+        stage_statuses[current_stage] = (
+            "draft"
+            if state.get("orchestration", {}).get("mode") == MANUAL_FIRST_MODE
+            else "awaiting_review"
+        )
     state["stage_statuses"] = stage_statuses
 
     active_versions = state.setdefault("active_versions", {})
     active_versions.pop("outcome_taxonomy", None)
+    active_versions.pop("alignment_matrix", None)
     if previous_version < 12 or removed_stage_was_current or sequential_flow_repositioned:
         for stage in STAGE_ORDER[current_index + 1 :]:
             if stage_statuses.get(stage) == "stale":
                 active_versions.pop(stage, None)
     version_dependencies = state.setdefault("version_dependencies", {})
     version_dependencies.pop("outcome_taxonomy", None)
+    version_dependencies.pop("alignment_matrix", None)
     for dependencies in version_dependencies.values():
         if isinstance(dependencies, list):
             for dependency in dependencies:
                 if isinstance(dependency, dict):
                     dependency.pop("outcome_taxonomy", None)
+                    dependency.pop("alignment_matrix", None)
     if previous_version < 17:
         allowed_dependencies = {
             stage: set(STAGE_ORDER[:index])
@@ -785,6 +715,15 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                     "foi preservado e a IA passou a ser facultativa."
                 ),
             }
+    if previous_version < 21 and (
+        state.get("final_validation")
+        or state.get("status") == "completed"
+        or state.get("current_stage") == "final_validation"
+    ):
+        state["final_validation"] = build_final_validation(state)
+        final_versions = versions.get("final_validation", [])
+        if final_versions:
+            final_versions[-1] = state["final_validation"]
     return state
 
 
