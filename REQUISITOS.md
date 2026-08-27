@@ -157,11 +157,14 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   IA ou eventual custo de API.
 - Apresentar os problemas e sugestões de **Validar dados** e as observações de
   **Verificar esta etapa com IA** como ações selecionáveis que desloquem a página
-  e realcem o campo, linha, recurso ou artefacto relacionado; utilizar o
-  artefacto da etapa como destino quando o parecer não incluir uma referência
-  mais específica. Usar o mesmo componente visual nos dois tipos de verificação
-  e, após **Validar dados**, deslocar automaticamente a página para o conjunto de
-  resultados.
+  e realcem o campo, linha, recurso ou artefacto relacionado. Cada observação de
+  IA deve guardar um destino estrutural escolhido entre os elementos existentes;
+  não localizar linhas por correspondência textual parcial. Num parecer legado
+  sem destino válido, realçar o título do conteúdo da etapa em vez do cartão
+  inteiro. Usar o mesmo componente visual nos dois tipos de verificação e, após
+  **Validar dados**, deslocar automaticamente a página para o conjunto de
+  resultados. Para a duração calculada, realçar conjuntamente **Horas de
+  contacto** e **Trabalho autónomo**.
 - Permitir guardar rascunhos incompletos; validar apenas a forma estrutural
   mínima necessária para a persistência.
 - Não acrescentar uma coluna de numeração de linhas no modo de edição.
@@ -211,7 +214,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Não alterar o artefacto ativo nem persistir uma proposta parcial se a chamada à
   IA falhar.
 - Apresentar a verificação global determinística num ecrã separado e torná-la a
-  única barreira obrigatória à conclusão.
+  única barreira obrigatória à conclusão. Apresentar todos os controlos
+  estruturais e de qualidade como ações selecionáveis que abram e realcem a
+  etapa, recurso, slide ou linha onde o docente pode consultar ou corrigir o
+  conteúdo.
 
 ### RF04 — Validação automática
 

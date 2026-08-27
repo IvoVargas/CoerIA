@@ -1708,6 +1708,13 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(result.passed)
         self.assertEqual(calls[0]["model"], "gpt-4o-mini")
         self.assertNotIn("reasoning", calls[0])
+        finding_schema = calls[0]["text"]["format"]["schema"]["properties"][
+            "findings"
+        ]["items"]
+        self.assertIn("target", finding_schema["properties"])
+        self.assertIn("target", finding_schema["required"])
+        context = json.loads(calls[0]["input"])
+        self.assertIn("available_finding_targets", context)
 
     def test_default_openai_profile_prioritises_cost(self) -> None:
         cleared_configuration = {

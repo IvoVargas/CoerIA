@@ -45,11 +45,14 @@ percurso; a criação de uma sessão usa também a barra, sem conservar o bloco 
 assistência anterior. Um diálogo de ajuda contextual descreve as ações da barra
 e explicita quais executam localmente e quais recorrem a um fornecedor de IA.
 Os resultados da validação inicial transportam um destino estrutural explícito.
-Nos pareceres de IA, a interface extrai identificadores curriculares e referências
-a slides para localizar o elemento relacionado; na sua ausência, usa o cartão do
-artefacto como destino. A deslocação é acompanhada por um realce temporário e não
-altera o estado curricular. A validação inicial desloca automaticamente a página
-para o parecer, e ambas as verificações reutilizam o mesmo componente de resultado.
+O esquema do crítico obriga também cada observação a escolher um destino entre os
+elementos existentes no artefacto. A interface converte essa chave num seletor
+derivado da estrutura e da posição da linha, slide ou secção, sem procurar texto
+parcial. Pareceres legados sem destino válido recaem no título do conteúdo. A
+deslocação é acompanhada por um realce temporário; na carga de trabalho, o destino
+agrupa horas de contacto e trabalho autónomo. A validação inicial desloca
+automaticamente a página para o parecer e reutiliza o mesmo componente dos
+pareceres de IA e dos controlos selecionáveis da validação final determinística.
 
 ```mermaid
 flowchart LR

@@ -413,6 +413,8 @@ class ResourceGenerationTests(unittest.TestCase):
 
         self.assertEqual(visual_check["status"], "error")
         self.assertIn("slide 1", visual_check["detail"])
+        self.assertEqual(visual_check["target_stage"], "resources")
+        self.assertEqual(visual_check["target_key"], "SLIDE:1")
         self.assertIn(
             "5 elementos; o diagrama admite 2 a 4",
             visual_check["detail"],
@@ -452,6 +454,8 @@ class ResourceGenerationTests(unittest.TestCase):
         )
         self.assertFalse(final_validation["passed"])
         self.assertFalse(sequence_check["passed"])
+        self.assertEqual(sequence_check["target_stage"], "pedagogical_design")
+        self.assertEqual(sequence_check["target_key"], "__stage__")
         self.assertIn("estratégia não vazia", sequence_check["detail"])
 
     def test_resources_with_blocking_quality_errors_cannot_be_approved(self) -> None:

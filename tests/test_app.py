@@ -303,6 +303,30 @@ async def test_initial_validation_results_focus_the_related_field(
 
 
 @pytest.mark.asyncio
+async def test_duration_validation_focuses_both_workload_fields(user: User) -> None:
+    interfaces: list[app.AGIRSoloInterface] = []
+    scroll_handlers: list[AsyncMock] = []
+
+    @ui.page("/_test_initial_duration_focus")
+    def initial_duration_focus_page():
+        interface = app.AGIRSoloInterface()
+        scroll_handler = AsyncMock()
+        interface._scroll_and_highlight = scroll_handler
+        interface.show_new_session()
+        interfaces.append(interface)
+        scroll_handlers.append(scroll_handler)
+
+    await user.open("/_test_initial_duration_focus")
+    await interfaces[-1]._focus_initial_result("duration_hours")
+
+    scroll_handlers[-1].assert_awaited_once_with(
+        f"#c{interfaces[-1].initial_hours_group.id}"
+    )
+    hours_group = next(iter(user.find(marker="initial-hours-group").elements))
+    assert hours_group.id == interfaces[-1].initial_hours_group.id
+
+
+@pytest.mark.asyncio
 async def test_existing_session_can_return_to_and_update_initial_data(
     user: User,
     tmp_path: Path,
@@ -658,6 +682,7 @@ async def test_ai_review_findings_focus_the_related_artifact(
         "severity": "warning",
         "criterion": "Clareza dos resultados",
         "message": "Clarificar o enunciado do RA1.",
+        "target": "RA1",
     }
     review = {
         "timestamp": "2026-08-27 18:30:00 UTC",
@@ -669,6 +694,16 @@ async def test_ai_review_findings_focus_the_related_artifact(
         "non_blocking": True,
     }
     state["ai_reviews"] = {"learning_outcomes": [review]}
+    state["learning_outcomes"] = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar os elementos de um algoritmo.",
+        }
+    ]
     review["context_signature"] = ai_review_context_signature(
         state, "learning_outcomes"
     )
@@ -698,7 +733,124 @@ async def test_ai_review_findings_focus_the_related_artifact(
     await user.should_see("Artefacto localizado.")
 
     focus_handlers[-1].assert_awaited_once_with(finding)
-    assert app.AGIRSoloInterface._finding_search_terms(finding) == ["RA1"]
+    selector, activate_selector = app.AGIRSoloInterface._structured_focus_plan(
+        state,
+        "learning_outcomes",
+        "RA1",
+    )
+    assert selector.endswith("tbody tr:nth-child(1)")
+    assert activate_selector == ""
+
+
+def test_structured_focus_distinguishes_ra1_from_ra10() -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    state["learning_outcomes"] = [
+        {"id": "RA10", "statement": "Analisar algoritmos complexos."},
+        {"id": "RA1", "statement": "Identificar elementos de algoritmos."},
+    ]
+
+    selector, _activate = app.AGIRSoloInterface._structured_focus_plan(
+        state,
+        "learning_outcomes",
+        "RA1",
+    )
+
+    assert selector.endswith("tbody tr:nth-child(2)")
+    assert "RA1" not in selector
+
+
+@pytest.mark.asyncio
+async def test_final_validation_controls_are_clickable(user: User) -> None:
+    state = navigate_to_stage(
+        create_session(
+            CourseInput.create(
+                "Programação",
+                "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+            )
+        ),
+        "final_validation",
+    )
+    focus_handlers: list[AsyncMock] = []
+
+    @ui.page("/_test_final_validation_links")
+    def final_validation_links_page():
+        interface = app.AGIRSoloInterface()
+
+        async def record_focus(*_args, **_kwargs) -> None:
+            ui.notify("Controlo localizado.")
+
+        handler = AsyncMock(side_effect=record_focus)
+        interface._focus_final_validation_result = handler
+        interface.state = state
+        interface.show_workspace()
+        focus_handlers.append(handler)
+
+    await user.open("/_test_final_validation_links")
+    await user.should_see("CONTROLOS DA ESTRUTURA E DO ALINHAMENTO")
+    await user.should_see("QUALIDADE AUTOMÁTICA DOS RECURSOS")
+
+    structural = next(
+        item
+        for item in state["final_validation"]["checks"]
+        if item["id"] == "stage_learning_outcomes"
+    )
+    user.find(marker="final-validation-check-stage_learning_outcomes").click()
+    await user.should_see("Controlo localizado.")
+    focus_handlers[-1].assert_awaited_once_with(structural)
+
+    quality_button = next(
+        iter(user.find(marker="resource-quality-check-unique_outcomes").elements)
+    )
+    assert "validation-result-link" in quality_button._classes
+
+
+@pytest.mark.asyncio
+async def test_final_validation_arms_the_target_before_changing_stage() -> None:
+    state = navigate_to_stage(
+        create_session(
+            CourseInput.create(
+                "Programação",
+                "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+            )
+        ),
+        "final_validation",
+    )
+    result = next(
+        item
+        for item in state["final_validation"]["checks"]
+        if item["id"] == "stage_learning_outcomes"
+    )
+    interface = object.__new__(app.AGIRSoloInterface)
+    interface.state = state
+    interface._arm_scroll_and_highlight = AsyncMock()
+    interface._focus_structured_target = AsyncMock()
+
+    async def navigate(target_stage: str, *, notice: str = "") -> None:
+        interface.state["current_stage"] = target_stage
+
+    interface._navigate_manual_stage = AsyncMock(side_effect=navigate)
+
+    await interface._focus_final_validation_result(result)
+
+    selector, activate_selector = interface._structured_focus_plan(
+        state,
+        "learning_outcomes",
+        "__stage__",
+    )
+    interface._arm_scroll_and_highlight.assert_awaited_once_with(
+        selector,
+        activate_selector=activate_selector,
+    )
+    interface._navigate_manual_stage.assert_awaited_once_with(
+        "learning_outcomes",
+        notice="Controlo localizado na etapa correspondente.",
+    )
+    interface._focus_structured_target.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -50,6 +50,7 @@ from .providers import (
     validate_ai_provider,
 )
 from .quality import presentation_visual_issues
+from .validation_targets import available_validation_targets
 
 
 DEFAULT_MODEL = "gpt-4o-mini"
@@ -2445,8 +2446,14 @@ class OpenAIPedagogicalCritic:
                             },
                             "criterion": {"type": "string"},
                             "message": {"type": "string"},
+                            "target": {"type": "string"},
                         },
-                        "required": ["severity", "criterion", "message"],
+                        "required": [
+                            "severity",
+                            "criterion",
+                            "message",
+                            "target",
+                        ],
                     },
                 },
                 "revision_instructions": {"type": "string"},
@@ -2464,13 +2471,19 @@ class OpenAIPedagogicalCritic:
             "exequibilidade. Não alteres "
             "o artefacto. Marca passed=false apenas quando existir pelo menos um finding "
             "blocking; sugestões opcionais são warning. A validação determinística de IDs, "
-            "cobertura e somas já foi executada."
+            "cobertura e somas já foi executada. Em cada finding, usa em target exatamente "
+            "uma das chaves fornecidas em available_finding_targets. Escolhe o elemento "
+            "mais específico relacionado com a observação e usa __stage__ apenas quando a "
+            "observação se aplicar realmente a toda a etapa."
         )
         context = {
             "stage": stage,
             "course": state.get("course", {}),
             "upstream": _upstream_context(state, stage),
             "proposed_artifact": artifact,
+            "available_finding_targets": available_validation_targets(
+                stage, artifact
+            ),
             "taxonomy": selected_taxonomy,
             "taxonomy_verb_catalogue": taxonomy_catalogue_for_prompt(
                 selected_taxonomy

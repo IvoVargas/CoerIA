@@ -172,11 +172,13 @@ de IA ou custo de API.
 
 Ao executar **Validar dados**, a página desloca-se automaticamente para o parecer.
 Os resultados são selecionáveis: cada problema ou sugestão desloca a página para
-o campo correspondente e realça-o temporariamente. As observações de **Verificar
-esta etapa com IA** usam os mesmos cartões e têm o mesmo comportamento; quando
-a mensagem inclui um identificador como `RA1`, `AE2`, `TA3` ou um número de
-slide, a respetiva linha ou secção é procurada, usando o artefacto da etapa como
-destino seguro quando não existe uma referência mais específica.
+o campo correspondente e realça-o temporariamente. O controlo da carga de
+trabalho realça em conjunto **Horas de contacto** e **Trabalho autónomo**. As
+observações de **Verificar esta etapa com IA** usam os mesmos cartões e guardam
+um destino estrutural explícito, escolhido entre os elementos existentes no
+artefacto; a interface localiza a linha, slide ou secção por posição e identidade
+estruturada, sem procurar correspondências parciais no texto. Pareceres antigos
+sem destino válido recaem no título do conteúdo da etapa, não no cartão inteiro.
 Cada cartão da barra conserva também uma cor de fundo própria para o respetivo
 estado — por preencher, rascunho, verificado, concluído, pendente ou a rever — e
 mantém o estado escrito. As cores são claras e distinguem-se do fundo geral da
@@ -213,6 +215,7 @@ Os controlos determinísticos dos recursos são executados durante a produção 
 edição da etapa **Recursos educativos**, mas o relatório consolidado não é
 apresentado nesse artefacto. O respetivo estado surge na etapa **Validação final
 da estrutura e do alinhamento**, em **Qualidade automática dos recursos**, com
+cartões selecionáveis que abrem a etapa, recurso, slide ou linha correspondente, e
 uma linha por controlo, estado `✅`/`⚠️`/`❌` e o respetivo detalhe. Esse relatório
 é recalculado antes da validação final e da exportação, sem confiar numa cópia
 anterior guardada na sessão.

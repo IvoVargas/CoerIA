@@ -7,7 +7,6 @@ import json
 import logging
 from pathlib import Path
 from queue import Empty, SimpleQueue
-import re
 from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Any
@@ -92,6 +91,10 @@ from prism.workflow import (
     ai_review_is_current,
     is_manual_first,
     revision_targets_for_state,
+)
+from prism.validation_targets import (
+    STAGE_ROOT_TARGET,
+    resolve_validation_target,
 )
 
 
@@ -325,6 +328,7 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .validation-results-list { width: 100%; gap: 8px; }
 .validation-result-link.validation-issue { border-color: #e7aaa5; color: #8e2f2a; }
 .validation-result-link.validation-suggestion { border-color: #9fc9c1; color: #245f5a; }
+.validation-result-link.validation-pass { border-color: #8fc7a1; color: #176b38; }
 .validation-focus-pulse { animation: validation-focus-pulse 1.8s ease-out; }
 @keyframes validation-focus-pulse {
   0%, 35% {
@@ -477,6 +481,7 @@ class AGIRSoloInterface:
         self.uploaded_files: dict[str, bytes] = {}
         self.removed_source_files: set[str] = set()
         self.fields: dict[str, Any] = {}
+        self.initial_hours_group: Any | None = None
         self.editing_initial_session = False
         self.initial_edit_baseline: dict[str, Any] | None = None
         self.export_document_format = "word"
@@ -844,12 +849,16 @@ class AGIRSoloInterface:
             self.fields["ects_credits"] = ui.number(
                 "ECTS", value=0, min=0, precision=1
             ).classes("full-control")
-            self.fields["contact_hours"] = ui.number(
-                "Horas de contacto", value=0, min=0, precision=1
-            ).classes("full-control")
-            self.fields["autonomous_hours"] = ui.number(
-                "Trabalho autónomo", value=0, min=0, precision=1
-            ).classes("full-control")
+            with ui.element("div").classes(
+                "col-span-2 grid grid-cols-2 gap-4 max-sm:grid-cols-1"
+            ) as self.initial_hours_group:
+                self.initial_hours_group.mark("initial-hours-group")
+                self.fields["contact_hours"] = ui.number(
+                    "Horas de contacto", value=0, min=0, precision=1
+                ).classes("full-control")
+                self.fields["autonomous_hours"] = ui.number(
+                    "Trabalho autónomo", value=0, min=0, precision=1
+                ).classes("full-control")
         self.fields["bibliography"] = ui.textarea(
             "Bibliografia fornecida ou validada pelo docente",
             placeholder=(
@@ -947,12 +956,19 @@ class AGIRSoloInterface:
     async def _scroll_and_highlight(
         self,
         selector: str,
-        search_terms: list[str] | None = None,
+        *,
+        activate_selector: str = "",
     ) -> None:
-        terms = [item for item in (search_terms or []) if item]
         script = f"""
         (() => new Promise(resolve => {{
           const deadline = Date.now() + 1800;
+          const activateSelector = {json.dumps(activate_selector)};
+          const activate = activateSelector
+            ? document.querySelector(activateSelector)
+            : null;
+          if (activate && !activate.classList.contains('q-tab--active')) {{
+            activate.click();
+          }}
           const locate = () => {{
             const root = document.querySelector({json.dumps(selector)});
             if (!root) {{
@@ -963,25 +979,12 @@ class AGIRSoloInterface:
               resolve(false);
               return;
             }}
-            const terms = {json.dumps(terms, ensure_ascii=False)}
-              .map(value => value.toLocaleLowerCase('pt-PT'));
-            const candidates = [
-              ...root.querySelectorAll(
-                'tr, [role="tab"], .presentation-slide, .q-expansion-item, .q-field'
-              )
-            ];
-            const target = terms.length
-              ? candidates.find(element => {{
-                  const text = (element.innerText || '').toLocaleLowerCase('pt-PT');
-                  return terms.some(term => text.includes(term));
-                }}) || root
-              : root;
-            target.scrollIntoView({{behavior: 'smooth', block: 'center'}});
-            target.classList.remove('validation-focus-pulse');
-            void target.offsetWidth;
-            target.classList.add('validation-focus-pulse');
+            root.scrollIntoView({{behavior: 'smooth', block: 'center'}});
+            root.classList.remove('validation-focus-pulse');
+            void root.offsetWidth;
+            root.classList.add('validation-focus-pulse');
             window.setTimeout(
-              () => target.classList.remove('validation-focus-pulse'),
+              () => root.classList.remove('validation-focus-pulse'),
               1900,
             );
             resolve(true);
@@ -991,8 +994,51 @@ class AGIRSoloInterface:
         """
         await ui.run_javascript(script, timeout=3.0)
 
+    async def _arm_scroll_and_highlight(
+        self,
+        selector: str,
+        *,
+        activate_selector: str = "",
+    ) -> None:
+        """Prepara o realce antes de uma mudança de etapa substituir o DOM."""
+
+        script = f"""
+        (() => {{
+          const deadline = Date.now() + 5000;
+          const selector = {json.dumps(selector)};
+          const activateSelector = {json.dumps(activate_selector)};
+          const locate = () => {{
+            const activate = activateSelector
+              ? document.querySelector(activateSelector)
+              : null;
+            if (activate && !activate.classList.contains('q-tab--active')) {{
+              activate.click();
+            }}
+            const target = document.querySelector(selector);
+            if (!target) {{
+              if (Date.now() < deadline) window.requestAnimationFrame(locate);
+              return;
+            }}
+            target.scrollIntoView({{behavior: 'smooth', block: 'center'}});
+            target.classList.remove('validation-focus-pulse');
+            void target.offsetWidth;
+            target.classList.add('validation-focus-pulse');
+            window.setTimeout(
+              () => target.classList.remove('validation-focus-pulse'),
+              1900,
+            );
+          }};
+          window.requestAnimationFrame(locate);
+          return true;
+        }})()
+        """
+        await ui.run_javascript(script, timeout=1.0)
+
     async def _focus_initial_result(self, target: str) -> None:
-        field_name = "contact_hours" if target == "duration_hours" else target
+        if target == "duration_hours" and self.initial_hours_group is not None:
+            await self._scroll_and_highlight(f"#c{self.initial_hours_group.id}")
+            return
+        field_name = target
         element = self.fields.get(field_name)
         if element is None:
             return
@@ -1005,9 +1051,14 @@ class AGIRSoloInterface:
         marker: str,
         on_click: Any,
     ) -> None:
+        icons = {
+            "issue": "error_outline",
+            "suggestion": "lightbulb",
+            "pass": "check_circle",
+        }
         ui.button(
             message,
-            icon="error_outline" if kind == "issue" else "lightbulb",
+            icon=icons.get(kind, "info_outline"),
             on_click=on_click,
         ).props("flat no-caps align=left").classes(
             f"validation-result-link validation-{kind}"
@@ -1932,7 +1983,9 @@ class AGIRSoloInterface:
                             else None
                         )
                         mode = str(slide.get("visual_mode", "diagrama")).strip()
-                        with ui.element("tr"):
+                        with ui.element("tr").classes(
+                            f"validation-target-slide-{index}"
+                        ):
                             with ui.element("td"):
                                 ui.label(str(index))
                             with ui.element("td"):
@@ -2011,6 +2064,8 @@ class AGIRSoloInterface:
                     section["id"],
                     label=section["label"],
                     icon=section["icon"],
+                ).classes(
+                    f"validation-resource-tab-{section['id']}"
                 ).mark(f"resource-view-tab-{section['id']}")
                 for section in sections
             }
@@ -2019,7 +2074,9 @@ class AGIRSoloInterface:
             "resource-tab-panels w-full"
         ):
             for section in sections:
-                with ui.tab_panel(tab_by_id[section["id"]]).classes("px-0"):
+                with ui.tab_panel(tab_by_id[section["id"]]).classes(
+                    f"px-0 validation-resource-panel-{section['id']}"
+                ):
                     if section["id"] == "presentation":
                         self._render_presentation_resource_view(state, artifact)
                     else:
@@ -2634,7 +2691,8 @@ class AGIRSoloInterface:
                     )
 
             with ui.card().classes(
-                "surface artifact-card stage-artifact-focus w-full"
+                f"surface artifact-card stage-artifact-focus "
+                f"stage-artifact-{stage} w-full"
             ).mark(
                 "artifact-content"
             ):
@@ -3546,7 +3604,8 @@ class AGIRSoloInterface:
             elif not editing and not is_manual_first(state):
                 self._render_decision_card(state)
             with ui.card().classes(
-                "surface artifact-card stage-artifact-focus w-full"
+                f"surface artifact-card stage-artifact-focus "
+                f"stage-artifact-{stage} w-full"
             ).mark(
                 "artifact-content"
             ):
@@ -3571,30 +3630,165 @@ class AGIRSoloInterface:
                         self._render_resource_detail_tabs(state, state[stage])
 
     @staticmethod
-    def _finding_search_terms(finding: dict[str, Any]) -> list[str]:
-        text = (
-            f"{finding.get('criterion', '')} {finding.get('message', '')}"
+    def _structured_focus_plan(
+        state: dict[str, Any],
+        stage: str,
+        target_key: str,
+    ) -> tuple[str, str]:
+        """Traduz um destino curricular num seletor exato, sem procurar texto."""
+
+        root = f".stage-artifact-{stage}"
+        heading = f"{root} .artifact-heading, {root} .artifact-markdown h1:first-of-type"
+        if target_key == STAGE_ROOT_TARGET:
+            return heading, ""
+        artifact = active_stage_artifact(state, stage)
+
+        def row_selector(index: int, *, table: int = 1, panel: str = "") -> str:
+            container = (
+                f".validation-resource-panel-{panel} " if panel else f"{root} "
+            )
+            return (
+                f"{container}.artifact-markdown table:nth-of-type({table}) "
+                f"tbody tr:nth-child({index + 1})"
+            )
+
+        def matching_index(items: list[Any], key: str) -> int | None:
+            requested = target_key.casefold()
+            return next(
+                (
+                    index
+                    for index, item in enumerate(items)
+                    if isinstance(item, dict)
+                    and str(item.get(key, "")).strip().casefold() == requested
+                ),
+                None,
+            )
+
+        if stage == "curriculum_analysis" and isinstance(artifact, dict):
+            special = {
+                "__summary__": f"{root} .artifact-markdown",
+                "__objectives__": f"{root} .artifact-markdown h2:nth-of-type(1)",
+                "__assumptions__": f"{root} .artifact-markdown h2:last-of-type",
+            }
+            if target_key in special:
+                return special[target_key], ""
+            index = matching_index(artifact.get("contents", []), "id")
+            return (row_selector(index), "") if index is not None else (heading, "")
+        if stage in {
+            "learning_outcomes",
+            "teaching_activities",
+            "assessment_activities",
+        } and isinstance(artifact, list):
+            index = matching_index(artifact, "id")
+            return (row_selector(index), "") if index is not None else (heading, "")
+        if stage == "pedagogical_design" and isinstance(artifact, dict):
+            if target_key == "__strategy__":
+                return f"{root} .artifact-markdown", ""
+            index = matching_index(artifact.get("sequence", []), "outcome_id")
+            return (row_selector(index), "") if index is not None else (heading, "")
+        if stage == "resources" and isinstance(artifact, dict):
+            tab_by_target = {
+                "RESOURCE:presentation": "presentation",
+                "RESOURCE:worksheet": "worksheet",
+                "RESOURCE:test": "test",
+                "RESOURCE:practical": "practical",
+            }
+            if target_key in tab_by_target:
+                tab = tab_by_target[target_key]
+                return (
+                    f".validation-resource-panel-{tab}",
+                    f".validation-resource-tab-{tab}",
+                )
+            if target_key.startswith("SLIDE:"):
+                number = int(target_key.partition(":")[2])
+                return (
+                    f".validation-resource-panel-presentation "
+                    f".validation-target-slide-{number}",
+                    ".validation-resource-tab-presentation",
+                )
+            if target_key.startswith("WORKSHEET:"):
+                index = int(target_key.partition(":")[2]) - 1
+                return (
+                    row_selector(index, panel="worksheet"),
+                    ".validation-resource-tab-worksheet",
+                )
+            if target_key.startswith("PRACTICAL_CRITERION:"):
+                index = int(target_key.partition(":")[2]) - 1
+                return (
+                    row_selector(index, table=2, panel="practical"),
+                    ".validation-resource-tab-practical",
+                )
+            if target_key.startswith("PRACTICAL:"):
+                index = int(target_key.partition(":")[2]) - 1
+                return (
+                    row_selector(index, panel="practical"),
+                    ".validation-resource-tab-practical",
+                )
+            questions = artifact.get("test", {}).get("questions", [])
+            index = matching_index(questions, "id")
+            if index is not None:
+                return (
+                    row_selector(index, panel="test"),
+                    ".validation-resource-tab-test",
+                )
+        return heading, ""
+
+    async def _focus_structured_target(
+        self,
+        stage: str,
+        target_key: str,
+    ) -> None:
+        if not self.state:
+            return
+        selector, activate_selector = self._structured_focus_plan(
+            self.state,
+            stage,
+            target_key,
         )
-        terms = re.findall(r"\b(?:RA|AE|TA|Q)\d+\b", text, flags=re.IGNORECASE)
-        for slide_number in re.findall(
-            r"\bslide\s+(\d+)\b", text, flags=re.IGNORECASE
-        ):
-            terms.append(f"Slide {slide_number}")
-        for resource_name in (
-            "Apresentação",
-            "Ficha de aula",
-            "Teste",
-            "Atividade prática",
-        ):
-            if resource_name.casefold() in text.casefold():
-                terms.append(resource_name)
-        return list(dict.fromkeys(terms))
+        await self._scroll_and_highlight(
+            selector,
+            activate_selector=activate_selector,
+        )
 
     async def _focus_stage_finding(self, finding: dict[str, Any]) -> None:
-        await self._scroll_and_highlight(
-            ".stage-artifact-focus",
-            self._finding_search_terms(finding),
-        )
+        if not self.state:
+            return
+        stage = str(self.state.get("current_stage", ""))
+        artifact = active_stage_artifact(self.state, stage)
+        target_key = resolve_validation_target(stage, artifact, finding)
+        await self._focus_structured_target(stage, target_key)
+
+    async def _focus_final_validation_result(
+        self,
+        result: dict[str, Any],
+    ) -> None:
+        if not self.state:
+            return
+        target_stage = str(result.get("target_stage", ""))
+        if target_stage not in STAGE_ORDER[:-1]:
+            return
+        target_key = str(result.get("target_key", STAGE_ROOT_TARGET))
+        stage_changed = self.state.get("current_stage") != target_stage
+        if stage_changed:
+            selector, activate_selector = self._structured_focus_plan(
+                self.state,
+                target_stage,
+                target_key,
+            )
+            await self._arm_scroll_and_highlight(
+                selector,
+                activate_selector=activate_selector,
+            )
+            await self._navigate_manual_stage(
+                target_stage,
+                notice="Controlo localizado na etapa correspondente.",
+            )
+        if (
+            not stage_changed
+            and self.state
+            and self.state.get("current_stage") == target_stage
+        ):
+            await self._focus_structured_target(target_stage, target_key)
 
     def _render_manual_authoring_card(
         self,
@@ -3876,9 +4070,49 @@ class AGIRSoloInterface:
             with ui.card().classes("surface artifact-card w-full").mark(
                 "artifact-content"
             ):
-                ui.markdown(render_current_artifact(state), extras=["tables"]).classes(
-                    "artifact-markdown"
+                artifact = state.get("final_validation", {})
+                rendered = render_current_artifact(state)
+                introduction = rendered.partition("\n\n|")[0]
+                ui.markdown(introduction).classes("artifact-markdown")
+                ui.label("CONTROLOS DA ESTRUTURA E DO ALINHAMENTO").classes(
+                    "eyebrow mt-3"
                 )
+                ui.label(
+                    "Selecione um controlo para abrir a etapa onde pode consultar ou corrigir o conteúdo."
+                ).classes("text-xs muted")
+                with ui.column().classes("validation-results-list mt-2"):
+                    for check in artifact.get("checks", []):
+                        self._render_validation_result_button(
+                            f"{check.get('label', '')}: {check.get('detail', '')}",
+                            "pass" if check.get("passed") else "issue",
+                            f"final-validation-check-{check.get('id', '')}",
+                            lambda selected=deepcopy(check): (
+                                self._focus_final_validation_result(selected)
+                            ),
+                        )
+                resource_checks = artifact.get("resource_quality_checks", [])
+                if resource_checks:
+                    ui.label("QUALIDADE AUTOMÁTICA DOS RECURSOS").classes(
+                        "eyebrow mt-5"
+                    )
+                    with ui.column().classes("validation-results-list mt-2"):
+                        for check in resource_checks:
+                            status = str(check.get("status", "warning"))
+                            kind = (
+                                "pass"
+                                if status == "pass"
+                                else "issue"
+                                if status == "error"
+                                else "suggestion"
+                            )
+                            self._render_validation_result_button(
+                                f"{check.get('label', '')}: {check.get('detail', '')}",
+                                kind,
+                                f"resource-quality-check-{check.get('id', '')}",
+                                lambda selected=deepcopy(check): (
+                                    self._focus_final_validation_result(selected)
+                                ),
+                            )
 
     def _render_completed_view(self, state: dict[str, Any]) -> None:
         with ui.card().classes("surface complete-hero w-full items-center gap-3"):

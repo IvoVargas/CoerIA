@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+import re
 from collections import Counter
 from copy import deepcopy
 from typing import Any
@@ -31,6 +32,45 @@ def _normalise(value: str) -> str:
 
 def _check(check_id: str, label: str, status: str, detail: str) -> dict[str, str]:
     return {"id": check_id, "label": label, "status": status, "detail": detail}
+
+
+def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
+    """Associa cada controlo ao artefacto que o docente pode corrigir."""
+
+    check_id = check["id"]
+    detail = check.get("detail", "")
+    target_stage = "resources"
+    target_key = "__stage__"
+    if check_id in {"unique_outcomes", "taxonomy_outcomes"}:
+        target_stage = "learning_outcomes"
+        references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
+        target_key = references[0].upper() if references else "__stage__"
+    elif check_id.startswith("assessment_"):
+        target_stage = "assessment_activities"
+        references = re.findall(r"\bTA\d+\b", detail, flags=re.IGNORECASE)
+        target_key = references[0].upper() if references else "__stage__"
+    elif check_id.startswith("teaching_") or check_id == "formative_activity_structure":
+        target_stage = "teaching_activities"
+        references = re.findall(r"\bAE\d+\b", detail, flags=re.IGNORECASE)
+        target_key = references[0].upper() if references else "__stage__"
+    elif check_id == "constructive_alignment":
+        target_stage = "pedagogical_design"
+        references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
+        target_key = references[0].upper() if references else "__stage__"
+    elif check_id == "presentation_visuals":
+        slides = re.findall(r"\bslide\s+(\d+)\b", detail, flags=re.IGNORECASE)
+        target_key = f"SLIDE:{slides[0]}" if slides else "RESOURCE:presentation"
+    elif "nao selecionado" in _normalise(detail):
+        target_key = "__stage__"
+    elif "apresentacao_powerpoint" in check_id:
+        target_key = "RESOURCE:presentation"
+    elif "ficha_de_aula" in check_id:
+        target_key = "RESOURCE:worksheet"
+    elif "atividade_pratica" in check_id or check_id == "practical_weights":
+        target_key = "RESOURCE:practical"
+    elif "teste" in check_id or check_id == "test_points":
+        target_key = "RESOURCE:test"
+    return {"target_stage": target_stage, "target_key": target_key}
 
 
 def _many_to_many_coverage_check(
@@ -472,6 +512,9 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 f"A soma das ponderações é {total_weight}%.",
             )
         )
+
+    for check in checks:
+        check.update(_quality_navigation_target(check))
 
     statuses = Counter(item["status"] for item in checks)
     status = "Requer revisão" if statuses["error"] else "Avisos" if statuses["warning"] else "OK"

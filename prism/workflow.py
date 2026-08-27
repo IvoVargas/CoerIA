@@ -52,6 +52,7 @@ from .manual_editing import (
     proposal_review_changes,
 )
 from .relationships import derive_alignment_rows
+from .validation_targets import resolve_validation_target
 
 
 class PrismState(TypedDict, total=False):
@@ -1478,6 +1479,17 @@ def verify_stage_with_ai(
     findings = [
         finding for finding in result.findings if finding not in ignored_findings
     ]
+    findings = [
+        {
+            **deepcopy(finding),
+            "target": resolve_validation_target(
+                target_stage,
+                updated[target_stage],
+                finding,
+            ),
+        }
+        for finding in findings
+    ]
     metadata = deepcopy(result.metadata)
     if ignored_findings:
         metadata["ignored_deterministic_findings"] = deepcopy(ignored_findings)
@@ -1570,12 +1582,22 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
                 "label": STAGE_LABELS[stage],
                 "passed": passed,
                 "detail": detail,
+                "target_stage": stage,
+                "target_key": "__stage__",
             }
         )
 
     alignment_rows = derive_alignment_rows(state)
     alignment_ok = bool(alignment_rows) and all(
         row.get("status") == "Coerente" for row in alignment_rows
+    )
+    first_alignment_problem = next(
+        (
+            str(row.get("outcome_id", "")).strip()
+            for row in alignment_rows
+            if row.get("status") != "Coerente"
+        ),
+        "",
     )
     selected_taxonomy = validate_taxonomy_choice(
         state.get("course", {}).get("taxonomy_type", "SOLO")
@@ -1588,6 +1610,18 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
         )
         for item in state["learning_outcomes"]
     )
+    first_taxonomy_problem = next(
+        (
+            str(item.get("id", "")).strip()
+            for item in state.get("learning_outcomes", [])
+            if not taxonomy_verb_allowed(
+                selected_taxonomy,
+                str(item.get("taxonomy_level", "")),
+                str(item.get("action_verb", "")),
+            )
+        ),
+        "",
+    )
     checks = [
         *structural_checks,
         {
@@ -1598,12 +1632,16 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
                 "Cada resultado deve estar ligado a conteúdo, atividade de "
                 "ensino-aprendizagem e tarefa de avaliação."
             ),
+            "target_stage": "pedagogical_design",
+            "target_key": first_alignment_problem or "__stage__",
         },
         {
             "id": "taxonomy",
             "label": f"Uso exclusivo da Taxonomia {selected_taxonomy}",
             "passed": taxonomy_ok,
             "detail": "Cada verbo deve corresponder ao nível taxonómico escolhido.",
+            "target_stage": "learning_outcomes",
+            "target_key": first_taxonomy_problem or "__stage__",
         },
     ]
     return {

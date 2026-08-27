@@ -421,6 +421,7 @@ def test_stage_ai_review_is_saved_but_does_not_block_navigation() -> None:
     assert reviewed["status"] == "drafting"
     review = reviewed["ai_reviews"]["learning_outcomes"][-1]
     assert review["non_blocking"]
+    assert review["findings"][0]["target"] == "__stage__"
     assert ai_review_is_current(reviewed, "learning_outcomes", review)
     assert navigate_to_stage(reviewed, "curriculum_analysis")["current_stage"] == "curriculum_analysis"
 
@@ -430,6 +431,38 @@ def test_stage_ai_review_is_saved_but_does_not_block_navigation() -> None:
         [{"id": "RA1", "statement": "Identificar elementos de um algoritmo."}],
     )
     assert not ai_review_is_current(changed, "learning_outcomes", review)
+
+
+def test_ai_review_preserves_a_valid_structural_target() -> None:
+    class TargetedCritic:
+        def review(self, stage, state, artifact):
+            return CritiqueResult(
+                passed=True,
+                findings=[
+                    {
+                        "severity": "warning",
+                        "criterion": "Clareza",
+                        "message": "Clarificar este resultado.",
+                        "target": "ra1",
+                    }
+                ],
+                revision_instructions="Clarificar RA1.",
+                metadata={"provider": "Teste", "model": "critic-fake"},
+            )
+
+    state = create_session(_course())
+    state["learning_outcomes"] = [
+        {"id": "RA1", "statement": "Identificar elementos de um algoritmo."}
+    ]
+    reviewed = verify_stage_with_ai(
+        state,
+        "learning_outcomes",
+        critic=TargetedCritic(),
+    )
+
+    assert reviewed["ai_reviews"]["learning_outcomes"][-1]["findings"][0][
+        "target"
+    ] == "RA1"
 
 
 def test_ai_review_discards_deterministic_coverage_claims() -> None:
