@@ -556,7 +556,7 @@ def test_initial_data_update_preserves_artifacts_and_requires_review(tmp_path) -
     assert updated["stage_statuses"]["final_validation"] == "pending"
     assert updated["status"] == "drafting"
     assert updated["ai_proposals"][0]["status"] == "superseded"
-    assert updated["audit"][-1]["stage"] == "Configuração inicial"
+    assert updated["audit"][-1]["stage"] == "Dados iniciais"
     assert service.load_session(updated["session_id"])["course"]["unit_name"] == (
         "Programação corrigida"
     )

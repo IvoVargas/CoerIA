@@ -384,6 +384,7 @@ def test_learning_outcome_editor_omits_taxonomy_and_numbers_levels() -> None:
     assert options["Abstrato expandido"] == "Abstrato expandido — SOLO 5"
 
     rendered = render_stage_artifact(state, "learning_outcomes")
+    assert "**Etapa 2 de 8**" in rendered
     assert "| ID | Tipo | Tema ou objeto | Nível | Verbo |" in rendered
     assert "| Taxonomia |" not in rendered
     assert "Uni-estrutural — SOLO 2" in rendered

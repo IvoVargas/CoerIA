@@ -19,13 +19,14 @@ determinística, não de uma decisão declarada pelo modelo.
 
 ## Fluxo
 
-1. resultados de aprendizagem com nível SOLO ou Bloom e um único verbo de ação principal;
-2. conteúdos com IDs associados aos resultados formulados e objetivos gerais em texto livre;
-3. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
-4. tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
-5. organização da sequência pedagógica;
-6. recursos educativos e validação automática;
-7. validação final da estrutura e do alinhamento.
+1. dados iniciais, fontes e caracterização da unidade curricular;
+2. resultados de aprendizagem com nível SOLO ou Bloom e um único verbo de ação principal;
+3. conteúdos com IDs associados aos resultados formulados e objetivos gerais em texto livre;
+4. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
+5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
+6. organização da sequência pedagógica;
+7. recursos educativos e validação automática;
+8. validação final da estrutura e do alinhamento.
 
 Seguindo o alinhamento construtivo de Biggs e Tang em *Teaching for Quality
 Learning at University*, os resultados de aprendizagem
@@ -135,9 +136,11 @@ inicial: são formulados ou introduzidos apenas na etapa **Conteúdos e objetivo
 curriculares**, evitando duplicação e mantendo essa etapa disponível para uma
 primeira proposta completa por IA.
 
-Depois de iniciar o desenho curricular, **Editar dados iniciais** permite regressar
-ao mesmo formulário para corrigir a identificação, a taxonomia, o fornecedor, o
-texto de base e a caracterização. As fontes documentais já incorporadas são
+Os **Dados iniciais** constituem o primeiro ponto da mesma barra de etapas. Depois
+de iniciar o desenho curricular, selecionar esse ponto permite regressar ao
+formulário para corrigir a identificação, a taxonomia, o fornecedor, o texto de
+base e a caracterização, sem abrir uma área separada da sessão. As fontes
+documentais já incorporadas são
 listadas e podem ser mantidas ou removidas; também podem ser adicionados novos
 ficheiros. A gravação preserva os artefactos existentes, invalida propostas de IA
 pendentes baseadas no contexto anterior e assinala as etapas preenchidas para

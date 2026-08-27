@@ -706,7 +706,7 @@ def update_initial_context(
     updated.setdefault("audit", []).append(
         {
             "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
-            "stage": "Configuração inicial",
+            "stage": "Dados iniciais",
             "event": "Docente alterou os dados iniciais da sessão.",
             "feedback": ", ".join(changed_labels),
         }

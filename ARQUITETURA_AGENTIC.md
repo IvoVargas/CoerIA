@@ -4,9 +4,10 @@
 
 O CoerIA adota um fluxo **manual-first**. O estado pedagógico, as versões e a
 navegação pertencem à aplicação; um LLM nunca controla a transição entre
-etapas. Criar uma sessão inicializa estruturas editáveis vazias para as seis
-etapas de autoria. O docente pode abrir, preencher e guardar qualquer uma sem
-chave de API.
+etapas. A barra apresenta os dados iniciais como primeiro ponto, seguidos das
+seis etapas de autoria e da validação final. Criar uma sessão inicializa as
+estruturas editáveis vazias de autoria. O docente pode abrir, preencher e
+guardar qualquer uma sem chave de API.
 
 ## Referência pedagógica
 
@@ -116,7 +117,7 @@ continuar independentemente de o parecer conter avisos ou problemas.
 
 ## Verificação global obrigatória
 
-Ao abrir a sétima etapa, o CoerIA executa localmente os validadores das seis
+Ao abrir a oitava etapa, o CoerIA executa localmente os validadores das seis
 etapas de autoria, a compatibilidade entre taxonomia, nível e verbo, a cobertura
 automática do alinhamento e a qualidade dos recursos. O relatório identifica cada controlo e só
 permite concluir quando todos passam. Pedir ou não uma segunda opinião a um LLM

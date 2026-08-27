@@ -58,6 +58,8 @@ materiais produzidos.
 - Exigir a escolha exclusiva entre SOLO e Bloom; nunca combinar as duas numa sessão.
 - Permitir regressar ao preenchimento inicial depois de iniciar ou retomar a sessão,
   corrigir os campos e guardar sem criar uma sessão nova nem apagar artefactos.
+- Apresentar os dados iniciais como o primeiro ponto da barra de etapas, no mesmo
+  percurso das restantes etapas, sem um botão ou página de edição separados.
 - Ao editar os dados iniciais, listar as fontes documentais já incorporadas e
   permitir mantê-las, removê-las ou acrescentar novos ficheiros.
 - Quando a caracterização ou as fontes forem alteradas, preservar o conteúdo das
@@ -69,16 +71,17 @@ materiais produzidos.
 Disponibilizar a seguinte sequência pedagógica recomendada, mantendo todas as
 etapas navegáveis e editáveis:
 
-1. formulação de resultados de aprendizagem com nível SOLO ou Bloom e um único
+1. recolha e revisão dos dados iniciais, fontes e caracterização;
+2. formulação de resultados de aprendizagem com nível SOLO ou Bloom e um único
    verbo de ação principal;
-2. estruturação de conteúdos associados aos resultados formulados
+3. estruturação de conteúdos associados aos resultados formulados
    e registo dos objetivos gerais em texto livre;
-3. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
-4. autoria de tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
-5. organização da sequência pedagógica, articulando em cada resultado o foco,
+4. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
+5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
+6. organização da sequência pedagógica, articulando em cada resultado o foco,
    a atividade de ensino-aprendizagem e a tarefa de avaliação;
-6. recursos educativos selecionados;
-7. verificação global determinística da estrutura e do alinhamento.
+7. recursos educativos selecionados;
+8. verificação global determinística da estrutura e do alinhamento.
 
 O alinhamento segue Biggs e Tang: os resultados de aprendizagem são o elemento
 central; as atividades de ensino-aprendizagem e as tarefas de avaliação devem

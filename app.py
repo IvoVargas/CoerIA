@@ -128,6 +128,9 @@ USER_ERRORS = (
 LOGGER = logging.getLogger(__name__)
 UNRESTRICTED_PAGE_ROUTES = {"/favicon.ico", "/login"}
 ERROR_NOTIFICATION_TIMEOUT_SECONDS = 12
+INITIAL_DATA_STAGE = "initial_data"
+INITIAL_DATA_LABEL = "Dados iniciais"
+DISPLAY_STAGE_COUNT = len(STAGE_ORDER) + 1
 STAGE_STATUS_CSS_CLASSES = {
     "empty": "stage-status-empty",
     "pending": "stage-status-pending",
@@ -618,6 +621,8 @@ class AGIRSoloInterface:
                 "curricular antes de criar a sessão."
             ).classes("muted")
 
+        self.initial_stage_track = ui.column().classes("w-full")
+
         with ui.card().classes("surface w-full p-5 md:p-6") as assistance_card:
             assistance_card.mark("new-session-assistance")
             ui.label("Fornecedor de IA").classes("text-sm font-semibold")
@@ -1028,8 +1033,8 @@ class AGIRSoloInterface:
         self.drawer.hide()
 
     def show_new_session(self) -> None:
-        self._set_initial_view_mode(False)
         self.state = None
+        self._set_initial_view_mode(False)
         self.viewed_stage = None
         self.manual_edit_stage = None
         self.manual_edit_artifact = None
@@ -1067,9 +1072,7 @@ class AGIRSoloInterface:
         self.editing_initial_session = editing
         if not hasattr(self, "create_session_button"):
             return
-        self.initial_eyebrow.set_text(
-            "EDITAR DADOS INICIAIS" if editing else "NOVA SESSÃO PEDAGÓGICA"
-        )
+        self.initial_eyebrow.set_text("01 · DADOS INICIAIS")
         self.initial_title.set_text(
             "Reveja o ponto de partida" if editing else "Configure o ponto de partida"
         )
@@ -1091,6 +1094,77 @@ class AGIRSoloInterface:
         )
         self.cancel_initial_edit_button.set_visibility(editing)
         self.existing_sources_notice.set_visibility(editing)
+        self._render_initial_view_stage_track()
+
+    def _render_initial_data_track_item(
+        self,
+        *,
+        current: bool,
+        selectable: bool,
+        status: str,
+        status_label: str,
+    ) -> None:
+        status_class = _stage_status_css_class(status)
+        item = ui.element("button" if selectable else "div").classes(
+            f"stage-item {status_class}"
+            + (" current" if current else "")
+            + (" selectable" if selectable else "")
+        )
+        item.mark(
+            f"manual-stage-{INITIAL_DATA_STAGE}",
+            "edit-initial-session-data",
+            status_class,
+        )
+        if selectable:
+            item.props("type=button")
+            item.on("click", self.show_initial_session_editor)
+        with item:
+            ui.label("01").classes("stage-number")
+            ui.label(INITIAL_DATA_LABEL).classes("stage-label")
+            ui.label(status_label).classes("stage-state")
+
+    def _render_initial_view_stage_track(self) -> None:
+        if not hasattr(self, "initial_stage_track"):
+            return
+        self.initial_stage_track.clear()
+        state = self.state or {}
+        statuses = state.get("stage_statuses", {})
+        status_labels = {
+            "draft": "Rascunho",
+            "empty": "Por preencher",
+            "needs_review": "Rever após alterações anteriores",
+            "checked": "Verificação executada",
+            "approved": "Concluído",
+            "pending": "Por verificar",
+            "stale": "Desatualizado",
+            "awaiting_review": "Em validação",
+            "generating": "A gerar",
+        }
+        with self.initial_stage_track:
+            with ui.element("div").classes("stage-track").style(
+                f"--stage-count: {DISPLAY_STAGE_COUNT}"
+            ):
+                self._render_initial_data_track_item(
+                    current=True,
+                    selectable=False,
+                    status="draft",
+                    status_label=(
+                        "Ponto atual · Em edição"
+                        if self.editing_initial_session
+                        else "Ponto atual · Por preencher"
+                    ),
+                )
+                for index, stage in enumerate(STAGE_ORDER, start=2):
+                    stored_status = statuses.get(stage, "pending")
+                    status_class = _stage_status_css_class(stored_status)
+                    with ui.element("div").classes(
+                        f"stage-item {status_class}"
+                    ).mark(status_class):
+                        ui.label(f"{index:02d}").classes("stage-number")
+                        ui.label(STAGE_LABELS[stage]).classes("stage-label")
+                        ui.label(
+                            status_labels.get(stored_status, str(stored_status))
+                        ).classes("stage-state")
 
     def show_initial_session_editor(self) -> None:
         if not self.state:
@@ -1102,7 +1176,9 @@ class AGIRSoloInterface:
         self.uploader.reset()
         self.render_upload_list()
         self.assistance_status.set_visibility(False)
-        self.header_context.set_text("Editar dados iniciais")
+        self.header_context.set_text(
+            f"{self.state.get('course', {}).get('unit_name', 'Sessão')} · Dados iniciais"
+        )
         self.home_view.set_visibility(False)
         self.workspace_view.set_visibility(False)
         self.initial_view.set_visibility(True)
@@ -1258,13 +1334,6 @@ class AGIRSoloInterface:
                             state.get("course", {}).get("taxonomy_type", "SOLO"),
                             icon="account_tree",
                         ).classes("info-chip")
-                ui.space()
-                edit_initial_button = ui.button(
-                    "Editar dados iniciais",
-                    icon="settings",
-                    on_click=self.show_initial_session_editor,
-                ).props("outline no-caps").classes("secondary-action")
-                edit_initial_button.mark("edit-initial-session-data")
 
             self._render_stage_track(state)
 
@@ -1299,8 +1368,14 @@ class AGIRSoloInterface:
             "pending": "Pendente",
         }
         with ui.element("div").classes("stage-track").style(
-            f"--stage-count: {len(STAGE_ORDER)}"
+            f"--stage-count: {DISPLAY_STAGE_COUNT}"
         ):
+            self._render_initial_data_track_item(
+                current=False,
+                selectable=True,
+                status="approved",
+                status_label="Concluído · selecionar para editar",
+            )
             for index, stage in enumerate(STAGE_ORDER):
                 stored_status = stored_statuses.get(stage)
                 if not stored_status:
@@ -1343,7 +1418,7 @@ class AGIRSoloInterface:
                         ),
                     )
                 with item:
-                    ui.label(f"{index + 1:02d}").classes("stage-number")
+                    ui.label(f"{index + 2:02d}").classes("stage-number")
                     ui.label(STAGE_LABELS[stage]).classes("stage-label")
                     base_status_label = status_labels.get(stored_status, stored_status)
                     stage_status_label = (
@@ -1367,8 +1442,14 @@ class AGIRSoloInterface:
         stored_statuses = state.get("stage_statuses", {})
         completed = state.get("status") == "completed"
         with ui.element("div").classes("stage-track").style(
-            f"--stage-count: {len(STAGE_ORDER)}"
+            f"--stage-count: {DISPLAY_STAGE_COUNT}"
         ):
+            self._render_initial_data_track_item(
+                current=False,
+                selectable=True,
+                status="approved",
+                status_label="Concluído · selecionar para editar",
+            )
             for index, stage in enumerate(STAGE_ORDER):
                 stored_status = stored_statuses.get(stage, "empty")
                 current = stage == state.get("current_stage")
@@ -1389,7 +1470,7 @@ class AGIRSoloInterface:
                         ),
                     )
                 with item:
-                    ui.label(f"{index + 1:02d}").classes("stage-number")
+                    ui.label(f"{index + 2:02d}").classes("stage-number")
                     ui.label(STAGE_LABELS[stage]).classes("stage-label")
                     base_status_label = status_labels.get(stored_status, stored_status)
                     ui.label(

@@ -289,7 +289,7 @@ def render_artifact(
 ) -> str:
     """Converte um artefacto estruturado num documento Markdown legível."""
 
-    progress = STAGE_ORDER.index(stage) + 1
+    progress = STAGE_ORDER.index(stage) + 2
     if is_current:
         stage_status = state.get("stage_statuses", {}).get(stage)
         review_status = (
@@ -303,7 +303,7 @@ def render_artifact(
         review_status = "versão guardada para consulta"
     header = (
         f"# {STAGE_LABELS[stage]} — versão {version_number}\n\n"
-        f"**Etapa {progress} de {len(STAGE_ORDER)}** · estado: **{review_status}**\n\n"
+        f"**Etapa {progress} de {len(STAGE_ORDER) + 1}** · estado: **{review_status}**\n\n"
         + _metadata_text(metadata)
     )
 

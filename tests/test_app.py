@@ -215,6 +215,9 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     user.find(marker="start-new-session").click()
 
     await user.should_see("Identificação e opções pedagógicas")
+    await user.should_see("01 · DADOS INICIAIS")
+    await user.should_see("Formulação dos resultados de aprendizagem")
+    assert user.find(marker="manual-stage-initial_data").elements
     assert not interfaces[-1].home_view.visible
     assert interfaces[-1].initial_view.visible
     form_data = interfaces[-1]._form_data()
@@ -284,6 +287,9 @@ async def test_existing_session_can_return_to_and_update_initial_data(
 
     await user.open("/_test_edit_initial_session")
 
+    await user.should_see("Dados iniciais")
+    await user.should_not_see("Editar dados iniciais")
+    assert user.find(marker="manual-stage-initial_data").elements
     user.find(marker="edit-initial-session-data").click()
     await user.should_see("Reveja o ponto de partida")
     await user.should_see("Guardar alterações iniciais")
@@ -408,6 +414,8 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
 
     await user.open("/_test_manual_first_workspace")
 
+    await user.should_see("Dados iniciais")
+    assert user.find(marker="manual-stage-initial_data").elements
     await user.should_see("Ponto atual · Rascunho")
     assert user.find(marker="stage-status-draft").elements
     assert user.find(marker="stage-status-empty").elements
