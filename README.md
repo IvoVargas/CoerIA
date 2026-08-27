@@ -170,9 +170,10 @@ anterior e identifica a verificação global obrigatória. O botão **?** abre u
 ajuda contextual que explica cada ação visível e indica quando existe utilização
 de IA ou custo de API.
 
-Os resultados de **Validar dados** são selecionáveis: cada problema ou sugestão
-desloca a página para o campo correspondente e realça-o temporariamente. As
-observações de **Verificar esta etapa com IA** têm o mesmo comportamento; quando
+Ao executar **Validar dados**, a página desloca-se automaticamente para o parecer.
+Os resultados são selecionáveis: cada problema ou sugestão desloca a página para
+o campo correspondente e realça-o temporariamente. As observações de **Verificar
+esta etapa com IA** usam os mesmos cartões e têm o mesmo comportamento; quando
 a mensagem inclui um identificador como `RA1`, `AE2`, `TA3` ou um número de
 slide, a respetiva linha ou secção é procurada, usando o artefacto da etapa como
 destino seguro quando não existe uma referência mais específica.

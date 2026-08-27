@@ -315,11 +315,14 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .validation-result-link {
   width: 100%; min-height: 42px; justify-content: flex-start; text-align: left;
   border: 1px solid var(--agir-border); border-radius: 12px; background: #ffffff;
+  padding: 9px 12px; box-shadow: 0 2px 7px rgba(31, 71, 75, .05);
 }
 .validation-result-link .q-btn__content {
   width: 100%; justify-content: flex-start; text-align: left; white-space: normal;
   line-height: 1.35;
 }
+.validation-result-link:hover { background: #f8fbfa; box-shadow: 0 4px 11px rgba(31, 71, 75, .09); }
+.validation-results-list { width: 100%; gap: 8px; }
 .validation-result-link.validation-issue { border-color: #e7aaa5; color: #8e2f2a; }
 .validation-result-link.validation-suggestion { border-color: #9fc9c1; color: #245f5a; }
 .validation-focus-pulse { animation: validation-focus-pulse 1.8s ease-out; }
@@ -726,6 +729,7 @@ class AGIRSoloInterface:
             self.assistance_status = ui.column().classes(
                 "soft-surface w-full p-4 mt-3"
             )
+            self.assistance_status.mark("initial-validation-results")
             self.assistance_status.set_visibility(False)
 
         with ui.card().classes("surface w-full p-5 md:p-7") as form_card:
@@ -947,32 +951,43 @@ class AGIRSoloInterface:
     ) -> None:
         terms = [item for item in (search_terms or []) if item]
         script = f"""
-        (() => {{
-          const root = document.querySelector({json.dumps(selector)});
-          if (!root) return false;
-          const terms = {json.dumps(terms, ensure_ascii=False)}
-            .map(value => value.toLocaleLowerCase('pt-PT'));
-          const candidates = [
-            ...root.querySelectorAll(
-              'tr, [role="tab"], .presentation-slide, .q-expansion-item, .q-field'
-            )
-          ];
-          const target = terms.length
-            ? candidates.find(element => {{
-                const text = (element.innerText || '').toLocaleLowerCase('pt-PT');
-                return terms.some(term => text.includes(term));
-              }}) || root
-            : root;
-          target.scrollIntoView({{behavior: 'smooth', block: 'center'}});
-          target.classList.remove('validation-focus-pulse');
-          void target.offsetWidth;
-          target.classList.add('validation-focus-pulse');
-          window.setTimeout(
-            () => target.classList.remove('validation-focus-pulse'),
-            1900,
-          );
-          return true;
-        }})()
+        (() => new Promise(resolve => {{
+          const deadline = Date.now() + 1800;
+          const locate = () => {{
+            const root = document.querySelector({json.dumps(selector)});
+            if (!root) {{
+              if (Date.now() < deadline) {{
+                window.requestAnimationFrame(locate);
+                return;
+              }}
+              resolve(false);
+              return;
+            }}
+            const terms = {json.dumps(terms, ensure_ascii=False)}
+              .map(value => value.toLocaleLowerCase('pt-PT'));
+            const candidates = [
+              ...root.querySelectorAll(
+                'tr, [role="tab"], .presentation-slide, .q-expansion-item, .q-field'
+              )
+            ];
+            const target = terms.length
+              ? candidates.find(element => {{
+                  const text = (element.innerText || '').toLocaleLowerCase('pt-PT');
+                  return terms.some(term => text.includes(term));
+                }}) || root
+              : root;
+            target.scrollIntoView({{behavior: 'smooth', block: 'center'}});
+            target.classList.remove('validation-focus-pulse');
+            void target.offsetWidth;
+            target.classList.add('validation-focus-pulse');
+            window.setTimeout(
+              () => target.classList.remove('validation-focus-pulse'),
+              1900,
+            );
+            resolve(true);
+          }};
+          locate();
+        }}))()
         """
         await ui.run_javascript(script, timeout=3.0)
 
@@ -982,6 +997,21 @@ class AGIRSoloInterface:
         if element is None:
             return
         await self._scroll_and_highlight(f"#c{element.id}")
+
+    @staticmethod
+    def _render_validation_result_button(
+        message: str,
+        kind: str,
+        marker: str,
+        on_click: Any,
+    ) -> None:
+        ui.button(
+            message,
+            icon="error_outline" if kind == "issue" else "lightbulb",
+            on_click=on_click,
+        ).props("flat no-caps align=left").classes(
+            f"validation-result-link validation-{kind}"
+        ).mark(marker)
 
     def _render_initial_validation(self, result: dict[str, Any]) -> None:
         self.assistance_status.clear()
@@ -997,17 +1027,18 @@ class AGIRSoloInterface:
                 ui.label(
                     "Selecione uma observação para localizar o campo correspondente."
                 ).classes("text-xs muted")
-            for index, item in enumerate(results):
-                kind = str(item.get("kind", "suggestion"))
-                ui.button(
-                    str(item.get("message", "")),
-                    icon="error_outline" if kind == "issue" else "lightbulb",
-                    on_click=lambda target=str(item.get("target", "")): (
-                        self._focus_initial_result(target)
-                    ),
-                ).props("flat no-caps align=left").classes(
-                    f"validation-result-link validation-{kind}"
-                ).mark(f"initial-validation-result-{index}")
+            if results:
+                with ui.column().classes("validation-results-list"):
+                    for index, item in enumerate(results):
+                        kind = str(item.get("kind", "suggestion"))
+                        self._render_validation_result_button(
+                            str(item.get("message", "")),
+                            kind,
+                            f"initial-validation-result-{index}",
+                            lambda target=str(item.get("target", "")): (
+                                self._focus_initial_result(target)
+                            ),
+                        )
         self.assistance_status.set_visibility(True)
 
     def _render_initial_assistance_message(self, title: str, message: str) -> None:
@@ -1017,9 +1048,10 @@ class AGIRSoloInterface:
             ui.label(message).classes("text-sm")
         self.assistance_status.set_visibility(True)
 
-    def handle_validate_initial(self) -> None:
+    async def handle_validate_initial(self) -> None:
         result = self.service.validate_initial_form(self._form_data())
         self._render_initial_validation(result)
+        await self._scroll_and_highlight(f"#c{self.assistance_status.id}")
 
     async def handle_generate_initial(self) -> None:
         self._show_busy("A IA está a completar os campos vazios…")
@@ -3513,7 +3545,9 @@ class AGIRSoloInterface:
                 self._render_manual_authoring_card(state, stage)
             elif not editing and not is_manual_first(state):
                 self._render_decision_card(state)
-            with ui.card().classes("surface artifact-card w-full").mark(
+            with ui.card().classes(
+                "surface artifact-card stage-artifact-focus w-full"
+            ).mark(
                 "artifact-content"
             ):
                 if editing:
@@ -3652,27 +3686,28 @@ class AGIRSoloInterface:
                         ui.label(
                             "Selecione uma observação para localizar o conteúdo relacionado."
                         ).classes("text-xs muted")
-                    for index, finding in enumerate(findings):
-                        severity = (
-                            "Bloqueante"
-                            if finding.get("severity") == "blocking"
-                            else "Aviso"
-                        )
-                        ui.button(
-                            f"{severity} — {finding.get('criterion', '')}: "
-                            f"{finding.get('message', '')}",
-                            icon="my_location",
-                            on_click=lambda selected=deepcopy(finding): (
-                                self._focus_stage_finding(selected)
-                            ),
-                        ).props("flat no-caps align=left").classes(
-                            "validation-result-link "
-                            + (
-                                "validation-issue"
-                                if finding.get("severity") == "blocking"
-                                else "validation-suggestion"
-                            )
-                        ).mark(f"ai-review-finding-{index}")
+                    if findings:
+                        with ui.column().classes("validation-results-list"):
+                            for index, finding in enumerate(findings):
+                                severity = (
+                                    "Bloqueante"
+                                    if finding.get("severity") == "blocking"
+                                    else "Aviso"
+                                )
+                                kind = (
+                                    "issue"
+                                    if finding.get("severity") == "blocking"
+                                    else "suggestion"
+                                )
+                                self._render_validation_result_button(
+                                    f"{severity} — {finding.get('criterion', '')}: "
+                                    f"{finding.get('message', '')}",
+                                    kind,
+                                    f"ai-review-finding-{index}",
+                                    lambda selected=deepcopy(finding): (
+                                        self._focus_stage_finding(selected)
+                                    ),
+                                )
                     ui.label(
                         "Este parecer não bloqueia a passagem à etapa seguinte."
                     ).classes("text-xs muted")

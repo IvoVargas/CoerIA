@@ -48,7 +48,8 @@ Os resultados da validação inicial transportam um destino estrutural explícit
 Nos pareceres de IA, a interface extrai identificadores curriculares e referências
 a slides para localizar o elemento relacionado; na sua ausência, usa o cartão do
 artefacto como destino. A deslocação é acompanhada por um realce temporário e não
-altera o estado curricular.
+altera o estado curricular. A validação inicial desloca automaticamente a página
+para o parecer, e ambas as verificações reutilizam o mesmo componente de resultado.
 
 ```mermaid
 flowchart LR

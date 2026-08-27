@@ -267,6 +267,7 @@ async def test_initial_validation_results_focus_the_related_field(
 ) -> None:
     interfaces: list[app.AGIRSoloInterface] = []
     focus_handlers: list[AsyncMock] = []
+    scroll_handlers: list[AsyncMock] = []
 
     @ui.page("/_test_initial_validation_focus")
     def initial_validation_focus_page():
@@ -276,10 +277,13 @@ async def test_initial_validation_results_focus_the_related_field(
             ui.notify("Campo localizado.")
 
         handler = AsyncMock(side_effect=record_focus)
+        scroll_handler = AsyncMock()
         interface._focus_initial_result = handler
+        interface._scroll_and_highlight = scroll_handler
         interface.show_new_session()
         interfaces.append(interface)
         focus_handlers.append(handler)
+        scroll_handlers.append(scroll_handler)
 
     await user.open("/_test_initial_validation_focus")
 
@@ -287,6 +291,9 @@ async def test_initial_validation_results_focus_the_related_field(
     await user.should_see("Existem campos obrigatórios a corrigir.")
     await user.should_see(
         "Selecione uma observação para localizar o campo correspondente."
+    )
+    scroll_handlers[-1].assert_awaited_once_with(
+        f"#c{interfaces[-1].assistance_status.id}"
     )
     user.find(marker="initial-validation-result-0").click()
     await user.should_see("Campo localizado.")
@@ -685,6 +692,8 @@ async def test_ai_review_findings_focus_the_related_artifact(
     await user.should_see(
         "Selecione uma observação para localizar o conteúdo relacionado."
     )
+    artifact = next(iter(user.find(marker="artifact-content").elements))
+    assert "stage-artifact-focus" in artifact._classes
     user.find(marker="ai-review-finding-0").click()
     await user.should_see("Artefacto localizado.")
 

@@ -159,7 +159,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   **Verificar esta etapa com IA** como ações selecionáveis que desloquem a página
   e realcem o campo, linha, recurso ou artefacto relacionado; utilizar o
   artefacto da etapa como destino quando o parecer não incluir uma referência
-  mais específica.
+  mais específica. Usar o mesmo componente visual nos dois tipos de verificação
+  e, após **Validar dados**, deslocar automaticamente a página para o conjunto de
+  resultados.
 - Permitir guardar rascunhos incompletos; validar apenas a forma estrutural
   mínima necessária para a persistência.
 - Não acrescentar uma coluna de numeração de linhas no modo de edição.
