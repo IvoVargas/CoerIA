@@ -433,6 +433,7 @@ class AGIRSoloInterface:
         self.removed_source_files: set[str] = set()
         self.fields: dict[str, Any] = {}
         self.editing_initial_session = False
+        self.initial_edit_baseline: dict[str, Any] | None = None
         self.export_document_format = "word"
         self.error_notification: Any | None = None
         self.busy_started_at: float | None = None
@@ -914,6 +915,9 @@ class AGIRSoloInterface:
             self._hide_busy()
 
     async def handle_start_session(self) -> None:
+        await self._save_initial_session()
+
+    async def _save_initial_session(self, target_stage: str | None = None) -> None:
         progress_updates: SimpleQueue[str] = SimpleQueue()
         self._show_busy(
             (
@@ -952,17 +956,27 @@ class AGIRSoloInterface:
             self.manual_edit_stage = None
             self.manual_edit_artifact = None
             editing_existing = self.editing_initial_session
-            self.editing_initial_session = False
             self.uploaded_files.clear()
             self.removed_source_files.clear()
             self.uploader.reset()
             self.render_upload_list()
-            self.show_workspace(
-                "Dados iniciais atualizados. O conteúdo existente foi preservado e as "
-                "etapas afetadas ficaram assinaladas para revisão, quando aplicável."
-                if editing_existing
-                else "Sessão iniciada sem executar a IA. Pode editar ou abrir qualquer etapa."
-            )
+            self.initial_edit_baseline = None
+            if editing_existing and target_stage:
+                await self._leave_initial_editor_for_stage(
+                    target_stage,
+                    notice=(
+                        "Dados iniciais guardados. As etapas afetadas ficaram "
+                        "assinaladas para revisão."
+                    ),
+                )
+            else:
+                self.editing_initial_session = False
+                self.show_workspace(
+                    "Dados iniciais atualizados. O conteúdo existente foi preservado e as "
+                    "etapas afetadas ficaram assinaladas para revisão, quando aplicável."
+                    if editing_existing
+                    else "Sessão iniciada sem executar a IA. Pode editar ou abrir qualquer etapa."
+                )
             self.refresh_sessions()
         except USER_ERRORS as error:
             self._show_error(error)
@@ -1022,6 +1036,7 @@ class AGIRSoloInterface:
 
     def show_home(self) -> None:
         self._set_initial_view_mode(False)
+        self.initial_edit_baseline = None
         self.state = None
         self.viewed_stage = None
         self.manual_edit_stage = None
@@ -1035,6 +1050,7 @@ class AGIRSoloInterface:
     def show_new_session(self) -> None:
         self.state = None
         self._set_initial_view_mode(False)
+        self.initial_edit_baseline = None
         self.viewed_stage = None
         self.manual_edit_stage = None
         self.manual_edit_artifact = None
@@ -1157,9 +1173,30 @@ class AGIRSoloInterface:
                 for index, stage in enumerate(STAGE_ORDER, start=2):
                     stored_status = statuses.get(stage, "pending")
                     status_class = _stage_status_css_class(stored_status)
-                    with ui.element("div").classes(
+                    selectable = bool(
+                        self.editing_initial_session
+                        and state
+                        and state.get("status") != "completed"
+                    )
+                    if selectable and not is_manual_first(state):
+                        current_stage = state.get("current_stage")
+                        selectable = stage == current_stage or stage in set(
+                            revision_targets_for_state(state)
+                        )
+                    item = ui.element("button" if selectable else "div").classes(
                         f"stage-item {status_class}"
-                    ).mark(status_class):
+                        + (" selectable" if selectable else "")
+                    )
+                    item.mark(f"manual-stage-{stage}", status_class)
+                    if selectable:
+                        item.props("type=button")
+                        item.on(
+                            "click",
+                            lambda _event, selected_stage=stage: (
+                                self._request_initial_stage_navigation(selected_stage)
+                            ),
+                        )
+                    with item:
                         ui.label(f"{index:02d}").classes("stage-number")
                         ui.label(STAGE_LABELS[stage]).classes("stage-label")
                         ui.label(
@@ -1175,6 +1212,7 @@ class AGIRSoloInterface:
         self.removed_source_files.clear()
         self.uploader.reset()
         self.render_upload_list()
+        self.initial_edit_baseline = self._initial_edit_signature()
         self.assistance_status.set_visibility(False)
         self.header_context.set_text(
             f"{self.state.get('course', {}).get('unit_name', 'Sessão')} · Dados iniciais"
@@ -1192,8 +1230,104 @@ class AGIRSoloInterface:
         self.removed_source_files.clear()
         self.uploader.reset()
         self.render_upload_list()
+        self.initial_edit_baseline = None
         self._set_initial_view_mode(False)
         self.show_workspace("Alterações aos dados iniciais canceladas.")
+
+    def _initial_edit_signature(self) -> dict[str, Any]:
+        """Representa os dados editáveis para detetar alterações por guardar."""
+
+        return {
+            "form": self._form_data(),
+            "uploaded_files": sorted(self.uploaded_files),
+            "removed_source_files": sorted(self.removed_source_files),
+        }
+
+    def _has_unsaved_initial_changes(self) -> bool:
+        return bool(
+            self.editing_initial_session
+            and self.initial_edit_baseline is not None
+            and self._initial_edit_signature() != self.initial_edit_baseline
+        )
+
+    async def _request_initial_stage_navigation(self, target_stage: str) -> None:
+        if not self.state or target_stage not in STAGE_ORDER:
+            return
+        if self._has_unsaved_initial_changes():
+            self._open_initial_navigation_dialog(target_stage)
+            return
+        await self._leave_initial_editor_for_stage(target_stage)
+
+    def _open_initial_navigation_dialog(self, target_stage: str) -> None:
+        with ui.dialog().props("persistent") as dialog, ui.card().classes(
+            "w-full max-w-2xl p-6 gap-4"
+        ):
+            ui.label("ALTERAÇÕES POR GUARDAR").classes("eyebrow")
+            ui.label("Guardar antes de mudar de etapa?").classes("section-title")
+            ui.label(
+                "Existem alterações nos dados iniciais. Para abrir "
+                f"«{STAGE_LABELS[target_stage]}», "
+                "guarde-as ou descarte-as explicitamente."
+            ).classes("text-sm")
+
+            async def discard_and_continue() -> None:
+                dialog.close()
+                await self._leave_initial_editor_for_stage(
+                    target_stage,
+                    notice="Alterações aos dados iniciais descartadas.",
+                )
+
+            async def save_and_continue() -> None:
+                dialog.close()
+                await self._save_initial_session(target_stage=target_stage)
+
+            with ui.row().classes("w-full justify-end gap-2 flex-wrap"):
+                ui.button("Continuar a editar", on_click=dialog.close).props(
+                    "flat no-caps"
+                )
+                ui.button(
+                    "Descartar alterações",
+                    icon="delete_outline",
+                    on_click=discard_and_continue,
+                ).props("outline no-caps color=negative").mark(
+                    "discard-initial-changes"
+                )
+                ui.button(
+                    "Guardar e continuar",
+                    icon="save",
+                    on_click=save_and_continue,
+                ).props("unelevated no-caps").classes("primary-action").mark(
+                    "save-initial-and-continue"
+                )
+        dialog.open()
+
+    async def _leave_initial_editor_for_stage(
+        self,
+        target_stage: str,
+        *,
+        notice: str = "",
+    ) -> None:
+        if not self.state or target_stage not in STAGE_ORDER:
+            return
+        self.uploaded_files.clear()
+        self.removed_source_files.clear()
+        self.uploader.reset()
+        self.initial_edit_baseline = None
+        self.editing_initial_session = False
+        if is_manual_first(self.state):
+            await self._navigate_manual_stage(target_stage, notice=notice)
+            return
+
+        self.viewed_stage = (
+            None if target_stage == self.state.get("current_stage") else target_stage
+        )
+        message = f"Etapa aberta: {STAGE_LABELS[target_stage]}."
+        if self.viewed_stage:
+            message = (
+                "Etapa aberta apenas para consulta. A sessão e os passos seguintes "
+                "permanecem inalterados."
+            )
+        self.show_workspace(" ".join(part for part in (notice, message) if part))
 
     def refresh_sessions(self) -> None:
         self.session_list.clear()
@@ -1305,6 +1439,7 @@ class AGIRSoloInterface:
         if not self.state:
             return
         self._set_initial_view_mode(False)
+        self.initial_edit_baseline = None
         self.home_view.set_visibility(False)
         self.initial_view.set_visibility(False)
         self.workspace_view.set_visibility(True)
@@ -1481,7 +1616,12 @@ class AGIRSoloInterface:
                         else base_status_label
                     ).classes("stage-state")
 
-    async def _navigate_manual_stage(self, target_stage: str) -> None:
+    async def _navigate_manual_stage(
+        self,
+        target_stage: str,
+        *,
+        notice: str = "",
+    ) -> None:
         try:
             self.state, message = await run.io_bound(
                 self.service.navigate_session,
@@ -1491,7 +1631,7 @@ class AGIRSoloInterface:
             self.viewed_stage = None
             self.manual_edit_stage = None
             self.manual_edit_artifact = None
-            self.show_workspace(message)
+            self.show_workspace(" ".join(part for part in (notice, message) if part))
             self.refresh_sessions()
         except USER_ERRORS as error:
             self._show_error(error)
@@ -3141,14 +3281,18 @@ class AGIRSoloInterface:
             current_index = STAGE_ORDER.index(stage)
             ui.separator().classes("my-2")
             with ui.row().classes("w-full gap-2 flex-wrap"):
-                if current_index > 0:
-                    ui.button(
-                        "Etapa anterior",
-                        icon="arrow_back",
-                        on_click=lambda: self._navigate_manual_stage(
-                            STAGE_ORDER[current_index - 1]
-                        ),
-                    ).props("outline no-caps").classes("secondary-action")
+                previous_action = (
+                    self.show_initial_session_editor
+                    if current_index == 0
+                    else lambda: self._navigate_manual_stage(
+                        STAGE_ORDER[current_index - 1]
+                    )
+                )
+                ui.button(
+                    "Etapa anterior",
+                    icon="arrow_back",
+                    on_click=previous_action,
+                ).props("outline no-caps").classes("secondary-action")
                 ui.space()
                 ui.button(
                     "Etapa seguinte",

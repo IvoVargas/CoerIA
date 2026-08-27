@@ -290,7 +290,7 @@ async def test_existing_session_can_return_to_and_update_initial_data(
     await user.should_see("Dados iniciais")
     await user.should_not_see("Editar dados iniciais")
     assert user.find(marker="manual-stage-initial_data").elements
-    user.find(marker="edit-initial-session-data").click()
+    user.find("Etapa anterior").click()
     await user.should_see("Reveja o ponto de partida")
     await user.should_see("Guardar alterações iniciais")
     await user.should_see("Incorporado: programa.pdf")
@@ -312,6 +312,116 @@ async def test_existing_session_can_return_to_and_update_initial_data(
     )
     assert "[Ficheiro: 00_programa.pdf]" not in interfaces[-1].state["source_original_text"]
     assert interfaces[-1].state["source_images"] == []
+
+
+@pytest.mark.asyncio
+async def test_initial_data_stage_navigates_to_another_stage_when_unchanged(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "initial-navigation.db"))
+    state = service._persist(
+        create_session(
+            CourseInput.create(
+                "Programação",
+                "Algoritmos, estruturas de dados, funções e testes.",
+            )
+        )
+    )
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_initial_navigation")
+    def initial_navigation_page():
+        interface = app.AGIRSoloInterface(service=service)
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_initial_navigation")
+
+    user.find(marker="edit-initial-session-data").click()
+    await user.should_see("Reveja o ponto de partida")
+    user.find(marker="manual-stage-curriculum_analysis").click()
+
+    await user.should_see("Etapa aberta: Conteúdos e objetivos curriculares.")
+    assert interfaces[-1].workspace_view.visible
+    assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
+
+
+@pytest.mark.asyncio
+async def test_initial_data_navigation_requires_a_decision_for_unsaved_changes(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "initial-unsaved.db"))
+    state = service._persist(
+        create_session(
+            CourseInput.create(
+                "Programação",
+                "Algoritmos, estruturas de dados, funções e testes.",
+            )
+        )
+    )
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_initial_unsaved_navigation")
+    def initial_unsaved_navigation_page():
+        interface = app.AGIRSoloInterface(service=service)
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_initial_unsaved_navigation")
+
+    user.find(marker="edit-initial-session-data").click()
+    interfaces[-1].fields["unit_name"].set_value("Programação alterada")
+    user.find(marker="manual-stage-curriculum_analysis").click()
+
+    await user.should_see("Guardar antes de mudar de etapa?")
+    assert interfaces[-1].initial_view.visible
+    user.find(marker="discard-initial-changes").click()
+
+    await user.should_see("Alterações aos dados iniciais descartadas.")
+    assert interfaces[-1].workspace_view.visible
+    assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
+    assert interfaces[-1].state["course"]["unit_name"] == "Programação"
+
+
+@pytest.mark.asyncio
+async def test_initial_data_navigation_can_save_and_continue(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "initial-save.db"))
+    state = service._persist(
+        create_session(
+            CourseInput.create(
+                "Programação",
+                "Algoritmos, estruturas de dados, funções e testes.",
+            )
+        )
+    )
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_initial_save_navigation")
+    def initial_save_navigation_page():
+        interface = app.AGIRSoloInterface(service=service)
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_initial_save_navigation")
+
+    user.find(marker="edit-initial-session-data").click()
+    interfaces[-1].fields["unit_name"].set_value("Programação aplicada")
+    user.find(marker="manual-stage-curriculum_analysis").click()
+    await user.should_see("Guardar antes de mudar de etapa?")
+    user.find(marker="save-initial-and-continue").click()
+
+    await user.should_see("Dados iniciais guardados.")
+    assert interfaces[-1].workspace_view.visible
+    assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
+    assert interfaces[-1].state["course"]["unit_name"] == "Programação aplicada"
 
 
 @pytest.mark.asyncio

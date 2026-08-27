@@ -60,6 +60,10 @@ materiais produzidos.
   corrigir os campos e guardar sem criar uma sessão nova nem apagar artefactos.
 - Apresentar os dados iniciais como o primeiro ponto da barra de etapas, no mesmo
   percurso das restantes etapas, sem um botão ou página de edição separados.
+- Permitir navegar dos dados iniciais para qualquer etapa disponível na sessão e
+  regressar a este ponto através da barra ou de **Etapa anterior**; perante
+  alterações por guardar, exigir a escolha explícita entre guardar, descartar ou
+  permanecer na etapa.
 - Ao editar os dados iniciais, listar as fontes documentais já incorporadas e
   permitir mantê-las, removê-las ou acrescentar novos ficheiros.
 - Quando a caracterização ou as fontes forem alteradas, preservar o conteúdo das

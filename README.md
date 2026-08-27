@@ -139,11 +139,15 @@ primeira proposta completa por IA.
 Os **Dados iniciais** constituem o primeiro ponto da mesma barra de etapas. Depois
 de iniciar o desenho curricular, selecionar esse ponto permite regressar ao
 formulário para corrigir a identificação, a taxonomia, o fornecedor, o texto de
-base e a caracterização, sem abrir uma área separada da sessão. As fontes
-documentais já incorporadas são
-listadas e podem ser mantidas ou removidas; também podem ser adicionados novos
-ficheiros. A gravação preserva os artefactos existentes, invalida propostas de IA
-pendentes baseadas no contexto anterior e assinala as etapas preenchidas para
+base e a caracterização, sem abrir uma área separada da sessão. A partir desse
+formulário, os restantes pontos da barra continuam navegáveis. Se existirem
+alterações por guardar, o docente escolhe explicitamente entre guardar, descartar
+ou permanecer nos dados iniciais. O botão **Etapa anterior** da formulação dos
+resultados também regressa a este primeiro ponto. As fontes documentais já
+incorporadas são listadas e podem ser mantidas ou removidas; também podem ser
+adicionados novos ficheiros. A gravação preserva os artefactos existentes,
+invalida propostas de IA pendentes baseadas no contexto anterior e assinala as
+etapas preenchidas para
 revisão antes de uma nova validação final.
 
 A barra de etapas permite abrir qualquer ponto de autoria desde a criação da

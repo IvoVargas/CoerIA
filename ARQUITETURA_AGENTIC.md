@@ -9,6 +9,13 @@ seis etapas de autoria e da validação final. Criar uma sessão inicializa as
 estruturas editáveis vazias de autoria. O docente pode abrir, preencher e
 guardar qualquer uma sem chave de API.
 
+Depois de a sessão existir, os dados iniciais participam na mesma navegação da
+barra. A saída deste ponto verifica primeiro se o formulário ou as fontes foram
+alterados e, nesse caso, exige uma decisão humana de guardar, descartar ou
+continuar a editar. A sessão ainda não criada mantém as etapas seguintes
+indisponíveis porque ainda não existe estado persistente para receber os
+artefactos.
+
 ## Referência pedagógica
 
 O alinhamento e a sequência pedagógica recomendada fundamentam-se em Biggs e
