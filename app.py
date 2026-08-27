@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 import logging
 from pathlib import Path
 from queue import Empty, SimpleQueue
+import re
 from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Any
@@ -310,6 +312,27 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 }
 .stage-toolbar-ai-label { white-space: nowrap; }
 .toolbar-help-item { padding: 12px 14px; border-radius: 12px; }
+.validation-result-link {
+  width: 100%; min-height: 42px; justify-content: flex-start; text-align: left;
+  border: 1px solid var(--agir-border); border-radius: 12px; background: #ffffff;
+}
+.validation-result-link .q-btn__content {
+  width: 100%; justify-content: flex-start; text-align: left; white-space: normal;
+  line-height: 1.35;
+}
+.validation-result-link.validation-issue { border-color: #e7aaa5; color: #8e2f2a; }
+.validation-result-link.validation-suggestion { border-color: #9fc9c1; color: #245f5a; }
+.validation-focus-pulse { animation: validation-focus-pulse 1.8s ease-out; }
+@keyframes validation-focus-pulse {
+  0%, 35% {
+    outline: 3px solid rgba(13, 118, 110, .55); outline-offset: 4px;
+    box-shadow: 0 0 0 8px rgba(13, 118, 110, .14); border-radius: 10px;
+  }
+  100% {
+    outline: 0 solid rgba(13, 118, 110, 0); outline-offset: 10px;
+    box-shadow: 0 0 0 14px rgba(13, 118, 110, 0); border-radius: 10px;
+  }
+}
 .artifact-card { min-width: 0; padding: 26px 30px; overflow-x: auto; }
 .artifact-markdown.artifact-heading { width: auto; min-width: 0; flex: 1 1 420px; }
 .artifact-heading h1 { margin: 0; }
@@ -700,7 +723,7 @@ class AGIRSoloInterface:
                 "A escolha é exclusiva, fica associada à sessão e só é usada "
                 "quando solicitar assistência por IA."
             ).classes("text-xs muted")
-            self.assistance_status = ui.markdown().classes(
+            self.assistance_status = ui.column().classes(
                 "soft-surface w-full p-4 mt-3"
             )
             self.assistance_status.set_visibility(False)
@@ -917,28 +940,86 @@ class AGIRSoloInterface:
                     value = SEMESTER_OPTIONS[0]
                 element.set_value(value)
 
-    def _assistance_markdown(self, result: dict[str, Any]) -> str:
-        status = (
-            "✅ Os campos obrigatórios estão prontos para iniciar a sessão."
-            if result["valid"]
-            else "⚠️ Existem campos obrigatórios a corrigir."
-        )
-        parts = [f"### Validação do preenchimento\n\n{status}"]
-        if result["issues"]:
-            parts.append(
-                "**Problemas**\n\n" + "\n".join(f"- ❌ {item}" for item in result["issues"])
+    async def _scroll_and_highlight(
+        self,
+        selector: str,
+        search_terms: list[str] | None = None,
+    ) -> None:
+        terms = [item for item in (search_terms or []) if item]
+        script = f"""
+        (() => {{
+          const root = document.querySelector({json.dumps(selector)});
+          if (!root) return false;
+          const terms = {json.dumps(terms, ensure_ascii=False)}
+            .map(value => value.toLocaleLowerCase('pt-PT'));
+          const candidates = [
+            ...root.querySelectorAll(
+              'tr, [role="tab"], .presentation-slide, .q-expansion-item, .q-field'
             )
-        if result["suggestions"]:
-            parts.append(
-                "**Sugestões**\n\n"
-                + "\n".join(f"- 💡 {item}" for item in result["suggestions"])
-            )
-        return "\n\n".join(parts)
+          ];
+          const target = terms.length
+            ? candidates.find(element => {{
+                const text = (element.innerText || '').toLocaleLowerCase('pt-PT');
+                return terms.some(term => text.includes(term));
+              }}) || root
+            : root;
+          target.scrollIntoView({{behavior: 'smooth', block: 'center'}});
+          target.classList.remove('validation-focus-pulse');
+          void target.offsetWidth;
+          target.classList.add('validation-focus-pulse');
+          window.setTimeout(
+            () => target.classList.remove('validation-focus-pulse'),
+            1900,
+          );
+          return true;
+        }})()
+        """
+        await ui.run_javascript(script, timeout=3.0)
+
+    async def _focus_initial_result(self, target: str) -> None:
+        field_name = "contact_hours" if target == "duration_hours" else target
+        element = self.fields.get(field_name)
+        if element is None:
+            return
+        await self._scroll_and_highlight(f"#c{element.id}")
+
+    def _render_initial_validation(self, result: dict[str, Any]) -> None:
+        self.assistance_status.clear()
+        with self.assistance_status:
+            ui.label("VALIDAÇÃO DO PREENCHIMENTO").classes("eyebrow")
+            ui.label(
+                "Os campos obrigatórios estão prontos para iniciar a sessão."
+                if result["valid"]
+                else "Existem campos obrigatórios a corrigir."
+            ).classes("font-semibold")
+            results = result.get("results", [])
+            if results:
+                ui.label(
+                    "Selecione uma observação para localizar o campo correspondente."
+                ).classes("text-xs muted")
+            for index, item in enumerate(results):
+                kind = str(item.get("kind", "suggestion"))
+                ui.button(
+                    str(item.get("message", "")),
+                    icon="error_outline" if kind == "issue" else "lightbulb",
+                    on_click=lambda target=str(item.get("target", "")): (
+                        self._focus_initial_result(target)
+                    ),
+                ).props("flat no-caps align=left").classes(
+                    f"validation-result-link validation-{kind}"
+                ).mark(f"initial-validation-result-{index}")
+        self.assistance_status.set_visibility(True)
+
+    def _render_initial_assistance_message(self, title: str, message: str) -> None:
+        self.assistance_status.clear()
+        with self.assistance_status:
+            ui.label(title.upper()).classes("eyebrow")
+            ui.label(message).classes("text-sm")
+        self.assistance_status.set_visibility(True)
 
     def handle_validate_initial(self) -> None:
         result = self.service.validate_initial_form(self._form_data())
-        self.assistance_status.set_content(self._assistance_markdown(result))
-        self.assistance_status.set_visibility(True)
+        self._render_initial_validation(result)
 
     async def handle_generate_initial(self) -> None:
         self._show_busy("A IA está a completar os campos vazios…")
@@ -948,12 +1029,11 @@ class AGIRSoloInterface:
                 self._form_data(),
             )
             self._set_form_data(proposal)
-            self.assistance_status.set_content(
-                "### Proposta inicial gerada\n\n"
-                + str(proposal.get("explanation", ""))
-                + "\n\nRevise os campos antes de iniciar a sessão."
+            self._render_initial_assistance_message(
+                "Proposta inicial gerada",
+                str(proposal.get("explanation", ""))
+                + " Revise os campos antes de iniciar a sessão.",
             )
-            self.assistance_status.set_visibility(True)
             ui.notify("Proposta inicial preenchida.", type="positive")
         except USER_ERRORS as error:
             self._show_error(error)
@@ -2521,7 +2601,9 @@ class AGIRSoloInterface:
                         "min-width: 210px; flex: 1 1 210px;"
                     )
 
-            with ui.card().classes("surface artifact-card w-full").mark(
+            with ui.card().classes(
+                "surface artifact-card stage-artifact-focus w-full"
+            ).mark(
                 "artifact-content"
             ):
                 ui.markdown(
@@ -3095,6 +3177,7 @@ class AGIRSoloInterface:
                         "fact_check",
                         "Validar dados",
                         "Verifica localmente os campos obrigatórios e apresenta sugestões. "
+                        "Cada observação pode ser selecionada para localizar o campo. "
                         "Não usa IA nem tem custo de API.",
                     ),
                     (
@@ -3142,7 +3225,7 @@ class AGIRSoloInterface:
                         "fact_check",
                         "Verificar esta etapa com IA",
                         "Obtém um parecer facultativo, sem alterar o conteúdo nem bloquear a "
-                        "navegação.",
+                        "navegação. Cada observação localiza e realça o conteúdo relacionado.",
                     ),
                 ],
                 "As propostas de IA só se tornam versões depois da decisão do docente.",
@@ -3453,6 +3536,32 @@ class AGIRSoloInterface:
                     if stage == "resources":
                         self._render_resource_detail_tabs(state, state[stage])
 
+    @staticmethod
+    def _finding_search_terms(finding: dict[str, Any]) -> list[str]:
+        text = (
+            f"{finding.get('criterion', '')} {finding.get('message', '')}"
+        )
+        terms = re.findall(r"\b(?:RA|AE|TA|Q)\d+\b", text, flags=re.IGNORECASE)
+        for slide_number in re.findall(
+            r"\bslide\s+(\d+)\b", text, flags=re.IGNORECASE
+        ):
+            terms.append(f"Slide {slide_number}")
+        for resource_name in (
+            "Apresentação",
+            "Ficha de aula",
+            "Teste",
+            "Atividade prática",
+        ):
+            if resource_name.casefold() in text.casefold():
+                terms.append(resource_name)
+        return list(dict.fromkeys(terms))
+
+    async def _focus_stage_finding(self, finding: dict[str, Any]) -> None:
+        await self._scroll_and_highlight(
+            ".stage-artifact-focus",
+            self._finding_search_terms(finding),
+        )
+
     def _render_manual_authoring_card(
         self,
         state: dict[str, Any],
@@ -3539,16 +3648,31 @@ class AGIRSoloInterface:
                     findings = latest.get("findings", [])
                     if not findings:
                         ui.label("A IA não assinalou problemas.").classes("text-sm")
-                    for finding in findings:
+                    else:
+                        ui.label(
+                            "Selecione uma observação para localizar o conteúdo relacionado."
+                        ).classes("text-xs muted")
+                    for index, finding in enumerate(findings):
                         severity = (
                             "Bloqueante"
                             if finding.get("severity") == "blocking"
                             else "Aviso"
                         )
-                        ui.label(
+                        ui.button(
                             f"{severity} — {finding.get('criterion', '')}: "
-                            f"{finding.get('message', '')}"
-                        ).classes("text-sm soft-surface p-2 w-full")
+                            f"{finding.get('message', '')}",
+                            icon="my_location",
+                            on_click=lambda selected=deepcopy(finding): (
+                                self._focus_stage_finding(selected)
+                            ),
+                        ).props("flat no-caps align=left").classes(
+                            "validation-result-link "
+                            + (
+                                "validation-issue"
+                                if finding.get("severity") == "blocking"
+                                else "validation-suggestion"
+                            )
+                        ).mark(f"ai-review-finding-{index}")
                     ui.label(
                         "Este parecer não bloqueia a passagem à etapa seguinte."
                     ).classes("text-xs muted")

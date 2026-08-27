@@ -39,6 +39,8 @@ class InitialAssistanceTests(unittest.TestCase):
 
         self.assertFalse(result["valid"])
         self.assertIn("1.º semestre", result["issues"][0])
+        self.assertEqual(result["results"][0]["target"], "semester")
+        self.assertEqual(result["results"][0]["kind"], "issue")
 
     def test_semester_cannot_be_empty(self) -> None:
         with self.assertRaisesRegex(ValueError, "1.º semestre.*2.º semestre"):

@@ -18,6 +18,7 @@ from prism.models import (
 )
 from prism.persistence import SQLiteSessionStore
 from prism.workflow import (
+    ai_review_context_signature,
     create_session,
     create_test_agent,
     navigate_to_stage,
@@ -258,6 +259,40 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("AJUDA DA BARRA DE FERRAMENTAS")
     await user.should_see("Não usa IA nem tem custo de API")
     user.find(marker="close-toolbar-help").click()
+
+
+@pytest.mark.asyncio
+async def test_initial_validation_results_focus_the_related_field(
+    user: User,
+) -> None:
+    interfaces: list[app.AGIRSoloInterface] = []
+    focus_handlers: list[AsyncMock] = []
+
+    @ui.page("/_test_initial_validation_focus")
+    def initial_validation_focus_page():
+        interface = app.AGIRSoloInterface()
+
+        async def record_focus(*_args, **_kwargs) -> None:
+            ui.notify("Campo localizado.")
+
+        handler = AsyncMock(side_effect=record_focus)
+        interface._focus_initial_result = handler
+        interface.show_new_session()
+        interfaces.append(interface)
+        focus_handlers.append(handler)
+
+    await user.open("/_test_initial_validation_focus")
+
+    user.find(marker="validate-initial-data").click()
+    await user.should_see("Existem campos obrigatórios a corrigir.")
+    await user.should_see(
+        "Selecione uma observação para localizar o campo correspondente."
+    )
+    user.find(marker="initial-validation-result-0").click()
+    await user.should_see("Campo localizado.")
+
+    focus_handlers[-1].assert_awaited_once_with("unit_name")
+    assert interfaces[-1].initial_view.visible
 
 
 @pytest.mark.asyncio
@@ -600,6 +635,61 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.should_see("Objetivos gerais")
     await user.should_see("Criar etapa completa com IA")
     assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
+
+
+@pytest.mark.asyncio
+async def test_ai_review_findings_focus_the_related_artifact(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    finding = {
+        "severity": "warning",
+        "criterion": "Clareza dos resultados",
+        "message": "Clarificar o enunciado do RA1.",
+    }
+    review = {
+        "timestamp": "2026-08-27 18:30:00 UTC",
+        "context_signature": "",
+        "passed": True,
+        "findings": [finding],
+        "revision_instructions": "Clarificar RA1.",
+        "metadata": {"provider": "Teste", "model": "critic-fake"},
+        "non_blocking": True,
+    }
+    state["ai_reviews"] = {"learning_outcomes": [review]}
+    review["context_signature"] = ai_review_context_signature(
+        state, "learning_outcomes"
+    )
+    focus_handlers: list[AsyncMock] = []
+
+    @ui.page("/_test_ai_review_focus")
+    def ai_review_focus_page():
+        interface = app.AGIRSoloInterface()
+
+        async def record_focus(*_args, **_kwargs) -> None:
+            ui.notify("Artefacto localizado.")
+
+        handler = AsyncMock(side_effect=record_focus)
+        interface._focus_stage_finding = handler
+        interface.state = state
+        interface.show_workspace()
+        focus_handlers.append(handler)
+
+    await user.open("/_test_ai_review_focus")
+
+    await user.should_see(
+        "Selecione uma observação para localizar o conteúdo relacionado."
+    )
+    user.find(marker="ai-review-finding-0").click()
+    await user.should_see("Artefacto localizado.")
+
+    focus_handlers[-1].assert_awaited_once_with(finding)
+    assert app.AGIRSoloInterface._finding_search_terms(finding) == ["RA1"]
 
 
 @pytest.mark.asyncio

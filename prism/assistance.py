@@ -96,48 +96,71 @@ def validate_initial_fields(data: dict[str, Any]) -> dict[str, Any]:
 
     issues: list[str] = []
     suggestions: list[str] = []
+    results: list[dict[str, str]] = []
+
+    def add_issue(message: str, target: str) -> None:
+        issues.append(message)
+        results.append({"kind": "issue", "message": message, "target": target})
+
+    def add_suggestion(message: str, target: str) -> None:
+        suggestions.append(message)
+        results.append(
+            {"kind": "suggestion", "message": message, "target": target}
+        )
+
     unit_name = str(data.get("unit_name", "") or "").strip()
     source_text = str(data.get("source_text", "") or "").strip()
     bibliography = str(data.get("bibliography", "") or "").strip()
 
     if not unit_name:
-        issues.append("Indique o nome da unidade curricular ou ação de formação.")
+        add_issue(
+            "Indique o nome da unidade curricular ou ação de formação.",
+            "unit_name",
+        )
     if len(source_text) < 40:
-        issues.append(
-            "Acrescente informação de referência com pelo menos 40 caracteres."
+        add_issue(
+            "Acrescente informação de referência com pelo menos 40 caracteres.",
+            "source_text",
         )
     if not str(data.get("program_type", "") or "").strip():
-        suggestions.append(
-            "Indique o tipo de formação para melhorar o enquadramento."
+        add_suggestion(
+            "Indique o tipo de formação para melhorar o enquadramento.",
+            "program_type",
         )
     try:
         duration = float(data.get("duration_hours", 0) or 0)
         if duration <= 0:
             raise ValueError
     except (TypeError, ValueError):
-        issues.append(
+        add_issue(
             "A soma das horas de contacto e do trabalho autónomo deve ser "
-            "superior a zero."
+            "superior a zero.",
+            "duration_hours",
         )
     try:
         validate_taxonomy_choice(str(data.get("taxonomy_type", "")))
     except ValueError as error:
-        issues.append(str(error))
+        add_issue(str(error), "taxonomy_type")
     try:
         validate_semester(str(data.get("semester", "") or ""))
     except ValueError as error:
-        issues.append(str(error))
+        add_issue(str(error), "semester")
     if not bibliography:
-        suggestions.append(
-            "Acrescente bibliografia fornecida ou validada pelo docente antes da exportação final."
+        add_suggestion(
+            "Acrescente bibliografia fornecida ou validada pelo docente antes da exportação final.",
+            "bibliography",
         )
     if not str(data.get("program_name", "") or "").strip():
-        suggestions.append("O curso ou formação é opcional, mas melhora o enquadramento.")
+        add_suggestion(
+            "O curso ou formação é opcional, mas melhora o enquadramento.",
+            "program_name",
+        )
 
     return {
         "valid": not issues,
         "issues": issues,
         "suggestions": suggestions,
+        "results": results,
     }
 
 

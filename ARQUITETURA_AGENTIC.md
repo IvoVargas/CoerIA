@@ -44,6 +44,11 @@ reutilizam a mesma linguagem visual com as ações adequadas a esses extremos do
 percurso; a criação de uma sessão usa também a barra, sem conservar o bloco de
 assistência anterior. Um diálogo de ajuda contextual descreve as ações da barra
 e explicita quais executam localmente e quais recorrem a um fornecedor de IA.
+Os resultados da validação inicial transportam um destino estrutural explícito.
+Nos pareceres de IA, a interface extrai identificadores curriculares e referências
+a slides para localizar o elemento relacionado; na sua ausência, usa o cartão do
+artefacto como destino. A deslocação é acompanhada por um realce temporário e não
+altera o estado curricular.
 
 ```mermaid
 flowchart LR

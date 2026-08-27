@@ -169,6 +169,13 @@ deixou de ser apresentado. Na validação final, conserva o regresso à etapa
 anterior e identifica a verificação global obrigatória. O botão **?** abre uma
 ajuda contextual que explica cada ação visível e indica quando existe utilização
 de IA ou custo de API.
+
+Os resultados de **Validar dados** são selecionáveis: cada problema ou sugestão
+desloca a página para o campo correspondente e realça-o temporariamente. As
+observações de **Verificar esta etapa com IA** têm o mesmo comportamento; quando
+a mensagem inclui um identificador como `RA1`, `AE2`, `TA3` ou um número de
+slide, a respetiva linha ou secção é procurada, usando o artefacto da etapa como
+destino seguro quando não existe uma referência mais específica.
 Cada cartão da barra conserva também uma cor de fundo própria para o respetivo
 estado — por preencher, rascunho, verificado, concluído, pendente ou a rever — e
 mantém o estado escrito. As cores são claras e distinguem-se do fundo geral da

@@ -155,6 +155,11 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Disponibilizar na barra um botão **?** que abra uma ajuda contextual com a
   finalidade de cada ação, os respetivos efeitos e a indicação de utilização de
   IA ou eventual custo de API.
+- Apresentar os problemas e sugestões de **Validar dados** e as observações de
+  **Verificar esta etapa com IA** como ações selecionáveis que desloquem a página
+  e realcem o campo, linha, recurso ou artefacto relacionado; utilizar o
+  artefacto da etapa como destino quando o parecer não incluir uma referência
+  mais específica.
 - Permitir guardar rascunhos incompletos; validar apenas a forma estrutural
   mínima necessária para a persistência.
 - Não acrescentar uma coluna de numeração de linhas no modo de edição.
