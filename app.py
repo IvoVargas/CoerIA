@@ -298,12 +298,18 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 }
 .stage-toolbar-main { min-width: 0; }
 .stage-toolbar-context { min-width: 170px; flex: 1 1 220px; }
-.stage-toolbar-actions { flex: 2 1 620px; justify-content: flex-end; }
+.stage-toolbar-controls { flex: 0 1 auto; justify-content: flex-end; }
+.stage-toolbar-actions {
+  width: 100%; justify-content: flex-end; padding-top: 8px; margin-top: 2px;
+  border-top: 1px solid var(--agir-border);
+}
 .stage-toolbar .q-btn { min-height: 38px; }
+.stage-toolbar .stage-toolbar-help { min-width: 38px; width: 38px; padding: 0; }
 .stage-toolbar .toolbar-stage-title {
   font-size: .8rem; line-height: 1.25; font-weight: 750; color: var(--agir-secondary);
 }
 .stage-toolbar-ai-label { white-space: nowrap; }
+.toolbar-help-item { padding: 12px 14px; border-radius: 12px; }
 .artifact-card { min-width: 0; padding: 26px 30px; overflow-x: auto; }
 .artifact-markdown.artifact-heading { width: auto; min-width: 0; flex: 1 1 420px; }
 .artifact-heading h1 { margin: 0; }
@@ -386,6 +392,7 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 @media (max-width: 1050px) {
   .agir-main { padding: 22px 18px 64px; }
   .stage-toolbar { top: 64px; }
+  .stage-toolbar-controls,
   .stage-toolbar-actions { justify-content: flex-start; flex-basis: 100%; }
 }
 @media (max-width: 640px) {
@@ -398,8 +405,9 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   .presentation-slide-grid { grid-template-columns: 1fr; }
   .stage-toolbar { top: 58px; padding: 9px; }
   .stage-toolbar-context { order: -1; flex-basis: 100%; }
+  .stage-toolbar-controls,
   .stage-toolbar-actions { gap: 6px; }
-  .stage-toolbar .q-btn { flex: 1 1 auto; }
+  .stage-toolbar .q-btn:not(.stage-toolbar-help) { flex: 1 1 auto; }
 }
 """
 
@@ -653,10 +661,20 @@ class AGIRSoloInterface:
                 ui.button(
                     "Etapa seguinte",
                     icon="arrow_forward",
-                    on_click=lambda: self._request_initial_stage_navigation(
-                        STAGE_ORDER[0]
-                    ),
+                    on_click=self._handle_initial_toolbar_next,
                 ).props("unelevated no-caps icon-right").classes("primary-action")
+                with ui.row().classes(
+                    "stage-toolbar-controls items-center gap-2 flex-wrap"
+                ):
+                    ui.button(
+                        "Validar dados",
+                        icon="fact_check",
+                        on_click=self.handle_validate_initial,
+                    ).props("outline no-caps").classes("secondary-action").mark(
+                        "validate-initial-data"
+                    )
+                    self._render_toolbar_help_button("initial")
+
                 with ui.row().classes(
                     "stage-toolbar-actions items-center gap-2 flex-wrap"
                 ):
@@ -664,19 +682,15 @@ class AGIRSoloInterface:
                         "eyebrow stage-toolbar-ai-label"
                     )
                     ui.button(
-                        "Validar e sugerir melhorias",
-                        icon="fact_check",
-                        on_click=self.handle_validate_initial,
-                    ).props("outline no-caps").classes("secondary-action")
-                    ui.button(
                         "Gerar proposta inicial por IA",
                         icon="auto_awesome",
                         on_click=self.handle_generate_initial,
-                    ).props("outline no-caps").classes("secondary-action")
-        self.initial_stage_toolbar.set_visibility(False)
+                    ).props("outline no-caps").classes("secondary-action").mark(
+                        "generate-initial-with-ai"
+                    )
 
-        with ui.card().classes("surface w-full p-5 md:p-6") as assistance_card:
-            assistance_card.mark("new-session-assistance")
+        with ui.card().classes("surface w-full p-5 md:p-6") as provider_card:
+            provider_card.mark("new-session-provider")
             ui.label("Fornecedor de IA").classes("text-sm font-semibold")
             self.fields["ai_provider"] = ui.toggle(
                 list(AI_PROVIDER_CHOICES),
@@ -686,27 +700,6 @@ class AGIRSoloInterface:
                 "A escolha é exclusiva, fica associada à sessão e só é usada "
                 "quando solicitar assistência por IA."
             ).classes("text-xs muted")
-            ui.separator().classes("my-4")
-            with ui.row().classes("w-full items-start gap-4"):
-                ui.icon("auto_awesome", color="primary", size="2rem")
-                with ui.column().classes("gap-1 flex-1"):
-                    ui.label("Preenchimento manual orientado").classes("section-title")
-                    ui.label(
-                        "Valide os dados localmente ou solicite à IA uma proposta apenas para os campos vazios."
-                    ).classes("muted")
-            with ui.row().classes(
-                "w-full gap-3 mt-3 items-center"
-            ) as self.initial_assistance_actions:
-                ui.button(
-                    "Validar e sugerir melhorias",
-                    icon="fact_check",
-                    on_click=self.handle_validate_initial,
-                ).props("outline no-caps").classes("secondary-action")
-                ui.button(
-                    "Gerar proposta inicial por IA",
-                    icon="auto_awesome",
-                    on_click=self.handle_generate_initial,
-                ).props("unelevated no-caps").classes("secondary-action")
             self.assistance_status = ui.markdown().classes(
                 "soft-surface w-full p-4 mt-3"
             )
@@ -1137,6 +1130,12 @@ class AGIRSoloInterface:
         self.initial_view.set_visibility(True)
         self.drawer.hide()
 
+    async def _handle_initial_toolbar_next(self) -> None:
+        if self.editing_initial_session:
+            await self._request_initial_stage_navigation(STAGE_ORDER[0])
+            return
+        await self.handle_start_session()
+
     def _set_initial_view_mode(self, editing: bool) -> None:
         self.editing_initial_session = editing
         if not hasattr(self, "create_session_button"):
@@ -1161,8 +1160,7 @@ class AGIRSoloInterface:
             if editing
             else "Iniciar desenho curricular alinhado"
         )
-        self.initial_stage_toolbar.set_visibility(editing)
-        self.initial_assistance_actions.set_visibility(not editing)
+        self.initial_stage_toolbar.set_visibility(True)
         self.cancel_initial_edit_button.set_visibility(editing)
         self.existing_sources_notice.set_visibility(editing)
         self._render_initial_view_stage_track()
@@ -3072,6 +3070,140 @@ class AGIRSoloInterface:
             "unidade curricular, no rascunho atual e nos artefactos anteriores.",
         )
 
+    def _render_toolbar_help_button(self, context: str) -> None:
+        ui.button(
+            "?",
+            on_click=lambda: self._open_toolbar_help_dialog(context),
+        ).props(
+            "outline round dense aria-label='Ajuda sobre os botões desta barra'"
+        ).classes("stage-toolbar-help secondary-action font-bold").mark(
+            "stage-toolbar-help", f"stage-toolbar-help-{context}"
+        )
+
+    def _open_toolbar_help_dialog(self, context: str) -> None:
+        help_content: dict[str, tuple[str, list[tuple[str, str, str]], str]] = {
+            "initial": (
+                "Dados iniciais",
+                [
+                    (
+                        "arrow_forward",
+                        "Etapa seguinte",
+                        "Cria a sessão ou, durante uma revisão, abre a formulação dos "
+                        "resultados. Se existirem alterações por guardar, pede uma decisão.",
+                    ),
+                    (
+                        "fact_check",
+                        "Validar dados",
+                        "Verifica localmente os campos obrigatórios e apresenta sugestões. "
+                        "Não usa IA nem tem custo de API.",
+                    ),
+                    (
+                        "auto_awesome",
+                        "Gerar proposta inicial por IA",
+                        "Pede ao fornecedor selecionado uma proposta para completar os dados "
+                        "iniciais. O docente deve rever os campos antes de avançar.",
+                    ),
+                    (
+                        "play_arrow",
+                        "Iniciar desenho curricular alinhado",
+                        "Guarda o formulário no fim da página e inicia o percurso sem gerar "
+                        "automaticamente as etapas seguintes.",
+                    ),
+                ],
+                "O fornecedor só recebe conteúdo quando é acionada a proposta por IA.",
+            ),
+            "authoring": (
+                "Autoria da etapa",
+                [
+                    (
+                        "arrow_back",
+                        "Etapa anterior / Etapa seguinte",
+                        "Navega sem executar IA e sem exigir que o conteúdo esteja completo.",
+                    ),
+                    (
+                        "edit",
+                        "Editar campos e tabelas",
+                        "Abre a edição manual do artefacto. Esta ação não pertence à "
+                        "assistência com IA e não tem custo de API.",
+                    ),
+                    (
+                        "auto_fix_high",
+                        "Criar etapa completa com IA",
+                        "Pede uma proposta para todo o artefacto. Nada é aplicado sem revisão "
+                        "e aceitação explícitas.",
+                    ),
+                    (
+                        "auto_awesome",
+                        "Pedir propostas à IA",
+                        "Abre um diálogo para escolher uma etapa, tabela, linha ou campo e "
+                        "escrever uma instrução localizada.",
+                    ),
+                    (
+                        "fact_check",
+                        "Verificar esta etapa com IA",
+                        "Obtém um parecer facultativo, sem alterar o conteúdo nem bloquear a "
+                        "navegação.",
+                    ),
+                ],
+                "As propostas de IA só se tornam versões depois da decisão do docente.",
+            ),
+            "editing": (
+                "Edição manual",
+                [
+                    (
+                        "close",
+                        "Cancelar edição",
+                        "Descarta as alterações ainda não guardadas e mantém a versão ativa.",
+                    ),
+                    (
+                        "save",
+                        "Guardar rascunho",
+                        "Guarda uma nova versão manual. Não executa IA; etapas posteriores "
+                        "podem ficar assinaladas para revisão.",
+                    ),
+                ],
+                "A navegação fica desativada enquanto a edição manual está aberta.",
+            ),
+            "final": (
+                "Validação final",
+                [
+                    (
+                        "arrow_back",
+                        "Etapa anterior",
+                        "Regressa aos recursos educativos para consulta ou alteração.",
+                    ),
+                    (
+                        "verified",
+                        "Verificação global obrigatória",
+                        "Aplica controlos determinísticos à estrutura, cobertura e coerência "
+                        "antes de permitir concluir e exportar.",
+                    ),
+                ],
+                "A etapa seguinte só fica disponível através da conclusão da validação.",
+            ),
+        }
+        title, items, note = help_content.get(context, help_content["authoring"])
+        with ui.dialog() as dialog, ui.card().classes(
+            "w-full max-w-2xl p-6 gap-4"
+        ).mark("toolbar-help-dialog"):
+            ui.label("AJUDA DA BARRA DE FERRAMENTAS").classes("eyebrow")
+            ui.label(title).classes("section-title")
+            with ui.column().classes("w-full gap-2"):
+                for icon, item_title, description in items:
+                    with ui.row().classes(
+                        "toolbar-help-item soft-surface w-full items-start gap-3"
+                    ):
+                        ui.icon(icon, color="primary", size="1.5rem")
+                        with ui.column().classes("gap-0 flex-1"):
+                            ui.label(item_title).classes("font-semibold")
+                            ui.label(description).classes("text-sm muted")
+            ui.label(note).classes("text-sm muted")
+            with ui.row().classes("w-full justify-end"):
+                ui.button("Fechar", on_click=dialog.close).props(
+                    "unelevated no-caps"
+                ).classes("primary-action").mark("close-toolbar-help")
+        dialog.open()
+
     def _open_ai_assistance_dialog(
         self,
         stage: str,
@@ -3211,7 +3343,7 @@ class AGIRSoloInterface:
                 ).props("unelevated no-caps icon-right").classes("primary-action")
 
                 with ui.row().classes(
-                    "stage-toolbar-actions items-center gap-2 flex-wrap"
+                    "stage-toolbar-controls items-center gap-2 flex-wrap"
                 ):
                     if editing:
                         previous_button.disable()
@@ -3233,44 +3365,52 @@ class AGIRSoloInterface:
                                 state, stage
                             ),
                         ).props("unelevated no-caps").classes("primary-action")
-                        return
+                        self._render_toolbar_help_button("editing")
+                    else:
+                        edit_button = ui.button(
+                            "Editar campos e tabelas",
+                            icon="edit",
+                            on_click=lambda: self._start_manual_edit(stage),
+                        ).props("outline no-caps").classes(
+                            "secondary-action"
+                        ).mark("edit-artifact-content")
+                        self._render_toolbar_help_button("authoring")
 
-                    ui.label("ASSISTÊNCIA COM IA").classes(
-                        "eyebrow stage-toolbar-ai-label"
-                    ).mark("ai-assistance-heading")
-                    create_button = ui.button(
-                        "Criar etapa completa com IA",
-                        icon="auto_fix_high",
-                        on_click=lambda: self._create_complete_stage_with_ai(stage),
-                    ).props("outline no-caps").classes("secondary-action").mark(
-                        "create-ai-version"
-                    )
-                    proposal_button = ui.button(
-                        "Pedir propostas à IA",
-                        icon="auto_awesome",
-                        on_click=lambda: self._open_ai_assistance_dialog(stage, state),
-                    ).props("outline no-caps").classes("secondary-action").mark(
-                        "open-ai-assistance"
-                    )
-                    verify_button = ui.button(
-                        "Verificar esta etapa com IA",
-                        icon="fact_check",
-                        on_click=lambda: self._handle_ai_verification(stage),
-                    ).props("outline no-caps").classes("secondary-action").mark(
-                        "verify-stage-with-ai"
-                    )
-                    edit_button = ui.button(
-                        "Editar campos e tabelas",
-                        icon="edit",
-                        on_click=lambda: self._start_manual_edit(stage),
-                    ).props("outline no-caps").classes("secondary-action").mark(
-                        "edit-artifact-content"
-                    )
-                    if proposal is not None:
-                        create_button.disable()
-                        proposal_button.disable()
-                        verify_button.disable()
-                        edit_button.disable()
+            if editing:
+                return
+
+            with ui.row().classes(
+                "stage-toolbar-actions items-center gap-2 flex-wrap"
+            ):
+                ui.label("ASSISTÊNCIA COM IA").classes(
+                    "eyebrow stage-toolbar-ai-label"
+                ).mark("ai-assistance-heading")
+                create_button = ui.button(
+                    "Criar etapa completa com IA",
+                    icon="auto_fix_high",
+                    on_click=lambda: self._create_complete_stage_with_ai(stage),
+                ).props("outline no-caps").classes("secondary-action").mark(
+                    "create-ai-version"
+                )
+                proposal_button = ui.button(
+                    "Pedir propostas à IA",
+                    icon="auto_awesome",
+                    on_click=lambda: self._open_ai_assistance_dialog(stage, state),
+                ).props("outline no-caps").classes("secondary-action").mark(
+                    "open-ai-assistance"
+                )
+                verify_button = ui.button(
+                    "Verificar esta etapa com IA",
+                    icon="fact_check",
+                    on_click=lambda: self._handle_ai_verification(stage),
+                ).props("outline no-caps").classes("secondary-action").mark(
+                    "verify-stage-with-ai"
+                )
+                if proposal is not None:
+                    create_button.disable()
+                    proposal_button.disable()
+                    verify_button.disable()
+                    edit_button.disable()
 
     def _render_authoring_view(self, state: dict[str, Any]) -> None:
         stage = state["current_stage"]
@@ -3554,6 +3694,13 @@ class AGIRSoloInterface:
                     ui.button("Etapa seguinte", icon="arrow_forward").props(
                         "unelevated no-caps icon-right disable"
                     ).classes("primary-action")
+                    with ui.row().classes(
+                        "stage-toolbar-controls items-center gap-2"
+                    ):
+                        self._render_toolbar_help_button("final")
+                with ui.row().classes(
+                    "stage-toolbar-actions items-center gap-2 flex-wrap"
+                ):
                     ui.label("VERIFICAÇÃO GLOBAL OBRIGATÓRIA").classes(
                         "eyebrow stage-toolbar-ai-label"
                     )

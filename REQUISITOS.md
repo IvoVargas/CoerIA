@@ -144,11 +144,17 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Disponibilizar uma barra de ferramentas superior, persistente durante a
   deslocação da página, que apresente o contexto da etapa e reúna **Etapa
   anterior**, **Etapa seguinte**, **Editar campos e tabelas** e as ações de IA.
+- Separar visualmente **Editar campos e tabelas** e outras ações determinísticas
+  da área identificada como **Assistência com IA**.
 - No modo de edição, manter a barra visível, desativar a navegação e substituir
   as ações de autoria por **Cancelar edição** e **Guardar rascunho**.
-- Ao rever **Dados iniciais**, apresentar na barra a passagem à etapa seguinte e
-  as ações de validação e proposta inicial; na validação final, manter o regresso
-  à etapa anterior e identificar a verificação global obrigatória.
+- Na criação e na revisão de **Dados iniciais**, substituir o bloco antigo de
+  assistência pela mesma barra, apresentando **Validar dados** como ação local e
+  **Gerar proposta inicial por IA** na área de IA; na validação final, manter o
+  regresso à etapa anterior e identificar a verificação global obrigatória.
+- Disponibilizar na barra um botão **?** que abra uma ajuda contextual com a
+  finalidade de cada ação, os respetivos efeitos e a indicação de utilização de
+  IA ou eventual custo de API.
 - Permitir guardar rascunhos incompletos; validar apenas a forma estrutural
   mínima necessária para a persistência.
 - Não acrescentar uma coluna de numeração de linhas no modo de edição.

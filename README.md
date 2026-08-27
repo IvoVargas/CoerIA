@@ -159,12 +159,16 @@ ocorrer antes de artefactos já preenchidos, esses artefactos são preservados e
 assinalados como **Rever após alterações anteriores**.
 Uma barra de ferramentas superior permanece visível durante a deslocação da
 página e reúne o contexto da etapa, **Etapa anterior**, **Etapa seguinte**,
-**Editar campos e tabelas** e as ações facultativas de IA. No modo de edição,
+**Editar campos e tabelas** e as ações facultativas de IA. A edição manual fica
+no grupo geral da etapa, visualmente separada da área **Assistência com IA**. No modo de edição,
 a mesma barra substitui essas ações por **Cancelar edição** e **Guardar
 rascunho**, evitando que os comandos necessários fiquem fora do ecrã. Ao
-regressar a **Dados iniciais**, a barra apresenta a navegação e as ações próprias
-de assistência desse formulário; na validação final, conserva o regresso à
-etapa anterior e identifica a verificação global obrigatória.
+criar ou rever **Dados iniciais**, a mesma barra apresenta **Validar dados** como
+ação local e separa **Gerar proposta inicial por IA**; o antigo bloco de ações
+deixou de ser apresentado. Na validação final, conserva o regresso à etapa
+anterior e identifica a verificação global obrigatória. O botão **?** abre uma
+ajuda contextual que explica cada ação visível e indica quando existe utilização
+de IA ou custo de API.
 Cada cartão da barra conserva também uma cor de fundo própria para o respetivo
 estado — por preencher, rascunho, verificado, concluído, pendente ou a rever — e
 mantém o estado escrito. As cores são claras e distinguem-se do fundo geral da

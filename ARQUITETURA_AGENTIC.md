@@ -35,12 +35,15 @@ versões.
 
 Na interface, uma barra de ferramentas superior persistente concentra o
 contexto da etapa, a navegação, a entrada no editor e as três ações facultativas
-de IA. A assistência localizada abre um diálogo apenas quando pedida, no qual o
+de IA, mantendo a edição manual fora do grupo visual **Assistência com IA**. A
+assistência localizada abre um diálogo apenas quando pedida, no qual o
 docente escolhe o âmbito e escreve a instrução. Durante a edição, a barra mantém
 visíveis as ações de cancelar e guardar e bloqueia a navegação, evitando perdas
 acidentais do rascunho em curso. A revisão dos dados iniciais e a validação final
 reutilizam a mesma linguagem visual com as ações adequadas a esses extremos do
-percurso.
+percurso; a criação de uma sessão usa também a barra, sem conservar o bloco de
+assistência anterior. Um diálogo de ajuda contextual descreve as ações da barra
+e explicita quais executam localmente e quais recorrem a um fornecedor de IA.
 
 ```mermaid
 flowchart LR

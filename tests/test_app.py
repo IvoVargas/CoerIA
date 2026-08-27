@@ -138,7 +138,10 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("Iniciar nova sessão")
     user.find(marker="start-new-session").click()
     await user.should_see("Configure o ponto de partida")
-    await user.should_see("Preenchimento manual orientado")
+    await user.should_see("Validar dados")
+    await user.should_see("ASSISTÊNCIA COM IA")
+    await user.should_see("Gerar proposta inicial por IA")
+    await user.should_not_see("Preenchimento manual orientado")
     await user.should_see("Fornecedor de IA")
     await user.should_see("OpenAI")
     await user.should_see("IAedu")
@@ -243,15 +246,18 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_not_see("Objetivos gerais da unidade curricular")
     await user.should_not_see("Recursos a produzir")
     await user.should_not_see("Permitir geração de imagens por IA")
-    assistance = next(
-        iter(user.find(marker="new-session-assistance").elements)
-    )
+    toolbar = next(iter(user.find(marker="initial-stage-toolbar").elements))
+    provider = next(iter(user.find(marker="new-session-provider").elements))
     create_button = next(
         iter(user.find(marker="create-pedagogical-session").elements)
     )
     form = next(iter(user.find(marker="new-session-form").elements))
-    assert assistance.id < form.id
+    assert toolbar.id < provider.id < form.id
     assert form.id < create_button.id
+    user.find(marker="stage-toolbar-help-initial").click()
+    await user.should_see("AJUDA DA BARRA DE FERRAMENTAS")
+    await user.should_see("Não usa IA nem tem custo de API")
+    user.find(marker="close-toolbar-help").click()
 
 
 @pytest.mark.asyncio
@@ -552,8 +558,12 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     edit_button = next(iter(user.find(marker="edit-artifact-content").elements))
     toolbar = next(iter(user.find(marker="stage-toolbar").elements))
     assert toolbar.id < create_button.id
+    assert edit_button.id < assistance_heading.id
     assert assistance_heading.id < create_button.id < proposal_button.id < verify_button.id
-    assert verify_button.id < edit_button.id
+    user.find(marker="stage-toolbar-help-authoring").click()
+    await user.should_see("Autoria da etapa")
+    await user.should_see("Esta ação não pertence à assistência com IA")
+    user.find(marker="close-toolbar-help").click()
     user.find(marker="open-ai-assistance").click()
     await user.should_see("Pedir uma proposta localizada")
     await user.should_see("Âmbito da assistência")
