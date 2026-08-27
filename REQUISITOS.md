@@ -141,9 +141,14 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   transformando a tabela apresentada no próprio local e permitindo alterar
   texto, adicionar linhas e remover linhas, sem abrir um editor separado nem
   mudar os campos visíveis ou a respetiva ordem.
-- Apresentar a ação **Editar campos e tabelas** no canto superior direito do
-  cartão que contém o artefacto, alinhada verticalmente com o respetivo título,
-  e designar a navegação para a frente como **Etapa seguinte**.
+- Disponibilizar uma barra de ferramentas superior, persistente durante a
+  deslocação da página, que apresente o contexto da etapa e reúna **Etapa
+  anterior**, **Etapa seguinte**, **Editar campos e tabelas** e as ações de IA.
+- No modo de edição, manter a barra visível, desativar a navegação e substituir
+  as ações de autoria por **Cancelar edição** e **Guardar rascunho**.
+- Ao rever **Dados iniciais**, apresentar na barra a passagem à etapa seguinte e
+  as ações de validação e proposta inicial; na validação final, manter o regresso
+  à etapa anterior e identificar a verificação global obrigatória.
 - Permitir guardar rascunhos incompletos; validar apenas a forma estrutural
   mínima necessária para a persistência.
 - Não acrescentar uma coluna de numeração de linhas no modo de edição.
@@ -155,15 +160,14 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir pedir uma verificação por IA em qualquer etapa de autoria. O parecer
   deve ser guardado, não deve alterar o artefacto e nunca deve bloquear a
   navegação.
-- Organizar o cartão sem o título redundante «Controlo do docente» e apresentar
-  primeiro **Criar etapa completa com IA**, acompanhada de uma explicação própria
-  e num botão de largura total, para obter uma proposta completa com base no
-  contexto, no rascunho atual e nos artefactos anteriores. A proposta só se torna
-  uma nova versão depois da revisão e aplicação explícitas pelo docente.
-- Apresentar depois **Assistência com IA**, com os campos de âmbito e instrução à
-  esquerda e **Pedir propostas à IA** à direita, ocupando a altura dos dois campos.
-- Colocar a explicação da autoria manual e **Verificar esta etapa com IA** no fim
-  do cartão, com o botão de verificação por baixo do texto.
+- Apresentar primeiro **Criar etapa completa com IA** na área de IA da barra,
+  para obter uma proposta completa com base no contexto, no rascunho atual e nos
+  artefactos anteriores. A proposta só se torna uma nova versão depois da
+  revisão e aplicação explícitas pelo docente.
+- Apresentar **Pedir propostas à IA** na mesma barra e abrir num diálogo os
+  campos **Âmbito da assistência** e **O que pretende que a IA proponha?**,
+  evitando ocupar permanentemente espaço no artefacto.
+- Disponibilizar **Verificar esta etapa com IA** na barra de ferramentas.
 - Na etapa de recursos, identificar inequivocamente que essa ação gera os tipos
   de recurso selecionados, pode efetuar várias chamadas ao fornecedor e exige
   confirmação explícita antes de iniciar, incluindo o aviso sobre eventual

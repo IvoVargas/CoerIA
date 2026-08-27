@@ -157,14 +157,21 @@ podem ser alterados textos, adicionadas linhas e removidas linhas. Guardar cria
 uma nova versão mesmo que o rascunho ainda esteja incompleto. Se a alteração
 ocorrer antes de artefactos já preenchidos, esses artefactos são preservados e
 assinalados como **Rever após alterações anteriores**.
-O botão de edição encontra-se no canto superior direito do cartão do conteúdo;
-**Etapa seguinte** navega sem executar a IA.
+Uma barra de ferramentas superior permanece visível durante a deslocação da
+página e reúne o contexto da etapa, **Etapa anterior**, **Etapa seguinte**,
+**Editar campos e tabelas** e as ações facultativas de IA. No modo de edição,
+a mesma barra substitui essas ações por **Cancelar edição** e **Guardar
+rascunho**, evitando que os comandos necessários fiquem fora do ecrã. Ao
+regressar a **Dados iniciais**, a barra apresenta a navegação e as ações próprias
+de assistência desse formulário; na validação final, conserva o regresso à
+etapa anterior e identifica a verificação global obrigatória.
 Cada cartão da barra conserva também uma cor de fundo própria para o respetivo
 estado — por preencher, rascunho, verificado, concluído, pendente ou a rever — e
 mantém o estado escrito. As cores são claras e distinguem-se do fundo geral da
 página; o ponto atual conserva o fundo verde em gradiente já usado na seleção.
 
-**Criar etapa completa com IA** é a primeira ação apresentada na zona de IA e
+**Criar etapa completa com IA** é a primeira ação apresentada na área de IA da
+barra de ferramentas e
 pede uma proposta para toda a etapa, considerando o rascunho atual; o conteúdo
 só se torna uma nova versão depois da revisão do docente. Em **Recursos
 educativos**, esta ação apresenta primeiro uma confirmação explícita, porque
@@ -173,9 +180,9 @@ imagens da apresentação. A proposta resultante reutiliza os mesmos separadores
 o mesmo editor da edição manual, mostra apenas os recursos selecionados e permite
 ajustar o conteúdo antes de aplicar a proposta editada como uma única versão.
 
-Depois, no bloco **Assistência com IA**, **Pedir propostas à IA** permite pedidos
-dirigidos e exige a escolha prévia do âmbito e uma instrução. Para uma célula,
-linha ou tabela, o fornecedor recebe um esquema de resposta
+Na mesma barra, **Pedir propostas à IA** abre um diálogo para escolher o âmbito
+e escrever uma instrução sem ocupar permanentemente espaço no artefacto. Para
+uma célula, linha ou tabela, o fornecedor recebe um esquema de resposta
 limitado exatamente a esse fragmento, sem gerar primeiro a etapa inteira. O
 seletor não oferece os identificadores técnicos próprios das linhas como campos
 isolados para reformulação. A proposta fica pendente até o docente comparar o
@@ -184,7 +191,7 @@ aceitar ou rejeitar cada alteração de forma independente. Linhas novas ou a
 remover são decididas como uma unidade. **Aplicar alterações aceites** reúne as
 decisões numa única nova versão; rejeitar todas conserva o rascunho sem alterações.
 
-**Verificar esta etapa com IA**, apresentada no fim do cartão, guarda um parecer
+**Verificar esta etapa com IA**, também disponível na barra, guarda um parecer
 facultativo que nunca impede avançar. O parecer fica identificado pela versão dos
 artefactos que analisou; depois de qualquer alteração é apresentado como
 desatualizado até o docente pedir uma nova verificação. Alegações da IA sobre IDs,

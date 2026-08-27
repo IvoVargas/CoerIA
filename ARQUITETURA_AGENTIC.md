@@ -33,6 +33,15 @@ avaliação. A separação entre `AE` e `TA` evita ambiguidades nas relações d
 alinhamento e mantém estes identificadores estáveis ao longo da autoria e das
 versões.
 
+Na interface, uma barra de ferramentas superior persistente concentra o
+contexto da etapa, a navegação, a entrada no editor e as três ações facultativas
+de IA. A assistência localizada abre um diálogo apenas quando pedida, no qual o
+docente escolhe o âmbito e escreve a instrução. Durante a edição, a barra mantém
+visíveis as ações de cancelar e guardar e bloqueia a navegação, evitando perdas
+acidentais do rascunho em curso. A revisão dos dados iniciais e a validação final
+reutilizam a mesma linguagem visual com as ações adequadas a esses extremos do
+percurso.
+
 ```mermaid
 flowchart LR
     D["Docente abre qualquer etapa"] --> M["Edita e guarda um rascunho"]

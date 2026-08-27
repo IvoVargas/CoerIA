@@ -293,7 +293,9 @@ async def test_existing_session_can_return_to_and_update_initial_data(
     user.find("Etapa anterior").click()
     await user.should_see("Reveja o ponto de partida")
     await user.should_see("Guardar alterações iniciais")
+    await user.should_see("ASSISTÊNCIA COM IA")
     await user.should_see("Incorporado: programa.pdf")
+    assert user.find(marker="initial-stage-toolbar").elements
     assert interfaces[-1].initial_view.visible
     assert interfaces[-1].state is not None
     assert interfaces[-1]._form_data()["unit_name"] == "Introdução às Pescas"
@@ -341,11 +343,11 @@ async def test_initial_data_stage_navigates_to_another_stage_when_unchanged(
 
     user.find(marker="edit-initial-session-data").click()
     await user.should_see("Reveja o ponto de partida")
-    user.find(marker="manual-stage-curriculum_analysis").click()
+    user.find("Etapa seguinte").click()
 
-    await user.should_see("Etapa aberta: Conteúdos e objetivos curriculares.")
+    await user.should_see("Etapa aberta: Formulação dos resultados de aprendizagem.")
     assert interfaces[-1].workspace_view.visible
-    assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
+    assert interfaces[-1].state["current_stage"] == "learning_outcomes"
 
 
 @pytest.mark.asyncio
@@ -494,10 +496,13 @@ async def test_teacher_decision_is_above_the_current_artifact_in_light_theme(
     with user:
         interfaces[-1].state = final_state
         interfaces[-1].show_workspace()
+    final_toolbars = user.find(marker="final-stage-toolbar").elements
     final_decisions = user.find(marker="teacher-decision").elements
     final_artifacts = user.find(marker="artifact-content").elements
+    assert len(final_toolbars) == 1
     assert len(final_decisions) == 1
     assert len(final_artifacts) == 1
+    assert next(iter(final_toolbars)).id < next(iter(final_decisions)).id
     assert next(iter(final_decisions)).id < next(iter(final_artifacts)).id
 
 
@@ -542,16 +547,19 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     assistance_heading = next(
         iter(user.find(marker="ai-assistance-heading").elements)
     )
-    assistance_grid = next(
-        iter(user.find(marker="ai-assistance-request").elements)
-    )
+    proposal_button = next(iter(user.find(marker="open-ai-assistance").elements))
     verify_button = next(iter(user.find(marker="verify-stage-with-ai").elements))
-    assert (
-        create_button.id
-        < assistance_heading.id
-        < assistance_grid.id
-        < verify_button.id
-    )
+    edit_button = next(iter(user.find(marker="edit-artifact-content").elements))
+    toolbar = next(iter(user.find(marker="stage-toolbar").elements))
+    assert toolbar.id < create_button.id
+    assert assistance_heading.id < create_button.id < proposal_button.id < verify_button.id
+    assert verify_button.id < edit_button.id
+    user.find(marker="open-ai-assistance").click()
+    await user.should_see("Pedir uma proposta localizada")
+    await user.should_see("Âmbito da assistência")
+    assert user.find(marker="ai-assistance-request").elements
+    user.find(marker="submit-ai-assistance-request").elements
+    user.find(marker="cancel-ai-assistance").click()
     user.find(marker="edit-artifact-content").click()
     await user.should_see("EDIÇÃO NA TABELA ATUAL")
     await user.should_see("Adicionar linha")
@@ -577,7 +585,7 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     assistance_heading = next(
         iter(user.find(marker="ai-assistance-heading").elements)
     )
-    assert resource_settings_button.id < create_button.id < assistance_heading.id
+    assert assistance_heading.id < create_button.id < resource_settings_button.id
     user.find(marker="manual-stage-curriculum_analysis").click()
     await user.should_see("Objetivos gerais")
     await user.should_see("Criar etapa completa com IA")
@@ -702,6 +710,47 @@ async def test_ai_version_action_requests_the_complete_stage(
         "Toda a etapa",
         "Crie uma versão completa desta etapa com base no contexto da "
         "unidade curricular, no rascunho atual e nos artefactos anteriores.",
+    )
+
+
+@pytest.mark.asyncio
+async def test_localized_ai_action_uses_the_toolbar_dialog(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    handlers: list[AsyncMock] = []
+
+    @ui.page("/_test_toolbar_ai_dialog")
+    def toolbar_ai_dialog_page():
+        interface = app.AGIRSoloInterface()
+
+        async def record_request(*_args, **_kwargs) -> None:
+            ui.notify("Pedido localizado registado.")
+
+        handler = AsyncMock(side_effect=record_request)
+        interface._handle_ai_assistance = handler
+        interface.state = state
+        interface.show_workspace()
+        handlers.append(handler)
+
+    await user.open("/_test_toolbar_ai_dialog")
+
+    user.find(marker="open-ai-assistance").click()
+    await user.should_see("Pedir uma proposta localizada")
+    handlers[-1].assert_not_awaited()
+    user.find(marker="submit-ai-assistance-request").click()
+    await user.should_see("Pedido localizado registado.")
+
+    handlers[-1].assert_awaited_once_with(
+        "learning_outcomes",
+        [],
+        "Toda a etapa",
+        "",
     )
 
 
