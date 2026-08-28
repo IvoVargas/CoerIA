@@ -669,6 +669,67 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
 
 
 @pytest.mark.asyncio
+async def test_outcome_reference_select_shows_descriptions_only_in_options(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    state["learning_outcomes"] = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar os elementos fundamentais de um algoritmo.",
+        },
+        {
+            "id": "RA2",
+            "outcome_type": "Conhecimento prático",
+            "theme": "Testes",
+            "taxonomy_level": "Relacional",
+            "action_verb": "Analisar",
+            "statement": "Analisar resultados de testes com casos concretos.",
+        },
+    ]
+    state["teaching_activities"] = [
+        {
+            "id": "AE1",
+            "outcome_ids": ["RA1"],
+            "learning_context": "Presencial",
+            "activity": "Exploração orientada.",
+            "practice": "Resolver exemplos.",
+            "support": "Acompanhamento do docente.",
+            "feedback_strategy": "Feedback formativo.",
+        }
+    ]
+    state = navigate_to_stage(state, "teaching_activities")
+
+    @ui.page("/_test_outcome_reference_labels")
+    def outcome_reference_labels_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_outcome_reference_labels")
+    user.find(marker="edit-artifact-content").click()
+
+    controls = user.find(marker="learning-outcome-reference").elements
+    assert len(controls) == 1
+    control = next(iter(controls))
+    assert control.options["RA1"] == (
+        "RA1 — Identificar os elementos fundamentais de um algoritmo."
+    )
+    assert control.value == ["RA1"]
+    assert "selected-item" in control.slots
+    assert "split(' — ')[0]" in str(control.slots["selected-item"].template)
+
+
+@pytest.mark.asyncio
 async def test_ai_review_findings_focus_the_related_artifact(
     user: User,
 ) -> None:

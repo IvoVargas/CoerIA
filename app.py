@@ -2868,6 +2868,7 @@ class AGIRSoloInterface:
             )
         if selection_options is not None:
             multiple = field.kind in {"csv", "content_ids", "linked_outcomes"}
+            is_outcome_reference = field.key in {"outcome_id", "outcome_ids"}
             selection_value = editor_reference_value(target, field)
             allowed_values = set(selection_options)
             if multiple:
@@ -2877,12 +2878,31 @@ class AGIRSoloInterface:
             elif selection_value not in allowed_values:
                 selection_value = None
             control = ui.select(
-                options=(list(selection_options) if multiple else selection_options),
+                options=(
+                    selection_options
+                    if is_outcome_reference or not multiple
+                    else list(selection_options)
+                ),
                 label=label,
                 value=selection_value,
                 multiple=multiple,
                 on_change=update_value,
             ).props("options-dense" + (" use-chips" if multiple else ""))
+            if is_outcome_reference:
+                control.mark("learning-outcome-reference")
+                control.add_slot(
+                    "selected-item",
+                    """
+                    <q-chip v-if="scope.removeAtIndex" dense removable
+                        :tabindex="scope.tabindex"
+                        @remove="scope.removeAtIndex(scope.index)">
+                        {{ String(scope.opt.label).split(' — ')[0] }}
+                    </q-chip>
+                    <span v-else>
+                        {{ String(scope.opt.label).split(' — ')[0] }}
+                    </span>
+                    """,
+                )
             if not selection_options:
                 control.props("disable")
         elif field.kind == "integer":
