@@ -109,6 +109,8 @@ class ResourceGenerationTests(unittest.TestCase):
         sections = render_resource_detail_sections(resources)
 
         self.assertEqual([item["id"] for item in sections], ["test"])
+        self.assertIn("Questões", sections[0]["content"])
+        self.assertNotIn("Enunciado", sections[0]["content"])
         self.assertIn("Chave de correção", sections[0]["content"])
         self.assertNotIn("Atividade prática", sections[0]["content"])
 

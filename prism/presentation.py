@@ -224,7 +224,7 @@ def render_resource_detail_sections(
                             "Resultado",
                             "Tipo",
                             "Pontos",
-                            "Enunciado",
+                            "Questões",
                             "Chave de correção",
                         ],
                         rows,

@@ -235,7 +235,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (
                     _field("id", "ID"),
                     _field("outcome_id", "Resultado"),
-                    _field("prompt", "Enunciado", "long"),
+                    _field("prompt", "Questões", "long"),
                     _field("question_type", "Tipo"),
                     _field("points", "Pontos", "integer"),
                     _field("answer_key", "Chave de correção", "long"),

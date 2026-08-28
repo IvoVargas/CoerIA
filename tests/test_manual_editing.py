@@ -73,6 +73,17 @@ def test_every_authorship_stage_has_editable_fields_and_tables() -> None:
             rows.pop()
 
 
+def test_test_question_column_uses_the_questions_label() -> None:
+    test_table = next(
+        table
+        for table in editor_layout("resources").tables
+        if table.path == ("test", "questions")
+    )
+
+    prompt_field = next(field for field in test_table.fields if field.key == "prompt")
+    assert prompt_field.label == "Questões"
+
+
 def test_ai_assistance_scopes_omit_technical_id_fields() -> None:
     state = _completed_state()
 
