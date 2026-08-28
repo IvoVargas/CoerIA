@@ -42,9 +42,9 @@ def content_ids_for_outcome(state: dict[str, Any], outcome_id: str) -> list[str]
 def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
     """Produz uma síntese de alinhamento sem criar uma etapa editável.
 
-    As relações são sempre calculadas a partir dos conteúdos, das atividades de
-    ensino-aprendizagem e das tarefas de avaliação atuais. Desta forma, a
-    síntese usada na validação e na exportação nunca fica desatualizada.
+    As relações são calculadas pela cadeia RA→AE→TA: as atividades indicam os
+    resultados que desenvolvem e as tarefas indicam as atividades que avaliam.
+    Desta forma, nenhuma tabela de autoria precisa de repetir os três tipos de ID.
     """
 
     taxonomy = str(state.get("course", {}).get("taxonomy_type", "SOLO") or "SOLO")
@@ -53,12 +53,6 @@ def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(outcome, dict):
             continue
         outcome_id = str(outcome.get("id", ""))
-        assessments = [
-            item
-            for item in state.get("assessment_activities", [])
-            if isinstance(item, dict)
-            and outcome_id in (item.get("outcome_ids") or [item.get("outcome_id")])
-        ]
         teaching = [
             item
             for item in state.get("teaching_activities", [])
@@ -66,17 +60,23 @@ def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
             and outcome_id in (item.get("outcome_ids") or [item.get("outcome_id")])
         ]
         content_ids = content_ids_for_outcome(state, outcome_id)
-        assessment_ids = sorted(
-            {
-                str(item.get("id", "")).strip()
-                for item in assessments
-                if str(item.get("id", "")).strip()
-            }
-        )
         teaching_ids = sorted(
             {
                 str(item.get("id", "")).strip()
                 for item in teaching
+                if str(item.get("id", "")).strip()
+            }
+        )
+        assessments = [
+            item
+            for item in state.get("assessment_activities", [])
+            if isinstance(item, dict)
+            and set(item.get("teaching_activity_ids", [])) & set(teaching_ids)
+        ]
+        assessment_ids = sorted(
+            {
+                str(item.get("id", "")).strip()
+                for item in assessments
                 if str(item.get("id", "")).strip()
             }
         )

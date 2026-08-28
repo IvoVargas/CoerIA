@@ -304,7 +304,6 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
     state["assessment_activities"] = [
         {
             "id": "TA1",
-            "outcome_ids": ["RA3"],
             "teaching_activity_ids": ["AE1"],
             "task": "Resolver um caso.",
         }
@@ -344,7 +343,7 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
     assert [item["id"] for item in accepted["learning_outcomes"]] == ["RA1", "RA2"]
     assert accepted["curriculum_analysis"]["contents"][0]["outcome_ids"] == ["RA2"]
     assert accepted["teaching_activities"][0]["outcome_ids"] == ["RA2"]
-    assert accepted["assessment_activities"][0]["outcome_ids"] == ["RA2"]
+    assert accepted["assessment_activities"][0]["teaching_activity_ids"] == ["AE1"]
     assert accepted["pedagogical_design"]["sequence"][0]["outcome_id"] == "RA2"
     assert accepted["resources"]["test"]["questions"][0]["outcome_ids"] == ["RA2"]
 

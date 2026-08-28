@@ -135,7 +135,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -334,8 +334,6 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
         ]
         assessments.append({
             "id": f"TA{index + 1}",
-            "outcome_id": outcome["id"],
-            "outcome_ids": outcome_ids,
             "teaching_activity_ids": teaching_activity_ids,
             "work_type": "Trabalho individual" if index % 2 == 0 else "Trabalho de grupo",
             "assessment_purpose": ASSESSMENT_PURPOSES[index % len(ASSESSMENT_PURPOSES)],
@@ -374,7 +372,15 @@ def create_pedagogical_design(state: PrismState) -> dict[str, Any]:
                 "assessment": next(
                     item["activity"]
                     for item in state["assessment_activities"]
-                    if outcome["id"] in item.get("outcome_ids", [item.get("outcome_id")])
+                    if set(item.get("teaching_activity_ids", []))
+                    & {
+                        activity.get("id")
+                        for activity in state["teaching_activities"]
+                        if outcome["id"] in (
+                            activity.get("outcome_ids")
+                            or [activity.get("outcome_id")]
+                        )
+                    }
                 ),
             }
             for outcome in state["learning_outcomes"]
@@ -426,14 +432,24 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
     course = state["course"]
     selected_types = state.get("resource_types", [RESOURCE_PRESENTATION])
     taxonomy_type = validate_taxonomy_choice(course.get("taxonomy_type", "SOLO"))
-    assessment_for = lambda outcome_id: next(
-        item for item in state["assessment_activities"]
-        if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
-    )
-    teaching_for = lambda outcome_id: next(
-        item for item in state["teaching_activities"]
-        if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
-    )
+    def assessment_for(outcome_id: str) -> dict[str, Any]:
+        teaching_ids = {
+            item.get("id")
+            for item in state["teaching_activities"]
+            if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
+        }
+        return next(
+            item
+            for item in state["assessment_activities"]
+            if teaching_ids & set(item.get("teaching_activity_ids", []))
+        )
+
+    def teaching_for(outcome_id: str) -> dict[str, Any]:
+        return next(
+            item
+            for item in state["teaching_activities"]
+            if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
+        )
     slides = [
         {
             "title": course["unit_name"],
@@ -1521,6 +1537,7 @@ def verify_stage_with_ai(
         "taxonomy_outcomes",
         "assessment_coverage",
         "assessment_purposes",
+        "assessment_teaching_alignment",
         "teaching_coverage",
         "formative_activity_structure",
         "constructive_alignment",

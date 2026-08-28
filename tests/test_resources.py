@@ -764,6 +764,11 @@ class ResourceGenerationTests(unittest.TestCase):
                 state["assessment_activities"][0]["teaching_activity_ids"][0],
                 word_text,
             )
+            assessment_headers = [
+                cell.text for cell in program.tables[4].rows[0].cells
+            ]
+            self.assertIn("Atividades de ensino-aprendizagem", assessment_headers)
+            self.assertNotIn("Resultados", assessment_headers)
 
             for table in program.tables[1:]:
                 for row in table.rows[1:]:

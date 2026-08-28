@@ -50,7 +50,7 @@ from .providers import (
     IAeduResponsesAdapter,
     validate_ai_provider,
 )
-from .quality import assessment_teaching_alignment_issues, presentation_visual_issues
+from .quality import presentation_visual_issues
 from .validation_targets import available_validation_targets
 
 
@@ -143,18 +143,16 @@ STAGE_REQUIREMENTS = {
         "principais coordenadas."
     ),
     "assessment_activities": (
-        "Lista de objetos {id, outcome_id, outcome_ids, teaching_activity_ids, work_type, "
-        "assessment_purpose, activity, evidence, criterion}. Os IDs são obrigatoriamente "
-        "TA1, TA2, ... "
+        "Lista de objetos {id, teaching_activity_ids, work_type, assessment_purpose, "
+        "activity, evidence, criterion}. Os IDs são obrigatoriamente TA1, TA2, ... "
         "pela ordem das linhas. assessment_purpose é exclusivamente Formativa ou "
         "Sumativa. Cada tarefa liga-se a uma ou mais atividades de ensino-aprendizagem "
-        "existentes, que em conjunto preparam todos os seus resultados. É válido o "
-        "conjunto conter apenas avaliações sumativas."
+        "existentes. É válido o conjunto conter apenas avaliações sumativas."
     ),
     "pedagogical_design": (
         "Objeto com strategy e sequence. sequence é uma lista de objetos "
-        "{outcome_id, focus, teaching_activity, assessment}; deve organizar a progressão pedagógica "
-        "articulando os resultados, as atividades de ensino-aprendizagem e a avaliação."
+        "{outcome_id, focus, teaching_activity, assessment}; deve organizar a progressão "
+        "pedagógica articulando os resultados, as atividades de ensino-aprendizagem e a avaliação."
     ),
     "teaching_activities": (
         "Lista de objetos {id, outcome_id, outcome_ids, learning_context, "
@@ -297,8 +295,6 @@ def _schema_for(
                 "additionalProperties": False,
                 "properties": {
                     "id": {"type": "string", "pattern": "^TA[1-9][0-9]*$"},
-                    "outcome_id": string,
-                    "outcome_ids": {"type": "array", "items": string},
                     "teaching_activity_ids": {"type": "array", "items": string},
                     "work_type": string,
                     "assessment_purpose": {
@@ -310,8 +306,7 @@ def _schema_for(
                     "criterion": string,
                 },
                 "required": [
-                    "id", "outcome_id", "outcome_ids", "teaching_activity_ids",
-                    "work_type",
+                    "id", "teaching_activity_ids", "work_type",
                     "assessment_purpose",
                     "activity", "evidence", "criterion"
                 ],
@@ -563,22 +558,12 @@ def _schema_for(
         }
     if stage == "assessment_activities" and state:
         artifact_schema = deepcopy(artifact_schema)
-        outcome_ids = [
-            str(item.get("id", ""))
-            for item in state.get("learning_outcomes", [])
-            if str(item.get("id", "")).strip()
-        ]
         teaching_activity_ids = [
             str(item.get("id", ""))
             for item in state.get("teaching_activities", [])
             if str(item.get("id", "")).strip()
         ]
         item_schema = artifact_schema["items"]["properties"]
-        item_schema["outcome_id"] = {"type": "string", "enum": outcome_ids}
-        item_schema["outcome_ids"]["items"] = {
-            "type": "string",
-            "enum": outcome_ids,
-        }
         item_schema["teaching_activity_ids"]["items"] = {
             "type": "string",
             "enum": teaching_activity_ids,
@@ -740,12 +725,10 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
             }
     if stage == "assessment_activities":
         context["assessment_link_rules"] = {
-            "allowed_outcome_ids": [
-                outcome["id"] for outcome in state.get("learning_outcomes", [])
-            ],
             "rule": (
-                "Cada outcome_ids deve conter pelo menos um ID permitido e "
-                "outcome_id deve ser exatamente o primeiro elemento de outcome_ids."
+                "Cada teaching_activity_ids contém uma ou mais atividades de "
+                "ensino-aprendizagem existentes. A relação aos resultados é inferida "
+                "através dessas atividades."
             ),
             "allowed_purposes": list(ASSESSMENT_PURPOSES),
             "allowed_teaching_activities": [
@@ -795,11 +778,10 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
 def _canonicalize_assessment_activities(
     artifact: Any, state: dict[str, Any]
 ) -> tuple[Any, list[dict[str, Any]]]:
-    """Normaliza ligações redundantes sem inventar cobertura curricular."""
+    """Normaliza os IDs e a finalidade sem inventar relações pedagógicas."""
 
     if not isinstance(artifact, list):
         return artifact, []
-    allowed = {item["id"] for item in state.get("learning_outcomes", [])}
     allowed_teaching = {
         str(item.get("id", ""))
         for item in state.get("teaching_activities", [])
@@ -811,14 +793,6 @@ def _canonicalize_assessment_activities(
         if not isinstance(item, dict):
             normalized.append(item)
             continue
-        primary = str(item.get("outcome_id", ""))
-        raw_links = item.get("outcome_ids") or ([primary] if primary else [])
-        links = list(
-            dict.fromkeys(str(identifier) for identifier in raw_links if identifier in allowed)
-        )
-        if primary in allowed:
-            links = [primary, *(identifier for identifier in links if identifier != primary)]
-        canonical_primary = links[0] if links else primary
         purpose = str(item.get("assessment_purpose", ""))
         canonical_purpose = next(
             (
@@ -840,8 +814,6 @@ def _canonicalize_assessment_activities(
         )
         canonical = {
             "id": f"TA{index}",
-            "outcome_id": canonical_primary,
-            "outcome_ids": links,
             "teaching_activity_ids": teaching_links,
             "assessment_purpose": canonical_purpose,
         }
@@ -850,7 +822,13 @@ def _canonicalize_assessment_activities(
             for field, value in canonical.items()
             if item.get(field) != value
         }
-        normalized.append({**item, **canonical})
+        normalized.append(
+            {
+                key: value
+                for key, value in {**item, **canonical}.items()
+                if key not in {"outcome_id", "outcome_ids"}
+            }
+        )
         if changes:
             corrections.append(
                 {"assessment_id": item.get("id", ""), "changes": changes}
@@ -1623,13 +1601,10 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             )
 
     if stage in {"assessment_activities", "teaching_activities"}:
-        expected = {item["id"] for item in state["learning_outcomes"]}
-        covered = set(_flattened_ids(artifact, "outcome_ids", "outcome_id"))
         identifiers = [item["id"] for item in artifact]
         expected_prefix = "TA" if stage == "assessment_activities" else "AE"
         if (
-            covered != expected
-            or len(identifiers) != len(set(identifiers))
+            len(identifiers) != len(set(identifiers))
             or not all(
                 is_structured_activity_id(identifier, expected_prefix)
                 for identifier in identifiers
@@ -1637,17 +1612,32 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         ):
             raise AgentGenerationError(
                 f"A proposta deve usar IDs {expected_prefix}1, {expected_prefix}2, ... "
-                "sem duplicados e cobrir todos e apenas os resultados definidos."
+                "sem duplicados."
+            )
+
+    if stage == "teaching_activities":
+        expected = {item["id"] for item in state["learning_outcomes"]}
+        covered = set(_flattened_ids(artifact, "outcome_ids", "outcome_id"))
+        if covered != expected:
+            raise AgentGenerationError(
+                "As atividades de ensino-aprendizagem devem cobrir todos e apenas "
+                "os resultados definidos."
             )
 
     if stage == "assessment_activities":
+        teaching_by_id = {
+            str(item.get("id", "")): item
+            for item in state.get("teaching_activities", [])
+        }
+        allowed_teaching = set(teaching_by_id)
         invalid_assessments = []
         for item in artifact:
             problems = []
-            if not item.get("outcome_ids"):
-                problems.append("outcome_ids vazio")
-            elif item.get("outcome_id") != item["outcome_ids"][0]:
-                problems.append("outcome_id não é o primeiro elemento de outcome_ids")
+            teaching_links = item.get("teaching_activity_ids", [])
+            if not teaching_links:
+                problems.append("sem atividades de ensino-aprendizagem")
+            elif set(teaching_links) - allowed_teaching:
+                problems.append("contém atividades de ensino-aprendizagem desconhecidas")
             if item.get("assessment_purpose") not in ASSESSMENT_PURPOSES:
                 problems.append("finalidade diferente de Formativa ou Sumativa")
             if problems:
@@ -1656,15 +1646,28 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 )
         if invalid_assessments:
             raise AgentGenerationError(
-                "Cada avaliação deve ser Formativa ou Sumativa e manter ligações "
-                "válidas. " + "; ".join(invalid_assessments)
+                "Cada avaliação deve ser Formativa ou Sumativa e ligar-se a atividades "
+                "de ensino-aprendizagem existentes. "
+                + "; ".join(invalid_assessments)
             )
-        teaching_issues = assessment_teaching_alignment_issues(state, artifact)
-        if teaching_issues:
+        expected_outcomes = {
+            str(item.get("id", "")) for item in state.get("learning_outcomes", [])
+        }
+        covered_outcomes = {
+            str(outcome_id)
+            for item in artifact
+            for teaching_id in item.get("teaching_activity_ids", [])
+            if teaching_id in teaching_by_id
+            for outcome_id in (
+                teaching_by_id[teaching_id].get("outcome_ids")
+                or [teaching_by_id[teaching_id].get("outcome_id", "")]
+            )
+            if str(outcome_id).strip()
+        }
+        if covered_outcomes != expected_outcomes:
             raise AgentGenerationError(
-                "Cada tarefa de avaliação deve indicar as atividades de "
-                "ensino-aprendizagem que preparam todos os resultados avaliados. "
-                + "; ".join(teaching_issues)
+                "As tarefas devem cobrir todos e apenas os resultados através das "
+                "atividades de ensino-aprendizagem selecionadas."
             )
 
     if stage == "teaching_activities":
@@ -2064,11 +2067,11 @@ class OpenAIPedagogicalAgent:
         if stage == "assessment_activities":
             instructions += (
                 " Em cada avaliação, assessment_purpose tem exatamente um valor: "
-                "Formativa ou Sumativa, nunca Mista. outcome_ids nunca pode estar vazio "
-                "e outcome_id tem de ser uma cópia exata do primeiro elemento de "
-                "outcome_ids. teaching_activity_ids nunca pode estar vazio: usa apenas "
-                "as atividades indicadas em assessment_link_rules e garante que, em "
-                "conjunto, preparam todos os resultados avaliados."
+                "Formativa ou Sumativa, nunca Mista. teaching_activity_ids nunca pode "
+                "estar vazio e usa apenas os IDs indicados em assessment_link_rules. "
+                "Não acrescentes outcome_id nem outcome_ids; a relação aos resultados "
+                "é derivada através das atividades selecionadas. O conjunto das tarefas "
+                "deve cobrir todos os resultados por essa cadeia indireta."
             )
         if stage == "resources":
             outcome_ids = [item["id"] for item in state.get("learning_outcomes", [])]

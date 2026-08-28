@@ -83,7 +83,9 @@ interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
 Os prefixos são atribuídos automaticamente e tornam inequívocas as referências
 usadas na verificação automática do alinhamento. Em cada tarefa `TA<n>`, o
 docente seleciona uma ou mais atividades `AE<n>`; a aplicação confirma que elas
-preparam, em conjunto, todos os resultados associados à tarefa.
+existem e deriva o alinhamento completo pela cadeia `RA → AE → TA`. As tabelas
+de autoria nunca apresentam mais de dois tipos de identificador: `AE ↔ RA` nas
+atividades e `TA ↔ AE` nas tarefas de avaliação.
 
 A seleção dos recursos é feita no início da etapa **Geração de recursos educativos**. As
 imagens extraídas dos documentos ficam reunidas no seletor visual de cada slide,

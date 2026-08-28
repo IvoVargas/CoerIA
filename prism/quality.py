@@ -128,7 +128,7 @@ def assessment_teaching_alignment_issues(
     state: dict[str, Any],
     assessments: list[dict[str, Any]] | None = None,
 ) -> list[str]:
-    """Deteta ligações TA→AE ausentes, desconhecidas ou pedagogicamente incoerentes."""
+    """Deteta ligações TA→AE ausentes ou desconhecidas."""
 
     teaching_by_id = {
         str(item.get("id", "")): item
@@ -144,13 +144,6 @@ def assessment_teaching_alignment_issues(
             issues.append("Tarefa de avaliação com estrutura inválida")
             continue
         task_id = str(item.get("id", "?")) or "?"
-        task_outcomes = {
-            str(identifier)
-            for identifier in (
-                item.get("outcome_ids") or [item.get("outcome_id", "")]
-            )
-            if str(identifier).strip()
-        }
         raw_links = item.get("teaching_activity_ids", [])
         linked_ids = list(
             dict.fromkeys(
@@ -168,30 +161,6 @@ def assessment_teaching_alignment_issues(
         if unknown:
             issues.append(
                 f"{task_id}: atividades desconhecidas: {', '.join(unknown)}"
-            )
-        known = [teaching_by_id[identifier] for identifier in linked_ids if identifier in teaching_by_id]
-        unrelated = []
-        covered: set[str] = set()
-        for activity in known:
-            activity_outcomes = {
-                str(identifier)
-                for identifier in (
-                    activity.get("outcome_ids")
-                    or [activity.get("outcome_id", "")]
-                )
-                if str(identifier).strip()
-            }
-            if not task_outcomes & activity_outcomes:
-                unrelated.append(str(activity.get("id", "?")))
-            covered.update(task_outcomes & activity_outcomes)
-        if unrelated:
-            issues.append(
-                f"{task_id}: atividades sem resultados em comum: {', '.join(unrelated)}"
-            )
-        missing = sorted(task_outcomes - covered)
-        if missing:
-            issues.append(
-                f"{task_id}: resultados sem atividade de preparação: {', '.join(missing)}"
             )
     return issues
 
@@ -281,6 +250,7 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
     checks: list[dict[str, str]] = []
     outcomes = state.get("learning_outcomes", [])
     expected_ids = {str(item.get("id", "")) for item in outcomes if item.get("id")}
+    alignment_rows = derive_alignment_rows(state)
 
     if (
         not MIN_OUTCOMES <= len(outcomes) <= MAX_OUTCOMES
@@ -340,12 +310,33 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         )
     )
 
+    uncovered_assessment_outcomes = [
+        str(row.get("outcome_id", "?"))
+        for row in alignment_rows
+        if not row.get("assessment_ids")
+    ]
     checks.append(
-        _many_to_many_coverage_check(
+        _check(
             "assessment_coverage",
             "Cobertura das atividades de avaliação",
-            expected_ids,
-            state.get("assessment_activities", []),
+            (
+                "warning"
+                if not expected_ids
+                else "error"
+                if uncovered_assessment_outcomes
+                else "pass"
+            ),
+            (
+                "Não existem resultados de aprendizagem; a cobertura não pode ser avaliada."
+                if not expected_ids
+                else "Resultados sem tarefa ligada através das atividades: "
+                + ", ".join(uncovered_assessment_outcomes)
+                if uncovered_assessment_outcomes
+                else (
+                    "Todos os resultados chegam a uma tarefa de avaliação pela cadeia "
+                    "RA → AE → TA."
+                )
+            ),
         )
     )
     invalid_assessment_purposes = [
@@ -436,7 +427,6 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             ),
         )
     )
-    alignment_rows = derive_alignment_rows(state)
     incomplete_alignment = []
     for row in alignment_rows:
         missing_links = []

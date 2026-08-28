@@ -30,9 +30,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 22:
+    if previous_version < 23:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 22
+    state["schema_version"] = 23
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -283,7 +283,11 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(item, dict):
                 continue
             item.setdefault("id", f"TA{index + 1}")
-            item.setdefault("outcome_ids", [item.get("outcome_id", "")])
+            if previous_version < 23:
+                item.setdefault("outcome_ids", [item.get("outcome_id", "")])
+            else:
+                item.pop("outcome_id", None)
+                item.pop("outcome_ids", None)
             item.setdefault("work_type", "Não especificado")
             item.setdefault("assessment_purpose", "Sumativa")
 
@@ -462,6 +466,31 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 proposal.get("after"),
                 state.get("teaching_activities"),
             )
+
+    def remove_assessment_outcome_links(assessments: Any) -> None:
+        if not isinstance(assessments, list):
+            return
+        for assessment in assessments:
+            if not isinstance(assessment, dict):
+                continue
+            assessment.pop("outcome_id", None)
+            assessment.pop("outcome_ids", None)
+
+    if previous_version < 23:
+        remove_assessment_outcome_links(state.get("assessment_activities"))
+        if isinstance(version_map, dict):
+            for assessment_version in version_map.get("assessment_activities", []):
+                remove_assessment_outcome_links(assessment_version)
+        for snapshot in state.get("revision_snapshots", []):
+            if isinstance(snapshot, dict) and isinstance(snapshot.get("artifacts"), dict):
+                remove_assessment_outcome_links(
+                    snapshot["artifacts"].get("assessment_activities")
+                )
+        for proposal in state.get("ai_proposals", []):
+            if not isinstance(proposal, dict) or proposal.get("stage") != "assessment_activities":
+                continue
+            remove_assessment_outcome_links(proposal.get("before"))
+            remove_assessment_outcome_links(proposal.get("after"))
 
     def migrate_pedagogical_sequence(
         design: Any,
@@ -793,7 +822,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                     "foi preservado e a IA passou a ser facultativa."
                 ),
             }
-    if previous_version < 21 and (
+    if previous_version < 23 and (
         state.get("final_validation")
         or state.get("status") == "completed"
         or state.get("current_stage") == "final_validation"

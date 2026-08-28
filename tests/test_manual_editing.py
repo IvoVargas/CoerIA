@@ -75,6 +75,29 @@ def test_every_authorship_stage_has_editable_fields_and_tables() -> None:
             rows.pop()
 
 
+def test_authoring_tables_expose_at_most_two_identifier_types() -> None:
+    identifier_fields = {
+        "id",
+        "outcome_id",
+        "outcome_ids",
+        "content_ids",
+        "content_links",
+        "teaching_activity_ids",
+        "assessment_ids",
+    }
+
+    for stage in STAGE_ORDER[:-1]:
+        for table in editor_layout(stage).tables:
+            visible_identifiers = {
+                field.key for field in table.fields if field.key in identifier_fields
+            }
+            assert len(visible_identifiers) <= 2, (
+                stage,
+                table.title,
+                visible_identifiers,
+            )
+
+
 def test_test_question_column_uses_the_questions_label() -> None:
     test_table = next(
         table
@@ -528,3 +551,14 @@ def test_assessment_editor_selects_existing_teaching_activities() -> None:
         for identifier, label in options.items()
     )
     assert new_table_row(table, state, [])["teaching_activity_ids"] == []
+    assert all(field.key not in {"outcome_id", "outcome_ids"} for field in table.fields)
+
+
+def test_assessment_presentation_omits_the_results_column() -> None:
+    rendered = render_stage_artifact(
+        _completed_state(),
+        "assessment_activities",
+    )
+
+    assert "Atividades de ensino-aprendizagem" in rendered
+    assert "| Resultados |" not in rendered
