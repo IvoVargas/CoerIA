@@ -1268,6 +1268,66 @@ async def test_manual_first_workspace_renders_a_pending_ai_proposal(
 
 
 @pytest.mark.asyncio
+async def test_stale_ai_proposal_review_closes_when_decision_is_already_saved(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    state["learning_outcomes"] = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Relacional",
+            "action_verb": "Analisar",
+            "statement": "Analisar algoritmos.",
+        }
+    ]
+    state["ai_proposals"] = [
+        {
+            "id": "P1",
+            "stage": "learning_outcomes",
+            "scope_path": [0],
+            "scope_label": "Linha 1 (RA1)",
+            "instruction": "Melhorar a linha.",
+            "before": deepcopy(state["learning_outcomes"][0]),
+            "after": {
+                **state["learning_outcomes"][0],
+                "statement": "Analisar algoritmos através de exemplos concretos.",
+            },
+            "status": "pending",
+            "metadata": {"provider": "Teste"},
+        }
+    ]
+
+    interfaces: list[app.AGIRSoloInterface] = []
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "stale-proposal.db"))
+
+    @ui.page("/_test_stale_ai_proposal")
+    def stale_proposal_page():
+        interface = app.AGIRSoloInterface(service=service)
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_stale_ai_proposal")
+    await user.should_see("PROPOSTA PENDENTE")
+
+    # Simula a decisão persistida entre o desenho do cartão e uma reconexão.
+    interfaces[-1].state["ai_proposals"][0]["status"] = "accepted"
+    user.find("Rejeitar todas as alterações").click()
+
+    await user.should_not_see("PROPOSTA PENDENTE")
+    await user.should_not_see("Esta proposta de IA já foi decidida.")
+    await user.should_see("Analisar algoritmos.")
+
+
+@pytest.mark.asyncio
 async def test_complete_resource_proposal_reuses_editor_and_hides_unselected_resources(
     user: User,
     tmp_path: Path,

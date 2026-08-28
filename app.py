@@ -3031,6 +3031,30 @@ class AGIRSoloInterface:
         ]
         return pending[-1] if pending else None
 
+    def _close_decided_ai_proposal_review(self, proposal_id: str) -> bool:
+        """Fecha uma revisão antiga quando a decisão já está no estado."""
+
+        if not self.state:
+            return False
+        proposal = next(
+            (
+                item
+                for item in self.state.get("ai_proposals", [])
+                if str(item.get("id", "")) == proposal_id
+            ),
+            None,
+        )
+        if proposal is not None and proposal.get("status") == "pending":
+            return False
+        self.manual_edit_stage = None
+        self.manual_edit_artifact = None
+        self.show_workspace(
+            "A decisão sobre esta proposta já estava guardada. "
+            "A interface foi atualizada."
+        )
+        self.refresh_sessions()
+        return True
+
     @staticmethod
     def _proposal_decision_toggle(
         decisions: dict[str, str],
@@ -4106,6 +4130,10 @@ class AGIRSoloInterface:
         *,
         edited_after: Any = None,
     ) -> None:
+        # O navegador pode conservar o cartão anterior durante uma reconexão ao
+        # servidor. Nesse caso, a decisão persistida é soberana e basta redesenhar.
+        if self._close_decided_ai_proposal_review(proposal_id):
+            return
         try:
             self.state, message = await run.io_bound(
                 self.service.decide_assistance,
