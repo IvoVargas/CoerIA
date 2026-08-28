@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Callable
 
 from .assistance import build_initial_form_assistant, validate_initial_fields
@@ -122,27 +123,26 @@ class ApplicationService:
     def list_sessions(self) -> list[dict[str, str]]:
         return self.store.list_sessions(owner_id=self.owner_id)
 
+    @staticmethod
+    def _consume_temporary_download(path_value: str) -> tuple[bytes, str]:
+        """Lê um resultado temporário e remove-o mesmo quando a leitura falha."""
+
+        path = Path(path_value)
+        try:
+            return path.read_bytes(), path.name
+        finally:
+            path.unlink(missing_ok=True)
+
     def backup_session(
         self,
         session_id: str | None,
-    ) -> tuple[str, dict[str, Any]]:
-        """Cria uma cópia portátil da sessão pertencente ao utilizador atual."""
+    ) -> tuple[bytes, str]:
+        """Cria uma cópia portátil sem alterar a sessão de origem."""
 
         state = self.load_session(session_id, include_source_attachments=True)
-        updated = deepcopy(state)
-        updated.setdefault("audit", []).append(
-            {
-                "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
-                "stage": "Cópia de segurança",
-                "event": "Cópia de segurança da sessão criada pelo docente.",
-                "feedback": (
-                    "A cópia inclui JSON legível, estado restaurável, versões, "
-                    "fontes, imagens e auditoria."
-                ),
-            }
+        return self._consume_temporary_download(
+            create_session_backup(state)
         )
-        backup_path = create_session_backup(updated)
-        return backup_path, self._persist(updated)
 
     def restore_session_backup(
         self,
@@ -799,7 +799,7 @@ class ApplicationService:
         self,
         state: dict[str, Any] | None,
         document_formats: list[str] | tuple[str, ...] | str | None = None,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[bytes, str, dict[str, Any]]:
         if not state:
             raise ValueError("Inicie ou retome uma sessão antes de exportar.")
         formats = normalize_document_formats(document_formats)
@@ -823,7 +823,10 @@ class ApplicationService:
             }
         )
         package_path = export_resource_package(updated, formats)
-        return package_path, self._persist(updated)
+        package_data, package_filename = self._consume_temporary_download(
+            package_path
+        )
+        return package_data, package_filename, self._persist(updated)
 
     @staticmethod
     def validate_initial_form(form: dict[str, Any]) -> dict[str, Any]:

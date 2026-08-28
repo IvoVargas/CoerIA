@@ -387,10 +387,15 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
 - Restaurar uma cópia como uma nova sessão pertencente ao utilizador autenticado,
   sem substituir a sessão de origem ou qualquer sessão existente, permitindo
   repetir o mesmo restauro de forma segura e importar o formato anterior.
+- Tratar a descarga da cópia como leitura, sem alterar a data, o estado ou a
+  auditoria da sessão de origem, e eliminar o ZIP temporário depois de preparar
+  a resposta de download.
 
 ### RF07 — Exportação
 
 - Exportar um pacote `.zip` depois da aprovação final.
+- Eliminar o ZIP temporário do pacote final depois de carregar os respetivos
+  bytes para a resposta de download.
 - Incluir uma versão editável, exclusivamente em português, do programa da UC,
   construída a partir dos artefactos aprovados e sem nova geração por IA.
 - Incluir no programa identificação, carga de trabalho e ECTS, objetivos gerais,

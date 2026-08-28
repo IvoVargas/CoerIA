@@ -224,6 +224,14 @@ normal, perde o identificador anterior e é guardado com um UUID novo sob o
 utilizador autenticado; desta forma, a importação não pode sobrescrever sessões
 nem apropriar-se do identificador de outro utilizador.
 
+A descarga de uma cópia é deliberadamente um caso de uso de leitura: carrega a
+sessão com os anexos binários, constrói o ZIP e não chama a persistência nem
+acrescenta auditoria. A camada de serviço lê o ZIP para memória e elimina o
+ficheiro temporário num bloco `finally`; a interface recebe os bytes, e não um
+caminho em `/tmp`. O pacote final de recursos usa o mesmo consumo seguro do
+ficheiro temporário, embora conserve a escrita de auditoria própria da
+exportação final.
+
 A camada `ApplicationService` coordena navegação, edição, assistência,
 verificação e persistência. A interface NiceGUI não executa regras pedagógicas
 nem chama diretamente fornecedores. Esta separação mantém o domínio testável

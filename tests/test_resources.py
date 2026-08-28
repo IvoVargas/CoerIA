@@ -863,26 +863,25 @@ class ResourceGenerationTests(unittest.TestCase):
             service = ApplicationService(store)
             session_id = store.save(state)
             stored_state = service.load_session(session_id)
-            package_path_text, updated = service.export_session(
+            package_data, package_filename, updated = service.export_session(
                 stored_state,
                 ("latex",),
             )
-            package_path = Path(package_path_text)
-            try:
-                self.assertEqual(updated["last_export_document_formats"], ["latex"])
-                self.assertTrue(updated["resources"]["quality"]["passed"])
-                self.assertEqual(
-                    updated["audit"][-1]["feedback"],
-                    "Formatos documentais: LaTeX.",
-                )
-                restored = service.load_session(session_id)
-                self.assertEqual(
-                    restored["last_export_document_formats"],
-                    ["latex"],
-                )
-                self.assertTrue(restored["resources"]["quality"]["passed"])
-            finally:
-                package_path.unlink(missing_ok=True)
+            self.assertTrue(package_filename.endswith(".zip"))
+            with zipfile.ZipFile(BytesIO(package_data), "r") as package:
+                self.assertIn("manifesto.json", package.namelist())
+            self.assertEqual(updated["last_export_document_formats"], ["latex"])
+            self.assertTrue(updated["resources"]["quality"]["passed"])
+            self.assertEqual(
+                updated["audit"][-1]["feedback"],
+                "Formatos documentais: LaTeX.",
+            )
+            restored = service.load_session(session_id)
+            self.assertEqual(
+                restored["last_export_document_formats"],
+                ["latex"],
+            )
+            self.assertTrue(restored["resources"]["quality"]["passed"])
 
     def test_latex_lists_use_a_teacher_fallback_when_empty(self) -> None:
         fallback = r"\emph{A confirmar pelo docente.}"

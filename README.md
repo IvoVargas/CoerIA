@@ -251,7 +251,10 @@ Numa sessão antiga, criada antes desta preservação, o ZIP inclui o texto já
 extraído e as imagens disponíveis, mas identifica os ficheiros originais que já
 não podem ser recuperados. Como a cópia pode conter materiais fornecidos pelo
 docente, deve ser guardada num local protegido. As chaves de API pertencem à
-configuração do servidor e não são incluídas.
+configuração do servidor e não são incluídas. Descarregar a cópia é uma operação
+de leitura: não atualiza a sessão nem acrescenta um evento de auditoria. Depois
+de os bytes serem entregues à interface, o ficheiro ZIP temporário é eliminado;
+o mesmo controlo de ciclo de vida aplica-se ao pacote final de recursos.
 
 As tabelas editáveis não acrescentam uma coluna de numeração. Os campos que
 referenciam conteúdos, resultados, avaliações ou atividades de

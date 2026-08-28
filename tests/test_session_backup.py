@@ -116,19 +116,50 @@ def _legacy_v1_backup(state: dict) -> bytes:
 
 def test_backup_and_restore_preserve_state_as_a_new_owned_session(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = SQLiteSessionStore(tmp_path / "coeria.db")
     original_service = ApplicationService(store, owner_id="D01")
     restore_service = ApplicationService(store, owner_id="D02")
     original = _stored_session(original_service, tmp_path)
+    with sqlite3.connect(tmp_path / "coeria.db") as connection:
+        stored_before = connection.execute(
+            "SELECT updated_at, state_json FROM sessions WHERE session_id = ?",
+            (original["session_id"],),
+        ).fetchone()
+    temporary_paths: list[Path] = []
+    real_create_backup = create_session_backup
 
-    backup_path, backed_up = original_service.backup_session(
+    def tracked_create_backup(state: dict) -> str:
+        path = Path(real_create_backup(state))
+        temporary_paths.append(path)
+        return str(path)
+
+    monkeypatch.setattr(
+        "prism.application_service.create_session_backup",
+        tracked_create_backup,
+    )
+    real_save = store.save
+
+    def reject_source_session_write(*_args, **_kwargs) -> str:
+        raise AssertionError("Descarregar o backup não pode chamar store.save().")
+
+    monkeypatch.setattr(store, "save", reject_source_session_write)
+
+    backup_data, backup_filename = original_service.backup_session(
         original["session_id"]
     )
-    backup_data = Path(backup_path).read_bytes()
+    monkeypatch.setattr(store, "save", real_save)
     restored = restore_service.restore_session_backup(backup_data)
+    with sqlite3.connect(tmp_path / "coeria.db") as connection:
+        stored_after = connection.execute(
+            "SELECT updated_at, state_json FROM sessions WHERE session_id = ?",
+            (original["session_id"],),
+        ).fetchone()
 
-    assert backed_up["session_id"] == original["session_id"]
+    assert backup_filename.endswith(".coeria-backup.zip")
+    assert stored_after == stored_before
+    assert temporary_paths and all(not path.exists() for path in temporary_paths)
     assert restored["session_id"] != original["session_id"]
     assert restored["course"] == original["course"]
     assert restored["source_attachments"] == _attachment_metadata(
@@ -151,8 +182,7 @@ def test_same_backup_can_be_restored_more_than_once_without_overwriting(
         owner_id="D01",
     )
     original = _stored_session(service, tmp_path)
-    backup_path, _ = service.backup_session(original["session_id"])
-    backup_data = Path(backup_path).read_bytes()
+    backup_data, _ = service.backup_session(original["session_id"])
 
     first = service.restore_session_backup(backup_data)
     second = service.restore_session_backup(backup_data)
@@ -169,15 +199,19 @@ def test_backup_contains_readable_json_and_real_attachment_files(
         owner_id="D01",
     )
     state = _stored_session(service, tmp_path)
-    backup_path, backed_up = service.backup_session(state["session_id"])
-    backup_data = Path(backup_path).read_bytes()
+    backed_up = service.load_session(
+        state["session_id"],
+        include_source_attachments=True,
+    )
+    backup_data, backup_filename = service.backup_session(state["session_id"])
 
     decoded, manifest = read_session_backup(backup_data)
 
+    assert backup_filename.endswith(".coeria-backup.zip")
     assert decoded["course"] == backed_up["course"]
     assert decoded["audit"] == backed_up["audit"]
     assert _attachment_metadata(decoded["source_attachments"]) == (
-        backed_up["source_attachments"]
+        _attachment_metadata(backed_up["source_attachments"])
     )
     assert decoded["source_attachments"][0]["data_base64"]
     assert manifest["format"] == "coeria-session-backup"
@@ -287,8 +321,8 @@ def test_session_creation_and_initial_edit_preserve_then_remove_source_file(
     assert "data_base64" not in stored_json
     assert stored_attachment_count == 1
 
-    backup_path, created = service.backup_session(created["session_id"])
-    with zipfile.ZipFile(backup_path, "r") as archive:
+    backup_data, _ = service.backup_session(created["session_id"])
+    with zipfile.ZipFile(BytesIO(backup_data), "r") as archive:
         source_names = [
             name for name in archive.namelist() if name.startswith("anexos/fontes/")
         ]

@@ -1653,14 +1653,15 @@ class AGIRSoloInterface:
             ),
         )
         try:
-            backup_path, updated = await run.io_bound(
+            backup_data, backup_filename = await run.io_bound(
                 self.service.backup_session,
                 session_id,
             )
-            if self.state and self.state.get("session_id") == session_id:
-                self.state = updated
-            ui.download(backup_path, filename=Path(backup_path).name)
-            self.refresh_sessions()
+            ui.download(
+                backup_data,
+                filename=backup_filename,
+                media_type="application/zip",
+            )
             ui.notify("Cópia de segurança preparada.", type="positive")
         except USER_ERRORS as error:
             self._show_error(error)
@@ -4661,14 +4662,18 @@ class AGIRSoloInterface:
     async def handle_export(self) -> None:
         self._show_busy("A preparar o pacote de recursos…")
         try:
-            package_path, self.state = await run.io_bound(
+            package_data, package_filename, self.state = await run.io_bound(
                 self.service.export_session,
                 self.state,
                 _document_formats_for_export_choice(
                     self.export_document_format
                 ),
             )
-            ui.download(package_path, filename=Path(package_path).name)
+            ui.download(
+                package_data,
+                filename=package_filename,
+                media_type="application/zip",
+            )
             self._render_workspace(
                 "Pacote exportado e evento registado na rastreabilidade."
             )
