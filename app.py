@@ -3036,15 +3036,12 @@ class AGIRSoloInterface:
 
         if not self.state:
             return False
-        proposal = next(
-            (
-                item
-                for item in self.state.get("ai_proposals", [])
-                if str(item.get("id", "")) == proposal_id
-            ),
-            None,
-        )
-        if proposal is not None and proposal.get("status") == "pending":
+        matching_proposals = [
+            item
+            for item in self.state.get("ai_proposals", [])
+            if str(item.get("id", "")) == proposal_id
+        ]
+        if any(item.get("status") == "pending" for item in matching_proposals):
             return False
         self.manual_edit_stage = None
         self.manual_edit_artifact = None

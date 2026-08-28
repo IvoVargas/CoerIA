@@ -220,6 +220,60 @@ def test_ai_assistance_requires_an_explicit_acceptance() -> None:
     assert accepted["generation_metadata"]["learning_outcomes"][-1]["human_approved"]
 
 
+def test_ai_assistance_id_advances_past_gaps_in_proposal_history() -> None:
+    state = create_session(_course())
+    state["ai_proposals"] = [
+        {"id": "P1", "status": "accepted"},
+        {"id": "P3", "status": "rejected"},
+    ]
+
+    proposed = request_ai_assistance(
+        state,
+        "learning_outcomes",
+        [],
+        "Toda a etapa",
+        "Propor um resultado inicial.",
+        agent=OutcomeProposalAgent(),
+    )
+
+    assert proposed["ai_proposals"][-1]["id"] == "P4"
+
+
+def test_ai_decision_targets_latest_pending_proposal_with_a_duplicate_id() -> None:
+    state = create_session(_course())
+    proposed_outcomes = OutcomeProposalAgent().generate(
+        "learning_outcomes", state
+    ).artifact
+    state["ai_proposals"] = [
+        {
+            "id": "P9",
+            "stage": "resources",
+            "scope_path": [],
+            "status": "accepted",
+        },
+        {
+            "id": "P9",
+            "stage": "learning_outcomes",
+            "scope_path": [],
+            "before": [],
+            "after": proposed_outcomes,
+            "status": "pending",
+            "metadata": {"provider": "Teste"},
+        },
+    ]
+
+    accepted = decide_ai_proposal(state, "P9", True)
+
+    assert accepted["learning_outcomes"][0]["id"] == "RA1"
+    assert accepted["learning_outcomes"][0]["statement"] == (
+        proposed_outcomes[0]["statement"]
+    )
+    assert [item["status"] for item in accepted["ai_proposals"]] == [
+        "accepted",
+        "accepted",
+    ]
+
+
 def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -> None:
     state = create_session(_course())
     outcomes = [

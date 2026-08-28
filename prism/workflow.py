@@ -1327,8 +1327,14 @@ def request_ai_assistance(
         raise AgentGenerationError("A IA não propôs qualquer alteração nesse âmbito.")
 
     proposals = deepcopy(updated.get("ai_proposals", []))
+    used_proposal_numbers = [
+        int(match.group(1))
+        for item in proposals
+        if isinstance(item, dict)
+        and (match := re.fullmatch(r"P(\d+)", str(item.get("id", ""))))
+    ]
     proposal = {
-        "id": f"P{len(proposals) + 1}",
+        "id": f"P{max(used_proposal_numbers, default=0) + 1}",
         "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
         "stage": target_stage,
         "scope_path": list(scope_path),
@@ -1363,10 +1369,23 @@ def decide_ai_proposal(
 
     working = deepcopy(state)
     proposals = deepcopy(working.get("ai_proposals", []))
-    proposal = next((item for item in proposals if item.get("id") == proposal_id), None)
-    if proposal is None:
+    matching_proposals = [
+        item for item in proposals if item.get("id") == proposal_id
+    ]
+    if not matching_proposals:
         raise ValueError("A proposta de IA selecionada já não está disponível.")
-    if proposal.get("status") != "pending":
+    # Sessões migradas podem ter IDs repetidos: ao remover uma antiga etapa, a
+    # numeração ficava com uma lacuna e len(proposals) reutilizava um ID. A UI
+    # apresenta a proposta pendente mais recente, portanto decide a mesma aqui.
+    proposal = next(
+        (
+            item
+            for item in reversed(matching_proposals)
+            if item.get("status") == "pending"
+        ),
+        None,
+    )
+    if proposal is None:
         raise ValueError("Esta proposta de IA já foi decidida.")
     proposal["status"] = "accepted" if accept else "rejected"
     proposal["decided_at"] = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
