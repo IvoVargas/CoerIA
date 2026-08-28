@@ -730,6 +730,8 @@ async def test_outcome_reference_select_shows_descriptions_only_in_options(
     assert "props.opt.label" in selected_template
     assert "scope." not in selected_template
     assert "split(' — ')[0]" in selected_template
+    assert "removable" not in selected_template
+    assert "removeAtIndex" not in selected_template
 
 
 @pytest.mark.asyncio
