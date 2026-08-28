@@ -56,7 +56,9 @@ def test_every_authorship_stage_has_editable_fields_and_tables() -> None:
             assert isinstance(rows, list)
             added = new_table_row(table)
             rows.append(added)
-            if any(
+            if any(field.kind == "content_id" for field in table.fields):
+                assert rows[-1] == {**table.template, "id": "C1"}
+            elif any(
                 field.kind == "learning_outcome_id" for field in table.fields
             ):
                 assert rows[-1] == {**table.template, "id": "RA1"}
@@ -327,6 +329,17 @@ def test_curriculum_editor_uses_free_text_objectives_and_links_contents() -> Non
     )
     assert title_field.label == "Tema"
     assert description_field.label == "Descrição do tema"
+    assert next(
+        field for field in layout.tables[0].fields if field.key == "id"
+    ).kind == "content_id"
+
+
+def test_new_curriculum_content_row_uses_the_next_readonly_identifier() -> None:
+    table = editor_layout("curriculum_analysis").tables[0]
+
+    row = new_table_row(table, existing_rows=[{"id": "C1"}, {"id": "C3"}])
+
+    assert row["id"] == "C4"
 
 
 def test_compact_relationship_fields_preserve_the_internal_model() -> None:

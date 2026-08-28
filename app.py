@@ -2907,14 +2907,16 @@ class AGIRSoloInterface:
         else:
             control = ui.input(label, value=value).props("outlined")
         if field.kind in {
+            "content_id",
             "learning_outcome_id",
             "teaching_activity_id",
             "assessment_task_id",
         }:
             control.props("readonly").mark(
-                "learning-outcome-id"
-                if field.kind == "learning_outcome_id"
-                else "structured-activity-id"
+                {
+                    "content_id": "content-id",
+                    "learning_outcome_id": "learning-outcome-id",
+                }.get(field.kind, "structured-activity-id")
             )
         if compact:
             control.props(

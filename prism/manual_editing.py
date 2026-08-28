@@ -60,7 +60,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 "Conteúdos identificados",
                 ("contents",),
                 (
-                    _field("id", "ID"),
+                    _field("id", "ID", "content_id"),
                     _field("outcome_ids", "Resultados", "linked_outcomes"),
                     _field("title", "Tema"),
                     _field("description", "Descrição do tema", "long"),
@@ -925,7 +925,19 @@ def new_table_row(
     existing_rows: list[Any] | None = None,
 ) -> dict[str, Any]:
     row = deepcopy(table.template)
-    if any(field.kind == "learning_outcome_id" for field in table.fields):
+    if any(field.kind == "content_id" for field in table.fields):
+        identifiers = [
+            int(match.group(1))
+            for item in (existing_rows or [])
+            if isinstance(item, dict)
+            and (
+                match := re.fullmatch(
+                    r"C([1-9]\d*)", str(item.get("id", "")).strip()
+                )
+            )
+        ]
+        row["id"] = f"C{max(identifiers, default=0) + 1}"
+    elif any(field.kind == "learning_outcome_id" for field in table.fields):
         row["id"] = next_learning_outcome_id(existing_rows or [])
     elif any(field.kind == "teaching_activity_id" for field in table.fields):
         row["id"] = next_structured_activity_id(existing_rows or [], "AE")

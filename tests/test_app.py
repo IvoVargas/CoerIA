@@ -669,6 +669,43 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
 
 
 @pytest.mark.asyncio
+async def test_curriculum_content_ids_are_readonly_in_the_editor(user: User) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, estruturas de dados, funções, testes e controlo de fluxo.",
+        )
+    )
+    state["curriculum_analysis"] = {
+        "summary": "Síntese.",
+        "objectives": "Objetivos.",
+        "assumptions": [],
+        "contents": [
+            {
+                "id": "C1",
+                "outcome_ids": [],
+                "title": "Algoritmos",
+                "description": "Fundamentos de algoritmos.",
+            }
+        ],
+    }
+    state = navigate_to_stage(state, "curriculum_analysis")
+
+    @ui.page("/_test_readonly_curriculum_content_ids")
+    def readonly_curriculum_content_ids_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_readonly_curriculum_content_ids")
+    user.find(marker="edit-artifact-content").click()
+
+    content_id_control = next(iter(user.find(marker="content-id").elements))
+    assert content_id_control.value == "C1"
+    assert content_id_control._props.get("readonly") is True
+
+
+@pytest.mark.asyncio
 async def test_outcome_reference_select_shows_descriptions_only_in_options(
     user: User,
 ) -> None:
