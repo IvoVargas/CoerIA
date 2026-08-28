@@ -1618,8 +1618,9 @@ class AGIRSoloInterface:
                 "nova sessão na sua conta e não substitui nenhuma sessão existente."
             ).classes("text-sm")
             ui.label(
-                "A cópia pode conter fontes, imagens, versões e o histórico completo "
-                "da sessão. Não contém chaves de API. Guarde-a num local protegido."
+                "A cópia contém um JSON legível, os anexos preservados, imagens, "
+                "versões e o histórico completo da sessão. Não contém chaves de API. "
+                "Guarde-a num local protegido."
             ).classes("text-sm muted")
             self.session_restore_uploader = ui.upload(
                 label="Selecionar cópia de segurança",
@@ -1646,7 +1647,10 @@ class AGIRSoloInterface:
     async def handle_backup_session(self, session_id: str) -> None:
         self._show_busy(
             "A preparar a cópia de segurança…",
-            detail="A reunir o estado, as versões e a rastreabilidade da sessão…",
+            detail=(
+                "A preparar o JSON legível, os anexos, as versões e a "
+                "rastreabilidade da sessão…"
+            ),
         )
         try:
             backup_path, updated = await run.io_bound(

@@ -62,6 +62,7 @@ class PrismState(TypedDict, total=False):
     source_input_text: str
     source_original_text: str
     source_images: list[dict[str, Any]]
+    source_attachments: list[dict[str, Any]]
     source_reduction: dict[str, Any]
     generated_images: list[dict[str, Any]]
     ai_image_generation_enabled: bool

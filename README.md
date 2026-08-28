@@ -234,14 +234,24 @@ verificação global é recalculada; o relatório final, por ser derivado, não 
 restaurável.
 
 Cada entrada da lista de sessões disponibiliza ainda uma **cópia de segurança**
-portátil em ZIP. A cópia contém o estado integral da sessão, incluindo fontes
-processadas, imagens, versões e auditoria, acompanhado por um manifesto com
-versão de formato, dimensão e SHA-256. A ação **Restaurar cópia de segurança**
-valida estes elementos e a compatibilidade do esquema antes de criar uma nova
-sessão na conta autenticada. O restauro nunca substitui a sessão de origem nem
-outra sessão existente. Como o ficheiro pode conter materiais fornecidos pelo
-docente, deve ser guardado num local protegido. As chaves de API pertencem à
-configuração do servidor e não são incluídas na cópia.
+portátil em ZIP. O ficheiro `sessao.json`, indentado e organizado por secções em
+português, permite consultar e copiar manualmente os dados iniciais, fontes,
+conteúdos das etapas, recursos, versões e rastreabilidade. Os ficheiros de apoio
+originais preservados, as imagens documentais e as imagens da apresentação são
+extraídos como ficheiros normais para `anexos/`, acompanhados por um índice com
+origem, tipo, dimensão e SHA-256. O estado técnico restaurável fica separado em
+`estado_tecnico.json` e o `LEIA-ME.txt` explica a estrutura do pacote.
+
+A ação **Restaurar cópia de segurança** valida a estrutura, os anexos e a
+compatibilidade do esquema antes de criar uma nova sessão na conta autenticada;
+as cópias da versão anterior, com `estado_sessao.json`, continuam a ser aceites.
+O restauro nunca substitui a sessão de origem nem outra sessão existente. Os
+ficheiros carregados passam a ser preservados integralmente nas novas sessões.
+Numa sessão antiga, criada antes desta preservação, o ZIP inclui o texto já
+extraído e as imagens disponíveis, mas identifica os ficheiros originais que já
+não podem ser recuperados. Como a cópia pode conter materiais fornecidos pelo
+docente, deve ser guardada num local protegido. As chaves de API pertencem à
+configuração do servidor e não são incluídas.
 
 As tabelas editáveis não acrescentam uma coluna de numeração. Os campos que
 referenciam conteúdos, resultados, avaliações ou atividades de

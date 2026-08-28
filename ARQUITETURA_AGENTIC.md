@@ -197,14 +197,32 @@ versões. O ponto corrente é preservado, as estruturas ausentes são inicializa
 vazias e estados antigos como `stale` passam a `needs_review`. As propostas e
 pareceres futuros ficam separados em `ai_proposals` e `ai_reviews`.
 
-As cópias de segurança por sessão usam um ZIP com apenas `manifest.json` e
-`estado_sessao.json`. O manifesto identifica o formato e a aplicação de origem,
-declara a dimensão do estado e inclui o respetivo SHA-256. Antes do restauro são
-verificados o tamanho comprimido e descomprimido, a estrutura do arquivo, a
-integridade e a compatibilidade de esquema. O estado aceite passa pelas mesmas
-migrações da persistência normal, perde o identificador anterior e é guardado
-com um UUID novo sob o utilizador autenticado; desta forma, a importação não pode
-sobrescrever sessões nem apropriar-se do identificador de outro utilizador.
+As cópias de segurança por sessão usam um ZIP com duas representações
+complementares. `sessao.json` é indentado, organizado por secções em português e
+destina-se à consulta e cópia manual; `estado_tecnico.json` conserva a estrutura
+necessária ao restauro. Os ficheiros de apoio originais preservados, as imagens
+documentais e as imagens da apresentação são retirados dos campos Base64 e
+gravados como ficheiros normais sob `anexos/`. O índice
+`anexos/indice.json` relaciona cada ficheiro com a coleção e posição no estado,
+a origem, a dimensão e o SHA-256, permitindo ao importador reconstituir os campos
+binários e as miniaturas. O `LEIA-ME.txt` documenta a estrutura para o docente.
+
+Os novos carregamentos são conservados integralmente numa tabela binária de
+anexos associada à sessão, além do texto e das imagens extraídos. O JSON de
+estado guarda apenas os metadados destes ficheiros, evitando que a listagem de
+sessões carregue representações Base64 potencialmente grandes. Para sessões
+criadas antes desta regra, o pacote não
+inventa os documentos já eliminados do servidor: inclui os textos e imagens que
+a sessão ainda possui e enumera as fontes originais indisponíveis. O manifesto
+identifica o formato e a aplicação de origem e protege os JSON por dimensão e
+SHA-256; o índice protege individualmente os anexos. Antes do restauro são
+verificados o tamanho comprimido e descomprimido, caminhos, duplicados,
+encriptação, estrutura, integridade e compatibilidade de esquema. O leitor
+continua a aceitar o formato 1, composto por `manifest.json` e
+`estado_sessao.json`. O estado aceite passa pelas mesmas migrações da persistência
+normal, perde o identificador anterior e é guardado com um UUID novo sob o
+utilizador autenticado; desta forma, a importação não pode sobrescrever sessões
+nem apropriar-se do identificador de outro utilizador.
 
 A camada `ApplicationService` coordena navegação, edição, assistência,
 verificação e persistência. A interface NiceGUI não executa regras pedagógicas
@@ -222,6 +240,6 @@ docente.
   recurso pedido explicitamente;
 - `COERIA_AI_PROVIDER`: fornecedor inicialmente mostrado na interface;
 - `COERIA_SESSION_BACKUP_MAX_BYTES`: limite do ZIP usado no restauro;
-- `COERIA_SESSION_BACKUP_MAX_UNCOMPRESSED_BYTES`: limite do estado JSON
+- `COERIA_SESSION_BACKUP_MAX_UNCOMPRESSED_BYTES`: limite do conteúdo total
   descomprimido;
 - `COERIA_IAEDU_ENDPOINT` e `COERIA_IAEDU_CHANNEL_ID`: configuração IAedu.

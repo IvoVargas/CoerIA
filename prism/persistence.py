@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 import json
 import os
 import sqlite3
@@ -38,6 +41,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         {"mode": "bounded-generator-critic", "human_approval_required": True},
     )
     state.setdefault("source_images", [])
+    state.setdefault("source_attachments", [])
     state.setdefault("source_reduction", {})
     state.setdefault(
         "source_original_text",
@@ -767,6 +771,17 @@ class SQLiteSessionStore:
                         PRIMARY KEY (session_id, event_index),
                         FOREIGN KEY (session_id) REFERENCES sessions(session_id)
                     );
+
+                    CREATE TABLE IF NOT EXISTS session_attachments (
+                        session_id TEXT NOT NULL,
+                        attachment_id TEXT NOT NULL,
+                        size_bytes INTEGER NOT NULL,
+                        sha256 TEXT NOT NULL,
+                        data BLOB NOT NULL,
+                        PRIMARY KEY (session_id, attachment_id),
+                        FOREIGN KEY (session_id) REFERENCES sessions(session_id)
+                            ON DELETE CASCADE
+                    );
                     """
                 )
                 columns = {
@@ -801,6 +816,26 @@ class SQLiteSessionStore:
         audit = state.get("audit", [])
         stored_state = dict(state)
         stored_state["session_id"] = identifier
+        attachment_metadata: list[dict[str, Any]] = []
+        attachment_payloads: dict[str, bytes] = {}
+        for item in state.get("source_attachments", []):
+            if not isinstance(item, dict):
+                raise ValueError("A sessão contém metadados de anexo inválidos.")
+            metadata = dict(item)
+            attachment_id = str(metadata.get("id", "") or "").strip()
+            if not attachment_id:
+                raise ValueError("A sessão contém um anexo sem identificador.")
+            encoded = str(metadata.pop("data_base64", "") or "").strip()
+            if encoded:
+                try:
+                    payload = base64.b64decode(encoded, validate=True)
+                except (binascii.Error, ValueError) as error:
+                    raise ValueError("A sessão contém um anexo inválido.") from error
+                metadata["size_bytes"] = len(payload)
+                metadata["sha256"] = hashlib.sha256(payload).hexdigest()
+                attachment_payloads[attachment_id] = payload
+            attachment_metadata.append(metadata)
+        stored_state["source_attachments"] = attachment_metadata
 
         connection = self._connect()
         try:
@@ -826,6 +861,54 @@ class SQLiteSessionStore:
                         json.dumps(stored_state, ensure_ascii=False),
                     ),
                 )
+                existing_attachment_ids = {
+                    str(row["attachment_id"])
+                    for row in connection.execute(
+                        "SELECT attachment_id FROM session_attachments "
+                        "WHERE session_id = ?",
+                        (identifier,),
+                    )
+                }
+                requested_attachment_ids = {
+                    str(item["id"])
+                    for item in attachment_metadata
+                }
+                missing_payload_ids = (
+                    requested_attachment_ids
+                    - existing_attachment_ids
+                    - set(attachment_payloads)
+                )
+                if missing_payload_ids:
+                    raise ValueError(
+                        "Não foi possível guardar um anexo sem os respetivos dados."
+                    )
+                for attachment_id, payload in attachment_payloads.items():
+                    connection.execute(
+                        """
+                        INSERT INTO session_attachments(
+                            session_id, attachment_id, size_bytes, sha256, data
+                        ) VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(session_id, attachment_id) DO UPDATE SET
+                            size_bytes=excluded.size_bytes,
+                            sha256=excluded.sha256,
+                            data=excluded.data
+                        """,
+                        (
+                            identifier,
+                            attachment_id,
+                            len(payload),
+                            hashlib.sha256(payload).hexdigest(),
+                            payload,
+                        ),
+                    )
+                for attachment_id in (
+                    existing_attachment_ids - requested_attachment_ids
+                ):
+                    connection.execute(
+                        "DELETE FROM session_attachments "
+                        "WHERE session_id = ? AND attachment_id = ?",
+                        (identifier, attachment_id),
+                    )
                 connection.execute(
                     "DELETE FROM audit_events WHERE session_id = ?",
                     (identifier,),
@@ -856,6 +939,8 @@ class SQLiteSessionStore:
         self,
         session_id: str,
         owner_id: str | None = None,
+        *,
+        include_source_attachments: bool = True,
     ) -> dict[str, Any] | None:
         connection = self._connect()
         try:
@@ -873,11 +958,43 @@ class SQLiteSessionStore:
                     """,
                     (session_id, owner),
                 ).fetchone()
+            attachment_rows = (
+                connection.execute(
+                    """
+                    SELECT attachment_id, size_bytes, sha256, data
+                    FROM session_attachments
+                    WHERE session_id = ?
+                    """,
+                    (session_id,),
+                ).fetchall()
+                if row and include_source_attachments
+                else []
+            )
         finally:
             connection.close()
         if not row:
             return None
         state = json.loads(row["state_json"])
+        payloads = {
+            str(attachment["attachment_id"]): attachment
+            for attachment in attachment_rows
+        }
+        for metadata in state.get("source_attachments", []):
+            if not isinstance(metadata, dict):
+                continue
+            payload_row = payloads.get(str(metadata.get("id", "")))
+            if payload_row is None:
+                continue
+            payload = bytes(payload_row["data"])
+            if (
+                int(payload_row["size_bytes"]) != len(payload)
+                or not hashlib.sha256(payload).hexdigest()
+                == str(payload_row["sha256"])
+            ):
+                raise ValueError("A integridade de um anexo guardado é inválida.")
+            metadata["size_bytes"] = len(payload)
+            metadata["sha256"] = str(payload_row["sha256"])
+            metadata["data_base64"] = base64.b64encode(payload).decode("ascii")
         state["session_id"] = session_id
         return migrate_legacy_state(state)
 
@@ -976,6 +1093,10 @@ class SQLiteSessionStore:
 
                 connection.execute(
                     "DELETE FROM audit_events WHERE session_id = ?",
+                    (identifier,),
+                )
+                connection.execute(
+                    "DELETE FROM session_attachments WHERE session_id = ?",
                     (identifier,),
                 )
                 if owner is None:

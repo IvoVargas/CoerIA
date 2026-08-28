@@ -33,7 +33,11 @@ from .persistence import SQLiteSessionStore, migrate_legacy_state
 from .quality import attach_quality_report
 from .source_reduction import reduce_source_text
 from .providers import configured_ai_provider
-from .session_backup import create_session_backup, read_session_backup
+from .session_backup import (
+    capture_source_attachments,
+    create_session_backup,
+    read_session_backup,
+)
 from .workflow import (
     ResourceGenerationError,
     SCHEMA_VERSION,
@@ -80,6 +84,9 @@ class ApplicationService:
             raise ValueError(
                 "A sessão selecionada já não está disponível."
             ) from error
+        for attachment in state.get("source_attachments", []):
+            if isinstance(attachment, dict):
+                attachment.pop("data_base64", None)
         return state
 
     def _prepare_source_for_ai(self, state: dict[str, Any]) -> dict[str, Any]:
@@ -121,14 +128,17 @@ class ApplicationService:
     ) -> tuple[str, dict[str, Any]]:
         """Cria uma cópia portátil da sessão pertencente ao utilizador atual."""
 
-        state = self.load_session(session_id)
+        state = self.load_session(session_id, include_source_attachments=True)
         updated = deepcopy(state)
         updated.setdefault("audit", []).append(
             {
                 "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "stage": "Cópia de segurança",
                 "event": "Cópia de segurança da sessão criada pelo docente.",
-                "feedback": "A cópia inclui o estado, versões, fontes, imagens e auditoria.",
+                "feedback": (
+                    "A cópia inclui JSON legível, estado restaurável, versões, "
+                    "fontes, imagens e auditoria."
+                ),
             }
         )
         backup_path = create_session_backup(updated)
@@ -181,6 +191,7 @@ class ApplicationService:
         restored.pop("session_id", None)
         restored["restored_from_backup"] = {
             "source_session_id": source_session_id,
+            "format_version": manifest.get("format_version"),
             "backup_created_at": str(manifest.get("created_at", "")),
             "restored_at": restored_at,
         }
@@ -216,6 +227,7 @@ class ApplicationService:
         )
         consolidated_source = reduction.text
         source_images = extract_source_images(source_files)
+        source_attachments = capture_source_attachments(source_files)
         ai_image_generation_enabled = bool(
             form.get("ai_image_generation_enabled", True)
         )
@@ -260,6 +272,7 @@ class ApplicationService:
         state["source_input_text"] = source_text.strip()
         state["source_original_text"] = raw_source
         state["source_images"] = source_images
+        state["source_attachments"] = source_attachments
         state["source_reduction"] = reduction.metadata
         if progress_callback is not None:
             progress_callback("A guardar a sessão e as estruturas de autoria manual…")
@@ -369,6 +382,24 @@ class ApplicationService:
                     source_images.append(asset)
                     known_ids.add(str(asset.get("id", "")))
 
+        source_attachments = [
+            deepcopy(attachment)
+            for attachment in state.get("source_attachments", [])
+            if not isinstance(attachment, dict)
+            or str(attachment.get("source_file", "")).strip()
+            not in removed_sources
+        ]
+        if has_new_files:
+            known_attachment_ids = {
+                str(attachment.get("id", ""))
+                for attachment in source_attachments
+                if isinstance(attachment, dict)
+            }
+            for attachment in capture_source_attachments(source_files):
+                if str(attachment.get("id", "")) not in known_attachment_ids:
+                    source_attachments.append(attachment)
+                    known_attachment_ids.add(str(attachment.get("id", "")))
+
         updated = update_initial_context(
             state,
             course,
@@ -378,6 +409,7 @@ class ApplicationService:
             source_reduction=reduction_metadata,
             source_images=source_images,
         )
+        updated["source_attachments"] = source_attachments
         if progress_callback is not None:
             progress_callback("A guardar os dados e a assinalar as etapas para revisão…")
         return self._persist(updated)
@@ -572,10 +604,19 @@ class ApplicationService:
         )
         return self._persist(working), deepcopy(asset)
 
-    def load_session(self, session_id: str | None) -> dict[str, Any]:
+    def load_session(
+        self,
+        session_id: str | None,
+        *,
+        include_source_attachments: bool = False,
+    ) -> dict[str, Any]:
         if not session_id:
             raise ValueError("Selecione uma sessão para retomar.")
-        state = self.store.load(session_id, owner_id=self.owner_id)
+        state = self.store.load(
+            session_id,
+            owner_id=self.owner_id,
+            include_source_attachments=include_source_attachments,
+        )
         if not state:
             raise ValueError("A sessão selecionada já não está disponível.")
         return state
