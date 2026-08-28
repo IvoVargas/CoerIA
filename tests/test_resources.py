@@ -461,6 +461,21 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertEqual(sequence_check["target_key"], "__stage__")
         self.assertIn("estratégia não vazia", sequence_check["detail"])
 
+    def test_missing_direct_assessment_link_navigates_to_the_sequence(self) -> None:
+        state = self._resource_state()
+        outcome_id = state["pedagogical_design"]["sequence"][0]["outcome_id"]
+        state["pedagogical_design"]["sequence"][0]["assessment_ids"] = []
+
+        report = evaluate_quality(state, state["resources"])
+        coverage = next(
+            item for item in report["checks"]
+            if item["id"] == "assessment_coverage"
+        )
+
+        self.assertEqual(coverage["status"], "error")
+        self.assertEqual(coverage["target_stage"], "pedagogical_design")
+        self.assertEqual(coverage["target_key"], outcome_id)
+
     def test_resources_with_blocking_quality_errors_cannot_be_approved(self) -> None:
         state = self._resource_state()
         state["resources"]["quality"]["passed"] = False
@@ -733,6 +748,9 @@ class ResourceGenerationTests(unittest.TestCase):
         activity["support"] = "Acompanhamento manual do docente."
         strategy = state["pedagogical_design"]["strategy"]
         sequence_focus = state["pedagogical_design"]["sequence"][0]["focus"]
+        sequence_assessment_id = state["pedagogical_design"]["sequence"][0][
+            "assessment_ids"
+        ][0]
 
         with TemporaryDirectory() as temporary_directory:
             word_path = Path(temporary_directory) / "programa.docx"
@@ -760,6 +778,7 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("7. Organização da sequência pedagógica", word_text)
             self.assertIn(strategy, word_text)
             self.assertIn(sequence_focus, word_text)
+            self.assertIn(sequence_assessment_id, word_text)
             self.assertIn(
                 state["assessment_activities"][0]["teaching_activity_ids"][0],
                 word_text,
@@ -790,6 +809,7 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn(r"\section{Organização da sequência pedagógica}", latex)
             self.assertIn(strategy, latex)
             self.assertIn(sequence_focus, latex)
+            self.assertIn(sequence_assessment_id, latex)
             self.assertIn(
                 state["assessment_activities"][0]["teaching_activity_ids"][0],
                 latex,

@@ -562,3 +562,21 @@ def test_assessment_presentation_omits_the_results_column() -> None:
 
     assert "Atividades de ensino-aprendizagem" in rendered
     assert "| Resultados |" not in rendered
+
+
+def test_pedagogical_sequence_selects_existing_assessment_tasks() -> None:
+    state = _completed_state()
+    table = editor_layout("pedagogical_design").tables[0]
+    field = next(item for item in table.fields if item.key == "assessment_ids")
+
+    options = editor_reference_options(state, field)
+
+    assert field.kind == "csv"
+    assert options is not None
+    assert set(options) == {
+        item["id"] for item in state["assessment_activities"]
+    }
+    assert all(
+        label.startswith(f"{identifier} — ")
+        for identifier, label in options.items()
+    )

@@ -84,7 +84,8 @@ etapas navegáveis e editáveis:
 5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou
    sumativa e associação explícita às atividades de ensino-aprendizagem;
 6. organização da sequência pedagógica, articulando em cada resultado o foco,
-   a atividade de ensino-aprendizagem e a tarefa de avaliação;
+   a atividade de ensino-aprendizagem e uma associação direta às tarefas que
+   fornecem a respetiva evidência de avaliação;
 7. geração dos recursos educativos selecionados;
 8. verificação global determinística da estrutura e do alinhamento.
 
@@ -112,8 +113,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   Em cada tarefa `TA<n>`, permitir selecionar uma ou mais atividades `AE<n>` e
   guardar essa ligação de forma explícita.
 - Limitar cada tabela de autoria a dois tipos de identificador: `AE ↔ RA` nas
-  atividades de ensino-aprendizagem e `TA ↔ AE` nas tarefas de avaliação. Não
-  repetir os `RA` na tabela das tarefas; derivar a cadeia `RA → AE → TA`.
+  atividades de ensino-aprendizagem, `TA ↔ AE` nas tarefas de avaliação e
+  `RA ↔ TA` na organização da sequência. Não repetir os `RA` na tabela das
+  tarefas; usar a sequência para explicitar a ligação avaliação–resultado.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
   etapa curricular formal.
@@ -141,8 +143,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Não estabelecer uma equivalência rígida entre níveis SOLO e Bloom.
 - Permitir relações muitos-para-muitos entre conteúdos, resultados, avaliações
   e atividades de ensino-aprendizagem.
-- Confirmar que cada tarefa `TA<n>` referencia atividades `AE<n>` existentes e
-  que a cadeia derivada `RA → AE → TA` cobre todos os resultados.
+- Confirmar que cada tarefa `TA<n>` referencia atividades `AE<n>` existentes,
+  que cada resultado tem uma ligação direta a pelo menos uma tarefa e que cada
+  `RA ↔ TA` partilha uma atividade no percurso `RA ↔ AE ↔ TA`.
 - Classificar cada avaliação exclusivamente como `Formativa` ou `Sumativa`;
   é válido existir apenas avaliação sumativa.
 
@@ -255,8 +258,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   assinalados pela verificação global.
 - Verificar a finalidade formativa ou sumativa de cada avaliação.
 - Verificar a ligação explícita de cada tarefa de avaliação às atividades de
-  ensino-aprendizagem e a cobertura indireta dos resultados pela cadeia
-  `RA → AE → TA`.
+  ensino-aprendizagem, a ligação direta `RA ↔ TA` e a coerência do triângulo:
+  uma tarefa ligada a um resultado deve partilhar uma atividade que o desenvolva.
 - Verificar prática, acompanhamento e feedback nas atividades de ensino-aprendizagem.
 - Verificar automaticamente o alinhamento relativamente aos artefactos produzidos.
 - Derivar uma síntese factual do alinhamento a partir das ligações aprovadas,

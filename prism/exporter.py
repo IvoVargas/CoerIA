@@ -706,10 +706,10 @@ def export_program_document(
         cells[0].text = str(item.get("outcome_id", ""))
         cells[1].text = str(item.get("focus", ""))
         cells[2].text = str(item.get("teaching_activity", ""))
-        cells[3].text = str(item.get("assessment", ""))
+        cells[3].text = ", ".join(item.get("assessment_ids", []))
     _format_table(
         table,
-        ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Avaliação"],
+        ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Tarefas de avaliação"],
         [700, 3000, 3200, 3060],
     )
 
@@ -878,13 +878,13 @@ def export_program_latex(
                 _display(state.get("pedagogical_design", {}).get("strategy"))
             ),
             _latex_table(
-                ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Avaliação"],
+                ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Tarefas de avaliação"],
                 [
                     [
                         item.get("outcome_id", ""),
                         item.get("focus", ""),
                         item.get("teaching_activity", ""),
-                        item.get("assessment", ""),
+                        ", ".join(item.get("assessment_ids", [])),
                     ]
                     for item in state.get("pedagogical_design", {}).get("sequence", [])
                 ],

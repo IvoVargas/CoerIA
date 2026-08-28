@@ -147,12 +147,13 @@ STAGE_REQUIREMENTS = {
         "activity, evidence, criterion}. Os IDs são obrigatoriamente TA1, TA2, ... "
         "pela ordem das linhas. assessment_purpose é exclusivamente Formativa ou "
         "Sumativa. Cada tarefa liga-se a uma ou mais atividades de ensino-aprendizagem "
-        "existentes. É válido o conjunto conter apenas avaliações sumativas."
+        "existentes e a evidência permite observar os verbos dos resultados trabalhados "
+        "por essas atividades. É válido o conjunto conter apenas avaliações sumativas."
     ),
     "pedagogical_design": (
         "Objeto com strategy e sequence. sequence é uma lista de objetos "
-        "{outcome_id, focus, teaching_activity, assessment}; deve organizar a progressão "
-        "pedagógica articulando os resultados, as atividades de ensino-aprendizagem e a avaliação."
+        "{outcome_id, focus, teaching_activity, assessment_ids}; deve organizar a progressão "
+        "pedagógica e associar diretamente cada resultado a tarefas de avaliação existentes."
     ),
     "teaching_activities": (
         "Lista de objetos {id, outcome_id, outcome_ids, learning_context, "
@@ -326,10 +327,10 @@ def _schema_for(
                             "outcome_id": string,
                             "focus": string,
                             "teaching_activity": string,
-                            "assessment": string,
+                            "assessment_ids": {"type": "array", "items": string},
                         },
                         "required": [
-                            "outcome_id", "focus", "teaching_activity", "assessment"
+                            "outcome_id", "focus", "teaching_activity", "assessment_ids"
                         ],
                     },
                 },
@@ -568,6 +569,26 @@ def _schema_for(
             "type": "string",
             "enum": teaching_activity_ids,
         }
+    if stage == "pedagogical_design" and state:
+        artifact_schema = deepcopy(artifact_schema)
+        outcome_ids = [
+            str(item.get("id", ""))
+            for item in state.get("learning_outcomes", [])
+            if str(item.get("id", "")).strip()
+        ]
+        assessment_ids = [
+            str(item.get("id", ""))
+            for item in state.get("assessment_activities", [])
+            if str(item.get("id", "")).strip()
+        ]
+        item_schema = artifact_schema["properties"]["sequence"]["items"][
+            "properties"
+        ]
+        item_schema["outcome_id"] = {"type": "string", "enum": outcome_ids}
+        item_schema["assessment_ids"]["items"] = {
+            "type": "string",
+            "enum": assessment_ids,
+        }
     scoped_resource_type = (
         _scoped_resource_type(state) if stage == "resources" else None
     )
@@ -741,6 +762,30 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                 for activity in state.get("teaching_activities", [])
             ],
             "mixed_purpose_forbidden": True,
+        }
+    if stage == "pedagogical_design":
+        teaching_by_outcome = {
+            str(outcome.get("id", "")): [
+                str(activity.get("id", ""))
+                for activity in state.get("teaching_activities", [])
+                if str(outcome.get("id", ""))
+                in (activity.get("outcome_ids") or [activity.get("outcome_id", "")])
+            ]
+            for outcome in state.get("learning_outcomes", [])
+        }
+        context["pedagogical_sequence_link_rules"] = {
+            "allowed_outcome_ids": list(teaching_by_outcome),
+            "allowed_assessment_ids": [
+                str(item.get("id", ""))
+                for item in state.get("assessment_activities", [])
+                if str(item.get("id", "")).strip()
+            ],
+            "teaching_activity_ids_by_outcome": teaching_by_outcome,
+            "rule": (
+                "Cada resultado surge exatamente uma vez e liga-se diretamente a uma ou "
+                "mais tarefas. Cada tarefa selecionada tem de referir pelo menos uma "
+                "atividade de ensino-aprendizagem que desenvolva esse resultado."
+            ),
         }
     if stage == "resources" and "Apresentação PowerPoint" in state.get(
         "resource_types", []
@@ -1711,12 +1756,48 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             for item in artifact.get("sequence", [])
             if not str(item.get("focus", "")).strip()
             or not str(item.get("teaching_activity", "")).strip()
-            or not str(item.get("assessment", "")).strip()
+            or not item.get("assessment_ids")
         ]
         if incomplete:
             raise AgentGenerationError(
                 "A sequência deve explicitar foco, atividade de ensino-aprendizagem "
-                "e avaliação em: " + ", ".join(incomplete)
+                "e tarefas de avaliação em: " + ", ".join(incomplete)
+            )
+        teaching_by_outcome = {
+            str(outcome_id): {
+                str(activity.get("id", ""))
+                for activity in state.get("teaching_activities", [])
+                if str(outcome_id)
+                in (activity.get("outcome_ids") or [activity.get("outcome_id", "")])
+            }
+            for outcome_id in expected
+        }
+        assessment_by_id = {
+            str(item.get("id", "")): item
+            for item in state.get("assessment_activities", [])
+            if str(item.get("id", "")).strip()
+        }
+        invalid_links: list[str] = []
+        for item in artifact.get("sequence", []):
+            outcome_id = str(item.get("outcome_id", ""))
+            for assessment_id in item.get("assessment_ids", []):
+                assessment_id = str(assessment_id)
+                assessment = assessment_by_id.get(assessment_id)
+                if assessment is None:
+                    invalid_links.append(
+                        f"{outcome_id}→{assessment_id}: tarefa desconhecida"
+                    )
+                    continue
+                linked_teaching = set(assessment.get("teaching_activity_ids", []))
+                if not linked_teaching & teaching_by_outcome.get(outcome_id, set()):
+                    invalid_links.append(
+                        f"{outcome_id}→{assessment_id}: a tarefa não está ligada a uma "
+                        "atividade que desenvolva o resultado"
+                    )
+        if invalid_links:
+            raise AgentGenerationError(
+                "A ligação direta entre resultados e tarefas deve ser coerente com as "
+                "atividades de ensino-aprendizagem. " + "; ".join(invalid_links)
             )
 
     if stage == "resources":
@@ -2071,7 +2152,23 @@ class OpenAIPedagogicalAgent:
                 "estar vazio e usa apenas os IDs indicados em assessment_link_rules. "
                 "Não acrescentes outcome_id nem outcome_ids; a relação aos resultados "
                 "é derivada através das atividades selecionadas. O conjunto das tarefas "
-                "deve cobrir todos os resultados por essa cadeia indireta."
+                "deve cobrir todos os resultados por essa cadeia indireta. Em evidence e "
+                "criterion torna observável o desempenho expresso pelos verbos dos "
+                "resultados associados às atividades selecionadas."
+            )
+        if stage == "teaching_activities":
+            instructions += (
+                " Em activity e practice torna explícitas ações através das quais o "
+                "estudante pratica os verbos dos resultados indicados em outcome_ids."
+            )
+        if stage == "pedagogical_design":
+            instructions += (
+                " Em cada linha, assessment_ids nunca pode estar vazio e usa apenas os "
+                "IDs indicados em pedagogical_sequence_link_rules. Cada resultado deve "
+                "surgir exatamente uma vez. Uma tarefa só pode ser ligada diretamente a "
+                "um resultado quando partilha pelo menos uma atividade de "
+                "ensino-aprendizagem que desenvolve esse resultado. Não devolvas o campo "
+                "textual assessment."
             )
         if stage == "resources":
             outcome_ids = [item["id"] for item in state.get("learning_outcomes", [])]

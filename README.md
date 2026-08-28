@@ -25,7 +25,8 @@ determinística, não de uma decisão declarada pelo modelo.
 4. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa e
    associação explícita às atividades de ensino-aprendizagem que as preparam;
-6. organização da sequência pedagógica;
+6. organização da sequência pedagógica, com associação direta entre cada
+   resultado e as tarefas que produzem a respetiva evidência de avaliação;
 7. geração de recursos educativos e validação automática;
 8. validação final da estrutura e do alinhamento.
 
@@ -83,9 +84,12 @@ interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
 Os prefixos são atribuídos automaticamente e tornam inequívocas as referências
 usadas na verificação automática do alinhamento. Em cada tarefa `TA<n>`, o
 docente seleciona uma ou mais atividades `AE<n>`; a aplicação confirma que elas
-existem e deriva o alinhamento completo pela cadeia `RA → AE → TA`. As tabelas
-de autoria nunca apresentam mais de dois tipos de identificador: `AE ↔ RA` nas
-atividades e `TA ↔ AE` nas tarefas de avaliação.
+existem. Na organização da sequência pedagógica associa também cada `RA<n>` às
+tarefas `TA<n>` que fornecem evidência direta desse resultado. O triângulo
+`RA ↔ AE`, `AE ↔ TA` e `RA ↔ TA` evita considerar um resultado avaliado apenas
+porque partilha uma atividade com outro. As tabelas de autoria nunca apresentam
+mais de dois tipos de identificador: `AE ↔ RA` nas atividades, `TA ↔ AE` nas
+tarefas e `RA ↔ TA` na sequência pedagógica.
 
 A seleção dos recursos é feita no início da etapa **Geração de recursos educativos**. As
 imagens extraídas dos documentos ficam reunidas no seletor visual de cada slide,

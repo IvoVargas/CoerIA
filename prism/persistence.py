@@ -30,9 +30,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 23:
+    if previous_version < 24:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 23
+    state["schema_version"] = 24
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -495,10 +495,14 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     def migrate_pedagogical_sequence(
         design: Any,
         teaching_activities: Any,
+        assessment_activities: Any,
     ) -> None:
         if not isinstance(design, dict) or not isinstance(design.get("sequence"), list):
             return
         activities = teaching_activities if isinstance(teaching_activities, list) else []
+        assessments = (
+            assessment_activities if isinstance(assessment_activities, list) else []
+        )
         for item in design["sequence"]:
             if not isinstance(item, dict):
                 continue
@@ -516,16 +520,48 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 "teaching_activity",
                 "; ".join(linked) or "A confirmar pelo docente.",
             )
+            teaching_ids = {
+                str(activity.get("id", ""))
+                for activity in activities
+                if isinstance(activity, dict)
+                and outcome_id in (
+                    activity.get("outcome_ids") or [activity.get("outcome_id")]
+                )
+                and str(activity.get("id", "")).strip()
+            }
+            assessment_ids = [
+                str(assessment.get("id", ""))
+                for assessment in assessments
+                if isinstance(assessment, dict)
+                and teaching_ids & set(assessment.get("teaching_activity_ids", []))
+                and str(assessment.get("id", "")).strip()
+            ]
+            if not item.get("assessment_ids"):
+                legacy_text = str(item.get("assessment", "")).strip()
+                exact_matches = [
+                    str(assessment.get("id", ""))
+                    for assessment in assessments
+                    if isinstance(assessment, dict)
+                    and legacy_text
+                    and str(assessment.get("activity", "")).strip() == legacy_text
+                    and teaching_ids
+                    & set(assessment.get("teaching_activity_ids", []))
+                    and str(assessment.get("id", "")).strip()
+                ]
+                item["assessment_ids"] = exact_matches or assessment_ids
+            item.pop("assessment", None)
 
     migrate_pedagogical_sequence(
         state.get("pedagogical_design"),
         state.get("teaching_activities"),
+        state.get("assessment_activities"),
     )
     if isinstance(version_map, dict):
         for design_version in version_map.get("pedagogical_design", []):
             migrate_pedagogical_sequence(
                 design_version,
                 state.get("teaching_activities"),
+                state.get("assessment_activities"),
             )
     for snapshot in state.get("revision_snapshots", []):
         if not isinstance(snapshot, dict) or not isinstance(snapshot.get("artifacts"), dict):
@@ -534,6 +570,20 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         migrate_pedagogical_sequence(
             artifacts.get("pedagogical_design"),
             artifacts.get("teaching_activities"),
+            artifacts.get("assessment_activities"),
+        )
+    for proposal in state.get("ai_proposals", []):
+        if not isinstance(proposal, dict) or proposal.get("stage") != "pedagogical_design":
+            continue
+        migrate_pedagogical_sequence(
+            proposal.get("before"),
+            state.get("teaching_activities"),
+            state.get("assessment_activities"),
+        )
+        migrate_pedagogical_sequence(
+            proposal.get("after"),
+            state.get("teaching_activities"),
+            state.get("assessment_activities"),
         )
 
     if state.get("current_stage") == "solo_taxonomy":
@@ -822,7 +872,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                     "foi preservado e a IA passou a ser facultativa."
                 ),
             }
-    if previous_version < 23 and (
+    if previous_version < 24 and (
         state.get("final_validation")
         or state.get("status") == "completed"
         or state.get("current_stage") == "final_validation"

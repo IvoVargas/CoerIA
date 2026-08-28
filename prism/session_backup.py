@@ -86,6 +86,7 @@ HUMAN_KEY_LABELS = {
     "outcome_id": "id_resultado_aprendizagem",
     "outcome_ids": "ids_resultados_aprendizagem",
     "teaching_activity_ids": "ids_atividades_ensino_aprendizagem",
+    "assessment_ids": "ids_tarefas_avaliacao",
     "activity": "atividade",
     "learning_context": "contexto_aprendizagem",
     "practice": "pratica",

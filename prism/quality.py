@@ -45,6 +45,10 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         target_stage = "learning_outcomes"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
+    elif check_id == "assessment_coverage":
+        target_stage = "pedagogical_design"
+        references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
+        target_key = references[0].upper() if references else "__stage__"
     elif check_id.startswith("assessment_"):
         target_stage = "assessment_activities"
         references = re.findall(r"\bTA\d+\b", detail, flags=re.IGNORECASE)
@@ -329,12 +333,11 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             (
                 "Não existem resultados de aprendizagem; a cobertura não pode ser avaliada."
                 if not expected_ids
-                else "Resultados sem tarefa ligada através das atividades: "
+                else "Resultados sem ligação direta a uma tarefa de avaliação: "
                 + ", ".join(uncovered_assessment_outcomes)
                 if uncovered_assessment_outcomes
                 else (
-                    "Todos os resultados chegam a uma tarefa de avaliação pela cadeia "
-                    "RA → AE → TA."
+                    "Todos os resultados têm uma ligação direta a uma tarefa de avaliação."
                 )
             ),
         )
@@ -440,6 +443,10 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             incomplete_alignment.append(
                 f"{row.get('outcome_id', '?')}: " + ", ".join(missing_links)
             )
+        elif row.get("status") != "Coerente":
+            incomplete_alignment.append(
+                f"{row.get('outcome_id', '?')}: {row.get('rationale', 'ligações incoerentes')}"
+            )
     checks.append(
         _check(
             "constructive_alignment",
@@ -457,8 +464,8 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 else "Ligações em falta — " + "; ".join(incomplete_alignment)
                 if incomplete_alignment
                 else (
-                    "Todos os resultados estão ligados a conteúdo, atividade de "
-                    "ensino-aprendizagem e tarefa de avaliação."
+                    "Todos os resultados estão ligados a conteúdo e atividades; a ligação "
+                    "direta à avaliação é coerente com as atividades de ensino-aprendizagem."
                 )
             ),
         )

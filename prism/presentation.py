@@ -412,7 +412,7 @@ def render_artifact(
                 item["outcome_id"],
                 item["focus"],
                 item.get("teaching_activity", "—"),
-                item["assessment"],
+                ", ".join(item.get("assessment_ids", [])),
             ]
             for item in artifact["sequence"]
         ]
@@ -421,7 +421,12 @@ def render_artifact(
             + f"**Estratégia:** {artifact['strategy']}\n\n"
             + "## Sequência pedagógica\n\n"
             + _table(
-                ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Avaliação"],
+                [
+                    "Resultado",
+                    "Foco",
+                    "Atividade de ensino-aprendizagem",
+                    "Tarefas de avaliação",
+                ],
                 sequence_rows,
             )
         )

@@ -135,7 +135,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -338,7 +338,10 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
             "work_type": "Trabalho individual" if index % 2 == 0 else "Trabalho de grupo",
             "assessment_purpose": ASSESSMENT_PURPOSES[index % len(ASSESSMENT_PURPOSES)],
             "activity": f"Tarefa aplicada: {outcome['statement']}",
-            "evidence": "Resposta fundamentada com critérios explícitos.",
+            "evidence": (
+                "Produto ou desempenho que demonstra: "
+                f"{outcome['statement']}"
+            ),
             "criterion": (
                 "Domínio demonstrado ao nível "
                 f"{outcome['taxonomy_level']} da Taxonomia {taxonomy_type}."
@@ -358,6 +361,27 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
 def create_pedagogical_design(state: PrismState) -> dict[str, Any]:
     feedback = _feedback(state, "pedagogical_design")
     course = state["course"]
+
+    def assessment_ids_for(index: int, outcome_id: str) -> list[str]:
+        teaching_ids = {
+            str(activity.get("id", ""))
+            for activity in state.get("teaching_activities", [])
+            if outcome_id
+            in (activity.get("outcome_ids") or [activity.get("outcome_id")])
+        }
+        compatible = [
+            item
+            for item in state.get("assessment_activities", [])
+            if teaching_ids & set(item.get("teaching_activity_ids", []))
+        ]
+        preferred = (
+            state["assessment_activities"][index]
+            if index < len(state.get("assessment_activities", []))
+            else None
+        )
+        selected = preferred if preferred in compatible else next(iter(compatible), None)
+        return [str(selected.get("id", ""))] if selected else []
+
     design = {
         "strategy": "Progressão guiada por resultados, prática e reflexão.",
         "sequence": [
@@ -369,21 +393,9 @@ def create_pedagogical_design(state: PrismState) -> dict[str, Any]:
                     for item in state["teaching_activities"]
                     if outcome["id"] in item.get("outcome_ids", [item.get("outcome_id")])
                 ),
-                "assessment": next(
-                    item["activity"]
-                    for item in state["assessment_activities"]
-                    if set(item.get("teaching_activity_ids", []))
-                    & {
-                        activity.get("id")
-                        for activity in state["teaching_activities"]
-                        if outcome["id"] in (
-                            activity.get("outcome_ids")
-                            or [activity.get("outcome_id")]
-                        )
-                    }
-                ),
+                "assessment_ids": assessment_ids_for(index, outcome["id"]),
             }
-            for outcome in state["learning_outcomes"]
+            for index, outcome in enumerate(state["learning_outcomes"])
         ],
         "audience": course["audience"],
         "estimated_hours": course["duration_hours"],
@@ -433,16 +445,32 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
     selected_types = state.get("resource_types", [RESOURCE_PRESENTATION])
     taxonomy_type = validate_taxonomy_choice(course.get("taxonomy_type", "SOLO"))
     def assessment_for(outcome_id: str) -> dict[str, Any]:
-        teaching_ids = {
-            item.get("id")
-            for item in state["teaching_activities"]
-            if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
-        }
-        return next(
-            item
-            for item in state["assessment_activities"]
-            if teaching_ids & set(item.get("teaching_activity_ids", []))
+        sequence_item = next(
+            (
+                item
+                for item in state.get("pedagogical_design", {}).get("sequence", [])
+                if item.get("outcome_id") == outcome_id
+            ),
+            None,
         )
+        if not sequence_item or not sequence_item.get("assessment_ids"):
+            raise ValueError(
+                f"O resultado {outcome_id} não tem uma tarefa de avaliação diretamente ligada."
+            )
+        assessment_id = sequence_item["assessment_ids"][0]
+        assessment = next(
+            (
+                item
+                for item in state["assessment_activities"]
+                if item.get("id") == assessment_id
+            ),
+            None,
+        )
+        if assessment is None:
+            raise ValueError(
+                f"A tarefa {assessment_id}, ligada ao resultado {outcome_id}, não existe."
+            )
+        return assessment
 
     def teaching_for(outcome_id: str) -> dict[str, Any]:
         return next(
@@ -970,6 +998,14 @@ def save_manual_draft(
         ):
             updated["assessment_activities"] = _remap_list_references(
                 updated.get("assessment_activities", []),
+                reference_field,
+                id_mapping,
+            )
+        elif target_stage == "assessment_activities" and any(
+            before != after for before, after in id_mapping.items()
+        ):
+            updated["pedagogical_design"] = _remap_list_references(
+                updated.get("pedagogical_design", {}),
                 reference_field,
                 id_mapping,
             )
