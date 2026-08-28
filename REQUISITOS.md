@@ -116,6 +116,11 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   desligadas nem IDs desconhecidos.
 - Registar os objetivos gerais num único campo de texto livre, sem IDs e sem os
   incluir como relação estrutural do alinhamento.
+- Distinguir linguisticamente os objetivos das descrições dos conteúdos: estas
+  devem caracterizar a matéria em formulação expositiva ou nominal, sem começar
+  por verbos de ação, sem se dirigir ao estudante e sem formular objetivos ou
+  resultados de aprendizagem. Rejeitar propostas completas da IA que violem
+  esta distinção, indicando os IDs dos conteúdos a corrigir.
 - Classificar o tipo de cada resultado de aprendizagem.
 - Usar um único verbo de ação principal pertencente ao vocabulário controlado do nível declarado; infinitivos subordinados podem ser usados em complementos, mas não como ações principais coordenadas.
 - Na opção SOLO, não usar o nível pré-estrutural para formular resultados.

@@ -624,7 +624,11 @@ def export_program_document(
         cells[0].text = str(item.get("id", ""))
         cells[1].text = str(item.get("title", ""))
         cells[2].text = str(item.get("description", ""))
-    _format_table(table, ["ID", "Conteúdo", "Descrição"], [800, 2700, 6460])
+    _format_table(
+        table,
+        ["ID", "Conteúdo", "Descrição do conteúdo"],
+        [800, 2700, 6460],
+    )
 
     document.add_heading("4. Resultados de aprendizagem", level=1)
     table = document.add_table(rows=1, cols=5)
@@ -791,7 +795,7 @@ def export_program_latex(
         [
             r"\section{Conteúdos programáticos}",
             _latex_table(
-                ["ID", "Conteúdo", "Descrição"],
+                ["ID", "Conteúdo", "Descrição do conteúdo"],
                 [
                     [item.get("id", ""), item.get("title", ""), item.get("description", "")]
                     for item in analysis.get("contents", [])

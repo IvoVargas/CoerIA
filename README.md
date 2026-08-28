@@ -136,6 +136,14 @@ inicial: são formulados ou introduzidos apenas na etapa **Conteúdos e objetivo
 curriculares**, evitando duplicação e mantendo essa etapa disponível para uma
 primeira proposta completa por IA.
 
+Nesta etapa, os objetivos gerais e as descrições dos conteúdos usam linguagens
+deliberadamente distintas. Os objetivos exprimem finalidades e podem começar por
+verbos; cada **Descrição do conteúdo** caracteriza, em formulação expositiva, os
+conceitos, princípios, processos, aplicações e limites da matéria. As propostas
+da IA que iniciem estas descrições por verbos de ação ou de desempenho são
+rejeitadas para reformulação, evitando que a tabela repita objetivos ou
+resultados de aprendizagem.
+
 Os **Dados iniciais** constituem o primeiro ponto da mesma barra de etapas. Depois
 de iniciar o desenho curricular, selecionar esse ponto permite regressar ao
 formulário para corrigir a identificação, a taxonomia, o fornecedor, o texto de

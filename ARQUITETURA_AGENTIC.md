@@ -33,6 +33,15 @@ avaliação. A separação entre `AE` e `TA` evita ambiguidades nas relações d
 alinhamento e mantém estes identificadores estáveis ao longo da autoria e das
 versões.
 
+Na etapa de conteúdos, o contrato estruturado separa também a função linguística
+dos campos. `objectives` contém finalidades gerais e pode usar verbos; `title` é
+uma designação temática nominal; `description` delimita conceitos, princípios,
+processos, aplicações e limites em linguagem expositiva. O prompt inclui esta
+distinção e o validador das propostas deteta descrições iniciadas pelos verbos
+controlados de SOLO/Bloom ou por verbos frequentes de objetivos. Uma violação
+faz repetir apenas a proposta de IA e identifica os conteúdos envolvidos; não
+limita a liberdade da edição manual nem altera versões existentes.
+
 Na interface, uma barra de ferramentas superior persistente concentra o
 contexto da etapa, a navegação, a entrada no editor e as três ações facultativas
 de IA, mantendo a edição manual fora do grupo visual **Assistência com IA**. A

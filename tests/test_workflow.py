@@ -25,6 +25,7 @@ from prism.curriculum import (
     ASSESSMENT_PURPOSES,
     has_single_action_verb,
     is_learning_outcome_id,
+    starts_with_objective_action_verb,
     taxonomy_level_for_verb,
     taxonomy_verb_allowed,
 )
@@ -262,6 +263,37 @@ class WorkflowTests(unittest.TestCase):
             all(
                 item["outcome_ids"]
                 for item in state["curriculum_analysis"]["contents"]
+            )
+        )
+        self.assertTrue(
+            all(
+                not starts_with_objective_action_verb(item["description"])
+                for item in state["curriculum_analysis"]["contents"]
+            )
+        )
+
+    def test_curriculum_validation_rejects_objective_like_descriptions(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        curriculum = deepcopy(state["curriculum_analysis"])
+        curriculum["contents"][0]["description"] = (
+            "Analisar os conceitos fundamentais da programação."
+        )
+
+        with self.assertRaisesRegex(
+            AgentGenerationError,
+            "não começar por verbos",
+        ):
+            _validate_artifact("curriculum_analysis", curriculum, state)
+
+        self.assertTrue(
+            starts_with_objective_action_verb(
+                "Desenvolver conhecimentos sobre estruturas de controlo."
+            )
+        )
+        self.assertFalse(
+            starts_with_objective_action_verb(
+                "Princípios, tipos e aplicações das estruturas de controlo."
             )
         )
 

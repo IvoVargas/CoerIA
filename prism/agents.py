@@ -35,6 +35,7 @@ from .curriculum import (
     normalize_learning_outcome_ids,
     normalize_structured_activity_ids,
     is_structured_activity_id,
+    starts_with_objective_action_verb,
     validate_taxonomy_choice,
 )
 from .models import (
@@ -127,7 +128,10 @@ STAGE_REQUIREMENTS = {
         "4 a 10 objetos {id, title, description, outcome_ids}, com IDs C1, C2, ...; "
         "objectives é um texto livre com os objetivos gerais, sem IDs nem "
         "ligações estruturais. Cada outcome_ids dos conteúdos usa exclusivamente "
-        "resultados aprovados na etapa anterior."
+        "resultados aprovados na etapa anterior. Em cada conteúdo, title é uma "
+        "designação temática breve e description caracteriza conceitos, princípios, "
+        "processos e limites em formulação expositiva. A descrição não começa por um "
+        "verbo de ação, não se dirige ao estudante e não formula um objetivo ou resultado."
     ),
     "learning_outcomes": (
         "Lista de 4 a 10 objetos {id, theme, statement, action_verb, taxonomy_level, "
@@ -1418,11 +1422,28 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             not MIN_OUTCOMES <= len(contents) <= MAX_OUTCOMES
             or len(content_ids) != len(set(content_ids))
             or any(not item.get("title") for item in contents)
+            or any(not str(item.get("description", "")).strip() for item in contents)
             or not objectives
         ):
             raise AgentGenerationError(
                 "A análise curricular deve conter objetivos gerais em texto livre e "
-                "conteúdos com IDs únicos."
+                "conteúdos com IDs únicos, título e descrição."
+            )
+
+        objective_like_descriptions = [
+            str(item.get("id", "?"))
+            for item in contents
+            if starts_with_objective_action_verb(
+                str(item.get("description", ""))
+            )
+        ]
+        if objective_like_descriptions:
+            raise AgentGenerationError(
+                "As descrições dos conteúdos devem caracterizar a matéria em linguagem "
+                "expositiva e não começar por verbos de objetivo ou desempenho. "
+                "Conteúdos a corrigir: "
+                + ", ".join(objective_like_descriptions)
+                + "."
             )
 
         expected_outcomes = {
@@ -1941,7 +1962,11 @@ class OpenAIPedagogicalAgent:
                     f"{required_outcomes}. A união dos outcome_ids dos conteúdos deve "
                     "ser exatamente essa lista. Escreve objectives como texto livre, sem "
                     "IDs, listas estruturadas ou ligações aos resultados. Não alteres "
-                    "nem reformules os resultados."
+                    "nem reformules os resultados. Para cada conteúdo, usa um título "
+                    "temático nominal e uma descrição expositiva da matéria abrangida. "
+                    "Não inicies description por verbos como identificar, compreender, "
+                    "analisar, aplicar ou desenvolver; essas formulações pertencem aos "
+                    "objetivos e resultados de aprendizagem."
                 )
             reduction = state.get("source_reduction", {})
             source_names = [

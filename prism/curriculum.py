@@ -288,6 +288,24 @@ TAXONOMY_VERBS = {
     TAXONOMY_BLOOM: BLOOM_VERBS,
 }
 
+COMMON_OBJECTIVE_OPENING_VERBS = (
+    "adquirir",
+    "aprofundar",
+    "aprender",
+    "capacitar",
+    "compreender",
+    "conhecer",
+    "consolidar",
+    "desenvolver",
+    "dominar",
+    "estudar",
+    "explorar",
+    "familiarizar",
+    "investigar",
+    "promover",
+    "sensibilizar",
+)
+
 OUTCOME_TYPES = (
     "Conhecimento teórico",
     "Aptidão prática ou técnica",
@@ -317,6 +335,21 @@ def normalise_text(value: str) -> str:
     return "".join(
         character for character in decomposed if not unicodedata.combining(character)
     ).casefold().strip()
+
+
+def starts_with_objective_action_verb(value: str) -> bool:
+    """Deteta descrições de conteúdo redigidas como objetivos/resultados."""
+
+    first_word = re.search(r"[a-z]+", normalise_text(value))
+    if first_word is None:
+        return False
+    objective_verbs = {
+        normalise_text(verb)
+        for levels in TAXONOMY_VERBS.values()
+        for verbs in levels.values()
+        for verb in verbs
+    } | {normalise_text(verb) for verb in COMMON_OBJECTIVE_OPENING_VERBS}
+    return first_word.group(0) in objective_verbs
 
 
 def verb_allowed(level: str, verb: str) -> bool:

@@ -33,6 +33,7 @@ from .curriculum import (
     TAXONOMY_VERBS,
     normalize_structured_activity_ids,
     normalize_learning_outcome_ids,
+    starts_with_objective_action_verb,
     taxonomy_verb_allowed,
     validate_taxonomy_choice,
 )
@@ -202,14 +203,35 @@ def _general_objectives_text(course: dict[str, Any], topics: list[str]) -> str:
     return "\n".join(fragments[:6])
 
 
+def _nominal_content_title(value: str) -> str:
+    """Converte um eventual enunciado de desempenho numa designação temática."""
+
+    clean = re.sub(r"\s+", " ", str(value or "")).strip(" .;:-")
+    if starts_with_objective_action_verb(clean):
+        clean = re.sub(r"^[^\wÀ-ÿ]*[\wÀ-ÿ-]+\s*", "", clean).strip(" .;:-")
+    if not clean:
+        return "Conteúdo curricular"
+    return clean[0].upper() + clean[1:]
+
+
+def _content_scope_description(title: str) -> str:
+    topic = str(title or "conteúdo curricular").strip(" .;:-").lower()
+    return (
+        "Delimitação conceptual, princípios fundamentais, componentes e aplicações "
+        f"relativas a {topic}."
+    )
+
+
 def analyse_curriculum(state: PrismState) -> dict[str, Any]:
     course = state["course"]
     outcomes = state.get("learning_outcomes", [])
     topics = [
-        str(outcome.get("theme", "")).strip()
-        or str(outcome.get("statement", "")).strip()
+        _nominal_content_title(
+            str(outcome.get("theme", "")).strip()
+            or str(outcome.get("statement", "")).strip()
+        )
         for outcome in outcomes
-    ] or _topics(str(course["source_text"]))
+    ] or [_nominal_content_title(topic) for topic in _topics(str(course["source_text"]))]
     feedback = _feedback(state, "curriculum_analysis")
     objectives = _general_objectives_text(course, topics)
     outcome_ids = [str(outcome.get("id", "")) for outcome in outcomes if outcome.get("id")]
@@ -224,7 +246,7 @@ def analyse_curriculum(state: PrismState) -> dict[str, Any]:
             {
                 "id": f"C{index + 1}",
                 "title": topic,
-                "description": topic,
+                "description": _content_scope_description(topic),
                 "outcome_ids": [outcome_ids[index]] if index < len(outcome_ids) else [],
             }
             for index, topic in enumerate(topics)

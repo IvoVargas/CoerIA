@@ -349,7 +349,10 @@ def render_artifact(
             + f"{artifact['summary']}\n\n## Objetivos gerais\n\n"
             + (objectives or "A confirmar pelo docente.")
             + "\n\n## Conteúdos identificados\n\n"
-            + _table(["ID", "Resultados", "Conteúdo", "Descrição"], content_rows)
+            + _table(
+                ["ID", "Resultados", "Conteúdo", "Descrição do conteúdo"],
+                content_rows,
+            )
             + source_section
             + f"\n\n## Pressupostos\n{assumptions}"
         )

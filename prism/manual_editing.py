@@ -63,7 +63,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     _field("id", "ID"),
                     _field("outcome_ids", "Resultados", "linked_outcomes"),
                     _field("title", "Conteúdo"),
-                    _field("description", "Descrição", "long"),
+                    _field("description", "Descrição do conteúdo", "long"),
                 ),
                 {"id": "", "title": "", "description": "", "outcome_ids": []},
             ),
