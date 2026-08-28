@@ -41,6 +41,10 @@ distinção e o validador das propostas deteta descrições iniciadas pelos verb
 controlados de SOLO/Bloom ou por verbos frequentes de objetivos. Uma violação
 faz repetir apenas a proposta de IA e identifica os conteúdos envolvidos; não
 limita a liberdade da edição manual nem altera versões existentes.
+Na apresentação ao docente e nos documentos exportados, estes campos internos
+surgem como **Tema** e **Descrição do tema**. A entidade continua a representar
+um conteúdo programático com ID `C<n>`; a alteração é exclusivamente semântica e
+não exige migração do estado.
 
 Na interface, uma barra de ferramentas superior persistente concentra o
 contexto da etapa, a navegação, a entrada no editor e as três ações facultativas

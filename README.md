@@ -138,7 +138,8 @@ primeira proposta completa por IA.
 
 Nesta etapa, os objetivos gerais e as descrições dos conteúdos usam linguagens
 deliberadamente distintas. Os objetivos exprimem finalidades e podem começar por
-verbos; cada **Descrição do conteúdo** caracteriza, em formulação expositiva, os
+verbos; cada linha usa **Tema** para a designação breve e **Descrição do tema**
+para caracterizar, em formulação expositiva, os
 conceitos, princípios, processos, aplicações e limites da matéria. As propostas
 da IA que iniciem estas descrições por verbos de ação ou de desempenho são
 rejeitadas para reformulação, evitando que a tabela repita objetivos ou

@@ -1441,7 +1441,7 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             raise AgentGenerationError(
                 "As descrições dos conteúdos devem caracterizar a matéria em linguagem "
                 "expositiva e não começar por verbos de objetivo ou desempenho. "
-                "Conteúdos a corrigir: "
+                "Temas a corrigir: "
                 + ", ".join(objective_like_descriptions)
                 + "."
             )

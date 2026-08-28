@@ -322,7 +322,11 @@ def test_curriculum_editor_uses_free_text_objectives_and_links_contents() -> Non
     description_field = next(
         field for field in layout.tables[0].fields if field.key == "description"
     )
-    assert description_field.label == "Descrição do conteúdo"
+    title_field = next(
+        field for field in layout.tables[0].fields if field.key == "title"
+    )
+    assert title_field.label == "Tema"
+    assert description_field.label == "Descrição do tema"
 
 
 def test_compact_relationship_fields_preserve_the_internal_model() -> None:

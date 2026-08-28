@@ -350,7 +350,7 @@ def render_artifact(
             + (objectives or "A confirmar pelo docente.")
             + "\n\n## Conteúdos identificados\n\n"
             + _table(
-                ["ID", "Resultados", "Conteúdo", "Descrição do conteúdo"],
+                ["ID", "Resultados", "Tema", "Descrição do tema"],
                 content_rows,
             )
             + source_section

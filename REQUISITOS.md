@@ -121,6 +121,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   por verbos de ação, sem se dirigir ao estudante e sem formular objetivos ou
   resultados de aprendizagem. Rejeitar propostas completas da IA que violem
   esta distinção, indicando os IDs dos conteúdos a corrigir.
+- Apresentar cada conteúdo programático na tabela através das colunas **Tema** e
+  **Descrição do tema**, mantendo internamente os IDs `C1`, `C2`, … e as relações
+  estruturadas com os resultados de aprendizagem.
 - Classificar o tipo de cada resultado de aprendizagem.
 - Usar um único verbo de ação principal pertencente ao vocabulário controlado do nível declarado; infinitivos subordinados podem ser usados em complementos, mas não como ações principais coordenadas.
 - Na opção SOLO, não usar o nível pré-estrutural para formular resultados.

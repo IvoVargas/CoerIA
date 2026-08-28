@@ -626,7 +626,7 @@ def export_program_document(
         cells[2].text = str(item.get("description", ""))
     _format_table(
         table,
-        ["ID", "Conteúdo", "Descrição do conteúdo"],
+        ["ID", "Tema", "Descrição do tema"],
         [800, 2700, 6460],
     )
 
@@ -795,7 +795,7 @@ def export_program_latex(
         [
             r"\section{Conteúdos programáticos}",
             _latex_table(
-                ["ID", "Conteúdo", "Descrição do conteúdo"],
+                ["ID", "Tema", "Descrição do tema"],
                 [
                     [item.get("id", ""), item.get("title", ""), item.get("description", "")]
                     for item in analysis.get("contents", [])

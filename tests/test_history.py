@@ -44,6 +44,12 @@ class HistoryViewTests(unittest.TestCase):
             "versão ativa aprovada",
             app.render_stage_artifact(approved_state, "curriculum_analysis"),
         )
+        rendered_curriculum = app.render_stage_artifact(
+            approved_state,
+            "curriculum_analysis",
+        )
+        self.assertIn("Tema", rendered_curriculum)
+        self.assertIn("Descrição do tema", rendered_curriculum)
 
 
 if __name__ == "__main__":
