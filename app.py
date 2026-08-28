@@ -85,6 +85,7 @@ from prism.presentation import (
     render_stage_artifact,
 )
 from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
+from prism.session_backup import configured_session_backup_max_bytes
 from prism.workflow import (
     STAGE_LABELS,
     STAGE_ORDER,
@@ -505,6 +506,7 @@ class AGIRSoloInterface:
 
         self._build_logout_dialog()
         self._build_busy_dialog()
+        self._build_session_restore_dialog()
 
         with ui.header(elevated=False).classes("agir-header h-16 items-center px-3 md:px-6"):
             ui.button(icon="menu", on_click=lambda: self.drawer.toggle()).props(
@@ -545,6 +547,13 @@ class AGIRSoloInterface:
                 ).props("unelevated color=white text-color=primary no-caps").classes(
                     "w-full primary-action"
                 )
+                ui.button(
+                    "Restaurar cópia de segurança",
+                    icon="upload_file",
+                    on_click=self.open_session_restore_dialog,
+                ).props("outline color=white no-caps align=left").classes(
+                    "w-full"
+                ).mark("open-session-restore")
                 ui.separator().classes("opacity-20")
                 with ui.row().classes("w-full items-center"):
                     ui.label("Sessões guardadas").classes("font-semibold")
@@ -1579,12 +1588,119 @@ class AGIRSoloInterface:
                                 f"{STAGE_LABELS.get(item.get('current_stage', ''), 'Sessão')}"
                             ).classes("text-xs opacity-65")
                     ui.button(
+                        icon="download",
+                        on_click=lambda _event=None, selected_id=session_id: (
+                            self.handle_backup_session(selected_id)
+                        ),
+                    ).props(
+                        "flat round dense aria-label='Descarregar cópia de segurança'"
+                    ).tooltip("Descarregar cópia de segurança").mark(
+                        "backup-session"
+                    )
+                    ui.button(
                         icon="delete_outline",
                         on_click=delete_selected,
                     ).props(
                         "flat round dense color=negative "
                         "aria-label='Eliminar sessão'"
                     ).tooltip("Eliminar sessão")
+
+    def _build_session_restore_dialog(self) -> None:
+        maximum_backup_bytes = configured_session_backup_max_bytes()
+        maximum_backup_mb = maximum_backup_bytes // (1024 * 1024)
+        with ui.dialog() as self.session_restore_dialog, ui.card().classes(
+            "p-6 w-full max-w-xl gap-4 surface"
+        ):
+            ui.label("CÓPIA DE SEGURANÇA").classes("eyebrow")
+            ui.label("Restaurar uma sessão").classes("section-title")
+            ui.label(
+                "Selecione um ficheiro ZIP criado pelo CoerIA. O restauro cria uma "
+                "nova sessão na sua conta e não substitui nenhuma sessão existente."
+            ).classes("text-sm")
+            ui.label(
+                "A cópia pode conter fontes, imagens, versões e o histórico completo "
+                "da sessão. Não contém chaves de API. Guarde-a num local protegido."
+            ).classes("text-sm muted")
+            self.session_restore_uploader = ui.upload(
+                label="Selecionar cópia de segurança",
+                auto_upload=True,
+                max_file_size=maximum_backup_bytes,
+                on_upload=self.handle_restore_backup_upload,
+                on_rejected=lambda: ui.notify(
+                    f"A cópia excede o limite de {maximum_backup_mb} MB.",
+                    type="warning",
+                ),
+            ).props("accept=.zip flat bordered").classes("w-full").mark(
+                "session-restore-upload"
+            )
+            with ui.row().classes("w-full justify-end"):
+                ui.button(
+                    "Cancelar",
+                    on_click=self.session_restore_dialog.close,
+                ).props("flat no-caps")
+
+    def open_session_restore_dialog(self) -> None:
+        self.session_restore_uploader.reset()
+        self.session_restore_dialog.open()
+
+    async def handle_backup_session(self, session_id: str) -> None:
+        self._show_busy(
+            "A preparar a cópia de segurança…",
+            detail="A reunir o estado, as versões e a rastreabilidade da sessão…",
+        )
+        try:
+            backup_path, updated = await run.io_bound(
+                self.service.backup_session,
+                session_id,
+            )
+            if self.state and self.state.get("session_id") == session_id:
+                self.state = updated
+            ui.download(backup_path, filename=Path(backup_path).name)
+            self.refresh_sessions()
+            ui.notify("Cópia de segurança preparada.", type="positive")
+        except USER_ERRORS as error:
+            self._show_error(error)
+        finally:
+            self._hide_busy()
+
+    async def handle_restore_backup_upload(
+        self,
+        event: events.UploadEventArguments,
+    ) -> None:
+        self._show_busy(
+            "A restaurar a sessão…",
+            detail="A validar a integridade e a compatibilidade da cópia…",
+        )
+        try:
+            backup_data = await event.file.read()
+            self.state = await run.io_bound(
+                self.service.restore_session_backup,
+                backup_data,
+            )
+            self.viewed_stage = None
+            self.manual_edit_stage = None
+            self.manual_edit_artifact = None
+            self.export_document_format = _export_choice_for_document_formats(
+                self.state.get("last_export_document_formats")
+            )
+            self._set_form_data(self.service.restored_initial_fields(self.state))
+            self.uploaded_files.clear()
+            self.removed_source_files.clear()
+            self.uploader.reset()
+            self.render_upload_list()
+            self.session_restore_dialog.close()
+            self.show_workspace(
+                "Sessão restaurada como uma nova sessão. A cópia original e as "
+                "restantes sessões não foram alteradas."
+            )
+            self.refresh_sessions()
+            self.drawer.hide()
+            ui.notify("Sessão restaurada com sucesso.", type="positive")
+        except USER_ERRORS as error:
+            self._show_error(error)
+        finally:
+            self.session_restore_uploader.reset()
+            self._hide_busy()
 
     def open_delete_session_dialog(
         self,

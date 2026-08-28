@@ -7,6 +7,8 @@ ENV_FILE="/etc/coeria/coeria.env"
 TEST_DB="/var/lib/coeria/test-update.db"
 SERVICE="coeria"
 BACKUP_SERVICE="coeria-backup.service"
+NGINX_SITE_SOURCE="$APP_DIR/deploy/nginx-coeria.conf"
+NGINX_SITE_TARGET="/etc/nginx/sites-available/coeria"
 PUBLIC_URL="https://coeria.ivovargas.pt/login"
 LOCAL_URL="http://127.0.0.1:7860/login"
 
@@ -25,8 +27,9 @@ O script executa:
   4. atualização de COERIA_APP_VERSION;
   5. instalação das dependências bloqueadas;
   6. testes com base SQLite temporária;
-  7. restart do serviço;
-  8. verificações local, HTTPS, Nginx e serviços.
+  7. sincronização e validação da configuração Nginx;
+  8. restart do serviço;
+  9. verificações local, HTTPS, Nginx e serviços.
 USAGE
 }
 
@@ -41,6 +44,7 @@ fail() {
 
 cleanup() {
   sudo rm -f "$TEST_DB" >/dev/null 2>&1 || true
+  [[ -z "${NGINX_SITE_BACKUP:-}" ]] || rm -f "$NGINX_SITE_BACKUP"
 }
 trap cleanup EXIT
 trap 'fail "Falha na linha $LINENO. O deploy foi interrompido."' ERR
@@ -136,6 +140,30 @@ sudo -u coeria sh -c "
 "
 sudo rm -f "$TEST_DB"
 
+log "Sincronizar configuração Nginx"
+[[ -f "$NGINX_SITE_SOURCE" ]] || fail "Falta $NGINX_SITE_SOURCE."
+NGINX_RELOAD_REQUIRED=0
+NGINX_SITE_BACKUP=""
+NGINX_SITE_EXISTED=0
+if ! cmp -s "$NGINX_SITE_SOURCE" "$NGINX_SITE_TARGET"; then
+  NGINX_SITE_BACKUP="$(mktemp)"
+  if sudo test -f "$NGINX_SITE_TARGET"; then
+    sudo cp "$NGINX_SITE_TARGET" "$NGINX_SITE_BACKUP"
+    NGINX_SITE_EXISTED=1
+  fi
+  sudo install -o root -g root -m 0644 "$NGINX_SITE_SOURCE" "$NGINX_SITE_TARGET"
+  if ! sudo nginx -t; then
+    if [[ "$NGINX_SITE_EXISTED" == "1" ]]; then
+      sudo install -o root -g root -m 0644 "$NGINX_SITE_BACKUP" "$NGINX_SITE_TARGET"
+    else
+      sudo rm -f "$NGINX_SITE_TARGET"
+    fi
+    sudo nginx -t || true
+    fail "A nova configuração Nginx era inválida e foi revertida."
+  fi
+  NGINX_RELOAD_REQUIRED=1
+fi
+
 log "Reiniciar $SERVICE"
 sudo systemctl restart "$SERVICE"
 sudo systemctl is-active --quiet "$SERVICE" || {
@@ -146,6 +174,9 @@ sudo systemctl is-active --quiet "$SERVICE" || {
 
 log "Validar Nginx"
 sudo nginx -t
+if [[ "$NGINX_RELOAD_REQUIRED" == "1" ]]; then
+  sudo systemctl reload nginx
+fi
 
 check_http() {
   local url="$1"

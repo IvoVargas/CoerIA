@@ -94,7 +94,7 @@ cd /opt/coeria/app
 ./deploy/update.sh v0.2.2
 ```
 
-O script valida que o checkout está limpo, cria backup, faz `fetch` e checkout da tag, atualiza `COERIA_APP_VERSION`, instala `requirements-vps.lock`, executa a suíte com uma base temporária, reinicia o serviço apenas se os testes passarem e verifica o acesso local/HTTPS, Nginx e serviços. Depois do restart, o health check local usa pedidos `GET` e repete a tentativa até 15 vezes (intervalos de 2 segundos), porque o processo pode estar `active` no systemd antes de o NiceGUI começar a aceitar ligações.
+O script valida que o checkout está limpo, cria backup, faz `fetch` e checkout da tag, atualiza `COERIA_APP_VERSION`, instala `requirements-vps.lock`, executa a suíte com uma base temporária, sincroniza o virtual host Nginx com validação e reversão em caso de erro, reinicia o serviço apenas se os testes passarem e verifica o acesso local/HTTPS, Nginx e serviços. Depois do restart, o health check local usa pedidos `GET` e repete a tentativa até 15 vezes (intervalos de 2 segundos), porque o processo pode estar `active` no systemd antes de o NiceGUI começar a aceitar ligações.
 
 Se qualquer etapa crítica falhar, o processo termina imediatamente. O script não executa `git reset --hard`, não altera ownership e não imprime segredos.
 
@@ -180,14 +180,17 @@ COERIA_OPENAI_IMAGE_QUALITY=low
 COERIA_OPENAI_IMAGE_MAX_PER_PRESENTATION=2
 COERIA_OPENAI_IMAGE_MAX_ADDITIONAL_EDITOR=2
 COERIA_PRESENTATION_IMAGE_UPLOAD_MAX_BYTES=20971520
+COERIA_SESSION_BACKUP_MAX_BYTES=251658240
+COERIA_SESSION_BACKUP_MAX_UNCOMPRESSED_BYTES=402653184
 ```
 
 A mesma `OPENAI_API_KEY` é usada pelas chamadas OpenAI de texto e de imagem. Nunca guardar a chave real no Git.
 
 Os ficheiros de apoio aceitam até 50 MB por ficheiro e 100 MB no conjunto com
 `COERIA_MAX_FILE_BYTES=52428800` e
-`COERIA_MAX_TOTAL_UPLOAD_BYTES=104857600`. O proxy Nginx mantém
-`client_max_body_size 64m`, suficiente para o limite individual.
+`COERIA_MAX_TOTAL_UPLOAD_BYTES=104857600`. As cópias de segurança por sessão
+aceitam até 240 MB no ZIP e 384 MB depois da descompressão. O proxy Nginx mantém
+`client_max_body_size 256m`, deixando margem para o corpo multipart do restauro.
 
 ### 2.6 Configurar a compilação LaTeX para PDF
 

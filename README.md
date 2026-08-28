@@ -233,6 +233,16 @@ passos posteriores preenchidos ficam assinalados para revisão e a
 verificação global é recalculada; o relatório final, por ser derivado, não é
 restaurável.
 
+Cada entrada da lista de sessões disponibiliza ainda uma **cópia de segurança**
+portátil em ZIP. A cópia contém o estado integral da sessão, incluindo fontes
+processadas, imagens, versões e auditoria, acompanhado por um manifesto com
+versão de formato, dimensão e SHA-256. A ação **Restaurar cópia de segurança**
+valida estes elementos e a compatibilidade do esquema antes de criar uma nova
+sessão na conta autenticada. O restauro nunca substitui a sessão de origem nem
+outra sessão existente. Como o ficheiro pode conter materiais fornecidos pelo
+docente, deve ser guardado num local protegido. As chaves de API pertencem à
+configuração do servidor e não são incluídas na cópia.
+
 As tabelas editáveis não acrescentam uma coluna de numeração. Os campos que
 referenciam conteúdos, resultados, avaliações ou atividades de
 etapas anteriores usam seletores de escolha única ou múltipla, evitando a

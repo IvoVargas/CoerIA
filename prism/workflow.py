@@ -91,6 +91,7 @@ class PrismState(TypedDict, total=False):
     revision_snapshots: list[dict[str, Any]]
     ai_proposals: list[dict[str, Any]]
     ai_reviews: dict[str, list[dict[str, Any]]]
+    restored_from_backup: dict[str, str]
 
 
 STAGE_LABELS = {

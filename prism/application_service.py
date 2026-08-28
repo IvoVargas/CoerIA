@@ -29,13 +29,16 @@ from .models import (
     SEMESTER_OPTIONS,
     validate_resource_types,
 )
-from .persistence import SQLiteSessionStore
+from .persistence import SQLiteSessionStore, migrate_legacy_state
 from .quality import attach_quality_report
 from .source_reduction import reduce_source_text
 from .providers import configured_ai_provider
+from .session_backup import create_session_backup, read_session_backup
 from .workflow import (
     ResourceGenerationError,
+    SCHEMA_VERSION,
     STAGE_LABELS,
+    STAGE_ORDER,
     apply_manual_edit,
     create_session,
     decide_ai_proposal,
@@ -111,6 +114,85 @@ class ApplicationService:
 
     def list_sessions(self) -> list[dict[str, str]]:
         return self.store.list_sessions(owner_id=self.owner_id)
+
+    def backup_session(
+        self,
+        session_id: str | None,
+    ) -> tuple[str, dict[str, Any]]:
+        """Cria uma cópia portátil da sessão pertencente ao utilizador atual."""
+
+        state = self.load_session(session_id)
+        updated = deepcopy(state)
+        updated.setdefault("audit", []).append(
+            {
+                "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "stage": "Cópia de segurança",
+                "event": "Cópia de segurança da sessão criada pelo docente.",
+                "feedback": "A cópia inclui o estado, versões, fontes, imagens e auditoria.",
+            }
+        )
+        backup_path = create_session_backup(updated)
+        return backup_path, self._persist(updated)
+
+    def restore_session_backup(
+        self,
+        data: bytes,
+    ) -> dict[str, Any]:
+        """Restaura uma cópia como nova sessão do utilizador autenticado."""
+
+        imported_state, manifest = read_session_backup(data)
+        try:
+            imported_schema = int(imported_state.get("schema_version", 1) or 1)
+        except (TypeError, ValueError) as error:
+            raise ValueError("A cópia contém uma versão de dados inválida.") from error
+        if imported_schema > SCHEMA_VERSION:
+            raise ValueError(
+                "A cópia foi criada por uma versão mais recente do CoerIA. "
+                "Atualize a aplicação antes de restaurar."
+            )
+        try:
+            restored = migrate_legacy_state(deepcopy(imported_state))
+        except (AttributeError, KeyError, TypeError, ValueError) as error:
+            raise ValueError(
+                "A cópia contém um estado de sessão incompatível ou incompleto."
+            ) from error
+        course = restored.get("course")
+        if not isinstance(course, dict) or not str(course.get("unit_name", "")).strip():
+            raise ValueError("A cópia não contém a identificação da sessão.")
+        if restored.get("current_stage") not in STAGE_ORDER:
+            raise ValueError("A cópia contém uma etapa atual inválida.")
+        audit = restored.get("audit")
+        if not isinstance(audit, list) or any(
+            not isinstance(item, dict)
+            or any(
+                key not in item or not isinstance(item.get(key), str)
+                for key in ("timestamp", "stage", "event", "feedback")
+            )
+            for item in audit
+        ):
+            raise ValueError("A cópia contém um histórico de auditoria inválido.")
+
+        source_session_id = str(
+            manifest.get("source_session_id")
+            or imported_state.get("session_id")
+            or "desconhecida"
+        )[:128]
+        restored_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+        restored.pop("session_id", None)
+        restored["restored_from_backup"] = {
+            "source_session_id": source_session_id,
+            "backup_created_at": str(manifest.get("created_at", "")),
+            "restored_at": restored_at,
+        }
+        restored.setdefault("audit", []).append(
+            {
+                "timestamp": restored_at,
+                "stage": "Cópia de segurança",
+                "event": "Sessão restaurada a partir de uma cópia de segurança.",
+                "feedback": f"Sessão de origem: {source_session_id}.",
+            }
+        )
+        return self._persist(restored)
 
     def start_session(
         self,

@@ -192,10 +192,19 @@ interna e entrega os resultados aos mesmos esquemas e guardrails.
 
 ## Migração e rastreabilidade
 
-Sessões anteriores são migradas para o esquema 16 sem apagar artefactos ou
+Sessões anteriores são migradas para o esquema 21 sem apagar artefactos ou
 versões. O ponto corrente é preservado, as estruturas ausentes são inicializadas
 vazias e estados antigos como `stale` passam a `needs_review`. As propostas e
 pareceres futuros ficam separados em `ai_proposals` e `ai_reviews`.
+
+As cópias de segurança por sessão usam um ZIP com apenas `manifest.json` e
+`estado_sessao.json`. O manifesto identifica o formato e a aplicação de origem,
+declara a dimensão do estado e inclui o respetivo SHA-256. Antes do restauro são
+verificados o tamanho comprimido e descomprimido, a estrutura do arquivo, a
+integridade e a compatibilidade de esquema. O estado aceite passa pelas mesmas
+migrações da persistência normal, perde o identificador anterior e é guardado
+com um UUID novo sob o utilizador autenticado; desta forma, a importação não pode
+sobrescrever sessões nem apropriar-se do identificador de outro utilizador.
 
 A camada `ApplicationService` coordena navegação, edição, assistência,
 verificação e persistência. A interface NiceGUI não executa regras pedagógicas
@@ -212,4 +221,7 @@ docente.
 - `COERIA_RESOURCE_QUALITY_MAX_REVISIONS`: correções internas limitadas de um
   recurso pedido explicitamente;
 - `COERIA_AI_PROVIDER`: fornecedor inicialmente mostrado na interface;
+- `COERIA_SESSION_BACKUP_MAX_BYTES`: limite do ZIP usado no restauro;
+- `COERIA_SESSION_BACKUP_MAX_UNCOMPRESSED_BYTES`: limite do estado JSON
+  descomprimido;
 - `COERIA_IAEDU_ENDPOINT` e `COERIA_IAEDU_CHANNEL_ID`: configuração IAedu.

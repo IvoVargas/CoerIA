@@ -1589,6 +1589,35 @@ def test_application_service_deletes_only_owner_session(tmp_path: Path) -> None:
     assert store.load(session_id, owner_id="D01") is None
 
 
+@pytest.mark.asyncio
+async def test_session_drawer_exposes_backup_and_restore_actions(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    store = SQLiteSessionStore(tmp_path / "coeria.db")
+    state = create_session(
+        CourseInput.create(
+            "Introdução à Psicologia",
+            "Conceitos, métodos de investigação e teorias psicológicas.",
+        )
+    )
+    store.save(state, owner_id="D01")
+    service = ApplicationService(store, owner_id="D01")
+
+    @ui.page("/_test_session_backup_actions")
+    def session_backup_actions_page():
+        app.AGIRSoloInterface(service)
+
+    await user.open("/_test_session_backup_actions")
+
+    await user.should_see("Restaurar cópia de segurança")
+    assert len(user.find(marker="open-session-restore").elements) == 1
+    assert len(user.find(marker="backup-session").elements) == 1
+    user.find(marker="open-session-restore").click()
+    await user.should_see("Restaurar uma sessão")
+    assert len(user.find(marker="session-restore-upload").elements) == 1
+
+
 def test_manual_assistance_validates_without_starting_a_session() -> None:
     result = ApplicationService.validate_initial_form(
         {

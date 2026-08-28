@@ -371,6 +371,15 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   acesso ao histórico, ao restauro ou às decisões registadas.
 - Guardar uma fotografia coerente dos artefactos e versões ativas antes de cada
   revisão em cascata.
+- Permitir descarregar, para cada sessão pertencente ao utilizador autenticado,
+  uma cópia de segurança portátil que preserve o estado integral, fontes
+  processadas, imagens, versões e auditoria.
+- Incluir na cópia um manifesto versionado com dimensão e SHA-256 do estado, e
+  rejeitar ficheiros incompletos, adulterados, excessivos ou criados por um
+  esquema de dados posterior ao suportado.
+- Restaurar uma cópia como uma nova sessão pertencente ao utilizador autenticado,
+  sem substituir a sessão de origem ou qualquer sessão existente, permitindo
+  repetir o mesmo restauro de forma segura.
 
 ### RF07 — Exportação
 
