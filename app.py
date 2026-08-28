@@ -2893,13 +2893,13 @@ class AGIRSoloInterface:
                 control.add_slot(
                     "selected-item",
                     """
-                    <q-chip v-if="scope.removeAtIndex" dense removable
-                        :tabindex="scope.tabindex"
-                        @remove="scope.removeAtIndex(scope.index)">
-                        {{ String(scope.opt.label).split(' — ')[0] }}
+                    <q-chip v-if="props.removeAtIndex" dense removable
+                        :tabindex="props.tabindex"
+                        @remove="props.removeAtIndex(props.index)">
+                        {{ String(props.opt.label).split(' — ')[0] }}
                     </q-chip>
                     <span v-else>
-                        {{ String(scope.opt.label).split(' — ')[0] }}
+                        {{ String(props.opt.label).split(' — ')[0] }}
                     </span>
                     """,
                 )

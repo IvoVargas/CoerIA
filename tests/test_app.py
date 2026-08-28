@@ -726,7 +726,10 @@ async def test_outcome_reference_select_shows_descriptions_only_in_options(
     )
     assert control.value == ["RA1"]
     assert "selected-item" in control.slots
-    assert "split(' — ')[0]" in str(control.slots["selected-item"].template)
+    selected_template = str(control.slots["selected-item"].template)
+    assert "props.opt.label" in selected_template
+    assert "scope." not in selected_template
+    assert "split(' — ')[0]" in selected_template
 
 
 @pytest.mark.asyncio
