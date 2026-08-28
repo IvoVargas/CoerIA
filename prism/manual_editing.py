@@ -101,6 +101,11 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (
                     _field("id", "ID", "assessment_task_id"),
                     _field("outcome_ids", "Resultados", "linked_outcomes"),
+                    _field(
+                        "teaching_activity_ids",
+                        "Atividades de ensino-aprendizagem",
+                        "csv",
+                    ),
                     _field("work_type", "Modalidade"),
                     _field("assessment_purpose", "Finalidade"),
                     _field("activity", "Atividade", "long"),
@@ -111,6 +116,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "id": "",
                     "outcome_id": "",
                     "outcome_ids": [],
+                    "teaching_activity_ids": [],
                     "work_type": "",
                     "assessment_purpose": "Formativa",
                     "activity": "",

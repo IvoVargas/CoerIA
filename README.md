@@ -23,7 +23,8 @@ determinística, não de uma decisão declarada pelo modelo.
 2. resultados de aprendizagem com nível SOLO ou Bloom e um único verbo de ação principal;
 3. conteúdos com IDs associados aos resultados formulados e objetivos gerais em texto livre;
 4. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
-5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
+5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa e
+   associação explícita às atividades de ensino-aprendizagem que as preparam;
 6. organização da sequência pedagógica;
 7. geração de recursos educativos e validação automática;
 8. validação final da estrutura e do alinhamento.
@@ -35,7 +36,8 @@ objetivos introduzidos pelo docente continuam a delimitar o contexto inicial.
 Depois de os resultados serem formulados, os conteúdos podem ser estruturados e
 associados a esses resultados; os objetivos gerais permanecem como texto livre.
 As atividades de ensino-aprendizagem são então definidas antes das tarefas de
-avaliação, que recolhem as evidências e aplicam os critérios correspondentes.
+avaliação. Cada tarefa identifica as atividades que preparam o desempenho a
+avaliar, recolhe as evidências e aplica os critérios correspondentes.
 Esta sequência é uma orientação pedagógica, não uma barreira técnica: todas as
 etapas permanecem navegáveis e editáveis desde o início.
 
@@ -79,7 +81,9 @@ Biggs e Tang distinguem *Teaching/Learning Activities* e *Assessment Tasks*. Na
 interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
 (atividades de ensino-aprendizagem) e `TA1`, `TA2`, … (tarefas de avaliação).
 Os prefixos são atribuídos automaticamente e tornam inequívocas as referências
-usadas na verificação automática do alinhamento.
+usadas na verificação automática do alinhamento. Em cada tarefa `TA<n>`, o
+docente seleciona uma ou mais atividades `AE<n>`; a aplicação confirma que elas
+preparam, em conjunto, todos os resultados associados à tarefa.
 
 A seleção dos recursos é feita no início da etapa **Geração de recursos educativos**. As
 imagens extraídas dos documentos ficam reunidas no seletor visual de cada slide,

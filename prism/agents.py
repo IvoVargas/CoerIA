@@ -50,7 +50,7 @@ from .providers import (
     IAeduResponsesAdapter,
     validate_ai_provider,
 )
-from .quality import presentation_visual_issues
+from .quality import assessment_teaching_alignment_issues, presentation_visual_issues
 from .validation_targets import available_validation_targets
 
 
@@ -143,10 +143,13 @@ STAGE_REQUIREMENTS = {
         "principais coordenadas."
     ),
     "assessment_activities": (
-        "Lista de objetos {id, outcome_id, outcome_ids, work_type, assessment_purpose, "
-        "activity, evidence, criterion}. Os IDs são obrigatoriamente TA1, TA2, ... "
+        "Lista de objetos {id, outcome_id, outcome_ids, teaching_activity_ids, work_type, "
+        "assessment_purpose, activity, evidence, criterion}. Os IDs são obrigatoriamente "
+        "TA1, TA2, ... "
         "pela ordem das linhas. assessment_purpose é exclusivamente Formativa ou "
-        "Sumativa. É válido o conjunto conter apenas avaliações sumativas."
+        "Sumativa. Cada tarefa liga-se a uma ou mais atividades de ensino-aprendizagem "
+        "existentes, que em conjunto preparam todos os seus resultados. É válido o "
+        "conjunto conter apenas avaliações sumativas."
     ),
     "pedagogical_design": (
         "Objeto com strategy e sequence. sequence é uma lista de objetos "
@@ -296,6 +299,7 @@ def _schema_for(
                     "id": {"type": "string", "pattern": "^TA[1-9][0-9]*$"},
                     "outcome_id": string,
                     "outcome_ids": {"type": "array", "items": string},
+                    "teaching_activity_ids": {"type": "array", "items": string},
                     "work_type": string,
                     "assessment_purpose": {
                         "type": "string",
@@ -306,7 +310,8 @@ def _schema_for(
                     "criterion": string,
                 },
                 "required": [
-                    "id", "outcome_id", "outcome_ids", "work_type",
+                    "id", "outcome_id", "outcome_ids", "teaching_activity_ids",
+                    "work_type",
                     "assessment_purpose",
                     "activity", "evidence", "criterion"
                 ],
@@ -556,6 +561,28 @@ def _schema_for(
             "type": "string",
             "enum": list(TAXONOMY_LEVELS[selected_taxonomy]),
         }
+    if stage == "assessment_activities" and state:
+        artifact_schema = deepcopy(artifact_schema)
+        outcome_ids = [
+            str(item.get("id", ""))
+            for item in state.get("learning_outcomes", [])
+            if str(item.get("id", "")).strip()
+        ]
+        teaching_activity_ids = [
+            str(item.get("id", ""))
+            for item in state.get("teaching_activities", [])
+            if str(item.get("id", "")).strip()
+        ]
+        item_schema = artifact_schema["items"]["properties"]
+        item_schema["outcome_id"] = {"type": "string", "enum": outcome_ids}
+        item_schema["outcome_ids"]["items"] = {
+            "type": "string",
+            "enum": outcome_ids,
+        }
+        item_schema["teaching_activity_ids"]["items"] = {
+            "type": "string",
+            "enum": teaching_activity_ids,
+        }
     scoped_resource_type = (
         _scoped_resource_type(state) if stage == "resources" else None
     )
@@ -721,6 +748,15 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                 "outcome_id deve ser exatamente o primeiro elemento de outcome_ids."
             ),
             "allowed_purposes": list(ASSESSMENT_PURPOSES),
+            "allowed_teaching_activities": [
+                {
+                    "id": activity.get("id", ""),
+                    "outcome_ids": activity.get("outcome_ids")
+                    or [activity.get("outcome_id", "")],
+                    "activity": activity.get("activity", ""),
+                }
+                for activity in state.get("teaching_activities", [])
+            ],
             "mixed_purpose_forbidden": True,
         }
     if stage == "resources" and "Apresentação PowerPoint" in state.get(
@@ -764,6 +800,11 @@ def _canonicalize_assessment_activities(
     if not isinstance(artifact, list):
         return artifact, []
     allowed = {item["id"] for item in state.get("learning_outcomes", [])}
+    allowed_teaching = {
+        str(item.get("id", ""))
+        for item in state.get("teaching_activities", [])
+        if str(item.get("id", "")).strip()
+    }
     normalized: list[Any] = []
     corrections: list[dict[str, Any]] = []
     for index, item in enumerate(artifact, start=1):
@@ -787,10 +828,21 @@ def _canonicalize_assessment_activities(
             ),
             purpose,
         )
+        raw_teaching_links = item.get("teaching_activity_ids", [])
+        teaching_links = list(
+            dict.fromkeys(
+                str(identifier)
+                for identifier in (
+                    raw_teaching_links if isinstance(raw_teaching_links, list) else []
+                )
+                if str(identifier) in allowed_teaching
+            )
+        )
         canonical = {
             "id": f"TA{index}",
             "outcome_id": canonical_primary,
             "outcome_ids": links,
+            "teaching_activity_ids": teaching_links,
             "assessment_purpose": canonical_purpose,
         }
         changes = {
@@ -1607,6 +1659,13 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 "Cada avaliação deve ser Formativa ou Sumativa e manter ligações "
                 "válidas. " + "; ".join(invalid_assessments)
             )
+        teaching_issues = assessment_teaching_alignment_issues(state, artifact)
+        if teaching_issues:
+            raise AgentGenerationError(
+                "Cada tarefa de avaliação deve indicar as atividades de "
+                "ensino-aprendizagem que preparam todos os resultados avaliados. "
+                + "; ".join(teaching_issues)
+            )
 
     if stage == "teaching_activities":
         if any(
@@ -2007,7 +2066,9 @@ class OpenAIPedagogicalAgent:
                 " Em cada avaliação, assessment_purpose tem exatamente um valor: "
                 "Formativa ou Sumativa, nunca Mista. outcome_ids nunca pode estar vazio "
                 "e outcome_id tem de ser uma cópia exata do primeiro elemento de "
-                "outcome_ids. Usa apenas os IDs indicados em assessment_link_rules."
+                "outcome_ids. teaching_activity_ids nunca pode estar vazio: usa apenas "
+                "as atividades indicadas em assessment_link_rules e garante que, em "
+                "conjunto, preparam todos os resultados avaliados."
             )
         if stage == "resources":
             outcome_ids = [item["id"] for item in state.get("learning_outcomes", [])]

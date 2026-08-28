@@ -124,6 +124,78 @@ def _many_to_many_coverage_check(
     )
 
 
+def assessment_teaching_alignment_issues(
+    state: dict[str, Any],
+    assessments: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    """Deteta ligações TA→AE ausentes, desconhecidas ou pedagogicamente incoerentes."""
+
+    teaching_by_id = {
+        str(item.get("id", "")): item
+        for item in state.get("teaching_activities", [])
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    }
+    rows = assessments if assessments is not None else state.get(
+        "assessment_activities", []
+    )
+    issues: list[str] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            issues.append("Tarefa de avaliação com estrutura inválida")
+            continue
+        task_id = str(item.get("id", "?")) or "?"
+        task_outcomes = {
+            str(identifier)
+            for identifier in (
+                item.get("outcome_ids") or [item.get("outcome_id", "")]
+            )
+            if str(identifier).strip()
+        }
+        raw_links = item.get("teaching_activity_ids", [])
+        linked_ids = list(
+            dict.fromkeys(
+                str(identifier)
+                for identifier in raw_links
+                if str(identifier).strip()
+            )
+        ) if isinstance(raw_links, list) else []
+        if not linked_ids:
+            issues.append(
+                f"{task_id}: sem atividades de ensino-aprendizagem associadas"
+            )
+            continue
+        unknown = [identifier for identifier in linked_ids if identifier not in teaching_by_id]
+        if unknown:
+            issues.append(
+                f"{task_id}: atividades desconhecidas: {', '.join(unknown)}"
+            )
+        known = [teaching_by_id[identifier] for identifier in linked_ids if identifier in teaching_by_id]
+        unrelated = []
+        covered: set[str] = set()
+        for activity in known:
+            activity_outcomes = {
+                str(identifier)
+                for identifier in (
+                    activity.get("outcome_ids")
+                    or [activity.get("outcome_id", "")]
+                )
+                if str(identifier).strip()
+            }
+            if not task_outcomes & activity_outcomes:
+                unrelated.append(str(activity.get("id", "?")))
+            covered.update(task_outcomes & activity_outcomes)
+        if unrelated:
+            issues.append(
+                f"{task_id}: atividades sem resultados em comum: {', '.join(unrelated)}"
+            )
+        missing = sorted(task_outcomes - covered)
+        if missing:
+            issues.append(
+                f"{task_id}: resultados sem atividade de preparação: {', '.join(missing)}"
+            )
+    return issues
+
+
 def presentation_visual_issues(
     state: dict[str, Any],
     slide: dict[str, Any],
@@ -299,6 +371,32 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 + ", ".join(invalid_assessment_purposes)
                 if invalid_assessment_purposes
                 else "Cada avaliação é exclusivamente Formativa ou Sumativa."
+            ),
+        )
+    )
+    assessment_rows = state.get("assessment_activities", [])
+    assessment_teaching_issues = assessment_teaching_alignment_issues(state)
+    checks.append(
+        _check(
+            "assessment_teaching_alignment",
+            "Ligação entre ensino-aprendizagem e avaliação",
+            (
+                "warning"
+                if not assessment_rows
+                else "error"
+                if assessment_teaching_issues
+                else "pass"
+            ),
+            (
+                "Não existem tarefas de avaliação; a ligação às atividades de "
+                "ensino-aprendizagem não pode ser avaliada."
+                if not assessment_rows
+                else "; ".join(assessment_teaching_issues)
+                if assessment_teaching_issues
+                else (
+                    "Cada tarefa de avaliação está associada às atividades de "
+                    "ensino-aprendizagem que preparam os respetivos resultados."
+                )
             ),
         )
     )

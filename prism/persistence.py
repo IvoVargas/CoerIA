@@ -30,9 +30,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 21:
+    if previous_version < 22:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 21
+    state["schema_version"] = 22
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -388,6 +388,80 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             elif proposal_stage == "teaching_activities":
                 remap_own_activity_ids(proposal.get("before"), teaching_id_map)
                 remap_own_activity_ids(proposal.get("after"), teaching_id_map)
+
+    def migrate_assessment_teaching_links(
+        assessments: Any,
+        teaching_activities: Any,
+    ) -> None:
+        """Infere TA→AE pela cobertura de RA nas sessões anteriores ao esquema 22."""
+
+        if not isinstance(assessments, list):
+            return
+        teachings = (
+            teaching_activities if isinstance(teaching_activities, list) else []
+        )
+        for assessment in assessments:
+            if not isinstance(assessment, dict):
+                continue
+            existing = assessment.get("teaching_activity_ids")
+            if isinstance(existing, list) and existing:
+                continue
+            assessment_outcomes = {
+                str(identifier)
+                for identifier in (
+                    assessment.get("outcome_ids")
+                    or [assessment.get("outcome_id", "")]
+                )
+                if str(identifier).strip()
+            }
+            assessment["teaching_activity_ids"] = [
+                str(activity.get("id", ""))
+                for activity in teachings
+                if isinstance(activity, dict)
+                and str(activity.get("id", "")).strip()
+                and assessment_outcomes
+                & {
+                    str(identifier)
+                    for identifier in (
+                        activity.get("outcome_ids")
+                        or [activity.get("outcome_id", "")]
+                    )
+                    if str(identifier).strip()
+                }
+            ]
+
+    if previous_version < 22:
+        migrate_assessment_teaching_links(
+            state.get("assessment_activities"),
+            state.get("teaching_activities"),
+        )
+        if isinstance(version_map, dict):
+            for assessment_version in version_map.get("assessment_activities", []):
+                migrate_assessment_teaching_links(
+                    assessment_version,
+                    state.get("teaching_activities"),
+                )
+        for snapshot in state.get("revision_snapshots", []):
+            if not isinstance(snapshot, dict) or not isinstance(
+                snapshot.get("artifacts"), dict
+            ):
+                continue
+            artifacts = snapshot["artifacts"]
+            migrate_assessment_teaching_links(
+                artifacts.get("assessment_activities"),
+                artifacts.get("teaching_activities"),
+            )
+        for proposal in state.get("ai_proposals", []):
+            if not isinstance(proposal, dict) or proposal.get("stage") != "assessment_activities":
+                continue
+            migrate_assessment_teaching_links(
+                proposal.get("before"),
+                state.get("teaching_activities"),
+            )
+            migrate_assessment_teaching_links(
+                proposal.get("after"),
+                state.get("teaching_activities"),
+            )
 
     def migrate_pedagogical_sequence(
         design: Any,

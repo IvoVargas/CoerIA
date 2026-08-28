@@ -507,3 +507,24 @@ def test_new_teaching_and_assessment_rows_use_localized_identifiers() -> None:
     assert next(
         field for field in assessment_table.fields if field.key == "id"
     ).kind == "assessment_task_id"
+
+
+def test_assessment_editor_selects_existing_teaching_activities() -> None:
+    state = _completed_state()
+    table = editor_layout("assessment_activities").tables[0]
+    field = next(
+        item for item in table.fields if item.key == "teaching_activity_ids"
+    )
+
+    options = editor_reference_options(state, field)
+
+    assert field.kind == "csv"
+    assert options is not None
+    assert set(options) == {
+        item["id"] for item in state["teaching_activities"]
+    }
+    assert all(
+        label.startswith(f"{identifier} — ")
+        for identifier, label in options.items()
+    )
+    assert new_table_row(table, state, [])["teaching_activity_ids"] == []

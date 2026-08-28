@@ -135,7 +135,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -315,18 +315,28 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
     taxonomy_type = validate_taxonomy_choice(
         state["course"].get("taxonomy_type", "SOLO")
     )
-    assessments = [
-        {
+    assessments = []
+    for index, outcome in enumerate(state["learning_outcomes"]):
+        outcome_ids = [
+            outcome["id"],
+            *(
+                [state["learning_outcomes"][index + 1]["id"]]
+                if index % 2 == 0 and index + 1 < len(state["learning_outcomes"])
+                else []
+            ),
+        ]
+        teaching_activity_ids = [
+            str(activity.get("id", ""))
+            for activity in state.get("teaching_activities", [])
+            if str(activity.get("id", "")).strip()
+            and set(activity.get("outcome_ids") or [activity.get("outcome_id")])
+            & set(outcome_ids)
+        ]
+        assessments.append({
             "id": f"TA{index + 1}",
             "outcome_id": outcome["id"],
-            "outcome_ids": [
-                outcome["id"],
-                *(
-                    [state["learning_outcomes"][index + 1]["id"]]
-                    if index % 2 == 0 and index + 1 < len(state["learning_outcomes"])
-                    else []
-                ),
-            ],
+            "outcome_ids": outcome_ids,
+            "teaching_activity_ids": teaching_activity_ids,
             "work_type": "Trabalho individual" if index % 2 == 0 else "Trabalho de grupo",
             "assessment_purpose": ASSESSMENT_PURPOSES[index % len(ASSESSMENT_PURPOSES)],
             "activity": f"Tarefa aplicada: {outcome['statement']}",
@@ -335,9 +345,7 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
                 "Domínio demonstrado ao nível "
                 f"{outcome['taxonomy_level']} da Taxonomia {taxonomy_type}."
             ),
-        }
-        for index, outcome in enumerate(state["learning_outcomes"])
-    ]
+        })
     return {
         "assessment_activities": assessments,
         **_audit_update(
@@ -941,6 +949,14 @@ def save_manual_draft(
             updated.get(target_stage),
             edited_artifact,
         )
+        if target_stage == "teaching_activities" and any(
+            before != after for before, after in id_mapping.items()
+        ):
+            updated["assessment_activities"] = _remap_list_references(
+                updated.get("assessment_activities", []),
+                reference_field,
+                id_mapping,
+            )
     if edited_artifact == updated.get(target_stage):
         raise ValueError("Não foram detetadas alterações para guardar.")
     if target_stage == "resources":

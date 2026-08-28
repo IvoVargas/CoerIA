@@ -81,7 +81,8 @@ etapas navegáveis e editáveis:
 3. estruturação de conteúdos associados aos resultados formulados
    e registo dos objetivos gerais em texto livre;
 4. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
-5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou sumativa;
+5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou
+   sumativa e associação explícita às atividades de ensino-aprendizagem;
 6. organização da sequência pedagógica, articulando em cada resultado o foco,
    a atividade de ensino-aprendizagem e a tarefa de avaliação;
 7. geração dos recursos educativos selecionados;
@@ -108,6 +109,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   distinção entre *Teaching/Learning Activities* e *Assessment Tasks* usada por
   Biggs e Tang. Atribuir estes IDs automaticamente, apresentá-los como campos não
   editáveis e conservar as respetivas referências nas relações estruturadas.
+  Em cada tarefa `TA<n>`, permitir selecionar uma ou mais atividades `AE<n>` e
+  guardar essa ligação de forma explícita.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
   etapa curricular formal.
@@ -135,6 +138,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Não estabelecer uma equivalência rígida entre níveis SOLO e Bloom.
 - Permitir relações muitos-para-muitos entre conteúdos, resultados, avaliações
   e atividades de ensino-aprendizagem.
+- Confirmar que as atividades `AE<n>` associadas a cada tarefa `TA<n>` preparam,
+  em conjunto, todos os resultados que essa tarefa avalia; rejeitar referências
+  desconhecidas ou atividades sem resultados em comum com a tarefa.
 - Classificar cada avaliação exclusivamente como `Formativa` ou `Sumativa`;
   é válido existir apenas avaliação sumativa.
 
@@ -248,6 +254,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Verificar a finalidade formativa ou sumativa de cada avaliação.
 - Normalizar as ligações de cada avaliação, garantindo que `outcome_id` coincide
   com o primeiro elemento não vazio de `outcome_ids`.
+- Verificar a ligação explícita de cada tarefa de avaliação às atividades de
+  ensino-aprendizagem e a cobertura dos respetivos resultados.
 - Verificar prática, acompanhamento e feedback nas atividades de ensino-aprendizagem.
 - Verificar automaticamente o alinhamento relativamente aos artefactos produzidos.
 - Derivar uma síntese factual do alinhamento a partir das ligações aprovadas,
@@ -528,7 +536,8 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
 - Cada avaliação é Formativa ou Sumativa, nunca Mista.
 - Todos os conteúdos estão ligados a pelo menos um resultado; todas as tarefas
   de avaliação usam IDs `TA<n>`, todas as atividades de ensino-aprendizagem usam
-  IDs `AE<n>` e ambas possuem ligações explícitas.
+  IDs `AE<n>` e cada tarefa referencia explicitamente as atividades que preparam
+  os resultados avaliados.
 - A síntese automática assinala incoerências sem depender da opinião declarada
   pelo LLM.
 - Cada tipo de recurso selecionado gera um ficheiro utilizável.

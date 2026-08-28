@@ -440,6 +440,7 @@ class ResourceGenerationTests(unittest.TestCase):
             "taxonomy_outcomes",
             "assessment_coverage",
             "assessment_purposes",
+            "assessment_teaching_alignment",
             "teaching_coverage",
             "formative_activity_structure",
             "constructive_alignment",
@@ -689,6 +690,10 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertIn("Taxonomia selecionada", program_text)
                 self.assertIn("Síntese automática do alinhamento", program_text)
                 self.assertIn("Tarefas e critérios de avaliação", program_text)
+                self.assertIn(
+                    state["assessment_activities"][0]["teaching_activity_ids"][0],
+                    program_text,
+                )
                 self.assertIn("Teaching for Quality Learning", program_text)
                 self.assertNotIn("Learning outcomes", program_text)
                 alignment_header = package.read("sintese_alinhamento.csv").decode(
@@ -755,6 +760,10 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("7. Organização da sequência pedagógica", word_text)
             self.assertIn(strategy, word_text)
             self.assertIn(sequence_focus, word_text)
+            self.assertIn(
+                state["assessment_activities"][0]["teaching_activity_ids"][0],
+                word_text,
+            )
 
             for table in program.tables[1:]:
                 for row in table.rows[1:]:
@@ -776,6 +785,10 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn(r"\section{Organização da sequência pedagógica}", latex)
             self.assertIn(strategy, latex)
             self.assertIn(sequence_focus, latex)
+            self.assertIn(
+                state["assessment_activities"][0]["teaching_activity_ids"][0],
+                latex,
+            )
 
     def test_zip_package_respects_word_latex_or_both_document_formats(self) -> None:
         state = review_current_stage(self._resource_state(), "approve", agent=self.agent)

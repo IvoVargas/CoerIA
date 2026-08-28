@@ -673,19 +673,28 @@ def export_program_document(
     )
 
     document.add_heading("6. Tarefas e critérios de avaliação", level=1)
-    table = document.add_table(rows=1, cols=6)
+    table = document.add_table(rows=1, cols=7)
     for assessment in state.get("assessment_activities", []):
         cells = table.add_row().cells
         cells[0].text = str(assessment.get("id", ""))
         cells[1].text = str(assessment.get("assessment_purpose", ""))
         cells[2].text = str(assessment.get("work_type", ""))
-        cells[3].text = str(assessment.get("activity", ""))
-        cells[4].text = str(assessment.get("criterion", ""))
-        cells[5].text = ", ".join(assessment.get("outcome_ids", []))
+        cells[3].text = ", ".join(assessment.get("teaching_activity_ids", []))
+        cells[4].text = str(assessment.get("activity", ""))
+        cells[5].text = str(assessment.get("criterion", ""))
+        cells[6].text = ", ".join(assessment.get("outcome_ids", []))
     _format_table(
         table,
-        ["ID", "Finalidade", "Modalidade", "Atividade", "Critério", "Resultados"],
-        [650, 1200, 1400, 2800, 2510, 1400],
+        [
+            "ID",
+            "Finalidade",
+            "Modalidade",
+            "Atividades de ensino-aprendizagem",
+            "Tarefa de avaliação",
+            "Critério",
+            "Resultados",
+        ],
+        [550, 950, 1050, 1450, 2100, 2360, 1500],
     )
 
     document.add_heading("7. Organização da sequência pedagógica", level=1)
@@ -844,19 +853,28 @@ def export_program_latex(
             ),
             r"\section{Tarefas e critérios de avaliação}",
             _latex_table(
-                ["ID", "Finalidade", "Modalidade", "Atividade", "Critério", "Resultados"],
+                [
+                    "ID",
+                    "Finalidade",
+                    "Modalidade",
+                    "Atividades de ensino-aprendizagem",
+                    "Tarefa de avaliação",
+                    "Critério",
+                    "Resultados",
+                ],
                 [
                     [
                         assessment.get("id", ""),
                         assessment.get("assessment_purpose", ""),
                         assessment.get("work_type", ""),
+                        ", ".join(assessment.get("teaching_activity_ids", [])),
                         assessment.get("activity", ""),
                         assessment.get("criterion", ""),
                         ", ".join(assessment.get("outcome_ids", [])),
                     ]
                     for assessment in state.get("assessment_activities", [])
                 ],
-                [0.05, 0.10, 0.12, 0.17, 0.20, 0.14],
+                [0.045, 0.08, 0.09, 0.12, 0.15, 0.16, 0.10],
             ),
             r"\section{Organização da sequência pedagógica}",
             r"\textbf{Estratégia pedagógica:} "
