@@ -1354,6 +1354,11 @@ def request_ai_assistance(
         )
         after = deepcopy(result.artifact)
     else:
+        working["_ai_assistance_request"] = {
+            "mode": "complete_stage_proposal",
+            "instruction": clean_instruction,
+            "current_artifact": deepcopy(current_artifact),
+        }
         active_agent = agent or build_pedagogical_team(
             updated.get("ai_provider", configured_ai_provider())
         ).generator

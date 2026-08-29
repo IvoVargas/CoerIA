@@ -597,3 +597,11 @@ def test_lesson_planning_selects_existing_teaching_and_assessment_components() -
         label.startswith(f"{identifier} — ")
         for identifier, label in options.items()
     )
+
+    rendered = render_stage_artifact(state, "pedagogical_design")
+    first_teaching = state["teaching_activities"][0]
+    first_assessment = state["assessment_activities"][0]
+    assert f"{first_teaching['id']} —" in rendered
+    assert first_teaching["activity"][:40] in rendered
+    assert f"{first_assessment['id']} —" in rendered
+    assert first_assessment["activity"][:40] in rendered

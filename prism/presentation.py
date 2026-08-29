@@ -28,6 +28,28 @@ def _table(headers: list[str], rows: list[list[Any]]) -> str:
     )
 
 
+def _lesson_component_text(
+    state: dict[str, Any], component_ids: list[str]
+) -> str:
+    descriptions = {
+        str(item.get("id", "")): " ".join(
+            str(item.get("activity", "")).split()
+        )
+        for stage in ("teaching_activities", "assessment_activities")
+        for item in state.get(stage, [])
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    }
+    labels = []
+    for identifier in component_ids:
+        description = descriptions.get(str(identifier), "")
+        if len(description) > 96:
+            description = description[:93].rstrip() + "…"
+        labels.append(
+            f"{identifier} — {description}" if description else str(identifier)
+        )
+    return "; ".join(labels)
+
+
 def _validation_icon(item: dict[str, Any]) -> str:
     status = str(item.get("status", ""))
     if status == "warning":
@@ -414,7 +436,7 @@ def render_artifact(
                 index,
                 item.get("duration_minutes", "—"),
                 item.get("session_type", "—"),
-                ", ".join(item.get("component_ids", [])),
+                _lesson_component_text(state, item.get("component_ids", [])),
                 item.get("notes", ""),
             ]
             for index, item in enumerate(artifact.get("lessons", []), start=1)

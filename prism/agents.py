@@ -715,6 +715,14 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         "feedback_from_teacher": state.get("feedback", {}).get(stage, ""),
         "requested_resource_types": state.get("resource_types", []),
     }
+    assistance_request = state.get("_ai_assistance_request")
+    if isinstance(assistance_request, dict):
+        context["teacher_request"] = str(
+            assistance_request.get("instruction", "")
+        ).strip()
+        context["current_stage_artifact_read_only"] = deepcopy(
+            assistance_request.get("current_artifact")
+        )
     for artifact_stage in stage_order[:stage_index]:
         if artifact_stage in state:
             context[artifact_stage] = state[artifact_stage]
@@ -782,6 +790,106 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
             "mixed_purpose_forbidden": True,
         }
     if stage == "pedagogical_design":
+        outcomes = [
+            item
+            for item in state.get("learning_outcomes", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        ]
+        contents = [
+            item
+            for item in state.get("curriculum_analysis", {}).get("contents", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        ]
+        teaching_activities = [
+            item
+            for item in state.get("teaching_activities", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        ]
+        assessment_tasks = [
+            item
+            for item in state.get("assessment_activities", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        ]
+        contact_minutes = round(
+            float(state.get("course", {}).get("contact_hours", 0) or 0) * 60
+        )
+        autonomous_minutes = round(
+            float(state.get("course", {}).get("autonomous_hours", 0) or 0)
+            * 60
+        )
+        alignment_chains = []
+        for outcome in outcomes:
+            outcome_id = str(outcome["id"])
+            linked_teaching_ids = [
+                str(item["id"])
+                for item in teaching_activities
+                if outcome_id
+                in (item.get("outcome_ids") or [item.get("outcome_id", "")])
+            ]
+            alignment_chains.append(
+                {
+                    "outcome_id": outcome_id,
+                    "statement": str(outcome.get("statement", "")),
+                    "taxonomy_level": str(outcome.get("taxonomy_level", "")),
+                    "content_ids": [
+                        str(item["id"])
+                        for item in contents
+                        if outcome_id in item.get("outcome_ids", [])
+                    ],
+                    "teaching_activity_ids": linked_teaching_ids,
+                    "assessment_task_ids": [
+                        str(item["id"])
+                        for item in assessment_tasks
+                        if outcome_id in item.get("outcome_ids", [])
+                        and set(linked_teaching_ids)
+                        & set(item.get("teaching_activity_ids", []))
+                    ],
+                }
+            )
+        context["lesson_planning_brief"] = {
+            "duration_targets": {
+                "contact_minutes_for_lessons": contact_minutes,
+                "autonomous_work_minutes_context_only": autonomous_minutes,
+            },
+            "contents": [
+                {
+                    "id": str(item["id"]),
+                    "title": str(item.get("title", "")),
+                    "description": str(item.get("description", "")),
+                    "outcome_ids": list(item.get("outcome_ids", []) or []),
+                }
+                for item in contents
+            ],
+            "component_catalogue": [
+                {
+                    "id": str(item["id"]),
+                    "kind": "atividade_de_ensino_aprendizagem",
+                    "description": str(item.get("activity", "")),
+                    "outcome_ids": list(
+                        item.get("outcome_ids") or [item.get("outcome_id", "")]
+                    ),
+                    "learning_context": str(item.get("learning_context", "")),
+                    "practice": str(item.get("practice", "")),
+                }
+                for item in teaching_activities
+            ]
+            + [
+                {
+                    "id": str(item["id"]),
+                    "kind": "tarefa_de_avaliacao",
+                    "description": str(item.get("activity", "")),
+                    "outcome_ids": list(item.get("outcome_ids", []) or []),
+                    "teaching_activity_ids": list(
+                        item.get("teaching_activity_ids", []) or []
+                    ),
+                    "assessment_purpose": str(
+                        item.get("assessment_purpose", "")
+                    ),
+                }
+                for item in assessment_tasks
+            ],
+            "alignment_chains": alignment_chains,
+        }
         context["lesson_planning_rules"] = {
             "allowed_component_ids": [
                 str(item.get("id", ""))
@@ -794,8 +902,14 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
             ],
             "allowed_session_types": list(LESSON_TYPES),
             "rule": (
-                "Planeia aulas ordenadas. Cada aula tem duração positiva e inclui uma ou "
-                "mais atividades AE e/ou tarefas TA existentes. O texto notes é opcional."
+                "Planeia aulas ordenadas a partir de lesson_planning_brief. Cada aula tem "
+                "duração positiva e inclui uma ou mais atividades AE e/ou tarefas TA "
+                "existentes. Distribui todos os componentes, preserva as cadeias RA→AE→TA "
+                "e agenda cada TA depois ou na mesma aula das AE que a preparam. Quando "
+                "contact_minutes_for_lessons for positivo, a soma das durações deve ser "
+                "exatamente esse valor. Numa proposta completa de IA, notes explicita o "
+                "foco curricular e a progressão com base nos conteúdos e resultados; o "
+                "docente pode posteriormente esvaziar esse texto opcional."
             ),
         }
     if stage == "resources" and "Apresentação PowerPoint" in state.get(
@@ -1782,6 +1896,11 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         }
         invalid_lessons: list[str] = []
         planned_components: set[str] = set()
+        complete_ai_proposal = (
+            isinstance(state.get("_ai_assistance_request"), dict)
+            and state["_ai_assistance_request"].get("mode")
+            == "complete_stage_proposal"
+        )
         for index, lesson in enumerate(lessons, start=1):
             problems: list[str] = []
             duration = lesson.get("duration_minutes")
@@ -1796,6 +1915,10 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 problems.append("contém componentes desconhecidos")
             if not isinstance(lesson.get("notes", ""), str):
                 problems.append("texto opcional inválido")
+            elif complete_ai_proposal and not str(lesson.get("notes", "")).strip():
+                problems.append(
+                    "a proposta completa de IA deve explicitar o foco curricular em notes"
+                )
             planned_components.update(
                 str(identifier)
                 for identifier in components
@@ -1808,6 +1931,22 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             invalid_lessons.append(
                 "Componentes ainda não planeados: " + ", ".join(missing_components)
             )
+        expected_contact_minutes = round(
+            float(state.get("course", {}).get("contact_hours", 0) or 0) * 60
+        )
+        if complete_ai_proposal and expected_contact_minutes > 0:
+            planned_minutes = sum(
+                int(lesson.get("duration_minutes", 0) or 0)
+                for lesson in lessons
+                if isinstance(lesson, dict)
+                and isinstance(lesson.get("duration_minutes"), int)
+            )
+            if planned_minutes != expected_contact_minutes:
+                invalid_lessons.append(
+                    "Duração total das aulas: "
+                    f"{planned_minutes} minutos; deve corresponder às horas de contacto "
+                    f"({expected_contact_minutes} minutos)"
+                )
         if invalid_lessons:
             raise AgentGenerationError(
                 "O planeamento das aulas está incompleto. " + "; ".join(invalid_lessons)
@@ -2097,6 +2236,13 @@ class OpenAIPedagogicalAgent:
             f"Formato obrigatório do campo artifact: {artifact_requirement} "
             "Devolve o resultado no objeto raiz {\"artifact\": ...}."
         )
+        if isinstance(state.get("_ai_assistance_request"), dict):
+            instructions += (
+                " Esta é uma proposta de substituição da etapa completa. Considera o "
+                "teacher_request e o current_stage_artifact_read_only enviados no contexto: "
+                "preserva o que já estiver adequado, corrige ou completa o restante e não "
+                "ignores relações ou dados válidos do rascunho atual."
+            )
         if stage == "learning_outcomes":
             instructions += (
                 f" Usa exclusivamente este catálogo controlado de verbos {selected_taxonomy}: "
@@ -2177,10 +2323,14 @@ class OpenAIPedagogicalAgent:
             )
         if stage == "pedagogical_design":
             instructions += (
-                " Planeia aulas numa ordem pedagogicamente útil. duration_minutes é um "
-                "inteiro positivo, session_type usa lesson_planning_rules e component_ids "
-                "contém uma ou mais referências AE e/ou TA permitidas. Distribui todas as "
-                "atividades e tarefas pelas aulas. notes é texto livre opcional e pode ser vazio."
+                " Usa lesson_planning_brief como fonte de verdade e planeia aulas numa ordem "
+                "pedagogicamente útil. duration_minutes é um inteiro positivo, session_type "
+                "usa lesson_planning_rules e component_ids contém uma ou mais referências AE "
+                "e/ou TA permitidas. Distribui todas as atividades e tarefas pelas aulas sem "
+                "quebrar as cadeias de alinhamento. Numa proposta completa, a soma das durações "
+                "corresponde a contact_minutes_for_lessons e notes nunca fica vazio: resume o "
+                "tema, os resultados trabalhados e a progressão prevista com base nos artefactos "
+                "anteriores. Na edição manual, notes continua a ser opcional."
             )
         if stage == "resources":
             outcome_ids = [item["id"] for item in state.get("learning_outcomes", [])]

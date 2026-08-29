@@ -216,6 +216,11 @@ pode executar uma chamada por tipo de recurso e chamadas adicionais para gerar
 imagens da apresentação. A proposta resultante reutiliza os mesmos separadores e
 o mesmo editor da edição manual, mostra apenas os recursos selecionados e permite
 ajustar o conteúdo antes de aplicar a proposta editada como uma única versão.
+No **Planeamento das aulas**, o pedido inclui ainda um resumo explícito dos
+conteúdos e das cadeias `RA → AE → TA`, o catálogo descritivo das atividades e
+tarefas e as horas de contacto. A proposta distribui todos esses componentes,
+usa em conjunto o rascunho existente e os artefactos anteriores, e torna o foco
+curricular de cada aula visível no texto opcional.
 
 Na mesma barra, **Pedir propostas à IA** abre um diálogo para escolher o âmbito
 e escrever uma instrução sem ocupar permanentemente espaço no artefacto. Para

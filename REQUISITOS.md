@@ -203,6 +203,11 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   para obter uma proposta completa com base no contexto, no rascunho atual e nos
   artefactos anteriores. A proposta só se torna uma nova versão depois da
   revisão e aplicação explícitas pelo docente.
+- No planeamento das aulas, fornecer à IA um contexto explícito com conteúdos,
+  cadeias `RA → AE → TA`, descrições dos componentes, horas de contacto e
+  rascunho atual. Exigir que a proposta completa distribua todos os componentes,
+  totalize as horas de contacto e explicite em cada aula o foco curricular; o
+  texto permanece opcional na edição manual.
 - Apresentar **Pedir propostas à IA** na mesma barra e abrir num diálogo os
   campos **Âmbito da assistência** e **O que pretende que a IA proponha?**,
   evitando ocupar permanentemente espaço no artefacto.

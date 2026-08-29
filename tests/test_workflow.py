@@ -47,6 +47,7 @@ from prism.workflow import (
     apply_manual_edit,
     create_session,
     create_test_agent,
+    request_ai_assistance,
     reopen_stage,
     review_current_stage,
     revision_impact,
@@ -2283,6 +2284,100 @@ class WorkflowTests(unittest.TestCase):
 
         state = review_current_stage(state, "approve", agent=self.agent)
         self.assertEqual(state["current_stage"], "resources")
+
+    def test_complete_lesson_proposal_receives_explicit_previous_context(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state["course"]["contact_hours"] = 6
+        state["course"]["autonomous_hours"] = 18
+        for _ in range(4):
+            state = review_current_stage(state, "approve", agent=self.agent)
+        current_draft = deepcopy(state["pedagogical_design"])
+        current_draft["lessons"][0]["notes"] = "Decisão atual do docente."
+        state["pedagogical_design"] = current_draft
+        generated = self.agent.generate("pedagogical_design", state).artifact
+
+        class FakeResponses:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def create(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(
+                    output_text=json.dumps({"artifact": generated}),
+                    id="lesson-response",
+                    usage=SimpleNamespace(
+                        input_tokens=10,
+                        output_tokens=20,
+                        total_tokens=30,
+                    ),
+                )
+
+        responses = FakeResponses()
+        openai_agent = OpenAIPedagogicalAgent(
+            client_factory=lambda: SimpleNamespace(responses=responses)
+        )
+        with patch.dict(environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
+            proposed = request_ai_assistance(
+                state,
+                "pedagogical_design",
+                [],
+                "Toda a etapa",
+                "Reorganizar as aulas com base nos artefactos anteriores.",
+                agent=openai_agent,
+            )
+
+        request_context = json.loads(responses.calls[0]["input"])
+        brief = request_context["lesson_planning_brief"]
+        expected_components = {
+            item["id"]
+            for stage in ("teaching_activities", "assessment_activities")
+            for item in state[stage]
+        }
+        self.assertEqual(
+            request_context["current_stage_artifact_read_only"],
+            current_draft,
+        )
+        self.assertEqual(
+            brief["duration_targets"],
+            {
+                "contact_minutes_for_lessons": 360,
+                "autonomous_work_minutes_context_only": 1080,
+            },
+        )
+        self.assertEqual(
+            {item["id"] for item in brief["component_catalogue"]},
+            expected_components,
+        )
+        self.assertEqual(
+            {item["outcome_id"] for item in brief["alignment_chains"]},
+            {item["id"] for item in state["learning_outcomes"]},
+        )
+        self.assertTrue(
+            all(item["teaching_activity_ids"] for item in brief["alignment_chains"])
+        )
+        self.assertTrue(
+            all(item["assessment_task_ids"] for item in brief["alignment_chains"])
+        )
+        self.assertEqual(proposed["ai_proposals"][-1]["after"], generated)
+
+    def test_complete_ai_lesson_proposal_uses_contact_time_and_visible_notes(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state["course"]["contact_hours"] = 4
+        for _ in range(4):
+            state = review_current_stage(state, "approve", agent=self.agent)
+        state["_ai_assistance_request"] = {
+            "mode": "complete_stage_proposal",
+            "current_artifact": deepcopy(state["pedagogical_design"]),
+        }
+        invalid_notes = deepcopy(state["pedagogical_design"])
+        invalid_notes["lessons"][0]["notes"] = ""
+        with self.assertRaisesRegex(AgentGenerationError, "foco curricular"):
+            _validate_artifact("pedagogical_design", invalid_notes, state)
+
+        invalid_duration = deepcopy(state["pedagogical_design"])
+        invalid_duration["lessons"][0]["duration_minutes"] += 1
+        with self.assertRaisesRegex(AgentGenerationError, "horas de contacto"):
+            _validate_artifact("pedagogical_design", invalid_duration, state)
 
     def test_agentic_team_revises_once_and_preserves_human_control(self) -> None:
         class FakeGenerator:
