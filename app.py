@@ -858,6 +858,12 @@ class AGIRSoloInterface:
             ).classes("full-control")
             self.fields["cnaef_code"] = ui.input("Código CNAEF").classes("full-control")
             self.fields["cnaef_name"] = ui.input("Área CNAEF").classes("full-control")
+            self.fields["isced_f_code"] = ui.input(
+                "Código ISCED-F", placeholder="Ex.: 0613"
+            ).classes("full-control")
+            self.fields["isced_f_name"] = ui.input(
+                "Área ISCED-F", placeholder="Ex.: Desenvolvimento de software"
+            ).classes("full-control")
             self.fields["ects_credits"] = ui.number(
                 "ECTS", value=0, min=0, precision=1
             ).classes("full-control")
@@ -1288,6 +1294,8 @@ class AGIRSoloInterface:
                 "semester": SEMESTER_OPTIONS[0],
                 "cnaef_code": "",
                 "cnaef_name": "",
+                "isced_f_code": "",
+                "isced_f_name": "",
                 "ects_credits": 0,
                 "contact_hours": 0,
                 "autonomous_hours": 0,

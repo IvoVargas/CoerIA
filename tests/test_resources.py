@@ -60,6 +60,8 @@ class ResourceGenerationTests(unittest.TestCase):
             ),
             audience="Licenciatura",
             duration_hours=20,
+            isced_f_code="0613",
+            isced_f_name="Desenvolvimento e análise de software e aplicações",
             bibliography=(
                 "Biggs, J., & Tang, C. (2011). Teaching for Quality Learning at University.\n"
                 "Anderson, L. W., & Krathwohl, D. R. (2001). A Taxonomy for Learning."
@@ -776,6 +778,12 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("Acompanhamento manual do docente.", word_text)
             self.assertIn("Tema", word_text)
             self.assertIn("Descrição do tema", word_text)
+            self.assertIn("ISCED-F 2013", word_text)
+            self.assertIn("0613", word_text)
+            self.assertIn(
+                "Desenvolvimento e análise de software e aplicações",
+                word_text,
+            )
             self.assertIn("7. Planeamento das aulas", word_text)
             self.assertIn(str(lesson["duration_minutes"]), word_text)
             self.assertIn(lesson["session_type"], word_text)
@@ -808,6 +816,12 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("Acompanhamento manual do docente.", latex)
             self.assertIn("Tema", latex)
             self.assertIn("Descrição do tema", latex)
+            self.assertIn("ISCED-F 2013", latex)
+            self.assertIn("0613", latex)
+            self.assertIn(
+                "Desenvolvimento e análise de software e aplicações",
+                latex,
+            )
             self.assertIn(r"\section{Planeamento das aulas}", latex)
             self.assertIn(str(lesson["duration_minutes"]), latex)
             self.assertIn(lesson["session_type"], latex)

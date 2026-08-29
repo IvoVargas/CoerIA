@@ -31,9 +31,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 25:
+    if previous_version < 26:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 25
+    state["schema_version"] = 26
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -85,6 +85,8 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         "semester": "1.º semestre",
         "cnaef_code": "",
         "cnaef_name": "",
+        "isced_f_code": "",
+        "isced_f_name": "",
         "ects_credits": 0.0,
         "contact_hours": 0.0,
         "autonomous_hours": 0.0,

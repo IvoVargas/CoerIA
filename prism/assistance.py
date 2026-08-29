@@ -27,6 +27,8 @@ PROPOSAL_FIELDS = (
     "semester",
     "cnaef_code",
     "cnaef_name",
+    "isced_f_code",
+    "isced_f_name",
     "ects_credits",
     "contact_hours",
     "autonomous_hours",
@@ -221,6 +223,8 @@ class OpenAIInitialFormAssistant:
                 "semester": {"type": "string", "enum": list(SEMESTER_OPTIONS)},
                 "cnaef_code": {"type": "string"},
                 "cnaef_name": {"type": "string"},
+                "isced_f_code": {"type": "string"},
+                "isced_f_name": {"type": "string"},
                 "ects_credits": {"type": "number"},
                 "contact_hours": {"type": "number"},
                 "autonomous_hours": {"type": "number"},
@@ -235,6 +239,8 @@ class OpenAIInitialFormAssistant:
                 "semester",
                 "cnaef_code",
                 "cnaef_name",
+                "isced_f_code",
+                "isced_f_name",
                 "ects_credits",
                 "contact_hours",
                 "autonomous_hours",
@@ -250,8 +256,10 @@ class OpenAIInitialFormAssistant:
             "numéricos iguais a zero. Quando source_text estiver em fields_to_complete, "
             "cria uma proposta estruturada de informação de referência com pelo menos "
             "200 caracteres; nunca devolvas apenas um título ou uma frase curta. "
-            "Código e designação CNAEF, ECTS e horas podem ser estimativas provisórias, "
-            "mas a explanation deve identificá-los claramente como dados a confirmar. "
+            "Código e designação CNAEF, código e designação ISCED-F 2013, ECTS e "
+            "horas podem ser estimativas provisórias, mas a explanation deve "
+            "identificá-los claramente como dados a confirmar. No ISCED-F, prefere o "
+            "código de área detalhada com quatro dígitos quando o contexto o permitir. "
             "Para semester, usa exatamente '1.º semestre' ou '2.º semestre'. "
             "A proposta será revista e aprovada pelo docente antes de ser usada. "
             f"A taxonomia escolhida é exclusivamente {taxonomy_type} e não deve ser "

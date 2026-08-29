@@ -486,8 +486,9 @@ class WorkflowTests(unittest.TestCase):
         state.pop("orchestration", None)
         for key in (
             "program_name", "program_type", "academic_year", "semester",
-            "cnaef_code", "cnaef_name", "ects_credits", "contact_hours",
-            "autonomous_hours", "general_aims", "bibliography",
+            "cnaef_code", "cnaef_name", "isced_f_code", "isced_f_name",
+            "ects_credits", "contact_hours", "autonomous_hours", "general_aims",
+            "bibliography",
         ):
             state["course"].pop(key, None)
         state["curriculum_analysis"].pop("contents", None)
@@ -508,6 +509,8 @@ class WorkflowTests(unittest.TestCase):
             restored["curriculum_analysis"]["contents"][0]["outcome_ids"]
         )
         self.assertIn("program_name", restored["course"])
+        self.assertEqual(restored["course"]["isced_f_code"], "")
+        self.assertEqual(restored["course"]["isced_f_name"], "")
         self.assertEqual(restored["course"]["semester"], "1.º semestre")
         self.assertIn("stage_statuses", restored)
         self.assertIn("active_versions", restored)

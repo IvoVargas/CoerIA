@@ -47,6 +47,8 @@ class CourseInput:
     semester: str = SEMESTER_OPTIONS[0]
     cnaef_code: str = ""
     cnaef_name: str = ""
+    isced_f_code: str = ""
+    isced_f_name: str = ""
     ects_credits: float = 0.0
     contact_hours: float = 0.0
     autonomous_hours: float = 0.0
@@ -67,6 +69,8 @@ class CourseInput:
         semester: str = SEMESTER_OPTIONS[0],
         cnaef_code: str = "",
         cnaef_name: str = "",
+        isced_f_code: str = "",
+        isced_f_name: str = "",
         ects_credits: int | float | str = 0,
         contact_hours: int | float | str = 0,
         autonomous_hours: int | float | str = 0,
@@ -114,6 +118,8 @@ class CourseInput:
             semester=validate_semester(semester),
             cnaef_code=(cnaef_code or "").strip(),
             cnaef_name=(cnaef_name or "").strip(),
+            isced_f_code=(isced_f_code or "").strip(),
+            isced_f_name=(isced_f_name or "").strip(),
             ects_credits=non_negative_number(ects_credits, "Os créditos ECTS"),
             contact_hours=non_negative_number(contact_hours, "As horas de contacto"),
             autonomous_hours=non_negative_number(

@@ -59,6 +59,8 @@ HUMAN_KEY_LABELS = {
     "semester": "semestre",
     "cnaef_code": "codigo_cnaef",
     "cnaef_name": "area_cnaef",
+    "isced_f_code": "codigo_isced_f",
+    "isced_f_name": "area_isced_f",
     "ects_credits": "creditos_ects",
     "contact_hours": "horas_contacto",
     "autonomous_hours": "horas_trabalho_autonomo",

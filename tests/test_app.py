@@ -241,6 +241,8 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Nome da unidade curricular ou ação de formação")
     await user.should_see("Curso ou programa em que se integra")
     await user.should_see("Caracterização da unidade curricular")
+    await user.should_see("Código ISCED-F")
+    await user.should_see("Área ISCED-F")
     await user.should_see("Iniciar desenho curricular alinhado")
     await user.should_not_see("Público-alvo")
     await user.should_not_see("Duração prevista")
@@ -1695,6 +1697,8 @@ def test_loading_a_session_restores_all_initial_fields() -> None:
         semester="1.º semestre",
         cnaef_code="852",
         cnaef_name="Ambientes naturais e vida selvagem",
+        isced_f_code="0522",
+        isced_f_name="Ambientes naturais e vida selvagem",
         ects_credits=6,
         contact_hours=45,
         autonomous_hours=117,
@@ -1726,6 +1730,8 @@ def test_loading_a_session_restores_all_initial_fields() -> None:
     assert "[Texto introduzido pelo docente]" not in fields["source_text"]
     assert "[Ficheiro:" not in fields["source_text"]
     assert fields["program_name"] == course.program_name
+    assert fields["isced_f_code"] == course.isced_f_code
+    assert fields["isced_f_name"] == course.isced_f_name
     assert fields["general_aims"] == course.general_aims
     assert fields["bibliography"] == course.bibliography
 

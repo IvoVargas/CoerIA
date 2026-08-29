@@ -136,7 +136,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]

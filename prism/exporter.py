@@ -309,6 +309,18 @@ def _add_program_metadata(document: Document, course: dict[str, Any]) -> None:
             )
             or "A confirmar pelo docente",
         ),
+        (
+            "ISCED-F 2013",
+            " — ".join(
+                item
+                for item in (
+                    str(course.get("isced_f_code", "")).strip(),
+                    str(course.get("isced_f_name", "")).strip(),
+                )
+                if item
+            )
+            or "A confirmar pelo docente",
+        ),
         ("ECTS", _display(course.get("ects_credits") or "")),
         ("Horas de contacto", _display(course.get("contact_hours") or "")),
         ("Trabalho autónomo", _display(course.get("autonomous_hours") or "")),
@@ -775,6 +787,18 @@ def export_program_latex(
                 for item in (
                     str(course.get("cnaef_code", "")).strip(),
                     str(course.get("cnaef_name", "")).strip(),
+                )
+                if item
+            )
+            or "A confirmar pelo docente",
+        ],
+        [
+            "ISCED-F 2013",
+            " --- ".join(
+                item
+                for item in (
+                    str(course.get("isced_f_code", "")).strip(),
+                    str(course.get("isced_f_name", "")).strip(),
                 )
                 if item
             )

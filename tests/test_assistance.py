@@ -83,6 +83,8 @@ class InitialAssistanceTests(unittest.TestCase):
             "semester": "1.º semestre",
             "cnaef_code": "624",
             "cnaef_name": "Pescas",
+            "isced_f_code": "0831",
+            "isced_f_name": "Pescas",
             "ects_credits": 6,
             "contact_hours": 45,
             "autonomous_hours": 117,
@@ -111,6 +113,10 @@ class InitialAssistanceTests(unittest.TestCase):
         self.assertNotIn("audience", proposal_schema["required"])
         self.assertNotIn("general_aims", proposal_schema["properties"])
         self.assertNotIn("general_aims", proposal_schema["required"])
+        self.assertIn("isced_f_code", proposal_schema["properties"])
+        self.assertIn("isced_f_name", proposal_schema["properties"])
+        self.assertIn("isced_f_code", proposal_schema["required"])
+        self.assertIn("isced_f_name", proposal_schema["required"])
 
     def test_requested_proposal_preserves_the_exclusive_taxonomy(self) -> None:
         proposal = {
@@ -127,6 +133,8 @@ class InitialAssistanceTests(unittest.TestCase):
             "semester": "1.º semestre",
             "cnaef_code": "624",
             "cnaef_name": "Pescas",
+            "isced_f_code": "0831",
+            "isced_f_name": "Pescas",
             "ects_credits": 6,
             "contact_hours": 45,
             "autonomous_hours": 117,
@@ -162,6 +170,8 @@ class InitialAssistanceTests(unittest.TestCase):
             "semester",
             "cnaef_code",
             "cnaef_name",
+            "isced_f_code",
+            "isced_f_name",
         ):
             self.assertTrue(result[field])
         for field in (
@@ -183,6 +193,8 @@ class InitialAssistanceTests(unittest.TestCase):
             "semester": "2.º semestre",
             "cnaef_code": "624",
             "cnaef_name": "Pescas",
+            "isced_f_code": "0831",
+            "isced_f_name": "Pescas",
             "ects_credits": 6,
             "contact_hours": 45,
             "autonomous_hours": 117,
@@ -231,6 +243,8 @@ class InitialAssistanceTests(unittest.TestCase):
             "semester": "1.º semestre",
             "cnaef_code": "481",
             "cnaef_name": "Ciências informáticas",
+            "isced_f_code": "0613",
+            "isced_f_name": "Desenvolvimento e análise de software e aplicações",
             "ects_credits": 6,
             "contact_hours": 60,
             "autonomous_hours": 102,

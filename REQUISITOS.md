@@ -27,8 +27,12 @@ materiais produzidos.
 ### RF01 — Dados iniciais e fontes
 
 - Recolher o nome da unidade curricular e o tipo de formação.
-- Recolher curso, ano, CNAEF, ECTS, horas de contacto, trabalho autónomo e
-  bibliografia a validar pelo docente.
+- Recolher curso, ano, CNAEF, ISCED-F 2013, ECTS, horas de contacto, trabalho
+  autónomo e bibliografia a validar pelo docente.
+- Registar CNAEF e ISCED-F em pares de código e designação. Para ISCED-F,
+  recomendar o código de área detalhada com quatro dígitos, sem impedir o uso
+  dos níveis amplo ou restrito quando sejam os únicos dados institucionais
+  disponíveis, conforme a hierarquia definida pela UNESCO.
 - Calcular a duração total pela soma das horas de contacto e do trabalho
   autónomo, sem pedir ao docente uma duração prevista redundante.
 - Tornar o semestre obrigatório, limitá-lo às opções `1.º semestre` e

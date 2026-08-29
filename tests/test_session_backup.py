@@ -61,6 +61,8 @@ def _stored_session(service: ApplicationService, tmp_path: Path) -> dict:
         CourseInput.create(
             "Introdução à Psicologia",
             "Conceitos, métodos de investigação e teorias psicológicas.",
+            isced_f_code="0313",
+            isced_f_name="Psicologia",
         )
     )
     source_path = tmp_path / "01_apoio.txt"
@@ -235,6 +237,8 @@ def test_backup_contains_readable_json_and_real_attachment_files(
         assert readable["unidade_curricular"]["nome_unidade_curricular"] == (
             "Introdução à Psicologia"
         )
+        assert readable["unidade_curricular"]["codigo_isced_f"] == "0313"
+        assert readable["unidade_curricular"]["area_isced_f"] == "Psicologia"
         assert readable["fontes"]["texto_processado"]
         assert readable["etapas"]["resultados_de_aprendizagem"][0][
             "enunciado"
