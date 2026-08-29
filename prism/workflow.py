@@ -27,6 +27,7 @@ from .agents import (
 from .branding import config_value
 from .curriculum import (
     ASSESSMENT_PURPOSES,
+    LESSON_TYPES,
     LEARNING_CONTEXTS,
     OUTCOME_TYPES,
     TAXONOMY_LEVELS,
@@ -101,7 +102,7 @@ STAGE_LABELS = {
     "learning_outcomes": "Formulação dos resultados de aprendizagem",
     "teaching_activities": "Atividades de ensino-aprendizagem",
     "assessment_activities": "Tarefas e critérios de avaliação",
-    "pedagogical_design": "Organização da sequência pedagógica",
+    "pedagogical_design": "Planeamento das aulas",
     "resources": "Geração de recursos educativos",
     "final_validation": "Validação final da estrutura e do alinhamento",
 }
@@ -135,7 +136,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -335,6 +336,7 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
         assessments.append({
             "id": f"TA{index + 1}",
             "teaching_activity_ids": teaching_activity_ids,
+            "outcome_ids": outcome_ids,
             "work_type": "Trabalho individual" if index % 2 == 0 else "Trabalho de grupo",
             "assessment_purpose": ASSESSMENT_PURPOSES[index % len(ASSESSMENT_PURPOSES)],
             "activity": f"Tarefa aplicada: {outcome['statement']}",
@@ -359,55 +361,46 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
 
 
 def create_pedagogical_design(state: PrismState) -> dict[str, Any]:
-    feedback = _feedback(state, "pedagogical_design")
     course = state["course"]
-
-    def assessment_ids_for(index: int, outcome_id: str) -> list[str]:
-        teaching_ids = {
-            str(activity.get("id", ""))
-            for activity in state.get("teaching_activities", [])
-            if outcome_id
-            in (activity.get("outcome_ids") or [activity.get("outcome_id")])
-        }
-        compatible = [
-            item
-            for item in state.get("assessment_activities", [])
-            if teaching_ids & set(item.get("teaching_activity_ids", []))
-        ]
-        preferred = (
-            state["assessment_activities"][index]
-            if index < len(state.get("assessment_activities", []))
-            else None
-        )
-        selected = preferred if preferred in compatible else next(iter(compatible), None)
-        return [str(selected.get("id", ""))] if selected else []
-
+    outcomes = state.get("learning_outcomes", [])
+    contact_minutes = max(
+        len(outcomes),
+        round(float(course.get("contact_hours", 0) or 0) * 60),
+    )
+    base_duration, extra_minutes = divmod(
+        contact_minutes,
+        max(len(outcomes), 1),
+    )
     design = {
-        "strategy": "Progressão guiada por resultados, prática e reflexão.",
-        "sequence": [
+        "lessons": [
             {
-                "outcome_id": outcome["id"],
-                "focus": outcome["statement"],
-                "teaching_activity": next(
-                    item["activity"]
-                    for item in state["teaching_activities"]
-                    if outcome["id"] in item.get("outcome_ids", [item.get("outcome_id")])
-                ),
-                "assessment_ids": assessment_ids_for(index, outcome["id"]),
+                "duration_minutes": base_duration + (1 if index < extra_minutes else 0),
+                "session_type": LESSON_TYPES[1],
+                "component_ids": [
+                    *[
+                        str(item.get("id", ""))
+                        for item in state.get("teaching_activities", [])
+                        if outcome["id"]
+                        in (item.get("outcome_ids") or [item.get("outcome_id")])
+                    ],
+                    *[
+                        str(item.get("id", ""))
+                        for item in state.get("assessment_activities", [])
+                        if outcome["id"] in item.get("outcome_ids", [])
+                    ],
+                ],
+                "notes": outcome["statement"],
             }
-            for index, outcome in enumerate(state["learning_outcomes"])
+            for index, outcome in enumerate(outcomes)
         ],
-        "audience": course["audience"],
-        "estimated_hours": course["duration_hours"],
-        "feedback_considered": feedback or None,
     }
     return {
         "pedagogical_design": design,
         **_audit_update(
             state,
             "pedagogical_design",
-            "Estrutura pedagógica criada.",
-            feedback,
+            "Aulas planeadas.",
+            _feedback(state, "pedagogical_design"),
         ),
     }
 
@@ -445,30 +438,17 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
     selected_types = state.get("resource_types", [RESOURCE_PRESENTATION])
     taxonomy_type = validate_taxonomy_choice(course.get("taxonomy_type", "SOLO"))
     def assessment_for(outcome_id: str) -> dict[str, Any]:
-        sequence_item = next(
-            (
-                item
-                for item in state.get("pedagogical_design", {}).get("sequence", [])
-                if item.get("outcome_id") == outcome_id
-            ),
-            None,
-        )
-        if not sequence_item or not sequence_item.get("assessment_ids"):
-            raise ValueError(
-                f"O resultado {outcome_id} não tem uma tarefa de avaliação diretamente ligada."
-            )
-        assessment_id = sequence_item["assessment_ids"][0]
         assessment = next(
             (
                 item
-                for item in state["assessment_activities"]
-                if item.get("id") == assessment_id
+                for item in state.get("assessment_activities", [])
+                if outcome_id in item.get("outcome_ids", [])
             ),
             None,
         )
         if assessment is None:
             raise ValueError(
-                f"A tarefa {assessment_id}, ligada ao resultado {outcome_id}, não existe."
+                f"O resultado {outcome_id} não tem uma tarefa de avaliação diretamente ligada."
             )
         return assessment
 
@@ -660,7 +640,7 @@ def blank_artifact(stage: str, state: PrismState) -> Any:
     if stage == "assessment_activities":
         return []
     if stage == "pedagogical_design":
-        return {"strategy": "", "sequence": []}
+        return {"lessons": []}
     if stage == "teaching_activities":
         return []
     if stage == "resources":
@@ -979,11 +959,6 @@ def save_manual_draft(
                     )
     elif target_stage in {"teaching_activities", "assessment_activities"}:
         prefix = "AE" if target_stage == "teaching_activities" else "TA"
-        reference_field = (
-            "teaching_activity_ids"
-            if target_stage == "teaching_activities"
-            else "assessment_ids"
-        )
         edited_artifact = normalize_structured_activity_ids(
             edited_artifact,
             prefix=prefix,
@@ -998,7 +973,12 @@ def save_manual_draft(
         ):
             updated["assessment_activities"] = _remap_list_references(
                 updated.get("assessment_activities", []),
-                reference_field,
+                "teaching_activity_ids",
+                id_mapping,
+            )
+            updated["pedagogical_design"] = _remap_list_references(
+                updated.get("pedagogical_design", {}),
+                "component_ids",
                 id_mapping,
             )
         elif target_stage == "assessment_activities" and any(
@@ -1006,7 +986,7 @@ def save_manual_draft(
         ):
             updated["pedagogical_design"] = _remap_list_references(
                 updated.get("pedagogical_design", {}),
-                reference_field,
+                "component_ids",
                 id_mapping,
             )
     if edited_artifact == updated.get(target_stage):
@@ -1745,9 +1725,10 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
             "passed": alignment_ok,
             "detail": (
                 "Cada resultado deve estar ligado a conteúdo, atividade de "
-                "ensino-aprendizagem e tarefa de avaliação."
+                "ensino-aprendizagem e tarefa de avaliação; a tarefa deve indicar "
+                "diretamente o resultado e uma atividade que o desenvolva."
             ),
-            "target_stage": "pedagogical_design",
+            "target_stage": "assessment_activities",
             "target_key": first_alignment_problem or "__stage__",
         },
         {
@@ -1794,7 +1775,7 @@ GENERATION_EVENTS = {
     "learning_outcomes": "Resultados de aprendizagem formulados.",
     "teaching_activities": "Atividades de ensino-aprendizagem propostas.",
     "assessment_activities": "Tarefas e critérios de avaliação propostos.",
-    "pedagogical_design": "Sequência pedagógica organizada.",
+    "pedagogical_design": "Aulas planeadas.",
     "resources": "Recursos educativos e verificação automática de qualidade gerados.",
 }
 

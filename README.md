@@ -24,9 +24,10 @@ determinística, não de uma decisão declarada pelo modelo.
 3. conteúdos com IDs associados aos resultados formulados e objetivos gerais em texto livre;
 4. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa e
-   associação explícita às atividades de ensino-aprendizagem que as preparam;
-6. organização da sequência pedagógica, com associação direta entre cada
-   resultado e as tarefas que produzem a respetiva evidência de avaliação;
+   associação explícita tanto às atividades de ensino-aprendizagem que as
+   preparam como aos resultados cuja evidência avaliam;
+6. planeamento das aulas, com duração, tipo de sessão, atividades ou tarefas de
+   avaliação previstas e um campo de texto opcional;
 7. geração de recursos educativos e validação automática;
 8. validação final da estrutura e do alinhamento.
 
@@ -38,7 +39,9 @@ Depois de os resultados serem formulados, os conteúdos podem ser estruturados e
 associados a esses resultados; os objetivos gerais permanecem como texto livre.
 As atividades de ensino-aprendizagem são então definidas antes das tarefas de
 avaliação. Cada tarefa identifica as atividades que preparam o desempenho a
-avaliar, recolhe as evidências e aplica os critérios correspondentes.
+avaliar e os resultados avaliados diretamente, recolhe as evidências e aplica
+os critérios correspondentes. O planeamento das aulas distribui depois as
+atividades e tarefas por sessões concretas.
 Esta sequência é uma orientação pedagógica, não uma barreira técnica: todas as
 etapas permanecem navegáveis e editáveis desde o início.
 
@@ -84,12 +87,13 @@ interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
 Os prefixos são atribuídos automaticamente e tornam inequívocas as referências
 usadas na verificação automática do alinhamento. Em cada tarefa `TA<n>`, o
 docente seleciona uma ou mais atividades `AE<n>`; a aplicação confirma que elas
-existem. Na organização da sequência pedagógica associa também cada `RA<n>` às
-tarefas `TA<n>` que fornecem evidência direta desse resultado. O triângulo
+existem e seleciona diretamente os `RA<n>` cuja evidência a tarefa avalia. O triângulo
 `RA ↔ AE`, `AE ↔ TA` e `RA ↔ TA` evita considerar um resultado avaliado apenas
-porque partilha uma atividade com outro. As tabelas de autoria nunca apresentam
-mais de dois tipos de identificador: `AE ↔ RA` nas atividades, `TA ↔ AE` nas
-tarefas e `RA ↔ TA` na sequência pedagógica.
+porque partilha uma atividade com outro. A tabela das tarefas de avaliação é a
+única que apresenta três tipos de identificador (`TA`, `AE` e `RA`), pois reúne
+as duas relações necessárias no mesmo local. As restantes tabelas apresentam no
+máximo dois tipos. No planeamento das aulas, cada sessão referencia apenas os
+componentes `AE` e `TA` que nela decorrem.
 
 A seleção dos recursos é feita no início da etapa **Geração de recursos educativos**. As
 imagens extraídas dos documentos ficam reunidas no seletor visual de cada slide,

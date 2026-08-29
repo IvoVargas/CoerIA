@@ -82,10 +82,10 @@ etapas navegáveis e editáveis:
    e registo dos objetivos gerais em texto livre;
 4. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou
-   sumativa e associação explícita às atividades de ensino-aprendizagem;
-6. organização da sequência pedagógica, articulando em cada resultado o foco,
-   a atividade de ensino-aprendizagem e uma associação direta às tarefas que
-   fornecem a respetiva evidência de avaliação;
+   sumativa e associação explícita às atividades de ensino-aprendizagem e aos
+   resultados avaliados diretamente;
+6. planeamento das aulas, registando duração, tipo de sessão, atividades de
+   ensino-aprendizagem ou tarefas de avaliação e um texto opcional;
 7. geração dos recursos educativos selecionados;
 8. verificação global determinística da estrutura e do alinhamento.
 
@@ -111,11 +111,15 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   Biggs e Tang. Atribuir estes IDs automaticamente, apresentá-los como campos não
   editáveis e conservar as respetivas referências nas relações estruturadas.
   Em cada tarefa `TA<n>`, permitir selecionar uma ou mais atividades `AE<n>` e
-  guardar essa ligação de forma explícita.
-- Limitar cada tabela de autoria a dois tipos de identificador: `AE ↔ RA` nas
-  atividades de ensino-aprendizagem, `TA ↔ AE` nas tarefas de avaliação e
-  `RA ↔ TA` na organização da sequência. Não repetir os `RA` na tabela das
-  tarefas; usar a sequência para explicitar a ligação avaliação–resultado.
+  um ou mais resultados `RA<n>`, guardando explicitamente as relações `TA ↔ AE`
+  e `TA ↔ RA` na mesma linha.
+- Permitir três tipos de identificador apenas na tabela das tarefas de avaliação
+  (`TA`, `AE` e `RA`), por ser o local onde se explicita o triângulo de
+  alinhamento. Limitar as restantes tabelas de autoria a dois tipos: `AE ↔ RA`
+  nas atividades de ensino-aprendizagem e `AE/TA` no planeamento das aulas.
+- No planeamento das aulas, permitir uma ou mais sessões com duração em minutos,
+  tipo de sessão, seleção de componentes `AE<n>` ou `TA<n>` e texto opcional. O
+  conjunto das aulas deve incluir todas as atividades e tarefas definidas.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
   etapa curricular formal.

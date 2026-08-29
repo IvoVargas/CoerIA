@@ -123,8 +123,14 @@ def test_all_stages_can_be_opened_without_generation_or_validation() -> None:
 def test_earlier_edit_preserves_later_work_and_marks_it_for_review() -> None:
     state = create_session(_course())
     design = {
-        "strategy": "Prática orientada.",
-        "sequence": [{"outcome_id": "RA1", "focus": "Aplicação"}],
+        "lessons": [
+            {
+                "duration_minutes": 60,
+                "session_type": "Teórico-prática",
+                "component_ids": ["AE1", "TA1"],
+                "notes": "Prática orientada.",
+            }
+        ],
     }
     state = save_manual_draft(state, "pedagogical_design", design)
     preserved = deepcopy(state["pedagogical_design"])
@@ -305,12 +311,19 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
         {
             "id": "TA1",
             "teaching_activity_ids": ["AE1"],
+            "outcome_ids": ["RA3"],
             "task": "Resolver um caso.",
         }
     ]
     state["pedagogical_design"] = {
-        "strategy": "Prática orientada.",
-        "sequence": [{"outcome_id": "RA3", "focus": "Testes"}],
+        "lessons": [
+            {
+                "duration_minutes": 60,
+                "session_type": "Teórico-prática",
+                "component_ids": ["AE1", "TA1"],
+                "notes": "Prática orientada sobre testes.",
+            }
+        ],
     }
     state["resources"]["test"]["questions"] = [
         {"id": "Q1", "outcome_ids": ["RA3"], "question": "Analise o caso."}
@@ -344,7 +357,8 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
     assert accepted["curriculum_analysis"]["contents"][0]["outcome_ids"] == ["RA2"]
     assert accepted["teaching_activities"][0]["outcome_ids"] == ["RA2"]
     assert accepted["assessment_activities"][0]["teaching_activity_ids"] == ["AE1"]
-    assert accepted["pedagogical_design"]["sequence"][0]["outcome_id"] == "RA2"
+    assert accepted["assessment_activities"][0]["outcome_ids"] == ["RA2"]
+    assert accepted["pedagogical_design"] == state["pedagogical_design"]
     assert accepted["resources"]["test"]["questions"][0]["outcome_ids"] == ["RA2"]
 
 

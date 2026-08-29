@@ -43,11 +43,9 @@ def available_validation_targets(stage: str, artifact: Any) -> list[dict[str, st
                 identifier = _clean_identifier(item.get("id"))
                 add(identifier, identifier)
     elif stage == "pedagogical_design" and isinstance(artifact, dict):
-        add("__strategy__", "Estratégia pedagógica")
-        for item in artifact.get("sequence", []):
+        for index, item in enumerate(artifact.get("lessons", []), start=1):
             if isinstance(item, dict):
-                identifier = _clean_identifier(item.get("outcome_id"))
-                add(identifier, f"Sequência de {identifier}")
+                add(f"LESSON:{index}", f"Aula {index}")
     elif stage == "resources" and isinstance(artifact, dict):
         selected = set(artifact.get("selected_types", []))
         resource_targets = (
@@ -97,6 +95,10 @@ def resolve_validation_target(stage: str, artifact: Any, finding: dict[str, Any]
     candidates.extend(
         f"SLIDE:{number}"
         for number in re.findall(r"\bslide\s+(\d+)\b", text, flags=re.IGNORECASE)
+    )
+    candidates.extend(
+        f"LESSON:{number}"
+        for number in re.findall(r"\baula\s+(\d+)\b", text, flags=re.IGNORECASE)
     )
     for candidate in candidates:
         if candidate.casefold() in canonical:

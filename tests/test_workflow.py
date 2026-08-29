@@ -539,16 +539,28 @@ class WorkflowTests(unittest.TestCase):
             restored["version_dependencies"]["teaching_activities"][-1],
         )
 
-    def test_schema_17_design_sequence_gains_the_teaching_activity(self) -> None:
+    def test_schema_17_design_sequence_becomes_lesson_planning(self) -> None:
         state = create_session(self.course, agent=self.agent)
         while state["current_stage"] != "pedagogical_design":
             state = review_current_stage(state, "approve", agent=self.agent)
         state["schema_version"] = 17
-        for item in state["pedagogical_design"]["sequence"]:
-            item.pop("teaching_activity", None)
-        for version in state["versions"]["pedagogical_design"]:
-            for item in version["sequence"]:
-                item.pop("teaching_activity", None)
+        legacy_design = {
+            "strategy": "Progressão dos conceitos para a aplicação.",
+            "sequence": [
+                {
+                    "outcome_id": outcome["id"],
+                    "focus": outcome["statement"],
+                    "assessment": next(
+                        item["activity"]
+                        for item in state["assessment_activities"]
+                        if outcome["id"] in item["outcome_ids"]
+                    ),
+                }
+                for outcome in state["learning_outcomes"]
+            ],
+        }
+        state["pedagogical_design"] = deepcopy(legacy_design)
+        state["versions"]["pedagogical_design"] = [deepcopy(legacy_design)]
 
         with TemporaryDirectory() as temporary_directory:
             store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
@@ -556,19 +568,26 @@ class WorkflowTests(unittest.TestCase):
             restored = store.load(session_id)
 
         self.assertEqual(restored["schema_version"], SCHEMA_VERSION)
+        expected_components = {
+            item["id"]
+            for stage in ("teaching_activities", "assessment_activities")
+            for item in restored[stage]
+        }
+        planned_components = {
+            identifier
+            for lesson in restored["pedagogical_design"]["lessons"]
+            for identifier in lesson["component_ids"]
+        }
+        self.assertEqual(planned_components, expected_components)
         self.assertTrue(
             all(
-                item["teaching_activity"].strip()
-                for item in restored["pedagogical_design"]["sequence"]
+                item["notes"].strip()
+                for item in restored["pedagogical_design"]["lessons"]
             )
         )
-        self.assertTrue(
-            all(
-                item["teaching_activity"].strip()
-                for item in restored["versions"]["pedagogical_design"][-1][
-                    "sequence"
-                ]
-            )
+        self.assertIn(
+            "lessons",
+            restored["versions"]["pedagogical_design"][-1],
         )
 
     def test_schema_17_sequential_session_before_teaching_is_repositioned(self) -> None:
@@ -757,7 +776,7 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertTrue(
             all(
-                "outcome_id" not in item and "outcome_ids" not in item
+                "outcome_id" not in item and item["outcome_ids"]
                 for item in restored["assessment_activities"]
             )
         )
@@ -769,7 +788,7 @@ class WorkflowTests(unittest.TestCase):
             )
         )
 
-    def test_schema_22_removes_redundant_assessment_outcome_links(self) -> None:
+    def test_schema_22_restores_direct_assessment_outcome_links(self) -> None:
         state = create_session(self.course, agent=self.agent)
         for _ in range(4):
             state = review_current_stage(state, "approve", agent=self.agent)
@@ -790,30 +809,40 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertTrue(
             all(
-                "outcome_id" not in item and "outcome_ids" not in item
+                "outcome_id" not in item and item["outcome_ids"]
                 for item in restored["assessment_activities"]
             )
         )
 
-    def test_schema_23_sequence_gains_direct_assessment_links(self) -> None:
+    def test_schema_23_sequence_moves_direct_links_to_tasks_and_becomes_lessons(self) -> None:
         state = create_session(self.course, agent=self.agent)
         while state["status"] != "completed":
             state = review_current_stage(state, "approve", agent=self.agent)
         legacy = deepcopy(state)
         legacy["schema_version"] = 23
-
-        assessment_by_id = {
-            item["id"]: item for item in legacy["assessment_activities"]
+        assessment_by_outcome = {
+            outcome["id"]: next(
+                item
+                for item in legacy["assessment_activities"]
+                if outcome["id"] in item["outcome_ids"]
+            )
+            for outcome in legacy["learning_outcomes"]
         }
-
-        def restore_legacy_text(design):
-            for item in design["sequence"]:
-                assessment_id = item.pop("assessment_ids")[0]
-                item["assessment"] = assessment_by_id[assessment_id]["activity"]
-
-        restore_legacy_text(legacy["pedagogical_design"])
-        for version in legacy["versions"]["pedagogical_design"]:
-            restore_legacy_text(version)
+        for item in legacy["assessment_activities"]:
+            item.pop("outcome_ids", None)
+        legacy_design = {
+            "strategy": "Progressão alinhada.",
+            "sequence": [
+                {
+                    "outcome_id": outcome["id"],
+                    "focus": outcome["statement"],
+                    "assessment": assessment_by_outcome[outcome["id"]]["activity"],
+                }
+                for outcome in legacy["learning_outcomes"]
+            ],
+        }
+        legacy["pedagogical_design"] = deepcopy(legacy_design)
+        legacy["versions"]["pedagogical_design"] = [deepcopy(legacy_design)]
 
         with TemporaryDirectory() as temporary_directory:
             store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
@@ -823,13 +852,63 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(restored["schema_version"], SCHEMA_VERSION)
         self.assertTrue(
             all(
-                item["assessment_ids"] and "assessment" not in item
-                for item in restored["pedagogical_design"]["sequence"]
+                item["outcome_ids"]
+                for item in restored["assessment_activities"]
             )
         )
+        self.assertTrue(restored["pedagogical_design"]["lessons"])
+        self.assertNotIn("sequence", restored["pedagogical_design"])
         self.assertTrue(
             all(row["status"] == "Coerente" for row in derive_alignment_rows(restored))
         )
+        self.assertTrue(restored["final_validation"]["passed"])
+
+    def test_schema_24_direct_sequence_links_move_to_tasks(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        while state["status"] != "completed":
+            state = review_current_stage(state, "approve", agent=self.agent)
+        legacy = deepcopy(state)
+        legacy["schema_version"] = 24
+        old_sequence = []
+        for outcome in legacy["learning_outcomes"]:
+            teaching = next(
+                item
+                for item in legacy["teaching_activities"]
+                if outcome["id"] in item["outcome_ids"]
+            )
+            assessment = next(
+                item
+                for item in legacy["assessment_activities"]
+                if outcome["id"] in item["outcome_ids"]
+            )
+            old_sequence.append(
+                {
+                    "outcome_id": outcome["id"],
+                    "focus": outcome["statement"],
+                    "teaching_activity": teaching["activity"],
+                    "assessment_ids": [assessment["id"]],
+                }
+            )
+        for item in legacy["assessment_activities"]:
+            item.pop("outcome_ids", None)
+        legacy_design = {
+            "strategy": "Progressão guiada por resultados.",
+            "sequence": old_sequence,
+        }
+        legacy["pedagogical_design"] = deepcopy(legacy_design)
+        legacy["versions"]["pedagogical_design"] = [deepcopy(legacy_design)]
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(legacy)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], SCHEMA_VERSION)
+        self.assertTrue(
+            all(row["status"] == "Coerente" for row in derive_alignment_rows(restored))
+        )
+        self.assertTrue(restored["pedagogical_design"]["lessons"])
+        self.assertNotIn("sequence", restored["pedagogical_design"])
         self.assertTrue(restored["final_validation"]["passed"])
 
     def test_schema_20_completed_session_rebuilds_final_validation_without_matrix(self) -> None:
@@ -1692,7 +1771,7 @@ class WorkflowTests(unittest.TestCase):
             {"received": "Uni-estrutural", "used": "Relacional"},
         )
 
-    def test_assessment_guardrail_keeps_only_teaching_activity_links(self) -> None:
+    def test_assessment_guardrail_keeps_valid_teaching_and_outcome_links(self) -> None:
         state = create_session(self.course, agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)
@@ -1705,7 +1784,9 @@ class WorkflowTests(unittest.TestCase):
                     "id": f"AV{index + 1}",
                     "outcome_id": outcome["id"],
                     "outcome_ids": (
-                        [] if index == 0 else [next_outcome, outcome["id"]]
+                        [outcome["id"]]
+                        if index == 0
+                        else [next_outcome, outcome["id"]]
                     ),
                     "teaching_activity_ids": [
                         activity["id"]
@@ -1751,7 +1832,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(item["id"], f"TA{index}")
             self.assertTrue(item["teaching_activity_ids"])
             self.assertNotIn("outcome_id", item)
-            self.assertNotIn("outcome_ids", item)
+            self.assertTrue(item["outcome_ids"])
             self.assertEqual(item["assessment_purpose"], "Formativa")
         self.assertTrue(result.metadata["guardrail_corrections"])
 
@@ -1806,12 +1887,12 @@ class WorkflowTests(unittest.TestCase):
             state = review_current_stage(state, "approve", agent=self.agent)
 
         outcome_id = state["learning_outcomes"][0]["id"]
-        sequence_row = next(
-            item
-            for item in state["pedagogical_design"]["sequence"]
-            if item["outcome_id"] == outcome_id
-        )
-        sequence_row["assessment_ids"] = []
+        for item in state["assessment_activities"]:
+            item["outcome_ids"] = [
+                identifier
+                for identifier in item["outcome_ids"]
+                if identifier != outcome_id
+            ]
 
         row = next(
             item for item in derive_alignment_rows(state)
@@ -1821,17 +1902,22 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(row["status"], "Requer revisão")
         self.assertIn("ligação direta", row["rationale"])
 
-    def test_sequence_rejects_a_task_without_a_shared_teaching_activity(self) -> None:
+    def test_assessment_rejects_a_result_without_a_shared_teaching_activity(self) -> None:
         state = create_session(self.course, agent=self.agent)
         for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
 
-        design = deepcopy(state["pedagogical_design"])
-        design["sequence"][0]["assessment_ids"] = [
-            state["assessment_activities"][1]["id"]
-        ]
-        with self.assertRaisesRegex(AgentGenerationError, "ligação direta"):
-            _validate_artifact("pedagogical_design", design, state)
+        assessments = deepcopy(state["assessment_activities"])
+        teaching_activity = state["teaching_activities"][0]
+        unsupported_outcome = next(
+            item["id"]
+            for item in state["learning_outcomes"]
+            if item["id"] not in teaching_activity["outcome_ids"]
+        )
+        assessments[0]["teaching_activity_ids"] = [teaching_activity["id"]]
+        assessments[0]["outcome_ids"] = [unsupported_outcome]
+        with self.assertRaisesRegex(AgentGenerationError, "não é desenvolvido"):
+            _validate_artifact("assessment_activities", assessments, state)
 
     def test_at_least_one_resource_type_is_required(self) -> None:
         with self.assertRaises(ValueError):
@@ -2004,7 +2090,7 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertTrue(
             all(
-                "outcome_id" not in item and "outcome_ids" not in item
+                "outcome_id" not in item and item["outcome_ids"]
                 for item in state["assessment_activities"]
             )
         )
@@ -2168,31 +2254,31 @@ class WorkflowTests(unittest.TestCase):
             {item["id"] for item in state["teaching_activities"]},
         )
         self.assertNotIn("outcome_id", assessment_properties)
-        self.assertNotIn("outcome_ids", assessment_properties)
+        self.assertEqual(
+            set(assessment_properties["outcome_ids"]["items"]["enum"]),
+            {item["id"] for item in state["learning_outcomes"]},
+        )
 
         for _ in range(1):
             state = review_current_stage(state, "approve", agent=self.agent)
         design_schema = _schema_for("pedagogical_design", state)
-        sequence_properties = design_schema["properties"]["artifact"]["properties"][
-            "sequence"
-        ]["items"]["properties"]
-        self.assertIn("teaching_activity", sequence_properties)
-        self.assertIn(
-            "teaching_activity",
-            design_schema["properties"]["artifact"]["properties"]["sequence"][
-                "items"
-            ]["required"],
-        )
-        self.assertNotIn("assessment", sequence_properties)
+        lesson_schema = design_schema["properties"]["artifact"]["properties"][
+            "lessons"
+        ]["items"]
+        lesson_properties = lesson_schema[
+            "properties"
+        ]
         self.assertEqual(
-            set(sequence_properties["assessment_ids"]["items"]["enum"]),
-            {item["id"] for item in state["assessment_activities"]},
+            set(lesson_properties["component_ids"]["items"]["enum"]),
+            {
+                item["id"]
+                for stage in ("teaching_activities", "assessment_activities")
+                for item in state[stage]
+            },
         )
-        self.assertIn(
-            "assessment_ids",
-            design_schema["properties"]["artifact"]["properties"]["sequence"][
-                "items"
-            ]["required"],
+        self.assertEqual(
+            set(lesson_schema["required"]),
+            {"duration_minutes", "session_type", "component_ids", "notes"},
         )
 
         state = review_current_stage(state, "approve", agent=self.agent)

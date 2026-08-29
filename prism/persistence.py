@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from .auth import normalize_user_id
 from .curriculum import (
+    LESSON_TYPES,
     TAXONOMY_LEVELS,
     normalize_structured_activity_ids,
     taxonomy_level_for_verb,
@@ -30,9 +31,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 24:
+    if previous_version < 25:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 24
+    state["schema_version"] = 25
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -285,9 +286,13 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             item.setdefault("id", f"TA{index + 1}")
             if previous_version < 23:
                 item.setdefault("outcome_ids", [item.get("outcome_id", "")])
-            else:
+                item.pop("outcome_id", None)
+            elif previous_version < 25:
                 item.pop("outcome_id", None)
                 item.pop("outcome_ids", None)
+            else:
+                item.pop("outcome_id", None)
+                item.setdefault("outcome_ids", [])
             item.setdefault("work_type", "Não especificado")
             item.setdefault("assessment_purpose", "Sumativa")
 
@@ -467,43 +472,47 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 state.get("teaching_activities"),
             )
 
-    def remove_assessment_outcome_links(assessments: Any) -> None:
-        if not isinstance(assessments, list):
-            return
-        for assessment in assessments:
-            if not isinstance(assessment, dict):
-                continue
-            assessment.pop("outcome_id", None)
-            assessment.pop("outcome_ids", None)
-
-    if previous_version < 23:
-        remove_assessment_outcome_links(state.get("assessment_activities"))
-        if isinstance(version_map, dict):
-            for assessment_version in version_map.get("assessment_activities", []):
-                remove_assessment_outcome_links(assessment_version)
-        for snapshot in state.get("revision_snapshots", []):
-            if isinstance(snapshot, dict) and isinstance(snapshot.get("artifacts"), dict):
-                remove_assessment_outcome_links(
-                    snapshot["artifacts"].get("assessment_activities")
-                )
-        for proposal in state.get("ai_proposals", []):
-            if not isinstance(proposal, dict) or proposal.get("stage") != "assessment_activities":
-                continue
-            remove_assessment_outcome_links(proposal.get("before"))
-            remove_assessment_outcome_links(proposal.get("after"))
-
-    def migrate_pedagogical_sequence(
+    def migrate_lesson_planning(
         design: Any,
         teaching_activities: Any,
         assessment_activities: Any,
+        *,
+        apply_assessment_links: bool = True,
     ) -> None:
-        if not isinstance(design, dict) or not isinstance(design.get("sequence"), list):
+        if not isinstance(design, dict):
             return
         activities = teaching_activities if isinstance(teaching_activities, list) else []
         assessments = (
             assessment_activities if isinstance(assessment_activities, list) else []
         )
-        for item in design["sequence"]:
+        if isinstance(design.get("lessons"), list):
+            lessons = []
+            for item in design["lessons"]:
+                if not isinstance(item, dict):
+                    continue
+                lessons.append(
+                    {
+                        "duration_minutes": int(item.get("duration_minutes", 60) or 60),
+                        "session_type": (
+                            item.get("session_type")
+                            if item.get("session_type") in LESSON_TYPES
+                            else LESSON_TYPES[1]
+                        ),
+                        "component_ids": list(item.get("component_ids", []) or []),
+                        "notes": str(item.get("notes", "") or ""),
+                    }
+                )
+            design.clear()
+            design["lessons"] = lessons
+            return
+
+        sequence = design.get("sequence", [])
+        if not isinstance(sequence, list):
+            design.clear()
+            design["lessons"] = []
+            return
+        migrated_rows: list[dict[str, Any]] = []
+        for item in sequence:
             if not isinstance(item, dict):
                 continue
             outcome_id = str(item.get("outcome_id", ""))
@@ -549,25 +558,115 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                     and str(assessment.get("id", "")).strip()
                 ]
                 item["assessment_ids"] = exact_matches or assessment_ids
-            item.pop("assessment", None)
+            direct_assessment_ids = list(item.get("assessment_ids", []) or [])
+            if apply_assessment_links and outcome_id:
+                for assessment in assessments:
+                    if not isinstance(assessment, dict):
+                        continue
+                    if str(assessment.get("id", "")) not in direct_assessment_ids:
+                        continue
+                    assessment["outcome_ids"] = list(
+                        dict.fromkeys(
+                            [*assessment.get("outcome_ids", []), outcome_id]
+                        )
+                    )
+            migrated_rows.append(
+                {
+                    "teaching_ids": sorted(teaching_ids),
+                    "assessment_ids": direct_assessment_ids,
+                    "focus": str(item.get("focus", "")).strip(),
+                    "teaching_activity": str(item.get("teaching_activity", "")).strip(),
+                }
+            )
 
-    migrate_pedagogical_sequence(
+        total_minutes = max(
+            len(migrated_rows),
+            round(float(course.get("contact_hours", 0) or 0) * 60),
+        )
+        base_duration, extra_minutes = divmod(
+            total_minutes,
+            max(len(migrated_rows), 1),
+        )
+        strategy = str(design.get("strategy", "")).strip()
+        lessons = []
+        for index, row in enumerate(migrated_rows):
+            notes = list(
+                dict.fromkeys(
+                    text
+                    for text in (
+                        strategy if index == 0 else "",
+                        row["focus"],
+                        row["teaching_activity"],
+                    )
+                    if text
+                )
+            )
+            lessons.append(
+                {
+                    "duration_minutes": base_duration + (1 if index < extra_minutes else 0),
+                    "session_type": LESSON_TYPES[1],
+                    "component_ids": list(
+                        dict.fromkeys(
+                            [*row["teaching_ids"], *row["assessment_ids"]]
+                        )
+                    ),
+                    "notes": " ".join(notes),
+                }
+            )
+        planned_components = {
+            identifier
+            for lesson in lessons
+            for identifier in lesson["component_ids"]
+        }
+        for component in [*activities, *assessments]:
+            if not isinstance(component, dict):
+                continue
+            component_id = str(component.get("id", "")).strip()
+            if not component_id or component_id in planned_components or not lessons:
+                continue
+            target_index = 0
+            if component_id.startswith("AE"):
+                target_index = next(
+                    (
+                        index
+                        for index, row in enumerate(migrated_rows)
+                        if component_id in row["teaching_ids"]
+                    ),
+                    0,
+                )
+            elif component_id.startswith("TA"):
+                linked_teaching = set(component.get("teaching_activity_ids", []) or [])
+                target_index = next(
+                    (
+                        index
+                        for index, row in enumerate(migrated_rows)
+                        if linked_teaching & set(row["teaching_ids"])
+                    ),
+                    0,
+                )
+            lessons[target_index]["component_ids"].append(component_id)
+            planned_components.add(component_id)
+        design.clear()
+        design["lessons"] = lessons
+
+    migrate_lesson_planning(
         state.get("pedagogical_design"),
         state.get("teaching_activities"),
         state.get("assessment_activities"),
     )
     if isinstance(version_map, dict):
         for design_version in version_map.get("pedagogical_design", []):
-            migrate_pedagogical_sequence(
+            migrate_lesson_planning(
                 design_version,
                 state.get("teaching_activities"),
                 state.get("assessment_activities"),
+                apply_assessment_links=False,
             )
     for snapshot in state.get("revision_snapshots", []):
         if not isinstance(snapshot, dict) or not isinstance(snapshot.get("artifacts"), dict):
             continue
         artifacts = snapshot["artifacts"]
-        migrate_pedagogical_sequence(
+        migrate_lesson_planning(
             artifacts.get("pedagogical_design"),
             artifacts.get("teaching_activities"),
             artifacts.get("assessment_activities"),
@@ -575,16 +674,62 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     for proposal in state.get("ai_proposals", []):
         if not isinstance(proposal, dict) or proposal.get("stage") != "pedagogical_design":
             continue
-        migrate_pedagogical_sequence(
+        migrate_lesson_planning(
             proposal.get("before"),
             state.get("teaching_activities"),
             state.get("assessment_activities"),
+            apply_assessment_links=False,
         )
-        migrate_pedagogical_sequence(
+        migrate_lesson_planning(
             proposal.get("after"),
             state.get("teaching_activities"),
             state.get("assessment_activities"),
+            apply_assessment_links=False,
         )
+
+    if previous_version < 25:
+        teaching_outcomes = {
+            str(item.get("id", "")): list(
+                item.get("outcome_ids") or [item.get("outcome_id", "")]
+            )
+            for item in state.get("teaching_activities", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        }
+        for assessment in state.get("assessment_activities", []):
+            if not isinstance(assessment, dict) or assessment.get("outcome_ids"):
+                continue
+            assessment["outcome_ids"] = list(
+                dict.fromkeys(
+                    outcome_id
+                    for teaching_id in assessment.get("teaching_activity_ids", []) or []
+                    for outcome_id in teaching_outcomes.get(str(teaching_id), [])
+                    if str(outcome_id).strip()
+                )
+            )
+
+    current_assessment_outcomes = {
+        str(item.get("id", "")): list(item.get("outcome_ids", []) or [])
+        for item in state.get("assessment_activities", [])
+        if isinstance(item, dict)
+    }
+    if isinstance(version_map, dict):
+        for assessment_version in version_map.get("assessment_activities", []):
+            for item in (
+                assessment_version if isinstance(assessment_version, list) else []
+            ):
+                if isinstance(item, dict) and not item.get("outcome_ids"):
+                    item["outcome_ids"] = list(
+                        current_assessment_outcomes.get(str(item.get("id", "")), [])
+                    )
+    for proposal in state.get("ai_proposals", []):
+        if not isinstance(proposal, dict) or proposal.get("stage") != "assessment_activities":
+            continue
+        for artifact in (proposal.get("before"), proposal.get("after")):
+            for item in (artifact if isinstance(artifact, list) else []):
+                if isinstance(item, dict) and not item.get("outcome_ids"):
+                    item["outcome_ids"] = list(
+                        current_assessment_outcomes.get(str(item.get("id", "")), [])
+                    )
 
     if state.get("current_stage") == "solo_taxonomy":
         state["current_stage"] = "learning_outcomes"
@@ -618,7 +763,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 + (
                     "Pode continuar na etapa de geração de recursos educativos."
                     if manual_first
-                    else "Confirme a sequência pedagógica para gerar os recursos."
+                    else "Confirme o planeamento das aulas para gerar os recursos."
                 )
             ),
         }
@@ -872,7 +1017,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                     "foi preservado e a IA passou a ser facultativa."
                 ),
             }
-    if previous_version < 24 and (
+    if previous_version < 25 and (
         state.get("final_validation")
         or state.get("status") == "completed"
         or state.get("current_stage") == "final_validation"

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .curriculum import (
+    LESSON_TYPES,
     TAXONOMY_VERBS,
     next_learning_outcome_id,
     next_structured_activity_id,
@@ -105,6 +106,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                         "Atividades de ensino-aprendizagem",
                         "csv",
                     ),
+                    _field("outcome_ids", "Resultados", "linked_outcomes"),
                     _field("work_type", "Modalidade"),
                     _field("assessment_purpose", "Finalidade"),
                     _field("activity", "Atividade", "long"),
@@ -114,6 +116,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 {
                     "id": "",
                     "teaching_activity_ids": [],
+                    "outcome_ids": [],
                     "work_type": "",
                     "assessment_purpose": "Formativa",
                     "activity": "",
@@ -124,22 +127,21 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
         )
     ),
     "pedagogical_design": EditorLayout(
-        fields=(ScalarSpec(("strategy",), "Estratégia pedagógica", "long"),),
         tables=(
             TableSpec(
-                "Sequência pedagógica",
-                ("sequence",),
+                "Aulas planeadas",
+                ("lessons",),
                 (
-                    _field("outcome_id", "Resultado"),
-                    _field("focus", "Foco", "long"),
-                    _field("teaching_activity", "Atividade de ensino-aprendizagem", "long"),
-                    _field("assessment_ids", "Tarefas de avaliação", "csv"),
+                    _field("duration_minutes", "Duração (minutos)", "integer"),
+                    _field("session_type", "Tipo de sessão"),
+                    _field("component_ids", "Atividades ou avaliação", "csv"),
+                    _field("notes", "Texto opcional", "long"),
                 ),
                 {
-                    "outcome_id": "",
-                    "focus": "",
-                    "teaching_activity": "",
-                    "assessment_ids": [],
+                    "duration_minutes": 60,
+                    "session_type": "Teórico-prática",
+                    "component_ids": [],
+                    "notes": "",
                 },
             ),
         ),
@@ -732,6 +734,29 @@ def editor_reference_options(
             "documento": "Imagem extraída de documento",
             "ia": "Imagem gerada por IA",
         }
+    if field.key == "session_type":
+        return {value: value for value in LESSON_TYPES}
+    if field.key == "component_ids":
+        options: dict[str, str] = {}
+        for stage, description_key in (
+            ("teaching_activities", "activity"),
+            ("assessment_activities", "activity"),
+        ):
+            for row in state.get(stage, []):
+                if not isinstance(row, dict):
+                    continue
+                identifier = str(row.get("id", "")).strip()
+                if not identifier:
+                    continue
+                description = " ".join(
+                    str(row.get(description_key, "")).strip().split()
+                )
+                if len(description) > 88:
+                    description = description[:85].rstrip() + "…"
+                options[identifier] = (
+                    f"{identifier} — {description}" if description else identifier
+                )
+        return options
     if field.key == "visual_asset_id":
         options = {"": "Sem imagem documental"}
         for asset in available_presentation_images(state):

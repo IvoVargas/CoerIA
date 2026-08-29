@@ -314,6 +314,15 @@ OUTCOME_TYPES = (
 
 ASSESSMENT_PURPOSES = ("Formativa", "Sumativa")
 
+LESSON_TYPES = (
+    "Teórica",
+    "Teórico-prática",
+    "Prática ou laboratorial",
+    "Tutorial",
+    "Avaliação",
+    "Outra",
+)
+
 LEARNING_CONTEXTS = (
     "Fora da sala de aula",
     "Apresentação externa",

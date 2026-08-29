@@ -385,6 +385,7 @@ def render_artifact(
             [
                 item.get("id", "—"),
                 ", ".join(item.get("teaching_activity_ids", [])),
+                ", ".join(item.get("outcome_ids", [])),
                 item.get("work_type", "—"),
                 item.get("assessment_purpose", "—"),
                 item["activity"],
@@ -397,6 +398,7 @@ def render_artifact(
             [
                 "ID",
                 "Atividades de ensino-aprendizagem",
+                "Resultados",
                 "Modalidade",
                 "Finalidade",
                 "Atividade",
@@ -407,27 +409,28 @@ def render_artifact(
         )
 
     if stage == "pedagogical_design":
-        sequence_rows = [
+        lesson_rows = [
             [
-                item["outcome_id"],
-                item["focus"],
-                item.get("teaching_activity", "—"),
-                ", ".join(item.get("assessment_ids", [])),
+                index,
+                item.get("duration_minutes", "—"),
+                item.get("session_type", "—"),
+                ", ".join(item.get("component_ids", [])),
+                item.get("notes", ""),
             ]
-            for item in artifact["sequence"]
+            for index, item in enumerate(artifact.get("lessons", []), start=1)
         ]
         return (
             header
-            + f"**Estratégia:** {artifact['strategy']}\n\n"
-            + "## Sequência pedagógica\n\n"
+            + "## Aulas planeadas\n\n"
             + _table(
                 [
-                    "Resultado",
-                    "Foco",
-                    "Atividade de ensino-aprendizagem",
-                    "Tarefas de avaliação",
+                    "Aula",
+                    "Duração (minutos)",
+                    "Tipo de sessão",
+                    "Atividades ou avaliação",
+                    "Texto opcional",
                 ],
-                sequence_rows,
+                lesson_rows,
             )
         )
 

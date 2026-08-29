@@ -42,9 +42,8 @@ def content_ids_for_outcome(state: dict[str, Any], outcome_id: str) -> list[str]
 def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
     """Produz uma síntese de alinhamento sem criar uma etapa editável.
 
-    O triângulo é explícito sem juntar três tipos de ID na mesma tabela: AE→RA,
-    TA→AE e, na sequência pedagógica, RA→TA. A última ligação impede que um
-    resultado seja considerado avaliado apenas por partilhar uma atividade.
+    O triângulo é explícito na tabela de avaliação: cada tarefa indica as
+    atividades que a preparam e os resultados que avalia diretamente.
     """
 
     taxonomy = str(state.get("course", {}).get("taxonomy_type", "SOLO") or "SOLO")
@@ -53,7 +52,6 @@ def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
         for item in state.get("assessment_activities", [])
         if isinstance(item, dict) and str(item.get("id", "")).strip()
     }
-    sequence = state.get("pedagogical_design", {}).get("sequence", [])
     rows: list[dict[str, Any]] = []
     for outcome in state.get("learning_outcomes", []):
         if not isinstance(outcome, dict):
@@ -75,11 +73,11 @@ def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
         )
         assessment_ids = list(
             dict.fromkeys(
-                str(identifier).strip()
-                for item in sequence
-                if isinstance(item, dict) and str(item.get("outcome_id", "")) == outcome_id
-                for identifier in item.get("assessment_ids", [])
-                if str(identifier).strip()
+                str(item.get("id", "")).strip()
+                for item in state.get("assessment_activities", [])
+                if isinstance(item, dict)
+                and outcome_id in item.get("outcome_ids", [])
+                and str(item.get("id", "")).strip()
             )
         )
         assessments = [

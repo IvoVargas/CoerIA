@@ -433,7 +433,7 @@ class ResourceGenerationTests(unittest.TestCase):
         tampered["learning_outcomes"] = []
         tampered["assessment_activities"] = []
         tampered["teaching_activities"] = []
-        tampered["pedagogical_design"] = {"strategy": "", "sequence": []}
+        tampered["pedagogical_design"] = {"lessons": []}
         report = evaluate_quality(tampered, tampered["resources"])
         checks = {item["id"]: item for item in report["checks"]}
         affected = {
@@ -459,12 +459,17 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertFalse(sequence_check["passed"])
         self.assertEqual(sequence_check["target_stage"], "pedagogical_design")
         self.assertEqual(sequence_check["target_key"], "__stage__")
-        self.assertIn("estratégia não vazia", sequence_check["detail"])
+        self.assertIn("pelo menos uma aula", sequence_check["detail"])
 
-    def test_missing_direct_assessment_link_navigates_to_the_sequence(self) -> None:
+    def test_missing_direct_assessment_link_navigates_to_the_task(self) -> None:
         state = self._resource_state()
-        outcome_id = state["pedagogical_design"]["sequence"][0]["outcome_id"]
-        state["pedagogical_design"]["sequence"][0]["assessment_ids"] = []
+        outcome_id = state["learning_outcomes"][0]["id"]
+        for item in state["assessment_activities"]:
+            item["outcome_ids"] = [
+                identifier
+                for identifier in item["outcome_ids"]
+                if identifier != outcome_id
+            ]
 
         report = evaluate_quality(state, state["resources"])
         coverage = next(
@@ -473,7 +478,7 @@ class ResourceGenerationTests(unittest.TestCase):
         )
 
         self.assertEqual(coverage["status"], "error")
-        self.assertEqual(coverage["target_stage"], "pedagogical_design")
+        self.assertEqual(coverage["target_stage"], "assessment_activities")
         self.assertEqual(coverage["target_key"], outcome_id)
 
     def test_resources_with_blocking_quality_errors_cannot_be_approved(self) -> None:
@@ -739,18 +744,14 @@ class ResourceGenerationTests(unittest.TestCase):
         finally:
             package_path.unlink(missing_ok=True)
 
-    def test_program_exports_manual_teaching_fields_and_pedagogical_sequence(self) -> None:
+    def test_program_exports_manual_teaching_fields_and_lesson_planning(self) -> None:
         state = self._resource_state()
         activity = state["teaching_activities"][0]
         activity.pop("method", None)
         activity["learning_context"] = "Presencial"
         activity["practice"] = "Aplicação manual orientada."
         activity["support"] = "Acompanhamento manual do docente."
-        strategy = state["pedagogical_design"]["strategy"]
-        sequence_focus = state["pedagogical_design"]["sequence"][0]["focus"]
-        sequence_assessment_id = state["pedagogical_design"]["sequence"][0][
-            "assessment_ids"
-        ][0]
+        lesson = state["pedagogical_design"]["lessons"][0]
 
         with TemporaryDirectory() as temporary_directory:
             word_path = Path(temporary_directory) / "programa.docx"
@@ -775,10 +776,11 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("Acompanhamento manual do docente.", word_text)
             self.assertIn("Tema", word_text)
             self.assertIn("Descrição do tema", word_text)
-            self.assertIn("7. Organização da sequência pedagógica", word_text)
-            self.assertIn(strategy, word_text)
-            self.assertIn(sequence_focus, word_text)
-            self.assertIn(sequence_assessment_id, word_text)
+            self.assertIn("7. Planeamento das aulas", word_text)
+            self.assertIn(str(lesson["duration_minutes"]), word_text)
+            self.assertIn(lesson["session_type"], word_text)
+            self.assertIn(lesson["notes"], word_text)
+            self.assertIn(lesson["component_ids"][0], word_text)
             self.assertIn(
                 state["assessment_activities"][0]["teaching_activity_ids"][0],
                 word_text,
@@ -787,7 +789,7 @@ class ResourceGenerationTests(unittest.TestCase):
                 cell.text for cell in program.tables[4].rows[0].cells
             ]
             self.assertIn("Atividades de ensino-aprendizagem", assessment_headers)
-            self.assertNotIn("Resultados", assessment_headers)
+            self.assertIn("Resultados", assessment_headers)
 
             for table in program.tables[1:]:
                 for row in table.rows[1:]:
@@ -806,10 +808,11 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("Acompanhamento manual do docente.", latex)
             self.assertIn("Tema", latex)
             self.assertIn("Descrição do tema", latex)
-            self.assertIn(r"\section{Organização da sequência pedagógica}", latex)
-            self.assertIn(strategy, latex)
-            self.assertIn(sequence_focus, latex)
-            self.assertIn(sequence_assessment_id, latex)
+            self.assertIn(r"\section{Planeamento das aulas}", latex)
+            self.assertIn(str(lesson["duration_minutes"]), latex)
+            self.assertIn(lesson["session_type"], latex)
+            self.assertIn(lesson["notes"], latex)
+            self.assertIn(lesson["component_ids"][0], latex)
             self.assertIn(
                 state["assessment_activities"][0]["teaching_activity_ids"][0],
                 latex,

@@ -673,15 +673,16 @@ def export_program_document(
     )
 
     document.add_heading("6. Tarefas e critérios de avaliação", level=1)
-    table = document.add_table(rows=1, cols=6)
+    table = document.add_table(rows=1, cols=7)
     for assessment in state.get("assessment_activities", []):
         cells = table.add_row().cells
         cells[0].text = str(assessment.get("id", ""))
         cells[1].text = str(assessment.get("assessment_purpose", ""))
         cells[2].text = str(assessment.get("work_type", ""))
         cells[3].text = ", ".join(assessment.get("teaching_activity_ids", []))
-        cells[4].text = str(assessment.get("activity", ""))
-        cells[5].text = str(assessment.get("criterion", ""))
+        cells[4].text = ", ".join(assessment.get("outcome_ids", []))
+        cells[5].text = str(assessment.get("activity", ""))
+        cells[6].text = str(assessment.get("criterion", ""))
     _format_table(
         table,
         [
@@ -689,28 +690,27 @@ def export_program_document(
             "Finalidade",
             "Modalidade",
             "Atividades de ensino-aprendizagem",
+            "Resultados",
             "Tarefa de avaliação",
             "Critério",
         ],
-        [600, 1100, 1250, 1700, 2800, 2510],
+        [500, 900, 900, 1400, 900, 2600, 2760],
     )
 
-    document.add_heading("7. Organização da sequência pedagógica", level=1)
+    document.add_heading("7. Planeamento das aulas", level=1)
     pedagogical_design = state.get("pedagogical_design", {})
-    strategy = document.add_paragraph()
-    strategy.add_run("Estratégia pedagógica: ").bold = True
-    strategy.add_run(_display(pedagogical_design.get("strategy")))
-    table = document.add_table(rows=1, cols=4)
-    for item in pedagogical_design.get("sequence", []):
+    table = document.add_table(rows=1, cols=5)
+    for index, item in enumerate(pedagogical_design.get("lessons", []), start=1):
         cells = table.add_row().cells
-        cells[0].text = str(item.get("outcome_id", ""))
-        cells[1].text = str(item.get("focus", ""))
-        cells[2].text = str(item.get("teaching_activity", ""))
-        cells[3].text = ", ".join(item.get("assessment_ids", []))
+        cells[0].text = str(index)
+        cells[1].text = str(item.get("duration_minutes", ""))
+        cells[2].text = str(item.get("session_type", ""))
+        cells[3].text = ", ".join(item.get("component_ids", []))
+        cells[4].text = str(item.get("notes", ""))
     _format_table(
         table,
-        ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Tarefas de avaliação"],
-        [700, 3000, 3200, 3060],
+        ["Aula", "Duração (minutos)", "Tipo de sessão", "Atividades ou avaliação", "Texto opcional"],
+        [500, 1200, 1800, 2600, 3860],
     )
 
     document.add_heading("8. Síntese automática do alinhamento", level=1)
@@ -856,6 +856,7 @@ def export_program_latex(
                     "Finalidade",
                     "Modalidade",
                     "Atividades de ensino-aprendizagem",
+                    "Resultados",
                     "Tarefa de avaliação",
                     "Critério",
                 ],
@@ -865,30 +866,31 @@ def export_program_latex(
                         assessment.get("assessment_purpose", ""),
                         assessment.get("work_type", ""),
                         ", ".join(assessment.get("teaching_activity_ids", [])),
+                        ", ".join(assessment.get("outcome_ids", [])),
                         assessment.get("activity", ""),
                         assessment.get("criterion", ""),
                     ]
                     for assessment in state.get("assessment_activities", [])
                 ],
-                [0.05, 0.09, 0.10, 0.14, 0.20, 0.18],
+                [0.04, 0.07, 0.08, 0.12, 0.08, 0.18, 0.17],
             ),
-            r"\section{Organização da sequência pedagógica}",
-            r"\textbf{Estratégia pedagógica:} "
-            + _latex_escape(
-                _display(state.get("pedagogical_design", {}).get("strategy"))
-            ),
+            r"\section{Planeamento das aulas}",
             _latex_table(
-                ["Resultado", "Foco", "Atividade de ensino-aprendizagem", "Tarefas de avaliação"],
+                ["Aula", "Duração (minutos)", "Tipo de sessão", "Atividades ou avaliação", "Texto opcional"],
                 [
                     [
-                        item.get("outcome_id", ""),
-                        item.get("focus", ""),
-                        item.get("teaching_activity", ""),
-                        ", ".join(item.get("assessment_ids", [])),
+                        index,
+                        item.get("duration_minutes", ""),
+                        item.get("session_type", ""),
+                        ", ".join(item.get("component_ids", [])),
+                        item.get("notes", ""),
                     ]
-                    for item in state.get("pedagogical_design", {}).get("sequence", [])
+                    for index, item in enumerate(
+                        state.get("pedagogical_design", {}).get("lessons", []),
+                        start=1,
+                    )
                 ],
-                [0.06, 0.25, 0.27, 0.24],
+                [0.04, 0.10, 0.15, 0.20, 0.25],
             ),
             r"\clearpage",
             r"\section{Síntese automática do alinhamento}",

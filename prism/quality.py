@@ -46,7 +46,7 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
     elif check_id == "assessment_coverage":
-        target_stage = "pedagogical_design"
+        target_stage = "assessment_activities"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
     elif check_id.startswith("assessment_"):
@@ -58,7 +58,7 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         references = re.findall(r"\bAE\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
     elif check_id == "constructive_alignment":
-        target_stage = "pedagogical_design"
+        target_stage = "assessment_activities"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
     elif check_id == "presentation_visuals":

@@ -649,7 +649,7 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     assert id_control._props.get("readonly") is True
     user.find("Cancelar edição").click()
     user.find(marker="manual-stage-pedagogical_design").click()
-    await user.should_see("Organização da sequência pedagógica — versão 1", retries=20)
+    await user.should_see("Planeamento das aulas — versão 1", retries=20)
     await user.should_not_see("RECURSOS A PREPARAR")
     user.find(marker="manual-stage-resources").click()
     await user.should_see("RECURSOS A PREPARAR", retries=20)

@@ -75,7 +75,7 @@ def test_every_authorship_stage_has_editable_fields_and_tables() -> None:
             rows.pop()
 
 
-def test_authoring_tables_expose_at_most_two_identifier_types() -> None:
+def test_only_assessment_tasks_expose_three_identifier_types() -> None:
     identifier_fields = {
         "id",
         "outcome_id",
@@ -84,6 +84,7 @@ def test_authoring_tables_expose_at_most_two_identifier_types() -> None:
         "content_links",
         "teaching_activity_ids",
         "assessment_ids",
+        "component_ids",
     }
 
     for stage in STAGE_ORDER[:-1]:
@@ -91,11 +92,18 @@ def test_authoring_tables_expose_at_most_two_identifier_types() -> None:
             visible_identifiers = {
                 field.key for field in table.fields if field.key in identifier_fields
             }
-            assert len(visible_identifiers) <= 2, (
-                stage,
-                table.title,
-                visible_identifiers,
-            )
+            if stage == "assessment_activities":
+                assert visible_identifiers == {
+                    "id",
+                    "teaching_activity_ids",
+                    "outcome_ids",
+                }
+            else:
+                assert len(visible_identifiers) <= 2, (
+                    stage,
+                    table.title,
+                    visible_identifiers,
+                )
 
 
 def test_test_question_column_uses_the_questions_label() -> None:
@@ -532,7 +540,7 @@ def test_new_teaching_and_assessment_rows_use_localized_identifiers() -> None:
     ).kind == "assessment_task_id"
 
 
-def test_assessment_editor_selects_existing_teaching_activities() -> None:
+def test_assessment_editor_selects_existing_teaching_activities_and_outcomes() -> None:
     state = _completed_state()
     table = editor_layout("assessment_activities").tables[0]
     field = next(
@@ -550,31 +558,40 @@ def test_assessment_editor_selects_existing_teaching_activities() -> None:
         label.startswith(f"{identifier} — ")
         for identifier, label in options.items()
     )
-    assert new_table_row(table, state, [])["teaching_activity_ids"] == []
-    assert all(field.key not in {"outcome_id", "outcome_ids"} for field in table.fields)
+    outcome_field = next(item for item in table.fields if item.key == "outcome_ids")
+    outcome_options = editor_reference_options(state, outcome_field)
+    assert outcome_options is not None
+    assert set(outcome_options) == {
+        item["id"] for item in state["learning_outcomes"]
+    }
+    new_row = new_table_row(table, state, [])
+    assert new_row["teaching_activity_ids"] == []
+    assert new_row["outcome_ids"] == []
 
 
-def test_assessment_presentation_omits_the_results_column() -> None:
+def test_assessment_presentation_shows_the_direct_results_column() -> None:
     rendered = render_stage_artifact(
         _completed_state(),
         "assessment_activities",
     )
 
     assert "Atividades de ensino-aprendizagem" in rendered
-    assert "| Resultados |" not in rendered
+    assert "| Resultados |" in rendered
 
 
-def test_pedagogical_sequence_selects_existing_assessment_tasks() -> None:
+def test_lesson_planning_selects_existing_teaching_and_assessment_components() -> None:
     state = _completed_state()
     table = editor_layout("pedagogical_design").tables[0]
-    field = next(item for item in table.fields if item.key == "assessment_ids")
+    field = next(item for item in table.fields if item.key == "component_ids")
 
     options = editor_reference_options(state, field)
 
     assert field.kind == "csv"
     assert options is not None
     assert set(options) == {
-        item["id"] for item in state["assessment_activities"]
+        item["id"]
+        for stage in ("teaching_activities", "assessment_activities")
+        for item in state[stage]
     }
     assert all(
         label.startswith(f"{identifier} — ")

@@ -2868,7 +2868,11 @@ class AGIRSoloInterface:
             )
         if selection_options is not None:
             multiple = field.kind in {"csv", "content_ids", "linked_outcomes"}
-            is_outcome_reference = field.key in {"outcome_id", "outcome_ids"}
+            is_compact_reference = field.key in {
+                "outcome_id",
+                "outcome_ids",
+                "component_ids",
+            }
             selection_value = editor_reference_value(target, field)
             allowed_values = set(selection_options)
             if multiple:
@@ -2880,7 +2884,7 @@ class AGIRSoloInterface:
             control = ui.select(
                 options=(
                     selection_options
-                    if is_outcome_reference or not multiple
+                    if is_compact_reference or not multiple
                     else list(selection_options)
                 ),
                 label=label,
@@ -2888,7 +2892,7 @@ class AGIRSoloInterface:
                 multiple=multiple,
                 on_change=update_value,
             ).props("options-dense" + (" use-chips" if multiple else ""))
-            if is_outcome_reference:
+            if is_compact_reference:
                 control.mark("learning-outcome-reference")
                 control.add_slot(
                     "selected-item",
@@ -3841,10 +3845,10 @@ class AGIRSoloInterface:
             index = matching_index(artifact, "id")
             return (row_selector(index), "") if index is not None else (heading, "")
         if stage == "pedagogical_design" and isinstance(artifact, dict):
-            if target_key == "__strategy__":
-                return f"{root} .artifact-markdown", ""
-            index = matching_index(artifact.get("sequence", []), "outcome_id")
-            return (row_selector(index), "") if index is not None else (heading, "")
+            if target_key.startswith("LESSON:"):
+                index = int(target_key.partition(":")[2]) - 1
+                return row_selector(index), ""
+            return heading, ""
         if stage == "resources" and isinstance(artifact, dict):
             tab_by_target = {
                 "RESOURCE:presentation": "presentation",
