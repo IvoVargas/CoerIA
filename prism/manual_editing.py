@@ -37,6 +37,7 @@ class TableSpec:
     path: tuple[str, ...]
     fields: tuple[FieldSpec, ...]
     template: dict[str, Any]
+    reorderable: bool = False
 
 
 @dataclass(frozen=True)
@@ -143,6 +144,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "component_ids": [],
                     "notes": "",
                 },
+                reorderable=True,
             ),
         ),
     ),
@@ -981,3 +983,26 @@ def new_table_row(
         )
         row["taxonomy_level"] = next(iter(taxonomy_level_options(taxonomy)))
     return row
+
+
+def move_table_row(
+    rows: list[Any],
+    row_index: int,
+    offset: int,
+) -> bool:
+    """Move uma linha uma posição, preservando integralmente o seu conteúdo."""
+
+    if offset not in {-1, 1}:
+        raise ValueError("A linha só pode ser movida uma posição de cada vez.")
+    target_index = row_index + offset
+    if (
+        row_index < 0
+        or row_index >= len(rows)
+        or target_index not in range(len(rows))
+    ):
+        return False
+    rows[row_index], rows[target_index] = rows[target_index], rows[row_index]
+    for index, row in enumerate(rows, start=1):
+        if isinstance(row, dict) and "order" in row:
+            row["order"] = index
+    return True

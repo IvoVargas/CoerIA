@@ -60,6 +60,7 @@ from prism.manual_editing import (
     editor_taxonomy_level_options,
     editor_taxonomy_verb_options,
     editor_layout,
+    move_table_row,
     new_table_row,
     presentation_image_label,
     proposal_review_changes,
@@ -355,6 +356,8 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table th { background: #eaf3f1; color: #244a50; font-size: .78rem; text-align: left; padding: 9px; border: 1px solid #d9e6e3; }
 .manual-table td { min-width: 110px; padding: 4px; vertical-align: top; border: 1px solid #d9e6e3; background: white; }
 .manual-table td.manual-row-action { min-width: 54px; width: 54px; text-align: center; }
+.manual-table td.manual-row-actions { min-width: 126px; width: 126px; text-align: center; }
+.manual-row-buttons { flex-wrap: nowrap; justify-content: center; gap: 0; }
 .manual-table .q-field { min-width: 100px; }
 .manual-table .manual-cell-long { min-width: 210px; }
 .manual-table .manual-cell-number { min-width: 72px; }
@@ -2962,7 +2965,7 @@ class AGIRSoloInterface:
                                 with ui.element("th"):
                                     ui.label(field.label)
                             with ui.element("th"):
-                                ui.label("Remover")
+                                ui.label("Ações" if table.reorderable else "Remover")
                     with ui.element("tbody"):
                         for index, row in enumerate(rows):
                             with ui.element("tr"):
@@ -2984,11 +2987,60 @@ class AGIRSoloInterface:
                                     rows.pop(row_index)
                                     render_rows.refresh()
 
-                                with ui.element("td").classes("manual-row-action"):
-                                    ui.button(icon="delete", on_click=remove_row).props(
-                                        "flat round color=negative "
-                                        "aria-label='Remover linha'"
-                                    )
+                                def move_row(
+                                    offset: int,
+                                    row_index: int = index,
+                                ) -> None:
+                                    if move_table_row(rows, row_index, offset):
+                                        render_rows.refresh()
+
+                                action_class = (
+                                    "manual-row-actions"
+                                    if table.reorderable
+                                    else "manual-row-action"
+                                )
+                                with ui.element("td").classes(action_class):
+                                    if table.reorderable:
+                                        with ui.row().classes("manual-row-buttons"):
+                                            move_up = ui.button(
+                                                icon="arrow_upward",
+                                                on_click=lambda row_index=index: move_row(
+                                                    -1, row_index
+                                                ),
+                                            ).props(
+                                                "flat round dense "
+                                                "aria-label='Mover linha para cima'"
+                                            ).mark(f"move-row-up-{index + 1}")
+                                            move_up.tooltip("Mover para cima")
+                                            if index == 0:
+                                                move_up.props("disable")
+                                            move_down = ui.button(
+                                                icon="arrow_downward",
+                                                on_click=lambda row_index=index: move_row(
+                                                    1, row_index
+                                                ),
+                                            ).props(
+                                                "flat round dense "
+                                                "aria-label='Mover linha para baixo'"
+                                            ).mark(f"move-row-down-{index + 1}")
+                                            move_down.tooltip("Mover para baixo")
+                                            if index == len(rows) - 1:
+                                                move_down.props("disable")
+                                            ui.button(
+                                                icon="delete",
+                                                on_click=remove_row,
+                                            ).props(
+                                                "flat round dense color=negative "
+                                                "aria-label='Remover linha'"
+                                            ).tooltip("Remover linha")
+                                    else:
+                                        ui.button(
+                                            icon="delete",
+                                            on_click=remove_row,
+                                        ).props(
+                                            "flat round color=negative "
+                                            "aria-label='Remover linha'"
+                                        )
 
         def add_row() -> None:
             row = new_table_row(table, self.state, rows)

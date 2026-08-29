@@ -183,6 +183,9 @@ podem ser alterados textos, adicionadas linhas e removidas linhas. Guardar cria
 uma nova versão mesmo que o rascunho ainda esteja incompleto. Se a alteração
 ocorrer antes de artefactos já preenchidos, esses artefactos são preservados e
 assinalados como **Rever após alterações anteriores**.
+Na tabela **Planeamento das aulas**, cada linha dispõe ainda de ações para subir
+ou descer uma posição, permitindo reorganizar a sequência sem voltar a introduzir
+os dados da aula.
 Uma barra de ferramentas superior permanece visível durante a deslocação da
 página e reúne o contexto da etapa, **Etapa anterior**, **Etapa seguinte**,
 **Editar campos e tabelas** e as ações facultativas de IA. A edição manual fica

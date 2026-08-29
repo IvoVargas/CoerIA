@@ -11,6 +11,7 @@ from prism.manual_editing import (
     editor_taxonomy_verb_options,
     editor_layout,
     format_editor_value,
+    move_table_row,
     new_table_row,
     parse_editor_value,
     apply_proposal_review_changes,
@@ -73,6 +74,33 @@ def test_every_authorship_stage_has_editable_fields_and_tables() -> None:
             else:
                 assert rows[-1] == table.template
             rows.pop()
+
+
+def test_only_lesson_planning_table_is_reorderable() -> None:
+    reorderable_stages = {
+        stage
+        for stage in STAGE_ORDER[:-1]
+        if any(table.reorderable for table in editor_layout(stage).tables)
+    }
+    assert reorderable_stages == {"pedagogical_design"}
+
+
+def test_lesson_rows_can_move_without_losing_content() -> None:
+    rows = [
+        {"duration_minutes": 60, "notes": "Primeira aula"},
+        {"duration_minutes": 90, "notes": "Segunda aula"},
+        {"duration_minutes": 120, "notes": "Terceira aula"},
+    ]
+
+    assert move_table_row(rows, 1, -1) is True
+    assert [row["notes"] for row in rows] == [
+        "Segunda aula",
+        "Primeira aula",
+        "Terceira aula",
+    ]
+    assert rows[0]["duration_minutes"] == 90
+    assert move_table_row(rows, 0, -1) is False
+    assert move_table_row(rows, 2, 1) is False
 
 
 def test_only_assessment_tasks_expose_three_identifier_types() -> None:

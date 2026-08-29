@@ -1626,6 +1626,58 @@ async def test_manual_table_editor_renders_for_the_current_stage(
     assert state == original
 
 
+@pytest.mark.asyncio
+async def test_lesson_planning_editor_moves_rows(user: User) -> None:
+    state = create_session(
+        CourseInput.create(
+            unit_name="Programação",
+            source_text="Algoritmos, variáveis, estruturas de dados, funções e testes.",
+            audience="Licenciatura",
+            duration_hours=12,
+        )
+    )
+    state["pedagogical_design"] = {
+        "lessons": [
+            {
+                "duration_minutes": 60,
+                "session_type": "Teórico-prática",
+                "component_ids": [],
+                "notes": "Primeira aula",
+            },
+            {
+                "duration_minutes": 90,
+                "session_type": "Prática laboratorial",
+                "component_ids": [],
+                "notes": "Segunda aula",
+            },
+        ]
+    }
+    state["current_stage"] = "pedagogical_design"
+    interfaces: list[app.AGIRSoloInterface] = []
+
+    @ui.page("/_test_lesson_row_movement")
+    def lesson_row_movement_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_lesson_row_movement")
+    user.find(marker="edit-artifact-content").click()
+    await user.should_see("EDIÇÃO NA TABELA ATUAL")
+    assert user.find(marker="move-row-up-1").elements
+    assert user.find(marker="move-row-down-1").elements
+
+    user.find(marker="move-row-down-1").click()
+    assert [
+        lesson["notes"]
+        for lesson in interfaces[-1].manual_edit_artifact["lessons"]
+    ] == ["Segunda aula", "Primeira aula"]
+    assert interfaces[-1].manual_edit_artifact["lessons"][1][
+        "duration_minutes"
+    ] == 60
+
+
 def test_loading_a_session_restores_all_initial_fields() -> None:
     course = CourseInput.create(
         unit_name="Introdução às Pescas",

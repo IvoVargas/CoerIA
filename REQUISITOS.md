@@ -168,6 +168,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   transformando a tabela apresentada no próprio local e permitindo alterar
   texto, adicionar linhas e remover linhas, sem abrir um editor separado nem
   mudar os campos visíveis ou a respetiva ordem.
+- Na edição do **Planeamento das aulas**, permitir mover cada linha uma posição
+  para cima ou para baixo, desativando a ação impossível na primeira e na última
+  linha e preservando integralmente os dados da aula movida.
 - Disponibilizar uma barra de ferramentas superior, persistente durante a
   deslocação da página, que apresente o contexto da etapa e reúna **Etapa
   anterior**, **Etapa seguinte**, **Editar campos e tabelas** e as ações de IA.
