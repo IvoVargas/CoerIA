@@ -29,10 +29,13 @@ materiais produzidos.
 - Recolher o nome da unidade curricular e o tipo de formação.
 - Recolher curso, ano, CNAEF, ISCED-F 2013, ECTS, horas de contacto, trabalho
   autónomo e bibliografia a validar pelo docente.
-- Registar CNAEF e ISCED-F em pares de código e designação. Para ISCED-F,
-  recomendar o código de área detalhada com quatro dígitos, sem impedir o uso
-  dos níveis amplo ou restrito quando sejam os únicos dados institucionais
-  disponíveis, conforme a hierarquia definida pela UNESCO.
+- Registar CNAEF e ISCED-F como classificações independentes, em pares de código
+  e designação, sem inferir nem exigir correspondência entre ambas.
+- Disponibilizar o catálogo oficial ISCED-F 2013 em português, aceitar apenas
+  códigos existentes com 2, 3 ou 4 dígitos e preencher automaticamente a
+  designação canónica. Recomendar o nível detalhado de quatro dígitos sem impedir
+  o uso dos níveis geral ou específico quando sejam os únicos dados
+  institucionais disponíveis.
 - Calcular a duração total pela soma das horas de contacto e do trabalho
   autónomo, sem pedir ao docente uma duração prevista redundante.
 - Tornar o semestre obrigatório, limitá-lo às opções `1.º semestre` e
@@ -438,10 +441,11 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   bytes para a resposta de download.
 - Incluir uma versão editável, exclusivamente em português, do programa da UC,
   construída a partir dos artefactos aprovados e sem nova geração por IA.
-- Incluir no programa identificação, carga de trabalho e ECTS, objetivos gerais,
-  conteúdos, resultados de aprendizagem e classificação taxonómica, atividades
-  de ensino-aprendizagem, avaliação, síntese automática do alinhamento e bibliografia
-  fornecida ou validada pelo docente.
+- Incluir no programa identificação — incluindo CNAEF e ISCED-F 2013 —, carga de
+  trabalho e ECTS, objetivos gerais, conteúdos, resultados de aprendizagem e
+  classificação taxonómica, atividades de ensino-aprendizagem, avaliação,
+  síntese automática do alinhamento e bibliografia fornecida ou validada pelo
+  docente.
 - Antes de preparar o ZIP, permitir ao docente escolher Word (`.docx`), LaTeX
   (`.tex`) ou ambos para todos os documentos textuais exportáveis: programa da
   UC, ficha de aula, teste com chave de correção e atividade prática.

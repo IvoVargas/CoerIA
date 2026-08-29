@@ -47,6 +47,7 @@ from prism.ingestion import (
     configured_max_file_bytes,
     configured_max_total_upload_bytes,
 )
+from prism.isced import ISCED_F_CATALOG, isced_f_options
 from prism.manual_editing import (
     FieldSpec,
     TableSpec,
@@ -858,12 +859,23 @@ class AGIRSoloInterface:
             ).classes("full-control")
             self.fields["cnaef_code"] = ui.input("Código CNAEF").classes("full-control")
             self.fields["cnaef_name"] = ui.input("Área CNAEF").classes("full-control")
-            self.fields["isced_f_code"] = ui.input(
-                "Código ISCED-F", placeholder="Ex.: 0613"
-            ).classes("full-control")
+            def update_isced_name(event: Any) -> None:
+                name_control = self.fields.get("isced_f_name")
+                if name_control is not None:
+                    name_control.set_value(
+                        ISCED_F_CATALOG.get(str(event.value or ""), "")
+                    )
+
+            self.fields["isced_f_code"] = ui.select(
+                isced_f_options(),
+                label="Código ISCED-F",
+                with_input=True,
+                clearable=True,
+                on_change=update_isced_name,
+            ).props("options-dense").classes("full-control")
             self.fields["isced_f_name"] = ui.input(
-                "Área ISCED-F", placeholder="Ex.: Desenvolvimento de software"
-            ).classes("full-control")
+                "Área ISCED-F"
+            ).props("readonly").classes("full-control")
             self.fields["ects_credits"] = ui.number(
                 "ECTS", value=0, min=0, precision=1
             ).classes("full-control")
@@ -969,6 +981,13 @@ class AGIRSoloInterface:
                 value = data[name]
                 if name == "semester" and value not in SEMESTER_OPTIONS:
                     value = SEMESTER_OPTIONS[0]
+                if name == "isced_f_code" and str(value or "") not in ISCED_F_CATALOG:
+                    value = None
+                if name == "isced_f_name":
+                    value = ISCED_F_CATALOG.get(
+                        str(data.get("isced_f_code", "") or ""),
+                        "",
+                    )
                 element.set_value(value)
 
     async def _scroll_and_highlight(

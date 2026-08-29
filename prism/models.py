@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 from .curriculum import TAXONOMY_SOLO, validate_taxonomy_choice
+from .isced import canonicalize_isced_f
 
 
 RESOURCE_PRESENTATION = "Apresentação PowerPoint"
@@ -106,6 +107,11 @@ class CourseInput:
                 raise ValueError(f"{label} não pode ser negativo.")
             return result
 
+        validated_isced_code, validated_isced_name = canonicalize_isced_f(
+            isced_f_code,
+            isced_f_name,
+        )
+
         return cls(
             unit_name=title,
             source_text=text,
@@ -118,8 +124,8 @@ class CourseInput:
             semester=validate_semester(semester),
             cnaef_code=(cnaef_code or "").strip(),
             cnaef_name=(cnaef_name or "").strip(),
-            isced_f_code=(isced_f_code or "").strip(),
-            isced_f_name=(isced_f_name or "").strip(),
+            isced_f_code=validated_isced_code,
+            isced_f_name=validated_isced_name,
             ects_credits=non_negative_number(ects_credits, "Os créditos ECTS"),
             contact_hours=non_negative_number(contact_hours, "As horas de contacto"),
             autonomous_hours=non_negative_number(

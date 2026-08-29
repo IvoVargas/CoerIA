@@ -114,9 +114,10 @@ class InitialAssistanceTests(unittest.TestCase):
         self.assertNotIn("general_aims", proposal_schema["properties"])
         self.assertNotIn("general_aims", proposal_schema["required"])
         self.assertIn("isced_f_code", proposal_schema["properties"])
-        self.assertIn("isced_f_name", proposal_schema["properties"])
+        self.assertNotIn("isced_f_name", proposal_schema["properties"])
         self.assertIn("isced_f_code", proposal_schema["required"])
-        self.assertIn("isced_f_name", proposal_schema["required"])
+        self.assertNotIn("isced_f_name", proposal_schema["required"])
+        self.assertIn("0613", proposal_schema["properties"]["isced_f_code"]["enum"])
 
     def test_requested_proposal_preserves_the_exclusive_taxonomy(self) -> None:
         proposal = {

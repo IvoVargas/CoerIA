@@ -243,6 +243,14 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Caracterização da unidade curricular")
     await user.should_see("Código ISCED-F")
     await user.should_see("Área ISCED-F")
+    isced_code = interfaces[-1].fields["isced_f_code"]
+    isced_name = interfaces[-1].fields["isced_f_name"]
+    assert isced_code.options["0613"].startswith("0613 — ")
+    assert isced_name._props.get("readonly") is True
+    isced_code.set_value("0613")
+    await user.should_see(
+        "Desenvolvimento e análise de software e aplicações informáticas"
+    )
     await user.should_see("Iniciar desenho curricular alinhado")
     await user.should_not_see("Público-alvo")
     await user.should_not_see("Duração prevista")

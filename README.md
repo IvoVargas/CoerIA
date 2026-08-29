@@ -63,9 +63,11 @@ histórico ou institucional.
 
 Nos dados iniciais, o CoerIA regista separadamente a classificação nacional
 CNAEF e a classificação internacional **ISCED-F 2013**, ambas através de código
-e designação. A ISCED-F organiza as áreas de educação e formação em níveis amplo
-(dois dígitos), restrito (três dígitos) e detalhado (quatro dígitos); o nível
-detalhado é o recomendado quando estiver disponível.
+e designação, sem exigir correspondência entre ambas. O ISCED-F é escolhido num
+catálogo oficial em português: apenas são aceites códigos existentes nos níveis
+geral (dois dígitos), específico (três dígitos) e detalhado (quatro dígitos), e
+a designação é preenchida automaticamente. O nível detalhado é o recomendado
+quando estiver disponível.
 
 O docente escolhe SOLO ou Bloom no início da sessão; as duas taxonomias nunca
 são combinadas. Cada avaliação é exclusivamente formativa ou sumativa, podendo
