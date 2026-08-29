@@ -85,7 +85,7 @@ etapas navegáveis e editáveis:
    sumativa e associação explícita às atividades de ensino-aprendizagem e aos
    resultados avaliados diretamente;
 6. planeamento das aulas, registando duração, tipo de sessão, atividades de
-   ensino-aprendizagem ou tarefas de avaliação e um texto opcional;
+   ensino-aprendizagem ou tarefas de avaliação opcionais e um texto opcional;
 7. geração dos recursos educativos selecionados;
 8. verificação global determinística da estrutura e do alinhamento.
 
@@ -118,8 +118,12 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   alinhamento. Limitar as restantes tabelas de autoria a dois tipos: `AE ↔ RA`
   nas atividades de ensino-aprendizagem e `AE/TA` no planeamento das aulas.
 - No planeamento das aulas, permitir uma ou mais sessões com duração em minutos,
-  tipo de sessão, seleção de componentes `AE<n>` ou `TA<n>` e texto opcional. O
-  conjunto das aulas deve incluir todas as atividades e tarefas definidas.
+  tipo de sessão, seleção opcional de componentes `AE<n>` ou `TA<n>` e texto
+  opcional. Não exigir que todas as aulas tenham componentes nem que o conjunto
+  repita todas as atividades e tarefas definidas. Exigir que a soma das durações
+  corresponda exatamente às horas de contacto. Nas propostas completas de IA,
+  corrigir essa soma deterministicamente antes da validação, evitando novas
+  chamadas ao fornecedor apenas por divergências aritméticas.
 - Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
   de entrada para formular os resultados, sem os transformar previamente numa
   etapa curricular formal.

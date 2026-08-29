@@ -2295,6 +2295,13 @@ class WorkflowTests(unittest.TestCase):
         current_draft["lessons"][0]["notes"] = "Decisão atual do docente."
         state["pedagogical_design"] = current_draft
         generated = self.agent.generate("pedagogical_design", state).artifact
+        for lesson in generated["lessons"]:
+            lesson["duration_minutes"] = 30
+            lesson["component_ids"] = []
+        received_minutes = sum(
+            lesson["duration_minutes"] for lesson in generated["lessons"]
+        )
+        self.assertNotEqual(received_minutes, 360)
 
         class FakeResponses:
             def __init__(self) -> None:
@@ -2358,7 +2365,21 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(
             all(item["assessment_task_ids"] for item in brief["alignment_chains"])
         )
-        self.assertEqual(proposed["ai_proposals"][-1]["after"], generated)
+        proposal = proposed["ai_proposals"][-1]
+        self.assertEqual(
+            sum(
+                lesson["duration_minutes"]
+                for lesson in proposal["after"]["lessons"]
+            ),
+            360,
+        )
+        self.assertTrue(
+            all(not lesson["component_ids"] for lesson in proposal["after"]["lessons"])
+        )
+        self.assertEqual(len(responses.calls), 1)
+        correction = proposal["metadata"]["guardrail_corrections"][0]
+        self.assertEqual(correction["received_total"], received_minutes)
+        self.assertEqual(correction["used_total"], 360)
 
     def test_complete_ai_lesson_proposal_uses_contact_time_and_visible_notes(self) -> None:
         state = create_session(self.course, agent=self.agent)
@@ -2376,6 +2397,15 @@ class WorkflowTests(unittest.TestCase):
 
         invalid_duration = deepcopy(state["pedagogical_design"])
         invalid_duration["lessons"][0]["duration_minutes"] += 1
+        with self.assertRaisesRegex(AgentGenerationError, "horas de contacto"):
+            _validate_artifact("pedagogical_design", invalid_duration, state)
+
+        optional_components = deepcopy(state["pedagogical_design"])
+        for lesson in optional_components["lessons"]:
+            lesson["component_ids"] = []
+        _validate_artifact("pedagogical_design", optional_components, state)
+
+        state.pop("_ai_assistance_request")
         with self.assertRaisesRegex(AgentGenerationError, "horas de contacto"):
             _validate_artifact("pedagogical_design", invalid_duration, state)
 

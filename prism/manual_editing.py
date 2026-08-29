@@ -134,7 +134,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (
                     _field("duration_minutes", "Duração (minutos)", "integer"),
                     _field("session_type", "Tipo de sessão"),
-                    _field("component_ids", "Atividades ou avaliação", "csv"),
+                    _field("component_ids", "Atividades ou avaliação (opcional)", "csv"),
                     _field("notes", "Texto opcional", "long"),
                 ),
                 {

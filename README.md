@@ -27,7 +27,8 @@ determinística, não de uma decisão declarada pelo modelo.
    associação explícita tanto às atividades de ensino-aprendizagem que as
    preparam como aos resultados cuja evidência avaliam;
 6. planeamento das aulas, com duração, tipo de sessão, atividades ou tarefas de
-   avaliação previstas e um campo de texto opcional;
+   avaliação opcionais e um campo de texto opcional; a soma das durações deve
+   corresponder exatamente às horas de contacto;
 7. geração de recursos educativos e validação automática;
 8. validação final da estrutura e do alinhamento.
 
@@ -40,8 +41,10 @@ associados a esses resultados; os objetivos gerais permanecem como texto livre.
 As atividades de ensino-aprendizagem são então definidas antes das tarefas de
 avaliação. Cada tarefa identifica as atividades que preparam o desempenho a
 avaliar e os resultados avaliados diretamente, recolhe as evidências e aplica
-os critérios correspondentes. O planeamento das aulas distribui depois as
-atividades e tarefas por sessões concretas.
+os critérios correspondentes. O planeamento das aulas organiza depois as sessões
+concretas. Pode associar-lhes atividades e tarefas quando seja útil, sem repetir
+obrigatoriamente todos os componentes; a duração total deve corresponder
+exatamente às horas de contacto.
 Esta sequência é uma orientação pedagógica, não uma barreira técnica: todas as
 etapas permanecem navegáveis e editáveis desde o início.
 
@@ -92,8 +95,8 @@ existem e seleciona diretamente os `RA<n>` cuja evidência a tarefa avalia. O tr
 porque partilha uma atividade com outro. A tabela das tarefas de avaliação é a
 única que apresenta três tipos de identificador (`TA`, `AE` e `RA`), pois reúne
 as duas relações necessárias no mesmo local. As restantes tabelas apresentam no
-máximo dois tipos. No planeamento das aulas, cada sessão referencia apenas os
-componentes `AE` e `TA` que nela decorrem.
+máximo dois tipos. No planeamento das aulas, cada sessão pode referenciar apenas
+os componentes `AE` e `TA` que nela decorrem, mas essa associação é opcional.
 
 A seleção dos recursos é feita no início da etapa **Geração de recursos educativos**. As
 imagens extraídas dos documentos ficam reunidas no seletor visual de cada slide,

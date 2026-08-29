@@ -154,8 +154,9 @@ STAGE_REQUIREMENTS = {
     "pedagogical_design": (
         "Objeto com lessons. lessons é uma lista de aulas com "
         "{duration_minutes, session_type, component_ids, notes}. A duração é positiva, "
-        "session_type usa um dos tipos permitidos, component_ids referencia atividades "
-        "AE e/ou tarefas TA existentes e notes pode ser texto vazio."
+        "session_type usa um dos tipos permitidos, component_ids pode ficar vazio ou "
+        "referenciar atividades AE e/ou tarefas TA existentes e notes pode ser texto vazio. "
+        "A soma das durações corresponde exatamente às horas de contacto."
     ),
     "teaching_activities": (
         "Lista de objetos {id, outcome_id, outcome_ids, learning_context, "
@@ -903,9 +904,11 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
             "allowed_session_types": list(LESSON_TYPES),
             "rule": (
                 "Planeia aulas ordenadas a partir de lesson_planning_brief. Cada aula tem "
-                "duração positiva e inclui uma ou mais atividades AE e/ou tarefas TA "
-                "existentes. Distribui todos os componentes, preserva as cadeias RA→AE→TA "
-                "e agenda cada TA depois ou na mesma aula das AE que a preparam. Quando "
+                "duração positiva. component_ids é opcional: pode ficar vazio ou incluir "
+                "atividades AE e/ou tarefas TA existentes quando forem relevantes nessa aula. "
+                "Quando associa componentes, preserva as cadeias RA→AE→TA e agenda cada TA "
+                "depois ou na mesma aula das AE que a preparam. Não é obrigatório distribuir "
+                "todos os componentes pelo planeamento. Quando "
                 "contact_minutes_for_lessons for positivo, a soma das durações deve ser "
                 "exatamente esse valor. Numa proposta completa de IA, notes explicita o "
                 "foco curricular e a progressão com base nos conteúdos e resultados; o "
@@ -1046,6 +1049,65 @@ def _canonicalize_teaching_activities(
         and received.get("id") != item.get("id")
     ]
     return normalized, corrections
+
+
+def _canonicalize_lesson_planning(
+    artifact: Any,
+    state: dict[str, Any],
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Ajusta deterministicamente as durações da proposta às horas de contacto."""
+
+    if not isinstance(artifact, dict) or not isinstance(artifact.get("lessons"), list):
+        return artifact, []
+    lessons = artifact["lessons"]
+    expected_minutes = round(
+        float(state.get("course", {}).get("contact_hours", 0) or 0) * 60
+    )
+    if not lessons or expected_minutes <= 0 or expected_minutes < len(lessons):
+        return artifact, []
+    durations = [
+        lesson.get("duration_minutes") if isinstance(lesson, dict) else None
+        for lesson in lessons
+    ]
+    if any(not isinstance(duration, int) or duration <= 0 for duration in durations):
+        return artifact, []
+    planned_minutes = sum(durations)
+    if planned_minutes == expected_minutes:
+        return artifact, []
+
+    # Reserva um minuto por aula e distribui o restante proporcionalmente. A
+    # aritmética inteira garante o total exato sem depender de uma nova chamada ao LLM.
+    distributable = expected_minutes - len(lessons)
+    quotients: list[int] = []
+    remainders: list[tuple[int, int]] = []
+    for index, duration in enumerate(durations):
+        quotient, remainder = divmod(duration * distributable, planned_minutes)
+        quotients.append(quotient)
+        remainders.append((remainder, index))
+    missing = distributable - sum(quotients)
+    recipients = {
+        index
+        for _remainder, index in sorted(
+            remainders,
+            key=lambda item: (-item[0], item[1]),
+        )[:missing]
+    }
+    normalized_durations = [
+        1 + quotient + (1 if index in recipients else 0)
+        for index, quotient in enumerate(quotients)
+    ]
+    normalized = deepcopy(artifact)
+    for lesson, duration in zip(normalized["lessons"], normalized_durations):
+        lesson["duration_minutes"] = duration
+    return normalized, [
+        {
+            "field": "lessons.duration_minutes",
+            "reason": "total ajustado deterministicamente às horas de contacto",
+            "received_total": planned_minutes,
+            "used_total": expected_minutes,
+            "used_durations": normalized_durations,
+        }
+    ]
 
 
 def _canonicalize_learning_outcomes(
@@ -1895,7 +1957,6 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             if str(item.get("id", "")).strip()
         }
         invalid_lessons: list[str] = []
-        planned_components: set[str] = set()
         complete_ai_proposal = (
             isinstance(state.get("_ai_assistance_request"), dict)
             and state["_ai_assistance_request"].get("mode")
@@ -1909,8 +1970,8 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 problems.append("duração inválida")
             if lesson.get("session_type") not in LESSON_TYPES:
                 problems.append("tipo de sessão inválido")
-            if not components:
-                problems.append("sem atividade ou avaliação")
+            if not isinstance(components, list):
+                problems.append("atividades ou avaliações inválidas")
             elif set(components) - known_components:
                 problems.append("contém componentes desconhecidos")
             if not isinstance(lesson.get("notes", ""), str):
@@ -1919,22 +1980,12 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 problems.append(
                     "a proposta completa de IA deve explicitar o foco curricular em notes"
                 )
-            planned_components.update(
-                str(identifier)
-                for identifier in components
-                if str(identifier) in known_components
-            )
             if problems:
                 invalid_lessons.append(f"Aula {index}: " + ", ".join(problems))
-        missing_components = sorted(known_components - planned_components)
-        if missing_components:
-            invalid_lessons.append(
-                "Componentes ainda não planeados: " + ", ".join(missing_components)
-            )
         expected_contact_minutes = round(
             float(state.get("course", {}).get("contact_hours", 0) or 0) * 60
         )
-        if complete_ai_proposal and expected_contact_minutes > 0:
+        if expected_contact_minutes > 0:
             planned_minutes = sum(
                 int(lesson.get("duration_minutes", 0) or 0)
                 for lesson in lessons
@@ -2325,9 +2376,10 @@ class OpenAIPedagogicalAgent:
             instructions += (
                 " Usa lesson_planning_brief como fonte de verdade e planeia aulas numa ordem "
                 "pedagogicamente útil. duration_minutes é um inteiro positivo, session_type "
-                "usa lesson_planning_rules e component_ids contém uma ou mais referências AE "
-                "e/ou TA permitidas. Distribui todas as atividades e tarefas pelas aulas sem "
-                "quebrar as cadeias de alinhamento. Numa proposta completa, a soma das durações "
+                "usa lesson_planning_rules e component_ids pode ficar vazio ou conter referências "
+                "AE e/ou TA permitidas. Quando associa componentes, não quebres as cadeias de "
+                "alinhamento; não é obrigatório distribuir todos os componentes. Numa proposta "
+                "completa, a soma das durações "
                 "corresponde a contact_minutes_for_lessons e notes nunca fica vazio: resume o "
                 "tema, os resultados trabalhados e a progressão prevista com base nos artefactos "
                 "anteriores. Na edição manual, notes continua a ser opcional."
@@ -2488,6 +2540,10 @@ class OpenAIPedagogicalAgent:
                 elif stage == "teaching_activities":
                     artifact, guardrail_corrections = (
                         _canonicalize_teaching_activities(artifact)
+                    )
+                elif stage == "pedagogical_design":
+                    artifact, guardrail_corrections = (
+                        _canonicalize_lesson_planning(artifact, state)
                     )
                 elif stage == "resources":
                     artifact, test_corrections = _canonicalize_resource_test(
