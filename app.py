@@ -860,7 +860,6 @@ class AGIRSoloInterface:
             ).classes("full-control")
             def update_cnaef_name(event: Any) -> None:
                 code = str(event.value or "")
-                event.sender.props.set_optional("display-value", code or None)
                 name_control = self.fields.get("cnaef_name")
                 if name_control is not None:
                     name_control.set_value(
@@ -874,13 +873,18 @@ class AGIRSoloInterface:
                 clearable=True,
                 on_change=update_cnaef_name,
             ).props("options-dense").classes("full-control")
+            self.fields["cnaef_code"].add_slot(
+                "selected-item",
+                """
+                <span>{{ String(props.opt.label).split(' — ')[0] }}</span>
+                """,
+            )
             self.fields["cnaef_name"] = ui.input(
                 "Área CNAEF"
             ).props("readonly").classes("full-control")
 
             def update_isced_name(event: Any) -> None:
                 code = str(event.value or "")
-                event.sender.props.set_optional("display-value", code or None)
                 name_control = self.fields.get("isced_f_name")
                 if name_control is not None:
                     name_control.set_value(
@@ -894,6 +898,12 @@ class AGIRSoloInterface:
                 clearable=True,
                 on_change=update_isced_name,
             ).props("options-dense").classes("full-control")
+            self.fields["isced_f_code"].add_slot(
+                "selected-item",
+                """
+                <span>{{ String(props.opt.label).split(' — ')[0] }}</span>
+                """,
+            )
             self.fields["isced_f_name"] = ui.input(
                 "Área ISCED-F"
             ).props("readonly").classes("full-control")
