@@ -96,7 +96,7 @@ etapas navegáveis e editáveis:
 1. recolha e revisão dos dados iniciais, fontes, caracterização e objetivos
    gerais opcionais;
 2. formulação de resultados de aprendizagem com nível SOLO ou Bloom, um único
-   verbo de ação principal e pressupostos contextuais opcionais;
+   verbo de ação principal, modo de IA e pressupostos contextuais opcionais;
 3. estruturação de conteúdos associados aos resultados formulados;
 4. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou
@@ -111,7 +111,13 @@ O alinhamento segue Biggs e Tang: os resultados de aprendizagem são o elemento
 central; as atividades de ensino-aprendizagem e as tarefas de avaliação devem
 mobilizar as ações expressas nesses resultados, e os critérios de avaliação
 devem permitir julgar em que medida o desempenho esperado foi atingido. O
-sistema deriva uma síntese automática destas relações para as tornar explícitas
+enquadramento de Brabrand e Denny acrescenta o **AI-mode** como dimensão
+ortogonal à taxonomia: `AI-off` representa aprendizagem sem IA, `AI-on` usa a IA
+como meio para uma tarefa disciplinar e `on-AI` torna a utilização, supervisão ou
+avaliação da própria IA objeto de aprendizagem. O modo é definido por resultado,
+com `AI-off` por defeito, e deve manter-se coerente nas atividades e tarefas
+associadas. A utilização do CoerIA pelo docente não altera o modo de aprendizagem
+do estudante. O sistema deriva uma síntese automática destas relações para as tornar explícitas
 e verificáveis, sem criar uma etapa de autoria adicional.
 
 Cada artefacto deve possuir um formato estruturado e identificadores estáveis
@@ -166,6 +172,11 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Não recolher uma síntese curricular global nem uma lista de temas separada,
   porque ambas duplicariam a identificação e a descrição existentes na tabela.
 - Classificar o tipo de cada resultado de aprendizagem.
+- Associar a cada resultado um modo controlado `AI-off`, `AI-on` ou `on-AI`,
+  apresentando `AI-off` por defeito.
+- Herdar e apresentar o modo nas atividades de ensino-aprendizagem e tarefas de
+  avaliação. Se uma linha associar resultados com modos diferentes, exigir a sua
+  divisão em linhas pedagogicamente inequívocas.
 - Usar um único verbo de ação principal pertencente ao vocabulário controlado do nível declarado; infinitivos subordinados podem ser usados em complementos, mas não como ações principais coordenadas.
 - Na opção SOLO, não usar o nível pré-estrutural para formular resultados.
 - Integrar a classificação taxonómica na primeira etapa, como atributo de cada
@@ -287,6 +298,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   controlos bloqueantes de completude e alinhamento para a verificação global.
 - Confirmar cobertura exata e sem duplicados dos resultados de aprendizagem.
 - Confirmar coerência entre a taxonomia escolhida, nível, verbo, atividades e avaliação.
+- Confirmar deterministicamente a coerência do AI-mode na cadeia `RA ↔ AE ↔ TA`,
+  sem impedir a navegação ou a gravação de rascunhos antes da verificação global.
 - Detetar resultados com mais de um verbo de ação.
 - Confirmar deterministicamente a compatibilidade entre o nível e o verbo
   aprovados segundo o catálogo SOLO ou Bloom selecionado.
@@ -467,7 +480,8 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   construída a partir dos artefactos aprovados e sem nova geração por IA.
 - Incluir no programa identificação — incluindo CNAEF e ISCED-F 2013 —, carga de
   trabalho e ECTS, objetivos gerais, conteúdos, resultados de aprendizagem e
-  classificação taxonómica, atividades de ensino-aprendizagem, avaliação,
+  classificação taxonómica, política de utilização da IA, atividades de
+  ensino-aprendizagem, avaliação,
   síntese automática do alinhamento e bibliografia fornecida ou validada pelo
   docente.
 - Antes de preparar o ZIP, permitir ao docente escolher Word (`.docx`), LaTeX
@@ -602,6 +616,9 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   aula, teste e atividade prática, sem alterar a exportação da apresentação.
 - O pacote exportado contém o programa da UC em português e apresentações com
   elementos visuais pedagogicamente relevantes.
+- O programa exportado comunica os modos `AI-off`, `AI-on` e `on-AI` aplicáveis
+  aos resultados, atividades e tarefas, agrupando-os numa política de utilização
+  da IA.
 - Uma apresentação pode utilizar imagens extraídas das fontes documentais ou
   geradas por IA, mantendo proveniência, texto alternativo e validação humana em
   ambas as modalidades; ficheiros de imagem isolados podem ser carregados pelo

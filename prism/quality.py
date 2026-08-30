@@ -8,6 +8,7 @@ from collections import Counter
 from copy import deepcopy
 from typing import Any
 
+from .ai_modes import ai_mode_alignment_issues
 from .curriculum import (
     ASSESSMENT_PURPOSES,
     MAX_OUTCOMES,
@@ -371,6 +372,36 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 else "; ".join(taxonomy_issues)
                 if taxonomy_issues
                 else "Resultados, níveis e verbos mantêm-se coerentes."
+            ),
+        )
+    )
+
+    ai_mode_issues = ai_mode_alignment_issues(state)
+    ai_mode_chain_complete = bool(
+        outcomes
+        and state.get("teaching_activities")
+        and state.get("assessment_activities")
+    )
+    checks.append(
+        _check(
+            "ai_mode_alignment",
+            "Alinhamento dos modos de utilização da IA",
+            (
+                "warning"
+                if not ai_mode_chain_complete
+                else "error"
+                if ai_mode_issues
+                else "pass"
+            ),
+            (
+                "A cadeia RA–AE–TA está incompleta; os modos de IA não podem ser avaliados."
+                if not ai_mode_chain_complete
+                else "; ".join(ai_mode_issues)
+                if ai_mode_issues
+                else (
+                    "AI-off, AI-on e on-AI mantêm-se coerentes entre resultados, "
+                    "atividades de ensino-aprendizagem e avaliação."
+                )
             ),
         )
     )

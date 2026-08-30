@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from .ai_modes import AI_MODE_OFF, canonical_ai_mode
 from .auth import normalize_user_id
 from .curriculum import (
     LESSON_TYPES,
@@ -31,9 +32,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 29:
+    if previous_version < 30:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 29
+    state["schema_version"] = 30
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -89,6 +90,52 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
 
     migrate_presentation_visuals(state.get("resources"))
     version_map = state.get("versions", {})
+
+    def migrate_ai_mode_rows(rows: Any) -> None:
+        if isinstance(rows, dict) and "id" in rows:
+            rows["ai_mode"] = canonical_ai_mode(
+                rows.get("ai_mode"), AI_MODE_OFF
+            )
+            return
+        if not isinstance(rows, list):
+            return
+        for row in rows:
+            if isinstance(row, dict):
+                row["ai_mode"] = canonical_ai_mode(
+                    row.get("ai_mode"), AI_MODE_OFF
+                )
+
+    if previous_version < 30:
+        for stage in (
+            "learning_outcomes",
+            "teaching_activities",
+            "assessment_activities",
+        ):
+            migrate_ai_mode_rows(state.get(stage))
+            if isinstance(version_map, dict):
+                for artifact_version in version_map.get(stage, []):
+                    migrate_ai_mode_rows(artifact_version)
+        for snapshot in state.get("revision_snapshots", []):
+            if not isinstance(snapshot, dict):
+                continue
+            artifacts = snapshot.get("artifacts", {})
+            if not isinstance(artifacts, dict):
+                continue
+            for stage in (
+                "learning_outcomes",
+                "teaching_activities",
+                "assessment_activities",
+            ):
+                migrate_ai_mode_rows(artifacts.get(stage))
+        for proposal in state.get("ai_proposals", []):
+            if not isinstance(proposal, dict) or proposal.get("stage") not in {
+                "learning_outcomes",
+                "teaching_activities",
+                "assessment_activities",
+            }:
+                continue
+            migrate_ai_mode_rows(proposal.get("before"))
+            migrate_ai_mode_rows(proposal.get("after"))
     if isinstance(version_map, dict):
         for resource_version in version_map.get("resources", []):
             migrate_presentation_visuals(resource_version)
@@ -1101,7 +1148,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                     "foi preservado e a IA passou a ser facultativa."
                 ),
             }
-    if previous_version < 25 and (
+    if previous_version < 30 and (
         state.get("final_validation")
         or state.get("status") == "completed"
         or state.get("current_stage") == "final_validation"

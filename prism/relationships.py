@@ -125,6 +125,7 @@ def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
                 "content_ids": content_ids,
                 "taxonomy": taxonomy,
                 "taxonomy_level": str(outcome.get("taxonomy_level", "")),
+                "ai_mode": str(outcome.get("ai_mode", "AI-off")),
                 "assessment_ids": assessment_ids,
                 "assessment_purposes": sorted(
                     {

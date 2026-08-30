@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from prism.ai_modes import AI_MODE_OFF, AI_MODE_ON
 from prism.agents import (
     DEFAULT_MODEL,
     DEFAULT_RESOURCE_MODEL,
@@ -39,13 +40,14 @@ from prism.models import (
     RESOURCE_WORKSHEET,
     SUPPORTED_RESOURCE_TYPES,
 )
-from prism.persistence import SQLiteSessionStore
+from prism.persistence import SQLiteSessionStore, migrate_legacy_state
 from prism.relationships import derive_alignment_rows
 from prism.workflow import (
     SCHEMA_VERSION,
     STAGE_ORDER,
     STAGE_LABELS,
     apply_manual_edit,
+    build_final_validation,
     create_session,
     create_test_agent,
     request_ai_assistance,
@@ -264,6 +266,70 @@ class WorkflowTests(unittest.TestCase):
         repeated = review_current_stage(state, "approve", agent=self.agent)
         self.assertEqual(repeated["status"], "completed")
         self.assertEqual(len(repeated["audit"]), audit_count)
+
+    def test_ai_mode_defaults_to_off_and_remains_aligned_across_the_chain(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        for _stage in STAGE_ORDER[:-1]:
+            state = review_current_stage(state, "approve", agent=self.agent)
+
+        self.assertTrue(
+            all(item["ai_mode"] == AI_MODE_OFF for item in state["learning_outcomes"])
+        )
+        self.assertTrue(
+            all(item["ai_mode"] == AI_MODE_OFF for item in state["teaching_activities"])
+        )
+        self.assertTrue(
+            all(item["ai_mode"] == AI_MODE_OFF for item in state["assessment_activities"])
+        )
+        check = next(
+            item
+            for item in state["final_validation"]["checks"]
+            if item["id"] == "ai_mode_alignment"
+        )
+        self.assertTrue(check["passed"])
+
+    def test_ai_mode_mismatch_is_blocked_and_identifies_the_activity(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        state["learning_outcomes"][0]["ai_mode"] = AI_MODE_ON
+
+        with self.assertRaisesRegex(AgentGenerationError, "mesmo AI-mode"):
+            _validate_artifact(
+                "teaching_activities",
+                state["teaching_activities"],
+                state,
+            )
+
+    def test_schema_30_migrates_existing_sessions_to_ai_off(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        for _stage in STAGE_ORDER[:-1]:
+            state = review_current_stage(state, "approve", agent=self.agent)
+        legacy = deepcopy(state)
+        legacy["schema_version"] = 29
+        for stage in (
+            "learning_outcomes",
+            "teaching_activities",
+            "assessment_activities",
+        ):
+            for row in legacy[stage]:
+                row.pop("ai_mode", None)
+            for version in legacy["versions"].get(stage, []):
+                for row in version:
+                    row.pop("ai_mode", None)
+
+        restored = migrate_legacy_state(legacy)
+
+        self.assertEqual(restored["schema_version"], SCHEMA_VERSION)
+        for stage in (
+            "learning_outcomes",
+            "teaching_activities",
+            "assessment_activities",
+        ):
+            self.assertTrue(
+                all(row["ai_mode"] == AI_MODE_OFF for row in restored[stage])
+            )
+        self.assertTrue(build_final_validation(restored)["passed"])
 
     def test_curriculum_contents_are_linked_to_learning_outcomes(self) -> None:
         state = create_session(self.course, agent=self.agent)

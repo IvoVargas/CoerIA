@@ -828,7 +828,9 @@ class ResourceGenerationTests(unittest.TestCase):
                 "Desenvolvimento e análise de software e aplicações",
                 word_text,
             )
-            self.assertIn("7. Planeamento das aulas", word_text)
+            self.assertIn("5. Política de utilização da IA", word_text)
+            self.assertIn("AI-off", word_text)
+            self.assertIn("8. Planeamento das aulas", word_text)
             self.assertIn(str(lesson["duration_minutes"]), word_text)
             self.assertIn(lesson["session_type"], word_text)
             self.assertIn(lesson["notes"], word_text)
@@ -842,6 +844,11 @@ class ResourceGenerationTests(unittest.TestCase):
             ]
             self.assertIn("Atividades de ensino-aprendizagem", assessment_headers)
             self.assertIn("Resultados", assessment_headers)
+            self.assertIn("Modo de IA", assessment_headers)
+
+            latex_text = latex_path.read_text(encoding="utf-8")
+            self.assertIn(r"\section{Política de utilização da IA}", latex_text)
+            self.assertIn("AI-off", latex_text)
 
             for table in program.tables[1:]:
                 for row in table.rows[1:]:

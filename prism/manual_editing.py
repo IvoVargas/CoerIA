@@ -7,6 +7,11 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from .ai_modes import (
+    AI_MODE_LABELS,
+    AI_MODE_OFF,
+    sync_inherited_ai_mode,
+)
 from .curriculum import (
     LESSON_TYPES,
     TAXONOMY_VERBS,
@@ -78,6 +83,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     _field("theme", "Tema ou objeto"),
                     _field("taxonomy_level", "Nível", "taxonomy_level"),
                     _field("action_verb", "Verbo", "taxonomy_verb"),
+                    _field("ai_mode", "Modo de IA", "ai_mode"),
                     _field("statement", "Resultado de aprendizagem", "long"),
                 ),
                 {
@@ -87,6 +93,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "action_verb": "",
                     "taxonomy_level": "",
                     "outcome_type": "Conhecimento",
+                    "ai_mode": AI_MODE_OFF,
                 },
             ),
         )
@@ -104,6 +111,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                         "csv",
                     ),
                     _field("outcome_ids", "Resultados", "linked_outcomes"),
+                    _field("ai_mode", "Modo de IA", "inherited_ai_mode"),
                     _field("work_type", "Modalidade"),
                     _field("assessment_purpose", "Finalidade"),
                     _field("activity", "Atividade", "long"),
@@ -114,6 +122,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "id": "",
                     "teaching_activity_ids": [],
                     "outcome_ids": [],
+                    "ai_mode": AI_MODE_OFF,
                     "work_type": "",
                     "assessment_purpose": "Formativa",
                     "activity": "",
@@ -152,6 +161,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (
                     _field("id", "ID", "teaching_activity_id"),
                     _field("outcome_ids", "Resultados", "linked_outcomes"),
+                    _field("ai_mode", "Modo de IA", "inherited_ai_mode"),
                     _field("learning_context", "Contexto"),
                     _field("activity", "Atividade", "long"),
                     _field("practice", "Prática", "long"),
@@ -162,6 +172,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "id": "",
                     "outcome_id": "",
                     "outcome_ids": [],
+                    "ai_mode": AI_MODE_OFF,
                     "learning_context": "Presencial",
                     "activity": "",
                     "method": "",
@@ -726,6 +737,8 @@ def editor_reference_options(
 ) -> dict[str, str] | None:
     """Devolve opções controladas para relações e escolhas estruturais."""
 
+    if field.kind in {"ai_mode", "inherited_ai_mode"}:
+        return dict(AI_MODE_LABELS)
     if field.key == "visual_mode":
         return {
             "diagrama": "Diagrama nativo editável",
@@ -825,6 +838,7 @@ def assistance_scope_options(stage: str, artifact: Any) -> list[dict[str, Any]]:
                     if (
                         field.key in row
                         and field.key != "id"
+                        and field.kind != "inherited_ai_mode"
                         and field.key not in PRESENTATION_INTERNAL_FIELDS
                     ):
                         options.append(
@@ -834,6 +848,18 @@ def assistance_scope_options(stage: str, artifact: Any) -> list[dict[str, Any]]:
                             }
                         )
     return options
+
+
+def synchronize_inherited_ai_mode(
+    state: dict[str, Any],
+    target: dict[str, Any],
+) -> str:
+    """Sincroniza o campo informativo depois de alterar relações com RA."""
+
+    return sync_inherited_ai_mode(
+        target,
+        state.get("learning_outcomes", []),
+    )
 
 
 def editor_taxonomy_level_options(

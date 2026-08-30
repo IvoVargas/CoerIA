@@ -66,6 +66,7 @@ from prism.manual_editing import (
     new_table_row,
     presentation_image_label,
     proposal_review_changes,
+    synchronize_inherited_ai_mode,
     value_at_path,
 )
 from prism.models import (
@@ -2959,6 +2960,8 @@ class AGIRSoloInterface:
         def update_value(event: Any) -> None:
             try:
                 apply_editor_field_value(target, field, event.value)
+                if field.kind == "linked_outcomes" and "ai_mode" in target:
+                    synchronize_inherited_ai_mode(self.state or {}, target)
                 if field.key == "taxonomy_level" and "action_verb" in target:
                     allowed_verbs = editor_taxonomy_verb_options(
                         self.state or {},
@@ -3023,6 +3026,8 @@ class AGIRSoloInterface:
                 )
             if not selection_options:
                 control.props("disable")
+            if field.kind == "inherited_ai_mode":
+                control.props("disable").mark("inherited-ai-mode")
         elif field.kind == "integer":
             control = ui.number(label, value=value, precision=0)
         elif field.kind in {"long", "lines"}:
@@ -3093,8 +3098,14 @@ class AGIRSoloInterface:
                                             compact=True,
                                             refresh_after_change=(
                                                 render_rows.refresh
-                                                if field.key == "taxonomy_level"
-                                                and "action_verb" in row
+                                                if (
+                                                    field.key == "taxonomy_level"
+                                                    and "action_verb" in row
+                                                )
+                                                or (
+                                                    field.kind == "linked_outcomes"
+                                                    and "ai_mode" in row
+                                                )
                                                 else None
                                             ),
                                         )

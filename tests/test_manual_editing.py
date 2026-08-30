@@ -16,8 +16,10 @@ from prism.manual_editing import (
     parse_editor_value,
     apply_proposal_review_changes,
     proposal_review_changes,
+    synchronize_inherited_ai_mode,
     value_at_path,
 )
+from prism.ai_modes import AI_MODE_OFF, AI_MODE_ON
 from prism.models import CourseInput
 from prism.curriculum import taxonomy_level_label
 from prism.presentation import active_stage_artifact, render_stage_artifact
@@ -83,6 +85,24 @@ def test_only_lesson_planning_table_is_reorderable() -> None:
         if any(table.reorderable for table in editor_layout(stage).tables)
     }
     assert reorderable_stages == {"pedagogical_design"}
+
+
+def test_ai_mode_defaults_on_outcomes_and_is_inherited_by_linked_rows() -> None:
+    outcome_table = editor_layout("learning_outcomes").tables[0]
+    assert new_table_row(outcome_table)["ai_mode"] == AI_MODE_OFF
+
+    state = {
+        "learning_outcomes": [
+            {"id": "RA1", "ai_mode": AI_MODE_OFF},
+            {"id": "RA2", "ai_mode": AI_MODE_ON},
+        ]
+    }
+    row = {"outcome_ids": ["RA2"], "ai_mode": AI_MODE_OFF}
+    assert synchronize_inherited_ai_mode(state, row) == AI_MODE_ON
+    assert row["ai_mode"] == AI_MODE_ON
+
+    row["outcome_ids"] = ["RA1", "RA2"]
+    assert synchronize_inherited_ai_mode(state, row) == ""
 
 
 def test_lesson_rows_can_move_without_losing_content() -> None:
@@ -361,6 +381,7 @@ def test_learning_outcome_editor_matches_the_visible_table() -> None:
         "Tema ou objeto",
         "Nível",
         "Verbo",
+        "Modo de IA",
         "Resultado de aprendizagem",
     ]
     assert any(field.key == "theme" for field in table.fields)
@@ -465,6 +486,7 @@ def test_learning_outcome_editor_omits_taxonomy_and_numbers_levels() -> None:
         "Tema ou objeto",
         "Nível",
         "Verbo",
+        "Modo de IA",
         "Resultado de aprendizagem",
     ]
     options = editor_taxonomy_level_options(state, level_field)

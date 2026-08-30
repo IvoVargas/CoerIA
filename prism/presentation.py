@@ -380,6 +380,7 @@ def render_artifact(
                     item.get("taxonomy_level", "—"),
                 ),
                 item["action_verb"],
+                item.get("ai_mode", "AI-off"),
                 item["statement"],
             ]
             for item in artifact
@@ -406,7 +407,7 @@ def render_artifact(
         )
         return header + assumptions_section + "\n\n" + _table(
             [
-                "ID", "Tipo", "Tema ou objeto", "Nível", "Verbo",
+                "ID", "Tipo", "Tema ou objeto", "Nível", "Verbo", "Modo de IA",
                 "Resultado de aprendizagem",
             ],
             rows,
@@ -418,6 +419,7 @@ def render_artifact(
                 item.get("id", "—"),
                 ", ".join(item.get("teaching_activity_ids", [])),
                 ", ".join(item.get("outcome_ids", [])),
+                item.get("ai_mode", "AI-off"),
                 item.get("work_type", "—"),
                 item.get("assessment_purpose", "—"),
                 item["activity"],
@@ -431,6 +433,7 @@ def render_artifact(
                 "ID",
                 "Atividades de ensino-aprendizagem",
                 "Resultados",
+                "Modo de IA",
                 "Modalidade",
                 "Finalidade",
                 "Atividade",
@@ -471,6 +474,7 @@ def render_artifact(
             [
                 item.get("id", "—"),
                 ", ".join(item.get("outcome_ids", [item.get("outcome_id", "")])),
+                item.get("ai_mode", "AI-off"),
                 item.get("learning_context", "—"),
                 item["activity"],
                 item["practice"],
@@ -480,7 +484,7 @@ def render_artifact(
             for item in artifact
         ]
         return header + _table(
-            ["ID", "Resultados", "Contexto", "Atividade", "Prática", "Acompanhamento", "Feedback"],
+            ["ID", "Resultados", "Modo de IA", "Contexto", "Atividade", "Prática", "Acompanhamento", "Feedback"],
             rows,
         )
 

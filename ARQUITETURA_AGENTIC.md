@@ -33,6 +33,15 @@ avaliação. A separação entre `AE` e `TA` evita ambiguidades nas relações d
 alinhamento e mantém estes identificadores estáveis ao longo da autoria e das
 versões.
 
+O enquadramento de Brabrand e Denny em *Constructive Alignment in the Age of
+AI* é implementado como uma dimensão adicional e independente da taxonomia. O
+campo `ai_mode` pertence a cada `RA<n>` e aceita `AI-off`, `AI-on` ou `on-AI`,
+com `AI-off` por defeito. As linhas `AE<n>` e `TA<n>` guardam o modo herdado dos
+resultados associados; os esquemas, a canonicalização e os validadores impedem
+que uma única linha combine resultados com modos diferentes. O módulo
+`prism/ai_modes.py` concentra o vocabulário e as regras, enquanto a validação
+final confirma a coerência do modo em toda a cadeia `RA ↔ AE ↔ TA`.
+
 Na etapa de conteúdos, o contrato estruturado separa também a função linguística
 dos campos. `objectives` contém finalidades gerais e pode usar verbos; `title` é
 uma designação temática nominal; `description` delimita conceitos, princípios,

@@ -22,7 +22,7 @@ determinística, não de uma decisão declarada pelo modelo.
 1. dados iniciais, fontes, caracterização da unidade curricular e objetivos
    gerais opcionais em texto livre;
 2. resultados de aprendizagem com nível SOLO ou Bloom, um único verbo de ação
-   principal e pressupostos contextuais opcionais;
+   principal, modo de IA e pressupostos contextuais opcionais;
 3. conteúdos com IDs associados aos resultados formulados;
 4. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa e
@@ -53,6 +53,13 @@ etapas permanecem navegáveis e editáveis desde o início.
 O alinhamento é verificado pela correspondência entre os resultados de
 aprendizagem, as atividades de ensino-aprendizagem e as tarefas e critérios de
 avaliação. Os verbos dos resultados funcionam como marcadores dessa coerência.
+O enquadramento de Brabrand e Denny em *Constructive Alignment in the Age of AI*
+acrescenta uma dimensão ortogonal: cada resultado indica `AI-off` (aprendizagem
+sem IA), `AI-on` (aprendizagem com IA como meio) ou `on-AI` (aprendizagem sobre
+a utilização da IA). `AI-off` é o valor por defeito. As atividades e tarefas
+herdam o modo dos resultados associados; uma linha que junte resultados com
+modos diferentes deve ser dividida. Esta classificação refere-se ao trabalho do
+estudante e não à utilização facultativa da IA pelo CoerIA para apoiar o docente.
 O protótipo usa conteúdos com IDs estáveis, 4 a 10 resultados de aprendizagem
 (preferencialmente 5 a 7), tipos de resultado, verbos taxonómicos controlados e
 relações muitos-para-muitos. A aplicação verifica essas relações diretamente e
@@ -101,6 +108,10 @@ divergência. Na edição manual, o seletor de verbos mostra exclusivamente os
 verbos do nível escolhido na mesma linha. Os resultados usam sempre IDs no
 formato `RA1`, `RA2`, …; a geração normaliza-os pela ordem das linhas e o editor
 atribui automaticamente o próximo ID, sem permitir edição livre desse campo.
+O campo **Modo de IA** é editável na mesma tabela através de uma lista controlada
+e começa em `AI-off`. Nas tabelas de atividades e tarefas, o modo é apresentado
+como valor informativo herdado dos resultados selecionados, evitando repetir a
+mesma decisão.
 Os **Pressupostos para a formulação** surgem nesta mesma etapa como um campo
 opcional. Podem registar conhecimentos prévios ou restrições contextuais que a
 IA deve considerar, mas não são gerados obrigatoriamente, não fazem parte da
@@ -148,7 +159,8 @@ textual pode sugerir uma instrução baseada no slide, que o docente revê antes
 usar a Image API. Também é possível carregar uma imagem do computador; essa
 imagem é processada localmente e não é enviada ao LLM. Depois da aprovação final,
 a aplicação exporta um ZIP com
-o programa da UC, os ficheiros selecionados, síntese automática do alinhamento,
+o programa da UC — incluindo a política de utilização da IA —, os ficheiros
+selecionados, síntese automática do alinhamento,
 auditoria,
 manifesto e estado completo da sessão. Antes de preparar o pacote, o docente
 escolhe se os documentos editáveis — programa da UC, ficha de aula, teste e
@@ -500,6 +512,7 @@ cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado
 - `prism/providers.py`: configuração e adaptador de streaming da IAedu;
 - `prism/assistance.py`: validação e proposta inicial assistida;
 - `prism/curriculum.py`: vocabulários SOLO/Bloom e regras do modelo curricular;
+- `prism/ai_modes.py`: vocabulário e regras de alinhamento `AI-off`/`AI-on`/`on-AI`;
 - `prism/workflow.py`: estado e fluxo LangGraph;
 - `prism/quality.py`: validações determinísticas independentes do modelo;
 - `prism/ingestion.py`: extração e limites das fontes documentais;

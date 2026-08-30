@@ -29,6 +29,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.parts.image import Image as PptxImage
 from pptx.util import Inches, Pt
 
+from .ai_modes import AI_MODE_DESCRIPTIONS, AI_MODES
 from .branding import APP_FULL_NAME, APP_NAME
 from .models import (
     RESOURCE_PRACTICAL,
@@ -347,6 +348,25 @@ def _bibliography_entries(value: Any) -> list[str]:
     ]
 
 
+def _ai_policy_entries(state: dict[str, Any]) -> list[str]:
+    """Resume os modos de IA escolhidos de forma comunicável aos estudantes."""
+
+    outcomes = state.get("learning_outcomes", [])
+    entries: list[str] = []
+    for mode in AI_MODES:
+        identifiers = [
+            str(outcome.get("id", "")).strip()
+            for outcome in outcomes
+            if str(outcome.get("ai_mode", "AI-off")).strip() == mode
+            and str(outcome.get("id", "")).strip()
+        ]
+        if identifiers:
+            entries.append(
+                f"{mode} ({', '.join(identifiers)}): {AI_MODE_DESCRIPTIONS[mode]}"
+            )
+    return entries
+
+
 def _validate_program_export_state(state: dict[str, Any]) -> None:
     required = (
         "learning_outcomes",
@@ -641,7 +661,7 @@ def export_program_document(
     )
 
     document.add_heading("4. Resultados de aprendizagem", level=1)
-    table = document.add_table(rows=1, cols=5)
+    table = document.add_table(rows=1, cols=6)
     for outcome in state.get("learning_outcomes", []):
         cells = table.add_row().cells
         cells[0].text = str(outcome.get("id", ""))
@@ -649,14 +669,19 @@ def export_program_document(
         cells[2].text = str(course.get("taxonomy_type", ""))
         cells[3].text = str(outcome.get("taxonomy_level", ""))
         cells[4].text = str(outcome.get("action_verb", ""))
+        cells[5].text = str(outcome.get("ai_mode", "AI-off"))
     _format_table(
         table,
-        ["ID", "Resultado de aprendizagem", "Taxonomia", "Nível", "Verbo"],
-        [700, 4660, 1200, 2300, 1100],
+        ["ID", "Resultado de aprendizagem", "Taxonomia", "Nível", "Verbo", "Modo de IA"],
+        [600, 4260, 1000, 1800, 900, 1400],
     )
 
-    document.add_heading("5. Atividades de ensino-aprendizagem", level=1)
-    table = document.add_table(rows=1, cols=7)
+    document.add_heading("5. Política de utilização da IA", level=1)
+    for entry in _ai_policy_entries(state):
+        document.add_paragraph(entry, style="List Bullet")
+
+    document.add_heading("6. Atividades de ensino-aprendizagem", level=1)
+    table = document.add_table(rows=1, cols=8)
     for activity in state.get("teaching_activities", []):
         cells = table.add_row().cells
         cells[0].text = str(activity.get("id", ""))
@@ -668,6 +693,7 @@ def export_program_document(
         cells[4].text = str(activity.get("support", ""))
         cells[5].text = str(activity.get("feedback_strategy", ""))
         cells[6].text = ", ".join(activity.get("outcome_ids", []))
+        cells[7].text = str(activity.get("ai_mode", "AI-off"))
     _format_table(
         table,
         [
@@ -678,12 +704,13 @@ def export_program_document(
             "Acompanhamento",
             "Feedback",
             "Resultados",
+            "Modo de IA",
         ],
-        [500, 1250, 1900, 1550, 1900, 1500, 1360],
+        [450, 1050, 1650, 1350, 1600, 1300, 1150, 1410],
     )
 
-    document.add_heading("6. Tarefas e critérios de avaliação", level=1)
-    table = document.add_table(rows=1, cols=7)
+    document.add_heading("7. Tarefas e critérios de avaliação", level=1)
+    table = document.add_table(rows=1, cols=8)
     for assessment in state.get("assessment_activities", []):
         cells = table.add_row().cells
         cells[0].text = str(assessment.get("id", ""))
@@ -693,6 +720,7 @@ def export_program_document(
         cells[4].text = ", ".join(assessment.get("outcome_ids", []))
         cells[5].text = str(assessment.get("activity", ""))
         cells[6].text = str(assessment.get("criterion", ""))
+        cells[7].text = str(assessment.get("ai_mode", "AI-off"))
     _format_table(
         table,
         [
@@ -703,11 +731,12 @@ def export_program_document(
             "Resultados",
             "Tarefa de avaliação",
             "Critério",
+            "Modo de IA",
         ],
-        [500, 900, 900, 1400, 900, 2600, 2760],
+        [450, 750, 750, 1200, 750, 2200, 2300, 1560],
     )
 
-    document.add_heading("7. Planeamento das aulas", level=1)
+    document.add_heading("8. Planeamento das aulas", level=1)
     pedagogical_design = state.get("pedagogical_design", {})
     table = document.add_table(rows=1, cols=5)
     for index, item in enumerate(pedagogical_design.get("lessons", []), start=1):
@@ -723,8 +752,8 @@ def export_program_document(
         [500, 1200, 1800, 2600, 3860],
     )
 
-    document.add_heading("8. Síntese automática do alinhamento", level=1)
-    table = document.add_table(rows=1, cols=6)
+    document.add_heading("9. Síntese automática do alinhamento", level=1)
+    table = document.add_table(rows=1, cols=7)
     for row in alignment_rows:
         cells = table.add_row().cells
         cells[0].text = str(row.get("outcome_id", ""))
@@ -733,13 +762,14 @@ def export_program_document(
         cells[3].text = ", ".join(row.get("assessment_ids", []))
         cells[4].text = str(row.get("status", ""))
         cells[5].text = str(row.get("rationale", ""))
+        cells[6].text = str(row.get("ai_mode", "AI-off"))
     _format_table(
         table,
-        ["RA", "Conteúdos", "Ensino-aprendizagem", "Avaliação", "Estado", "Fundamentação"],
-        [650, 1250, 1750, 1350, 1150, 3810],
+        ["RA", "Conteúdos", "Ensino-aprendizagem", "Avaliação", "Estado", "Fundamentação", "Modo de IA"],
+        [550, 1050, 1500, 1150, 900, 3200, 1610],
     )
 
-    document.add_heading("9. Bibliografia", level=1)
+    document.add_heading("10. Bibliografia", level=1)
     bibliography = _bibliography_entries(course.get("bibliography"))
     if bibliography:
         for entry in bibliography:
@@ -831,7 +861,7 @@ def export_program_latex(
             ),
             r"\section{Resultados de aprendizagem}",
             _latex_table(
-                ["ID", "Resultado de aprendizagem", "Taxonomia", "Nível", "Verbo"],
+                ["ID", "Resultado de aprendizagem", "Taxonomia", "Nível", "Verbo", "Modo de IA"],
                 [
                     [
                         outcome.get("id", ""),
@@ -839,11 +869,14 @@ def export_program_latex(
                         course.get("taxonomy_type", ""),
                         outcome.get("taxonomy_level", ""),
                         outcome.get("action_verb", ""),
+                        outcome.get("ai_mode", "AI-off"),
                     ]
                     for outcome in state.get("learning_outcomes", [])
                 ],
-                [0.06, 0.35, 0.11, 0.18, 0.12],
+                [0.05, 0.30, 0.09, 0.15, 0.10, 0.11],
             ),
+            r"\section{Política de utilização da IA}",
+            _latex_itemize(_ai_policy_entries(state)),
             r"\section{Atividades de ensino-aprendizagem}",
             _latex_table(
                 [
@@ -854,6 +887,7 @@ def export_program_latex(
                     "Acompanhamento",
                     "Feedback",
                     "Resultados",
+                    "Modo de IA",
                 ],
                 [
                     [
@@ -864,10 +898,11 @@ def export_program_latex(
                         activity.get("support", ""),
                         activity.get("feedback_strategy", ""),
                         ", ".join(activity.get("outcome_ids", [])),
+                        activity.get("ai_mode", "AI-off"),
                     ]
                     for activity in state.get("teaching_activities", [])
                 ],
-                [0.045, 0.100, 0.170, 0.130, 0.160, 0.120, 0.095],
+                [0.04, 0.08, 0.15, 0.11, 0.13, 0.10, 0.08, 0.09],
             ),
             r"\section{Tarefas e critérios de avaliação}",
             _latex_table(
@@ -879,6 +914,7 @@ def export_program_latex(
                     "Resultados",
                     "Tarefa de avaliação",
                     "Critério",
+                    "Modo de IA",
                 ],
                 [
                     [
@@ -889,10 +925,11 @@ def export_program_latex(
                         ", ".join(assessment.get("outcome_ids", [])),
                         assessment.get("activity", ""),
                         assessment.get("criterion", ""),
+                        assessment.get("ai_mode", "AI-off"),
                     ]
                     for assessment in state.get("assessment_activities", [])
                 ],
-                [0.04, 0.07, 0.08, 0.12, 0.08, 0.18, 0.17],
+                [0.035, 0.06, 0.065, 0.10, 0.065, 0.16, 0.15, 0.09],
             ),
             r"\section{Planeamento das aulas}",
             _latex_table(
@@ -915,7 +952,7 @@ def export_program_latex(
             r"\clearpage",
             r"\section{Síntese automática do alinhamento}",
             _latex_table(
-                ["RA", "Conteúdos", "Ensino-aprendizagem", "Avaliação", "Estado", "Fundamentação"],
+                ["RA", "Conteúdos", "Ensino-aprendizagem", "Avaliação", "Estado", "Fundamentação", "Modo de IA"],
                 [
                     [
                         row.get("outcome_id", ""),
@@ -924,10 +961,11 @@ def export_program_latex(
                         ", ".join(row.get("assessment_ids", [])),
                         row.get("status", ""),
                         row.get("rationale", ""),
+                        row.get("ai_mode", "AI-off"),
                     ]
                     for row in alignment_rows
                 ],
-                [0.05, 0.12, 0.17, 0.12, 0.10, 0.29],
+                [0.04, 0.10, 0.14, 0.10, 0.08, 0.24, 0.09],
             ),
             r"\section{Bibliografia}",
         ]

@@ -11,6 +11,12 @@ from typing import Any, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from .ai_modes import (
+    AI_MODE_ABOUT,
+    AI_MODE_OFF,
+    AI_MODE_ON,
+    ai_mode_alignment_issues,
+)
 from .agents import (
     AgentGenerationError,
     CritiqueResult,
@@ -138,7 +144,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 30
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -272,6 +278,7 @@ def formulate_learning_outcomes(state: PrismState) -> dict[str, Any]:
             "action_verb": verbs[levels[index % len(levels)]][0],
             "taxonomy_level": levels[index % len(levels)],
             "outcome_type": OUTCOME_TYPES[index % len(OUTCOME_TYPES)],
+            "ai_mode": AI_MODE_OFF,
         }
         for index, topic in enumerate(topics)
     ]
@@ -297,7 +304,14 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
             outcome["id"],
             *(
                 [state["learning_outcomes"][index + 1]["id"]]
-                if index % 2 == 0 and index + 1 < len(state["learning_outcomes"])
+                if (
+                    index % 2 == 0
+                    and index + 1 < len(state["learning_outcomes"])
+                    and state["learning_outcomes"][index + 1].get(
+                        "ai_mode", AI_MODE_OFF
+                    )
+                    == outcome.get("ai_mode", AI_MODE_OFF)
+                )
                 else []
             ),
         ]
@@ -314,6 +328,7 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
             "outcome_ids": outcome_ids,
             "work_type": "Trabalho individual" if index % 2 == 0 else "Trabalho de grupo",
             "assessment_purpose": ASSESSMENT_PURPOSES[index % len(ASSESSMENT_PURPOSES)],
+            "ai_mode": outcome.get("ai_mode", AI_MODE_OFF),
             "activity": f"Tarefa aplicada: {outcome['statement']}",
             "evidence": (
                 "Produto ou desempenho que demonstra: "
@@ -388,6 +403,7 @@ def propose_teaching_activities(state: PrismState) -> dict[str, Any]:
             "outcome_id": outcome["id"],
             "outcome_ids": [outcome["id"]],
             "learning_context": LEARNING_CONTEXTS[index % len(LEARNING_CONTEXTS)],
+            "ai_mode": outcome.get("ai_mode", AI_MODE_OFF),
             "activity": f"Exploração orientada e discussão sobre {outcome['statement'].split(' de ', 1)[-1]}",
             "method": "Aprendizagem ativa com feedback formativo.",
             "practice": "Aplicação orientada do resultado em tarefa progressiva.",
@@ -412,6 +428,21 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
     course = state["course"]
     selected_types = state.get("resource_types", [RESOURCE_PRESENTATION])
     taxonomy_type = validate_taxonomy_choice(course.get("taxonomy_type", "SOLO"))
+
+    def ai_mode_instruction(outcome: dict[str, Any]) -> str:
+        mode = str(outcome.get("ai_mode", AI_MODE_OFF))
+        if mode == AI_MODE_ON:
+            return (
+                "Utilize IA como apoio à realização, mantendo a responsabilidade "
+                "pela verificação e pelo resultado apresentado."
+            )
+        if mode == AI_MODE_ABOUT:
+            return (
+                "Documente e justifique o processo de utilização ou não utilização "
+                "da IA, incluindo a revisão crítica dos seus resultados."
+            )
+        return "Realize esta tarefa autonomamente, sem assistência de IA."
+
     def assessment_for(outcome_id: str) -> dict[str, Any]:
         assessment = next(
             (
@@ -466,6 +497,7 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 "title": f"{outcome['id']} — {theme}",
                 "bullets": [
                     outcome["statement"],
+                    f"Modo de IA: {outcome.get('ai_mode', AI_MODE_OFF)}.",
                     teaching_for(outcome["id"])["activity"],
                     assessment_for(outcome["id"])["criterion"],
                 ],
@@ -518,7 +550,10 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 "heading": f"{outcome['id']} — {outcome['theme']}",
                 "content": outcome["statement"],
                 "outcome_ids": [outcome["id"]],
-                "activity": teaching_for(outcome["id"])["activity"],
+                "activity": (
+                    f"{teaching_for(outcome['id'])['activity']} "
+                    f"{ai_mode_instruction(outcome)}"
+                ),
             }
             for index, outcome in enumerate(state["learning_outcomes"])
         ],
@@ -527,7 +562,10 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
         {
             "id": f"Q{index + 1}",
             "outcome_id": outcome["id"],
-            "prompt": assessment_for(outcome["id"])["activity"],
+            "prompt": (
+                f"{assessment_for(outcome['id'])['activity']} "
+                f"{ai_mode_instruction(outcome)}"
+            ),
             "question_type": "Resposta estruturada",
             "points": 10,
             "answer_key": assessment_for(outcome["id"])["criterion"],
@@ -548,7 +586,10 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
         "steps": [
             {
                 "order": index + 1,
-                "instruction": teaching_for(outcome["id"])["activity"],
+                "instruction": (
+                    f"{teaching_for(outcome['id'])['activity']} "
+                    f"{ai_mode_instruction(outcome)}"
+                ),
                 "outcome_ids": [outcome["id"]],
             }
             for index, outcome in enumerate(state["learning_outcomes"])
@@ -1767,6 +1808,27 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
         ),
         "",
     )
+    ai_mode_issues = ai_mode_alignment_issues(state)
+    ai_mode_chain_complete = bool(
+        state.get("learning_outcomes")
+        and state.get("teaching_activities")
+        and state.get("assessment_activities")
+    )
+    first_ai_mode_problem = next(
+        (
+            issue.split(":", 1)[0]
+            for issue in ai_mode_issues
+            if ":" in issue
+        ),
+        "",
+    )
+    ai_mode_target_stage = (
+        "assessment_activities"
+        if first_ai_mode_problem.startswith("TA")
+        else "teaching_activities"
+        if first_ai_mode_problem.startswith("AE")
+        else "learning_outcomes"
+    )
     checks = [
         *structural_checks,
         {
@@ -1788,6 +1850,26 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
             "detail": "Cada verbo deve corresponder ao nível taxonómico escolhido.",
             "target_stage": "learning_outcomes",
             "target_key": first_taxonomy_problem or "__stage__",
+        },
+        {
+            "id": "ai_mode_alignment",
+            "label": "Alinhamento dos modos de utilização da IA",
+            "passed": ai_mode_chain_complete and not ai_mode_issues,
+            "detail": (
+                "; ".join(ai_mode_issues)
+                if ai_mode_issues
+                else (
+                    "A cadeia RA–AE–TA está incompleta; os modos de IA não podem "
+                    "ser avaliados."
+                )
+                if not ai_mode_chain_complete
+                else (
+                    "Cada resultado, atividade de ensino-aprendizagem e tarefa de "
+                    "avaliação mantém o mesmo AI-mode."
+                )
+            ),
+            "target_stage": ai_mode_target_stage,
+            "target_key": first_ai_mode_problem or "__stage__",
         },
     ]
     return {
