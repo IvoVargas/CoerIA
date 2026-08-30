@@ -63,6 +63,7 @@ def _stored_session(service: ApplicationService, tmp_path: Path) -> dict:
             "Conceitos, métodos de investigação e teorias psicológicas.",
             isced_f_code="0313",
             isced_f_name="Psicologia",
+            general_aims="Compreender a Psicologia e os seus campos de aplicação.",
         )
     )
     source_path = tmp_path / "01_apoio.txt"
@@ -239,7 +240,11 @@ def test_backup_contains_readable_json_and_real_attachment_files(
         )
         assert readable["unidade_curricular"]["codigo_isced_f"] == "0313"
         assert readable["unidade_curricular"]["area_isced_f"] == "Psicologia"
+        assert readable["unidade_curricular"]["objetivos_gerais"] == (
+            "Compreender a Psicologia e os seus campos de aplicação."
+        )
         assert readable["fontes"]["texto_processado"]
+        assert "conteudos_curriculares" in readable["etapas"]
         assert readable["etapas"]["pressupostos_para_resultados_opcionais"] == (
             backed_up["learning_outcome_assumptions"]
         )

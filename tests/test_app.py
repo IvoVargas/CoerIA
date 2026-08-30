@@ -228,6 +228,7 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     assert form_data["resource_types"] == [RESOURCE_PRESENTATION]
     assert form_data["ai_image_generation_enabled"] is True
     assert form_data["semester"] == "1.º semestre"
+    assert form_data["general_aims"] == ""
     assert form_data["audience"] == "Ensino superior"
     assert form_data["duration_hours"] == 0
     interfaces[-1].fields["program_type"].set_value("Mestrado")
@@ -239,6 +240,8 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Texto de base e fontes de referência")
     await user.should_see("Informação de referência para a unidade curricular")
     await user.should_see("Nome da unidade curricular ou ação de formação")
+    await user.should_see("Objetivos gerais (opcional)")
+    assert user.find(marker="initial-general-aims").elements
     await user.should_see("Curso ou programa em que se integra")
     await user.should_see("Caracterização da unidade curricular")
     await user.should_see("Código CNAEF")
@@ -272,7 +275,6 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Iniciar desenho curricular alinhado")
     await user.should_not_see("Público-alvo")
     await user.should_not_see("Duração prevista")
-    await user.should_not_see("Objetivos gerais da unidade curricular")
     await user.should_not_see("Recursos a produzir")
     await user.should_not_see("Permitir geração de imagens por IA")
     toolbar = next(iter(user.find(marker="initial-stage-toolbar").elements))
@@ -642,7 +644,7 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.should_not_see("ASSISTÊNCIA LOCALIZADA DA IA")
     await user.should_see("Criar etapa completa com IA")
     await user.should_see("Pedir propostas à IA")
-    await user.should_see("Conteúdos e objetivos curriculares")
+    await user.should_see("Conteúdos curriculares")
     create_button = next(iter(user.find(marker="create-ai-version").elements))
     assistance_heading = next(
         iter(user.find(marker="ai-assistance-heading").elements)
@@ -693,7 +695,8 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     )
     assert assistance_heading.id < create_button.id < resource_settings_button.id
     user.find(marker="manual-stage-curriculum_analysis").click()
-    await user.should_see("Objetivos gerais")
+    await user.should_see("Conteúdos curriculares — versão 1", retries=20)
+    await user.should_not_see("Objetivos gerais")
     await user.should_see("Criar etapa completa com IA")
     assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
 
@@ -708,7 +711,6 @@ async def test_curriculum_content_ids_are_readonly_in_the_editor(user: User) -> 
     )
     state["curriculum_analysis"] = {
         "summary": "Síntese.",
-        "objectives": "Objetivos.",
         "contents": [
             {
                 "id": "C1",

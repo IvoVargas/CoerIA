@@ -129,10 +129,9 @@ STAGE_ROLES = {
 
 STAGE_REQUIREMENTS = {
     "curriculum_analysis": (
-        "Objeto com summary, themes, contents e objectives. contents contém "
+        "Objeto com summary, themes e contents. contents contém "
         "4 a 10 objetos {id, title, description, outcome_ids}, com IDs C1, C2, ...; "
-        "objectives é um texto livre com os objetivos gerais, sem IDs nem "
-        "ligações estruturais. Cada outcome_ids dos conteúdos usa exclusivamente "
+        "cada outcome_ids dos conteúdos usa exclusivamente "
         "resultados aprovados na etapa anterior. Em cada conteúdo, title é uma "
         "designação temática breve e description caracteriza conceitos, princípios, "
         "processos e limites em formulação expositiva. A descrição não começa por um "
@@ -260,7 +259,6 @@ def _schema_for(
             "properties": {
                 "summary": string,
                 "themes": {"type": "array", "items": string},
-                "objectives": string,
                 "contents": {
                     "type": "array",
                     "items": {
@@ -276,9 +274,7 @@ def _schema_for(
                     },
                 },
             },
-            "required": [
-                "summary", "themes", "objectives", "contents"
-            ],
+            "required": ["summary", "themes", "contents"],
         },
         "learning_outcomes": {
             "type": "array",
@@ -752,8 +748,7 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                 "rule": (
                     "Cada conteúdo indica os resultados que suporta. A união dos "
                     "outcome_ids dos conteúdos deve corresponder exatamente aos "
-                    "resultados aprovados, sem IDs desconhecidos. Os objetivos gerais "
-                    "são texto livre e não participam nesta relação."
+                    "resultados aprovados, sem IDs desconhecidos."
                 ),
             }
         reduction = state.get("source_reduction", {})
@@ -1813,22 +1808,16 @@ def _flattened_ids(artifact: list[dict[str, Any]], plural_key: str, legacy_key: 
 def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None:
     if stage == "curriculum_analysis":
         contents = artifact.get("contents", []) if isinstance(artifact, dict) else []
-        objectives = (
-            str(artifact.get("objectives", "")).strip()
-            if isinstance(artifact, dict)
-            else ""
-        )
         content_ids = [item.get("id") for item in contents]
         if (
             not MIN_OUTCOMES <= len(contents) <= MAX_OUTCOMES
             or len(content_ids) != len(set(content_ids))
             or any(not item.get("title") for item in contents)
             or any(not str(item.get("description", "")).strip() for item in contents)
-            or not objectives
         ):
             raise AgentGenerationError(
-                "A análise curricular deve conter objetivos gerais em texto livre e "
-                "conteúdos com IDs únicos, título e descrição."
+                "A análise curricular deve conter conteúdos com IDs únicos, título "
+                "e descrição."
             )
 
         objective_like_descriptions = [
@@ -2450,13 +2439,12 @@ class OpenAIPedagogicalAgent:
                     "constituem a referência desta etapa. Em cada conteúdo, "
                     "outcome_ids nunca pode estar vazio e usa apenas IDs desta lista: "
                     f"{required_outcomes}. A união dos outcome_ids dos conteúdos deve "
-                    "ser exatamente essa lista. Escreve objectives como texto livre, sem "
-                    "IDs, listas estruturadas ou ligações aos resultados. Não alteres "
-                    "nem reformules os resultados. Para cada conteúdo, usa um título "
+                    "ser exatamente essa lista. Não alteres nem reformules os resultados. "
+                    "Para cada conteúdo, usa um título "
                     "temático nominal e uma descrição expositiva da matéria abrangida. "
                     "Não inicies description por verbos como identificar, compreender, "
                     "analisar, aplicar ou desenvolver; essas formulações pertencem aos "
-                    "objetivos e resultados de aprendizagem."
+                    "resultados de aprendizagem."
                 )
             reduction = state.get("source_reduction", {})
             source_names = [
@@ -2488,7 +2476,7 @@ class OpenAIPedagogicalAgent:
                 "configurar'), mas evita coordenar duas ações principais com 'e + infinitivo' "
                 "ou 'ou + infinitivo'. Se uma intenção geral contiver várias ações coordenadas, "
                 "não a copies literalmente: distribui essas ações por resultados diferentes. "
-                "Usa os conteúdos e objetivos introduzidos pelo docente "
+                "Usa a informação de referência e os objetivos gerais introduzidos pelo docente "
                 "apenas como contexto para definir o que o estudante deverá demonstrar; a "
                 "estrutura curricular detalhada será produzida e associada na etapa seguinte. "
                 "Se optional_assumptions_for_learning_outcomes contiver elementos, considera-os "

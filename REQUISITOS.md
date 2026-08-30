@@ -70,8 +70,9 @@ materiais produzidos.
   CNAEF e ISCED-F, exigir que a classificação seja escolhida pelo conteúdo
   principal e apresentar ao docente apenas designações obtidas localmente dos
   catálogos, sem confiar em descrições livres geradas pelo modelo.
-- Não pedir objetivos gerais na criação da sessão; estes são formulados ou
-  introduzidos uma única vez na etapa de conteúdos e objetivos curriculares.
+- Recolher os objetivos gerais nos dados iniciais, num único campo opcional de
+  texto livre, distinto da informação de referência; não lhes atribuir IDs nem
+  tratá-los como relação estrutural do alinhamento.
 - Exigir a escolha exclusiva entre SOLO e Bloom; nunca combinar as duas numa sessão.
 - Permitir regressar ao preenchimento inicial depois de iniciar ou retomar a sessão,
   corrigir os campos e guardar sem criar uma sessão nova nem apagar artefactos.
@@ -92,11 +93,11 @@ materiais produzidos.
 Disponibilizar a seguinte sequência pedagógica recomendada, mantendo todas as
 etapas navegáveis e editáveis:
 
-1. recolha e revisão dos dados iniciais, fontes e caracterização;
+1. recolha e revisão dos dados iniciais, fontes, caracterização e objetivos
+   gerais opcionais;
 2. formulação de resultados de aprendizagem com nível SOLO ou Bloom, um único
    verbo de ação principal e pressupostos contextuais opcionais;
-3. estruturação de conteúdos associados aos resultados formulados
-   e registo dos objetivos gerais em texto livre;
+3. estruturação de conteúdos associados aos resultados formulados;
 4. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou
    sumativa e associação explícita às atividades de ensino-aprendizagem e aos
@@ -145,17 +146,18 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   corresponda exatamente às horas de contacto. Nas propostas completas de IA,
   corrigir essa soma deterministicamente antes da validação, evitando novas
   chamadas ao fornecedor apenas por divergências aritméticas.
-- Usar os documentos, conteúdos e objetivos fornecidos pelo docente como contexto
-  de entrada para formular os resultados, sem os transformar previamente numa
-  etapa curricular formal.
+- Usar a informação de referência, as fontes e os objetivos gerais opcionais
+  fornecidos pelo docente como contexto de entrada para formular os resultados,
+  sem tratar o texto de base como uma versão formal dos conteúdos curriculares.
 - Na segunda etapa, associar cada conteúdo a um ou mais resultados formulados; o
   conjunto das associações deve cobrir exatamente todos os resultados, sem linhas
   desligadas nem IDs desconhecidos.
-- Registar os objetivos gerais num único campo de texto livre, sem IDs e sem os
-  incluir como relação estrutural do alinhamento.
-- Distinguir linguisticamente os objetivos das descrições dos conteúdos: estas
-  devem caracterizar a matéria em formulação expositiva ou nominal, sem começar
-  por verbos de ação, sem se dirigir ao estudante e sem formular objetivos ou
+- Registar os objetivos gerais nos dados iniciais, num único campo opcional de
+  texto livre, sem IDs e sem os incluir como relação estrutural do alinhamento.
+- Distinguir linguisticamente as descrições dos conteúdos dos objetivos e dos
+  resultados: aquelas devem caracterizar a matéria em formulação expositiva ou
+  nominal, sem começar por verbos de ação, sem se dirigir ao estudante e sem
+  formular objetivos ou
   resultados de aprendizagem. Rejeitar propostas completas da IA que violem
   esta distinção, indicando os IDs dos conteúdos a corrigir.
 - Apresentar cada conteúdo programático na tabela através das colunas **Tema** e

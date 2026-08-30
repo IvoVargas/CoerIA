@@ -54,7 +54,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
     "curriculum_analysis": EditorLayout(
         fields=(
             ScalarSpec(("summary",), "Síntese", "long"),
-            ScalarSpec(("objectives",), "Objetivos gerais", "long"),
         ),
         tables=(
             TableSpec(

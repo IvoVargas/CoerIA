@@ -71,6 +71,7 @@ class InitialAssistanceTests(unittest.TestCase):
     def test_gpt_4o_mini_initial_assistance_omits_reasoning_parameter(self) -> None:
         proposal = {
             "unit_name": "Introdução às Pescas",
+            "general_aims": "Promover uma compreensão integrada e sustentável das pescas.",
             "audience": "Licenciatura",
             "duration_hours": 18,
             "source_text": (
@@ -114,8 +115,8 @@ class InitialAssistanceTests(unittest.TestCase):
         proposal_schema = calls[0]["text"]["format"]["schema"]
         self.assertNotIn("audience", proposal_schema["properties"])
         self.assertNotIn("audience", proposal_schema["required"])
-        self.assertNotIn("general_aims", proposal_schema["properties"])
-        self.assertNotIn("general_aims", proposal_schema["required"])
+        self.assertIn("general_aims", proposal_schema["properties"])
+        self.assertIn("general_aims", proposal_schema["required"])
         self.assertIn("cnaef_code", proposal_schema["properties"])
         self.assertNotIn("cnaef_name", proposal_schema["properties"])
         self.assertIn("cnaef_code", proposal_schema["required"])
@@ -139,6 +140,7 @@ class InitialAssistanceTests(unittest.TestCase):
     def test_requested_proposal_preserves_the_exclusive_taxonomy(self) -> None:
         proposal = {
             "unit_name": "Introdução às Pescas",
+            "general_aims": "Promover uma compreensão integrada e sustentável das pescas.",
             "audience": "Licenciatura",
             "duration_hours": 18,
             "source_text": (
@@ -180,6 +182,7 @@ class InitialAssistanceTests(unittest.TestCase):
 
         self.assertEqual(result["taxonomy_type"], "Bloom")
         self.assertEqual(result["unit_name"], "Introdução às Pescas")
+        self.assertEqual(result["general_aims"], proposal["general_aims"])
         self.assertTrue(result["source_text"].startswith("1. Ecossistemas"))
         for field in (
             "program_name",
@@ -202,6 +205,7 @@ class InitialAssistanceTests(unittest.TestCase):
     def test_requested_proposal_only_fills_empty_fields(self) -> None:
         proposal = {
             "unit_name": "Nome proposto pela IA",
+            "general_aims": "Objetivo geral proposto pela IA.",
             "audience": "Público proposto pela IA",
             "duration_hours": 30,
             "source_text": "Conteúdos programáticos propostos para o campo vazio.",
@@ -230,6 +234,7 @@ class InitialAssistanceTests(unittest.TestCase):
         original = {
             "taxonomy_type": "SOLO",
             "unit_name": "Nome introduzido pelo docente",
+            "general_aims": "Objetivo geral definido pelo docente.",
             "audience": "Público definido pelo docente",
             "duration_hours": 20,
             "source_text": "",
@@ -241,6 +246,7 @@ class InitialAssistanceTests(unittest.TestCase):
             result = OpenAIInitialFormAssistant().propose(original)
 
         self.assertEqual(result["unit_name"], original["unit_name"])
+        self.assertEqual(result["general_aims"], original["general_aims"])
         self.assertNotIn("audience", result)
         self.assertNotIn("duration_hours", result)
         self.assertEqual(result["source_text"], proposal["source_text"])
@@ -248,6 +254,10 @@ class InitialAssistanceTests(unittest.TestCase):
     def test_short_generated_source_text_is_repaired_automatically(self) -> None:
         valid_proposal = {
             "unit_name": "Introdução à Programação",
+            "general_aims": (
+                "Desenvolver uma compreensão fundamentada da programação e da resolução "
+                "estruturada de problemas computacionais."
+            ),
             "audience": "Estudantes de licenciatura",
             "duration_hours": 30,
             "source_text": (

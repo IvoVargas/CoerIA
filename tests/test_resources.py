@@ -62,6 +62,10 @@ class ResourceGenerationTests(unittest.TestCase):
             duration_hours=20,
             isced_f_code="0613",
             isced_f_name="Desenvolvimento e análise de software e aplicações",
+            general_aims=(
+                "Desenvolver a capacidade de conceber e analisar soluções "
+                "computacionais aplicadas."
+            ),
             bibliography=(
                 "Biggs, J., & Tang, C. (2011). Teaching for Quality Learning at University.\n"
                 "Anderson, L. W., & Krathwohl, D. R. (2001). A Taxonomy for Learning."
@@ -817,6 +821,7 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("Acompanhamento manual do docente.", word_text)
             self.assertIn("Tema", word_text)
             self.assertIn("Descrição do tema", word_text)
+            self.assertIn(self.course.general_aims, word_text)
             self.assertIn("ISCED-F 2013", word_text)
             self.assertIn("0613", word_text)
             self.assertIn(
@@ -855,6 +860,7 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("Acompanhamento manual do docente.", latex)
             self.assertIn("Tema", latex)
             self.assertIn("Descrição do tema", latex)
+            self.assertIn(self.course.general_aims, latex)
             self.assertIn("ISCED-F 2013", latex)
             self.assertIn("0613", latex)
             self.assertIn(
@@ -870,6 +876,28 @@ class ResourceGenerationTests(unittest.TestCase):
                 state["assessment_activities"][0]["teaching_activity_ids"][0],
                 latex,
             )
+
+    def test_program_does_not_recover_objectives_from_the_curriculum_stage(self) -> None:
+        state = self._resource_state()
+        state["course"]["general_aims"] = ""
+        state["curriculum_analysis"]["objectives"] = (
+            "Objetivo legado que não deve ser exportado."
+        )
+
+        with TemporaryDirectory() as temporary_directory:
+            word_path = Path(temporary_directory) / "programa.docx"
+            latex_path = Path(temporary_directory) / "programa.tex"
+            export_program_document(state, word_path)
+            export_program_latex(state, latex_path)
+
+            program = Document(word_path)
+            word_text = "\n".join(paragraph.text for paragraph in program.paragraphs)
+            latex = latex_path.read_text(encoding="utf-8")
+
+        self.assertIn("Não indicado pelo docente.", word_text)
+        self.assertIn("Não indicado pelo docente.", latex)
+        self.assertNotIn("Objetivo legado", word_text)
+        self.assertNotIn("Objetivo legado", latex)
 
     def test_zip_package_respects_word_latex_or_both_document_formats(self) -> None:
         state = review_current_stage(self._resource_state(), "approve", agent=self.agent)

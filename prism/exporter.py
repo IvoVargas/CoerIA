@@ -623,10 +623,8 @@ def export_program_document(
     _add_program_metadata(document, course)
 
     document.add_heading("2. Objetivos gerais", level=1)
-    general_aims = str(
-        analysis.get("objectives") or course.get("general_aims", "")
-    ).strip()
-    document.add_paragraph(general_aims or "A confirmar pelo docente.")
+    general_aims = str(course.get("general_aims", "")).strip()
+    document.add_paragraph(general_aims or "Não indicado pelo docente.")
 
     document.add_heading("3. Conteúdos programáticos", level=1)
     contents = analysis.get("contents", [])
@@ -818,10 +816,8 @@ def export_program_latex(
         _latex_table(["Campo", "Valor"], metadata_rows, [0.24, 0.66]),
         r"\section{Objetivos gerais}",
     ]
-    general_aims = str(
-        analysis.get("objectives") or course.get("general_aims", "")
-    ).strip()
-    body.append(_latex_escape(general_aims or "A confirmar pelo docente."))
+    general_aims = str(course.get("general_aims", "")).strip()
+    body.append(_latex_escape(general_aims or "Não indicado pelo docente."))
     body.extend(
         [
             r"\section{Conteúdos programáticos}",

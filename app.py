@@ -791,6 +791,18 @@ class AGIRSoloInterface:
             list(TAXONOMY_CHOICES),
             value="SOLO",
         ).props("spread no-caps").classes("full-control max-w-xl")
+        self.fields["general_aims"] = ui.textarea(
+            "Objetivos gerais (opcional)",
+            placeholder=(
+                "Indique, em termos amplos, a finalidade da unidade curricular. "
+                "Não formule aqui os resultados de aprendizagem."
+            ),
+        ).props("outlined autogrow").classes("full-control mt-4")
+        self.fields["general_aims"].mark("initial-general-aims")
+        ui.label(
+            "Este enquadramento orienta a formulação posterior dos resultados, mas "
+            "não participa diretamente nas ligações do alinhamento."
+        ).classes("text-xs muted")
 
     def _build_sources_step(self) -> None:
         ui.label("Texto de base e fontes de referência").classes("section-title")
@@ -1352,6 +1364,7 @@ class AGIRSoloInterface:
                 "ai_provider": configured_ai_provider(),
                 "taxonomy_type": "SOLO",
                 "source_text": "",
+                "general_aims": "",
                 "program_name": "",
                 "program_type": None,
                 "academic_year": "",
@@ -3995,7 +4008,6 @@ class AGIRSoloInterface:
         if stage == "curriculum_analysis" and isinstance(artifact, dict):
             special = {
                 "__summary__": f"{root} .artifact-markdown",
-                "__objectives__": f"{root} .artifact-markdown h2:nth-of-type(1)",
             }
             if target_key in special:
                 return special[target_key], ""

@@ -25,6 +25,7 @@ from .providers import (
 
 PROPOSAL_FIELDS = (
     "unit_name",
+    "general_aims",
     "source_text",
     "program_name",
     "program_type",
@@ -276,6 +277,7 @@ class OpenAIInitialFormAssistant:
             "additionalProperties": False,
             "properties": {
                 "unit_name": {"type": "string"},
+                "general_aims": {"type": "string"},
                 "source_text": {"type": "string"},
                 "program_name": {"type": "string"},
                 "program_type": {"type": "string"},
@@ -296,6 +298,7 @@ class OpenAIInitialFormAssistant:
             },
             "required": [
                 "unit_name",
+                "general_aims",
                 "source_text",
                 "program_name",
                 "program_type",
@@ -318,6 +321,9 @@ class OpenAIInitialFormAssistant:
             "numéricos iguais a zero. Quando source_text estiver em fields_to_complete, "
             "cria uma proposta estruturada de informação de referência com pelo menos "
             "200 caracteres; nunca devolvas apenas um título ou uma frase curta. "
+            "Quando general_aims estiver em fields_to_complete, formula uma finalidade "
+            "global específica para esta unidade curricular, sem a transformar numa lista "
+            "de resultados de aprendizagem nem usar frases genéricas aplicáveis a qualquer curso. "
             "ECTS e horas podem ser estimativas provisórias, mas a explanation deve "
             "identificá-los claramente como dados a confirmar. Para CNAEF e ISCED-F "
             "2013, consulta obrigatoriamente classification_catalogs, que contém a "

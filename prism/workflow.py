@@ -100,7 +100,7 @@ class PrismState(TypedDict, total=False):
 
 
 STAGE_LABELS = {
-    "curriculum_analysis": "Conteúdos e objetivos curriculares",
+    "curriculum_analysis": "Conteúdos curriculares",
     "learning_outcomes": "Formulação dos resultados de aprendizagem",
     "teaching_activities": "Atividades de ensino-aprendizagem",
     "assessment_activities": "Tarefas e critérios de avaliação",
@@ -138,7 +138,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -190,22 +190,6 @@ def _topics(text: str) -> list[str]:
     return topics
 
 
-def _general_objectives_text(course: dict[str, Any], topics: list[str]) -> str:
-    source = str(course.get("general_aims", "") or "")
-    fragments = [
-        re.sub(r"\s+", " ", item).strip(" -•\t")
-        for item in re.split(r"[\n.;]+", source)
-        if len(re.sub(r"\s+", " ", item).strip(" -•\t")) >= 8
-    ]
-    if not fragments:
-        fragments = [
-            f"Desenvolver conhecimentos fundamentais sobre {topics[0].lower()}.",
-            "Aplicar os conteúdos da unidade curricular em contextos relevantes.",
-            "Promover análise crítica, autonomia e integração dos conhecimentos.",
-        ]
-    return "\n".join(fragments[:6])
-
-
 def _nominal_content_title(value: str) -> str:
     """Converte um eventual enunciado de desempenho numa designação temática."""
 
@@ -236,7 +220,6 @@ def analyse_curriculum(state: PrismState) -> dict[str, Any]:
         for outcome in outcomes
     ] or [_nominal_content_title(topic) for topic in _topics(str(course["source_text"]))]
     feedback = _feedback(state, "curriculum_analysis")
-    objectives = _general_objectives_text(course, topics)
     outcome_ids = [str(outcome.get("id", "")) for outcome in outcomes if outcome.get("id")]
     result = {
         "summary": (
@@ -244,7 +227,6 @@ def analyse_curriculum(state: PrismState) -> dict[str, Any]:
             f"{course['duration_hours']} horas de trabalho previsto."
         ),
         "themes": topics,
-        "objectives": objectives,
         "contents": [
             {
                 "id": f"C{index + 1}",
@@ -635,7 +617,6 @@ def blank_artifact(stage: str, state: PrismState) -> Any:
         return {
             "summary": "",
             "themes": [],
-            "objectives": str(state.get("course", {}).get("general_aims", "") or ""),
             "contents": [],
         }
     if stage == "assessment_activities":
@@ -1847,7 +1828,7 @@ DETERMINISTIC_GENERATORS = {
 
 
 GENERATION_EVENTS = {
-    "curriculum_analysis": "Conteúdos e objetivos curriculares estruturados.",
+    "curriculum_analysis": "Conteúdos curriculares estruturados.",
     "learning_outcomes": "Resultados de aprendizagem formulados.",
     "teaching_activities": "Atividades de ensino-aprendizagem propostas.",
     "assessment_activities": "Tarefas e critérios de avaliação propostos.",

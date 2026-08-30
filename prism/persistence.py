@@ -31,9 +31,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 27:
+    if previous_version < 28:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 27
+    state["schema_version"] = 28
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -198,10 +198,11 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
 
     analysis = state.get("curriculum_analysis")
 
-    def migrate_curriculum_objectives(curriculum: Any) -> None:
+    def remove_curriculum_objectives(curriculum: Any) -> str:
         if not isinstance(curriculum, dict):
-            return
-        value = curriculum.get("objectives", "")
+            return ""
+        value = curriculum.pop("objectives", curriculum.pop("aims", ""))
+        curriculum.pop("aims", None)
         if isinstance(value, list):
             statements = [
                 str(item.get("statement", "")).strip()
@@ -213,23 +214,26 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             text = str(value.get("statement", "")).strip()
         else:
             text = str(value or "").strip()
-        curriculum["objectives"] = text or str(
-            curriculum.get("aims")
-            or course.get("general_aims")
-            or "Desenvolver os conhecimentos e competências previstos."
-        ).strip()
+        return text
 
-    migrate_curriculum_objectives(analysis)
+    migrated_general_aims = remove_curriculum_objectives(analysis)
+    if migrated_general_aims:
+        course["general_aims"] = migrated_general_aims
     if isinstance(version_map, dict):
         for curriculum_version in version_map.get("curriculum_analysis", []):
-            migrate_curriculum_objectives(curriculum_version)
+            remove_curriculum_objectives(curriculum_version)
     for snapshot in state.get("revision_snapshots", []):
         if isinstance(snapshot, dict):
-            migrate_curriculum_objectives(
+            remove_curriculum_objectives(
                 snapshot.get("artifacts", {}).get("curriculum_analysis")
                 if isinstance(snapshot.get("artifacts"), dict)
                 else None
             )
+    for proposal in state.get("ai_proposals", []):
+        if not isinstance(proposal, dict) or proposal.get("stage") != "curriculum_analysis":
+            continue
+        for key in ("before", "after", "edited_after"):
+            remove_curriculum_objectives(proposal.get(key))
 
     if isinstance(analysis, dict):
         analysis.setdefault(

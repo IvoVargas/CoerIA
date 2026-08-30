@@ -343,7 +343,6 @@ def render_artifact(
             ]
             for item in contents
         ]
-        objectives = str(artifact.get("objectives", "")).strip()
         source_rows = [
             [
                 item.get("source", "—"),
@@ -365,9 +364,7 @@ def render_artifact(
         )
         return (
             header
-            + f"{artifact['summary']}\n\n## Objetivos gerais\n\n"
-            + (objectives or "A confirmar pelo docente.")
-            + "\n\n## Conteúdos identificados\n\n"
+            + f"{artifact['summary']}\n\n## Conteúdos identificados\n\n"
             + _table(
                 ["ID", "Resultados", "Tema", "Descrição do tema"],
                 content_rows,

@@ -369,12 +369,10 @@ def test_learning_outcome_editor_matches_the_visible_table() -> None:
     )
 
 
-def test_curriculum_editor_uses_free_text_objectives_and_links_contents() -> None:
+def test_curriculum_editor_only_links_curricular_contents() -> None:
     layout = editor_layout("curriculum_analysis")
 
-    objectives = next(field for field in layout.fields if field.path == ("objectives",))
-    assert objectives.label == "Objetivos gerais"
-    assert objectives.kind == "long"
+    assert [field.path for field in layout.fields] == [("summary",)]
     assert [table.title for table in layout.tables] == ["Conteúdos identificados"]
     outcome_field = next(
         field for field in layout.tables[0].fields if field.key == "outcome_ids"

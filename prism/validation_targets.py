@@ -27,7 +27,6 @@ def available_validation_targets(stage: str, artifact: Any) -> list[dict[str, st
 
     if stage == "curriculum_analysis" and isinstance(artifact, dict):
         add("__summary__", "Síntese curricular")
-        add("__objectives__", "Objetivos gerais")
         for item in artifact.get("contents", []):
             if isinstance(item, dict):
                 identifier = _clean_identifier(item.get("id"))

@@ -67,7 +67,7 @@ HUMAN_KEY_LABELS = {
     "general_aims": "objetivos_gerais",
     "bibliography": "bibliografia",
     "learning_outcomes": "resultados_de_aprendizagem",
-    "curriculum_analysis": "conteudos_e_objetivos_curriculares",
+    "curriculum_analysis": "conteudos_curriculares",
     "teaching_activities": "atividades_de_ensino_aprendizagem",
     "assessment_activities": "tarefas_e_criterios_de_avaliacao",
     "pedagogical_design": "planeamento_das_aulas",
@@ -81,7 +81,6 @@ HUMAN_KEY_LABELS = {
     "content_links": "ligacoes_a_conteudos",
     "content_id": "id_conteudo",
     "importance": "importancia",
-    "objectives": "objetivos_gerais",
     "contents": "conteudos",
     "title": "titulo",
     "description": "descricao",
@@ -366,7 +365,7 @@ def _human_readable_state(
             "resultados_de_aprendizagem": _humanize_keys(
                 state.get("learning_outcomes", [])
             ),
-            "conteudos_e_objetivos_curriculares": _humanize_keys(
+            "conteudos_curriculares": _humanize_keys(
                 state.get("curriculum_analysis", {})
             ),
             "atividades_de_ensino_aprendizagem": _humanize_keys(

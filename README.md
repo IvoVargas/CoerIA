@@ -19,10 +19,11 @@ determinística, não de uma decisão declarada pelo modelo.
 
 ## Fluxo
 
-1. dados iniciais, fontes e caracterização da unidade curricular;
+1. dados iniciais, fontes, caracterização da unidade curricular e objetivos
+   gerais opcionais em texto livre;
 2. resultados de aprendizagem com nível SOLO ou Bloom, um único verbo de ação
    principal e pressupostos contextuais opcionais;
-3. conteúdos com IDs associados aos resultados formulados e objetivos gerais em texto livre;
+3. conteúdos com IDs associados aos resultados formulados;
 4. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa e
    associação explícita tanto às atividades de ensino-aprendizagem que as
@@ -172,15 +173,14 @@ caracterização numa única página. O tipo de formação fornece o enquadramen
 anteriormente pedido como público-alvo e o semestre obrigatório inicia-se em
 `1.º semestre`. O fornecedor é escolhido junto das ações facultativas de IA e a
 duração total é calculada automaticamente pela soma das horas de contacto e do
-trabalho autónomo. Os objetivos gerais não são pedidos nesta configuração
-inicial: são formulados ou introduzidos apenas na etapa **Conteúdos e objetivos
-curriculares**, evitando duplicação e mantendo essa etapa disponível para uma
-primeira proposta completa por IA.
+trabalho autónomo. Os **Objetivos gerais** são recolhidos neste formulário num
+campo opcional de texto livre. Exprimem a finalidade ampla da unidade curricular
+e permanecem distintos do **Texto de base e fontes de referência**, que fornece
+apenas contexto documental. Não recebem IDs nem constituem uma ligação estrutural
+do alinhamento.
 
-Nesta etapa, os objetivos gerais e as descrições dos conteúdos usam linguagens
-deliberadamente distintas. Os objetivos exprimem finalidades e podem começar por
-verbos; cada linha usa **Tema** para a designação breve e **Descrição do tema**
-para caracterizar, em formulação expositiva, os
+Na etapa **Conteúdos curriculares**, cada linha usa **Tema** para a designação
+breve e **Descrição do tema** para caracterizar, em formulação expositiva, os
 conceitos, princípios, processos, aplicações e limites da matéria. As propostas
 da IA que iniciem estas descrições por verbos de ação ou de desempenho são
 rejeitadas para reformulação, evitando que a tabela repita objetivos ou
