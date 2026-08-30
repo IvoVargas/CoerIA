@@ -129,7 +129,7 @@ STAGE_ROLES = {
 
 STAGE_REQUIREMENTS = {
     "curriculum_analysis": (
-        "Objeto com summary, themes e contents. contents contém "
+        "Objeto com contents. contents contém "
         "4 a 10 objetos {id, title, description, outcome_ids}, com IDs C1, C2, ...; "
         "cada outcome_ids dos conteúdos usa exclusivamente "
         "resultados aprovados na etapa anterior. Em cada conteúdo, title é uma "
@@ -257,8 +257,6 @@ def _schema_for(
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "summary": string,
-                "themes": {"type": "array", "items": string},
                 "contents": {
                     "type": "array",
                     "items": {
@@ -274,7 +272,7 @@ def _schema_for(
                     },
                 },
             },
-            "required": ["summary", "themes", "contents"],
+            "required": ["contents"],
         },
         "learning_outcomes": {
             "type": "array",

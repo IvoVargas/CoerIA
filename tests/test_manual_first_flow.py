@@ -182,7 +182,14 @@ def test_historical_version_becomes_active_without_creating_a_new_version() -> N
         },
     )
     curriculum = deepcopy(state["curriculum_analysis"])
-    curriculum["summary"] = "Rascunho curricular posterior."
+    curriculum["contents"] = [
+        {
+            "id": "C1",
+            "outcome_ids": ["RA1"],
+            "title": "Algoritmos",
+            "description": "Conteúdo curricular revisto.",
+        }
+    ]
     state = save_manual_draft(state, "curriculum_analysis", curriculum)
     state["final_validation"] = {"passed": True, "checks": []}
     state["versions"]["final_validation"] = [deepcopy(state["final_validation"])]

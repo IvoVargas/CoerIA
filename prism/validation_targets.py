@@ -26,7 +26,6 @@ def available_validation_targets(stage: str, artifact: Any) -> list[dict[str, st
             targets.append({"key": clean_key, "label": label})
 
     if stage == "curriculum_analysis" and isinstance(artifact, dict):
-        add("__summary__", "Síntese curricular")
         for item in artifact.get("contents", []):
             if isinstance(item, dict):
                 identifier = _clean_identifier(item.get("id"))

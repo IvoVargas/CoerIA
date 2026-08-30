@@ -330,10 +330,7 @@ def render_artifact(
     )
 
     if stage == "curriculum_analysis":
-        contents = artifact.get("contents") or [
-            {"id": f"C{index + 1}", "title": theme, "description": theme}
-            for index, theme in enumerate(artifact["themes"])
-        ]
+        contents = artifact.get("contents", [])
         content_rows = [
             [
                 item["id"],
@@ -364,7 +361,7 @@ def render_artifact(
         )
         return (
             header
-            + f"{artifact['summary']}\n\n## Conteúdos identificados\n\n"
+            + "## Conteúdos identificados\n\n"
             + _table(
                 ["ID", "Resultados", "Tema", "Descrição do tema"],
                 content_rows,

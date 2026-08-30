@@ -791,18 +791,22 @@ class AGIRSoloInterface:
             list(TAXONOMY_CHOICES),
             value="SOLO",
         ).props("spread no-caps").classes("full-control max-w-xl")
+        ui.separator().classes("my-5")
+        general_aims_heading = ui.label("Objetivos gerais").classes("section-title")
+        general_aims_heading.mark("initial-general-aims-heading")
+        ui.label(
+            "Registe, se aplicável, a finalidade ampla da unidade curricular. "
+            "Este enquadramento é distinto do texto de base e não constitui um "
+            "resultado de aprendizagem."
+        ).classes("muted mb-3")
         self.fields["general_aims"] = ui.textarea(
-            "Objetivos gerais (opcional)",
+            "Finalidade da unidade curricular (opcional)",
             placeholder=(
                 "Indique, em termos amplos, a finalidade da unidade curricular. "
                 "Não formule aqui os resultados de aprendizagem."
             ),
-        ).props("outlined autogrow").classes("full-control mt-4")
+        ).props("outlined autogrow").classes("full-control")
         self.fields["general_aims"].mark("initial-general-aims")
-        ui.label(
-            "Este enquadramento orienta a formulação posterior dos resultados, mas "
-            "não participa diretamente nas ligações do alinhamento."
-        ).classes("text-xs muted")
 
     def _build_sources_step(self) -> None:
         ui.label("Texto de base e fontes de referência").classes("section-title")
@@ -4006,11 +4010,6 @@ class AGIRSoloInterface:
             )
 
         if stage == "curriculum_analysis" and isinstance(artifact, dict):
-            special = {
-                "__summary__": f"{root} .artifact-markdown",
-            }
-            if target_key in special:
-                return special[target_key], ""
             index = matching_index(artifact.get("contents", []), "id")
             return (row_selector(index), "") if index is not None else (heading, "")
         if stage in {

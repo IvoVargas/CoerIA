@@ -240,7 +240,16 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Texto de base e fontes de referência")
     await user.should_see("Informação de referência para a unidade curricular")
     await user.should_see("Nome da unidade curricular ou ação de formação")
-    await user.should_see("Objetivos gerais (opcional)")
+    await user.should_see("Objetivos gerais")
+    await user.should_see("Finalidade da unidade curricular (opcional)")
+    aims_heading = next(
+        iter(user.find(marker="initial-general-aims-heading").elements)
+    )
+    assert (
+        interfaces[-1].fields["taxonomy_type"].id
+        < aims_heading.id
+        < interfaces[-1].fields["general_aims"].id
+    )
     assert user.find(marker="initial-general-aims").elements
     await user.should_see("Curso ou programa em que se integra")
     await user.should_see("Caracterização da unidade curricular")
@@ -710,7 +719,6 @@ async def test_curriculum_content_ids_are_readonly_in_the_editor(user: User) -> 
         )
     )
     state["curriculum_analysis"] = {
-        "summary": "Síntese.",
         "contents": [
             {
                 "id": "C1",

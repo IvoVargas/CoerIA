@@ -52,9 +52,7 @@ def _field(key: str, label: str, kind: str = "text") -> FieldSpec:
 
 EDITOR_LAYOUTS: dict[str, EditorLayout] = {
     "curriculum_analysis": EditorLayout(
-        fields=(
-            ScalarSpec(("summary",), "Síntese", "long"),
-        ),
+        fields=(),
         tables=(
             TableSpec(
                 "Conteúdos identificados",

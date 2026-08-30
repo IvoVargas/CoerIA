@@ -372,7 +372,7 @@ def test_learning_outcome_editor_matches_the_visible_table() -> None:
 def test_curriculum_editor_only_links_curricular_contents() -> None:
     layout = editor_layout("curriculum_analysis")
 
-    assert [field.path for field in layout.fields] == [("summary",)]
+    assert layout.fields == ()
     assert [table.title for table in layout.tables] == ["Conteúdos identificados"]
     outcome_field = next(
         field for field in layout.tables[0].fields if field.key == "outcome_ids"

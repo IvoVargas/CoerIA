@@ -278,6 +278,8 @@ class WorkflowTests(unittest.TestCase):
         }
         self.assertEqual(content_outcome_ids, approved_outcome_ids)
         self.assertNotIn("objectives", state["curriculum_analysis"])
+        self.assertNotIn("summary", state["curriculum_analysis"])
+        self.assertNotIn("themes", state["curriculum_analysis"])
         self.assertTrue(
             all(
                 item["outcome_ids"]
@@ -504,6 +506,10 @@ class WorkflowTests(unittest.TestCase):
             "bibliography",
         ):
             state["course"].pop(key, None)
+        state["curriculum_analysis"]["summary"] = "Síntese curricular legada."
+        state["curriculum_analysis"]["themes"] = [
+            item["title"] for item in state["curriculum_analysis"]["contents"]
+        ]
         state["curriculum_analysis"].pop("contents", None)
         state["curriculum_analysis"].pop("objectives", None)
 
@@ -517,6 +523,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(restored["ai_provider"], "OpenAI")
         self.assertTrue(restored["curriculum_analysis"]["contents"])
         self.assertNotIn("objectives", restored["curriculum_analysis"])
+        self.assertNotIn("summary", restored["curriculum_analysis"])
+        self.assertNotIn("themes", restored["curriculum_analysis"])
         self.assertEqual(restored["course"]["general_aims"], "")
         self.assertTrue(
             restored["curriculum_analysis"]["contents"][0]["outcome_ids"]
@@ -631,6 +639,80 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("objectives", restored["ai_proposals"][0]["before"])
         self.assertNotIn("objectives", restored["ai_proposals"][0]["after"])
+
+    def test_schema_28_removes_redundant_curriculum_fields_from_session_history(
+        self,
+    ) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        state["schema_version"] = 28
+        titles = [item["title"] for item in state["curriculum_analysis"]["contents"]]
+
+        def add_redundant_fields(artifact: dict) -> dict:
+            artifact["summary"] = "Síntese curricular redundante."
+            artifact["themes"] = deepcopy(titles)
+            return artifact
+
+        add_redundant_fields(state["curriculum_analysis"])
+        add_redundant_fields(state["versions"]["curriculum_analysis"][-1])
+        state["revision_snapshots"] = [
+            {
+                "artifacts": {
+                    "curriculum_analysis": add_redundant_fields(
+                        deepcopy(state["curriculum_analysis"])
+                    )
+                }
+            }
+        ]
+        state["ai_proposals"] = [
+            {
+                "id": "P1",
+                "stage": "curriculum_analysis",
+                "scope_path": ["summary"],
+                "status": "pending",
+                "before": "Síntese atual.",
+                "after": "Síntese proposta.",
+            },
+            {
+                "id": "P2",
+                "stage": "curriculum_analysis",
+                "scope_path": [],
+                "status": "pending",
+                "before": add_redundant_fields(
+                    deepcopy(state["curriculum_analysis"])
+                ),
+                "after": add_redundant_fields(
+                    deepcopy(state["curriculum_analysis"])
+                ),
+            },
+        ]
+        expected_contents = deepcopy(state["curriculum_analysis"]["contents"])
+        expected_stage = state["current_stage"]
+        expected_status = state["status"]
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(state)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(restored["current_stage"], expected_stage)
+        self.assertEqual(restored["status"], expected_status)
+        self.assertEqual(restored["curriculum_analysis"]["contents"], expected_contents)
+        for artifact in (
+            restored["curriculum_analysis"],
+            restored["versions"]["curriculum_analysis"][-1],
+            restored["revision_snapshots"][0]["artifacts"]["curriculum_analysis"],
+            restored["ai_proposals"][1]["before"],
+            restored["ai_proposals"][1]["after"],
+        ):
+            self.assertNotIn("summary", artifact)
+            self.assertNotIn("themes", artifact)
+        self.assertEqual(restored["ai_proposals"][0]["status"], "superseded")
+        self.assertEqual(
+            restored["ai_proposals"][0]["decision"],
+            "invalidada_por_migracao_curricular",
+        )
 
     def test_schema_16_session_is_migrated_to_biggs_stage_dependencies(self) -> None:
         state = create_session(self.course, agent=self.agent)
@@ -2354,6 +2436,12 @@ class WorkflowTests(unittest.TestCase):
         ]["items"]
         self.assertEqual(set(outcome_items["enum"]), allowed_outcomes)
         self.assertNotIn("objectives", curriculum_properties)
+        self.assertNotIn("summary", curriculum_properties)
+        self.assertNotIn("themes", curriculum_properties)
+        self.assertEqual(
+            curriculum_schema["properties"]["artifact"]["required"],
+            ["contents"],
+        )
 
         state = review_current_stage(state, "approve", agent=self.agent)
         teaching_schema = _schema_for("teaching_activities", state)

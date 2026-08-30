@@ -179,9 +179,11 @@ e permanecem distintos do **Texto de base e fontes de referência**, que fornece
 apenas contexto documental. Não recebem IDs nem constituem uma ligação estrutural
 do alinhamento.
 
-Na etapa **Conteúdos curriculares**, cada linha usa **Tema** para a designação
-breve e **Descrição do tema** para caracterizar, em formulação expositiva, os
-conceitos, princípios, processos, aplicações e limites da matéria. As propostas
+Na etapa **Conteúdos curriculares**, a autoria concentra-se numa única tabela,
+sem uma síntese global ou uma lista de temas duplicada. Cada linha usa **Tema**
+para a designação breve e **Descrição do tema** para caracterizar, em
+formulação expositiva, os conceitos, princípios, processos, aplicações e limites
+da matéria. As propostas
 da IA que iniciem estas descrições por verbos de ação ou de desempenho são
 rejeitadas para reformulação, evitando que a tabela repita objetivos ou
 resultados de aprendizagem.

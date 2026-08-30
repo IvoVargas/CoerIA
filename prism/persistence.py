@@ -31,9 +31,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 28:
+    if previous_version < 29:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 28
+    state["schema_version"] = 29
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -198,6 +198,57 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
 
     analysis = state.get("curriculum_analysis")
 
+    def remove_redundant_curriculum_fields(curriculum: Any) -> None:
+        if not isinstance(curriculum, dict):
+            return
+        contents = curriculum.get("contents")
+        themes = curriculum.get("themes")
+        if (
+            not isinstance(contents, list) or not contents
+        ) and isinstance(themes, list):
+            migrated_contents = [
+                {
+                    "id": f"C{index + 1}",
+                    "title": str(theme).strip(),
+                    "description": str(theme).strip(),
+                }
+                for index, theme in enumerate(themes)
+                if str(theme).strip()
+            ]
+            if migrated_contents:
+                curriculum["contents"] = migrated_contents
+        curriculum.pop("summary", None)
+        curriculum.pop("themes", None)
+
+    remove_redundant_curriculum_fields(analysis)
+    if isinstance(version_map, dict):
+        for curriculum_version in version_map.get("curriculum_analysis", []):
+            remove_redundant_curriculum_fields(curriculum_version)
+    for snapshot in state.get("revision_snapshots", []):
+        if isinstance(snapshot, dict):
+            remove_redundant_curriculum_fields(
+                snapshot.get("artifacts", {}).get("curriculum_analysis")
+                if isinstance(snapshot.get("artifacts"), dict)
+                else None
+            )
+    for proposal in state.get("ai_proposals", []):
+        if (
+            not isinstance(proposal, dict)
+            or proposal.get("stage") != "curriculum_analysis"
+        ):
+            continue
+        scope_path = proposal.get("scope_path", [])
+        if (
+            isinstance(scope_path, list)
+            and scope_path
+            and scope_path[0] in {"summary", "themes"}
+            and proposal.get("status") == "pending"
+        ):
+            proposal["status"] = "superseded"
+            proposal["decision"] = "invalidada_por_migracao_curricular"
+        for key in ("before", "after", "edited_after"):
+            remove_redundant_curriculum_fields(proposal.get(key))
+
     def remove_curriculum_objectives(curriculum: Any) -> str:
         if not isinstance(curriculum, dict):
             return ""
@@ -230,19 +281,16 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 else None
             )
     for proposal in state.get("ai_proposals", []):
-        if not isinstance(proposal, dict) or proposal.get("stage") != "curriculum_analysis":
+        if (
+            not isinstance(proposal, dict)
+            or proposal.get("stage") != "curriculum_analysis"
+        ):
             continue
         for key in ("before", "after", "edited_after"):
             remove_curriculum_objectives(proposal.get(key))
 
     if isinstance(analysis, dict):
-        analysis.setdefault(
-            "contents",
-            [
-                {"id": f"C{index + 1}", "title": theme, "description": theme}
-                for index, theme in enumerate(analysis.get("themes", []))
-            ],
-        )
+        analysis.setdefault("contents", [])
         content_by_theme = {
             str(item.get("title", "")).casefold(): item.get("id", "")
             for item in analysis.get("contents", [])
@@ -307,6 +355,11 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(snapshot.get("artifacts"), dict)
                 else None
             )
+    for proposal in state.get("ai_proposals", []):
+        if not isinstance(proposal, dict) or proposal.get("stage") != "curriculum_analysis":
+            continue
+        for key in ("before", "after", "edited_after"):
+            migrate_curriculum_relations(proposal.get(key))
 
     def migrate_assessment_rows(activities: Any) -> None:
         if not isinstance(activities, list):

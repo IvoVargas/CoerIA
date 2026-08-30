@@ -138,7 +138,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -222,11 +222,6 @@ def analyse_curriculum(state: PrismState) -> dict[str, Any]:
     feedback = _feedback(state, "curriculum_analysis")
     outcome_ids = [str(outcome.get("id", "")) for outcome in outcomes if outcome.get("id")]
     result = {
-        "summary": (
-            f"Unidade curricular orientada para {course['audience']}, com "
-            f"{course['duration_hours']} horas de trabalho previsto."
-        ),
-        "themes": topics,
         "contents": [
             {
                 "id": f"C{index + 1}",
@@ -615,8 +610,6 @@ def blank_artifact(stage: str, state: PrismState) -> Any:
         return []
     if stage == "curriculum_analysis":
         return {
-            "summary": "",
-            "themes": [],
             "contents": [],
         }
     if stage == "assessment_activities":
