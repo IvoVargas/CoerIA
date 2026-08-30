@@ -706,6 +706,11 @@ def update_initial_context(
 ) -> PrismState:
     """Atualiza a configuração inicial sem eliminar artefactos já produzidos."""
 
+    if state.get("status") == "completed":
+        raise ValueError(
+            "A sessão concluída está em modo de consulta. Reabra-a explicitamente "
+            "antes de alterar os dados iniciais."
+        )
     updated = ensure_manual_artifacts(deepcopy(state))
     previous_course = deepcopy(updated.get("course", {}))
     previous_provider = str(updated.get("ai_provider", ""))

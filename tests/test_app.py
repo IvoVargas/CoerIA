@@ -1574,6 +1574,10 @@ async def test_completed_view_offers_word_latex_or_both(
     await user.should_see(app.EXPORT_DOCUMENT_FORMAT_CHOICES["latex"])
     await user.should_see(app.EXPORT_DOCUMENT_FORMAT_CHOICES["both"])
     assert interfaces[-1].export_document_format == "word"
+    initial_item = next(iter(user.find(marker="manual-stage-initial_data").elements))
+    assert initial_item.tag == "div"
+    assert "selectable" not in initial_item._classes
+    assert "click" not in initial_item._event_listeners
 
 
 @pytest.mark.asyncio
@@ -1588,16 +1592,29 @@ async def test_completed_manual_session_requires_explicit_reopen_dialog(
     )
     state = navigate_to_stage(state, "final_validation")
     state["status"] = "completed"
+    interfaces: list[app.AGIRSoloInterface] = []
 
     @ui.page("/_test_manual_completed_reopen")
     def manual_completed_page():
         interface = app.AGIRSoloInterface()
         interface.state = state
         interface.show_workspace()
+        interfaces.append(interface)
 
     await user.open("/_test_manual_completed_reopen")
 
     await user.should_see("Sessão concluída")
+    initial_item = next(iter(user.find(marker="manual-stage-initial_data").elements))
+    assert initial_item.tag == "div"
+    assert "selectable" not in initial_item._classes
+    assert "click" not in initial_item._event_listeners
+    with patch.object(interfaces[-1], "_show_error") as show_error:
+        interfaces[-1].show_initial_session_editor()
+    show_error.assert_called_once()
+    assert "modo de consulta" in str(show_error.call_args.args[0])
+    assert interfaces[-1].workspace_view.visible
+    assert not interfaces[-1].initial_view.visible
+    assert interfaces[-1].state["status"] == "completed"
     user.find(marker="reopen-completed-session").click()
     await user.should_see("REABERTURA EXPLÍCITA")
     await user.should_see("Motivo da reabertura")

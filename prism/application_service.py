@@ -292,6 +292,11 @@ class ApplicationService:
 
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
+        if state.get("status") == "completed":
+            raise ValueError(
+                "A sessão concluída está em modo de consulta. Reabra-a explicitamente "
+                "antes de alterar os dados iniciais."
+            )
         if progress_callback is not None:
             progress_callback("A validar as alterações aos dados iniciais…")
 

@@ -22,6 +22,7 @@ from prism.workflow import (
     restore_stage_version,
     review_current_stage,
     save_manual_draft,
+    update_initial_context,
     update_manual_resource_settings,
     version_restore_impact,
     verify_stage_with_ai,
@@ -672,6 +673,29 @@ def test_completed_manual_session_cannot_be_reopened_by_navigation_click() -> No
     assert reopened["stage_statuses"]["final_validation"] == "pending"
 
 
+def test_completed_session_rejects_direct_initial_context_update() -> None:
+    state = create_session(_course())
+    state["status"] = "completed"
+    original = deepcopy(state)
+
+    with pytest.raises(ValueError, match="modo de consulta"):
+        update_initial_context(
+            state,
+            CourseInput.create(
+                "Programação alterada",
+                state["course"]["source_text"],
+                taxonomy_type=state["course"]["taxonomy_type"],
+            ),
+            ai_provider=state["ai_provider"],
+            source_input_text=state.get("source_input_text", ""),
+            source_original_text=state.get("source_original_text", ""),
+            source_reduction=state.get("source_reduction", {}),
+            source_images=state.get("source_images", []),
+        )
+
+    assert state == original
+
+
 def test_long_sources_can_start_manual_authoring_without_ai_reduction() -> None:
     source = "Conteúdo curricular. " * 8_000
     with patch("prism.source_reduction._provider_client") as provider:
@@ -714,6 +738,24 @@ def test_initial_data_update_preserves_artifacts_and_requires_review(tmp_path) -
     assert updated["audit"][-1]["stage"] == "Dados iniciais"
     assert service.load_session(updated["session_id"])["course"]["unit_name"] == (
         "Programação corrigida"
+    )
+
+
+def test_completed_session_rejects_initial_data_service_update(tmp_path) -> None:
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "completed-initial.db"))
+    state = create_session(_course())
+    state["status"] = "completed"
+    state = service._persist(state)
+    original = deepcopy(state)
+    form = service.restored_initial_fields(state)
+    form["unit_name"] = "Programação alterada"
+
+    with pytest.raises(ValueError, match="modo de consulta"):
+        service.update_session_initial_data(state, form)
+
+    assert state == original
+    assert service.load_session(state["session_id"])["course"]["unit_name"] == (
+        original["course"]["unit_name"]
     )
 
 

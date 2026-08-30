@@ -1506,6 +1506,14 @@ class AGIRSoloInterface:
     def show_initial_session_editor(self) -> None:
         if not self.state:
             return
+        if self.state.get("status") == "completed":
+            self._show_error(
+                ValueError(
+                    "A sessão concluída está em modo de consulta. Reabra-a "
+                    "explicitamente antes de editar os dados iniciais."
+                )
+            )
+            return
         self._set_initial_view_mode(True)
         self._set_form_data(self.service.restored_initial_fields(self.state))
         self.uploaded_files.clear()
@@ -1917,11 +1925,16 @@ class AGIRSoloInterface:
         with ui.element("div").classes("stage-track").style(
             f"--stage-count: {DISPLAY_STAGE_COUNT}"
         ):
+            completed = state.get("status") == "completed"
             self._render_initial_data_track_item(
                 current=False,
-                selectable=True,
+                selectable=not completed,
                 status="approved",
-                status_label="Concluído · selecionar para editar",
+                status_label=(
+                    "Sessão concluída · modo de consulta"
+                    if completed
+                    else "Concluído · selecionar para editar"
+                ),
             )
             for index, stage in enumerate(STAGE_ORDER):
                 stored_status = stored_statuses.get(stage)
@@ -1993,9 +2006,13 @@ class AGIRSoloInterface:
         ):
             self._render_initial_data_track_item(
                 current=False,
-                selectable=True,
+                selectable=not completed,
                 status="approved",
-                status_label="Concluído · selecionar para editar",
+                status_label=(
+                    "Sessão concluída · modo de consulta"
+                    if completed
+                    else "Concluído · selecionar para editar"
+                ),
             )
             for index, stage in enumerate(STAGE_ORDER):
                 stored_status = stored_statuses.get(stage, "empty")
