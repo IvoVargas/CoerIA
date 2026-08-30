@@ -360,6 +360,9 @@ def _human_readable_state(
             ),
         },
         "etapas": {
+            "pressupostos_para_resultados_opcionais": deepcopy(
+                state.get("learning_outcome_assumptions", [])
+            ),
             "resultados_de_aprendizagem": _humanize_keys(
                 state.get("learning_outcomes", [])
             ),

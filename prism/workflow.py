@@ -67,6 +67,7 @@ class PrismState(TypedDict, total=False):
     source_images: list[dict[str, Any]]
     source_attachments: list[dict[str, Any]]
     source_reduction: dict[str, Any]
+    learning_outcome_assumptions: list[str]
     generated_images: list[dict[str, Any]]
     ai_image_generation_enabled: bool
     ai_provider: str
@@ -137,7 +138,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -252,10 +253,6 @@ def analyse_curriculum(state: PrismState) -> dict[str, Any]:
                 "outcome_ids": [outcome_ids[index]] if index < len(outcome_ids) else [],
             }
             for index, topic in enumerate(topics)
-        ],
-        "assumptions": [
-            "Os conteúdos fornecidos pelo docente constituem a fonte primária.",
-            "A progressão parte de conceitos fundamentais para aplicação e reflexão.",
         ],
         "feedback_considered": feedback or None,
     }
@@ -640,7 +637,6 @@ def blank_artifact(stage: str, state: PrismState) -> Any:
             "themes": [],
             "objectives": str(state.get("course", {}).get("general_aims", "") or ""),
             "contents": [],
-            "assumptions": [],
         }
     if stage == "assessment_activities":
         return []
@@ -690,6 +686,9 @@ def ensure_manual_artifacts(state: PrismState) -> PrismState:
     for stage in AUTHORING_STAGES:
         if stage not in state:
             state[stage] = blank_artifact(stage, state)
+    state["learning_outcome_assumptions"] = _clean_learning_outcome_assumptions(
+        state.get("learning_outcome_assumptions", [])
+    )
     state.setdefault("ai_proposals", [])
     state.setdefault("ai_reviews", {})
     return state
@@ -799,6 +798,33 @@ def _validate_draft_shape(stage: str, artifact: Any) -> None:
         raise ValueError(f"A etapa {STAGE_LABELS[stage]} deve conservar {label}.")
 
 
+def _clean_learning_outcome_assumptions(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return list(
+        dict.fromkeys(
+            str(item).strip()
+            for item in value
+            if str(item).strip()
+        )
+    )
+
+
+def _version_metadata(
+    state: PrismState,
+    stage: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    enriched = deepcopy(metadata)
+    if stage == "learning_outcomes":
+        enriched["stage_context"] = {
+            "learning_outcome_assumptions": _clean_learning_outcome_assumptions(
+                state.get("learning_outcome_assumptions", [])
+            )
+        }
+    return enriched
+
+
 def _append_version(
     state: PrismState,
     stage: str,
@@ -823,7 +849,9 @@ def _append_version(
     state["active_versions"] = active_versions
 
     generation_metadata = deepcopy(state.get("generation_metadata", {}))
-    generation_metadata.setdefault(stage, []).append(deepcopy(metadata))
+    generation_metadata.setdefault(stage, []).append(
+        _version_metadata(state, stage, metadata)
+    )
     state["generation_metadata"] = generation_metadata
 
 
@@ -938,6 +966,7 @@ def save_manual_draft(
     reason: str = "",
     *,
     metadata: dict[str, Any] | None = None,
+    stage_context: dict[str, Any] | None = None,
 ) -> PrismState:
     """Guarda um rascunho incompleto e preserva sempre os artefactos posteriores."""
 
@@ -946,6 +975,17 @@ def save_manual_draft(
     updated = ensure_manual_artifacts(deepcopy(state))
     edited_artifact = deepcopy(artifact)
     _validate_draft_shape(target_stage, edited_artifact)
+    context_changed = False
+    edited_assumptions = _clean_learning_outcome_assumptions(
+        updated.get("learning_outcome_assumptions", [])
+    )
+    if target_stage == "learning_outcomes" and stage_context is not None:
+        edited_assumptions = _clean_learning_outcome_assumptions(
+            stage_context.get("learning_outcome_assumptions", [])
+        )
+        context_changed = edited_assumptions != _clean_learning_outcome_assumptions(
+            updated.get("learning_outcome_assumptions", [])
+        )
     if target_stage == "learning_outcomes":
         edited_artifact = normalize_learning_outcome_ids(
             edited_artifact,
@@ -994,7 +1034,7 @@ def save_manual_draft(
                 "component_ids",
                 id_mapping,
             )
-    if edited_artifact == updated.get(target_stage):
+    if edited_artifact == updated.get(target_stage) and not context_changed:
         raise ValueError("Não foram detetadas alterações para guardar.")
     if target_stage == "resources":
         selected_types = validate_resource_types(updated.get("resource_types", []))
@@ -1013,6 +1053,8 @@ def save_manual_draft(
 
     clean_reason = reason.strip() or "Conteúdo alterado diretamente pelo docente."
     _snapshot_without_invalidation(updated, target_stage, clean_reason)
+    if target_stage == "learning_outcomes":
+        updated["learning_outcome_assumptions"] = edited_assumptions
     updated[target_stage] = edited_artifact
     updated.setdefault("feedback", {})[target_stage] = clean_reason
     _append_version(
@@ -1118,6 +1160,25 @@ def restore_stage_version(
         state["versions"][stage][int(impact["version_index"])]
     )
     restored = ensure_manual_artifacts(deepcopy(state))
+    if stage == "learning_outcomes":
+        metadata_versions = restored.get("generation_metadata", {}).get(stage, [])
+        version_index = int(impact["version_index"])
+        version_metadata = (
+            metadata_versions[version_index]
+            if 0 <= version_index < len(metadata_versions)
+            and isinstance(metadata_versions[version_index], dict)
+            else {}
+        )
+        stage_context = version_metadata.get("stage_context", {})
+        if (
+            isinstance(stage_context, dict)
+            and "learning_outcome_assumptions" in stage_context
+        ):
+            restored["learning_outcome_assumptions"] = (
+                _clean_learning_outcome_assumptions(
+                    stage_context.get("learning_outcome_assumptions", [])
+                )
+            )
     previous_resource_types = list(restored.get("resource_types", []))
     if stage == "resources":
         selected_types = validate_resource_types(
@@ -2167,7 +2228,9 @@ def _stage_node(stage: str, agent: PedagogicalAgent):
         if stage == "resources" and isinstance(artifact, dict):
             state_updates["generated_images"] = artifact.pop("_generated_images", [])
         metadata = deepcopy(state.get("generation_metadata", {}))
-        metadata.setdefault(stage, []).append(generation.metadata)
+        metadata.setdefault(stage, []).append(
+            _version_metadata(state, stage, generation.metadata)
+        )
         audit_update = _audit_update(
             state,
             stage,
@@ -2392,16 +2455,35 @@ def apply_manual_edit(
     target_stage: str,
     artifact: Any,
     reason: str = "",
+    *,
+    stage_context: dict[str, Any] | None = None,
 ) -> PrismState:
     """Guarda uma edição humana como nova versão, sem chamar um fornecedor de IA."""
 
     if is_manual_first(state):
-        return save_manual_draft(state, target_stage, artifact, reason)
+        return save_manual_draft(
+            state,
+            target_stage,
+            artifact,
+            reason,
+            stage_context=stage_context,
+        )
     if state.get("status") not in {"awaiting_review", "completed"}:
         raise ValueError("A sessão não está disponível para edição manual.")
     revision_impact(state, target_stage)
     edited_artifact = deepcopy(artifact)
-    if edited_artifact == state.get(target_stage):
+    edited_assumptions = _clean_learning_outcome_assumptions(
+        state.get("learning_outcome_assumptions", [])
+    )
+    context_changed = False
+    if target_stage == "learning_outcomes" and stage_context is not None:
+        edited_assumptions = _clean_learning_outcome_assumptions(
+            stage_context.get("learning_outcome_assumptions", [])
+        )
+        context_changed = edited_assumptions != _clean_learning_outcome_assumptions(
+            state.get("learning_outcome_assumptions", [])
+        )
+    if edited_artifact == state.get(target_stage) and not context_changed:
         raise ValueError("Não foram detetadas alterações para guardar.")
 
     updated = deepcopy(state)
@@ -2421,6 +2503,8 @@ def apply_manual_edit(
         clean_reason,
     )
     updated[target_stage] = edited_artifact
+    if target_stage == "learning_outcomes":
+        updated["learning_outcome_assumptions"] = edited_assumptions
     updated.setdefault("feedback", {})[target_stage] = clean_reason
 
     versions = deepcopy(updated.get("versions", {}))
@@ -2442,14 +2526,14 @@ def apply_manual_edit(
 
     generation_metadata = deepcopy(updated.get("generation_metadata", {}))
     generation_metadata.setdefault(target_stage, []).append(
-        {
+        _version_metadata(updated, target_stage, {
             "provider": "Docente",
             "model": "Edição manual",
             "duration_ms": 0,
             "total_tokens": 0,
             "validation_attempts": 1,
             "manual_edit": True,
-        }
+        })
     )
     updated["generation_metadata"] = generation_metadata
     stage_statuses = dict(updated.get("stage_statuses", {}))
@@ -2582,6 +2666,7 @@ def create_session(
         "resource_types": selected_resource_types,
         "generated_images": [],
         "source_reduction": deepcopy(source_reduction or {}),
+        "learning_outcome_assumptions": [],
         "ai_image_generation_enabled": bool(ai_image_generation_enabled),
         "ai_provider": validate_ai_provider(
             ai_provider or configured_ai_provider()

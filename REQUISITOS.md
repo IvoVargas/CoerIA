@@ -93,8 +93,8 @@ Disponibilizar a seguinte sequência pedagógica recomendada, mantendo todas as
 etapas navegáveis e editáveis:
 
 1. recolha e revisão dos dados iniciais, fontes e caracterização;
-2. formulação de resultados de aprendizagem com nível SOLO ou Bloom e um único
-   verbo de ação principal;
+2. formulação de resultados de aprendizagem com nível SOLO ou Bloom, um único
+   verbo de ação principal e pressupostos contextuais opcionais;
 3. estruturação de conteúdos associados aos resultados formulados
    e registo dos objetivos gerais em texto livre;
 4. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
@@ -118,6 +118,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 
 - Numerar os conteúdos com IDs estáveis.
 - Formular entre 4 e 10 resultados de aprendizagem, preferencialmente 5 a 7.
+- Permitir indicar, na etapa dos resultados, pressupostos contextuais opcionais
+  como conhecimentos prévios ou restrições que devam orientar a formulação. O
+  campo pode permanecer vazio, não pertence aos conteúdos curriculares e não
+  constitui um requisito para avançar.
 - Identificar os resultados exclusivamente como `RA1`, `RA2`, …; numa proposta
   completa, derivar estes IDs deterministicamente pela ordem das linhas. Na
   edição manual, apresentar o ID como campo não editável e atribuir o próximo

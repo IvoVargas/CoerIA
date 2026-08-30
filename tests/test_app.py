@@ -666,6 +666,8 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     user.find(marker="cancel-ai-assistance").click()
     user.find(marker="edit-artifact-content").click()
     await user.should_see("EDIÇÃO NA TABELA ATUAL")
+    await user.should_see("Pressupostos para a formulação")
+    assert user.find(marker="learning-outcome-assumptions").elements
     await user.should_see("Adicionar linha")
     assert interfaces[-1].manual_edit_stage == "learning_outcomes"
     user.find("Adicionar linha").click()
@@ -707,7 +709,6 @@ async def test_curriculum_content_ids_are_readonly_in_the_editor(user: User) -> 
     state["curriculum_analysis"] = {
         "summary": "Síntese.",
         "objectives": "Objetivos.",
-        "assumptions": [],
         "contents": [
             {
                 "id": "C1",

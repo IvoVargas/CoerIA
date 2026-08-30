@@ -32,7 +32,6 @@ def available_validation_targets(stage: str, artifact: Any) -> list[dict[str, st
             if isinstance(item, dict):
                 identifier = _clean_identifier(item.get("id"))
                 add(identifier, f"Tema {identifier}")
-        add("__assumptions__", "Pressupostos")
     elif stage in {
         "learning_outcomes",
         "teaching_activities",

@@ -109,6 +109,7 @@ def test_new_session_is_manual_first_and_does_not_build_an_ai_team() -> None:
     assert state["status"] == "drafting"
     assert state["current_stage"] == "learning_outcomes"
     assert state["orchestration"]["mode"] == "manual-first"
+    assert state["learning_outcome_assumptions"] == []
     assert all(stage in state for stage in STAGE_ORDER[:-1])
 
 
@@ -159,8 +160,26 @@ def test_historical_version_becomes_active_without_creating_a_new_version() -> N
     ]
     version_two = deepcopy(version_one)
     version_two[0]["statement"] = "Identificar os elementos essenciais de um algoritmo."
-    state = save_manual_draft(state, "learning_outcomes", version_one)
-    state = save_manual_draft(state, "learning_outcomes", version_two)
+    state = save_manual_draft(
+        state,
+        "learning_outcomes",
+        version_one,
+        stage_context={
+            "learning_outcome_assumptions": [
+                "Conhecimentos introdutórios de lógica."
+            ]
+        },
+    )
+    state = save_manual_draft(
+        state,
+        "learning_outcomes",
+        version_two,
+        stage_context={
+            "learning_outcome_assumptions": [
+                "Experiência prévia com pseudocódigo."
+            ]
+        },
+    )
     curriculum = deepcopy(state["curriculum_analysis"])
     curriculum["summary"] = "Rascunho curricular posterior."
     state = save_manual_draft(state, "curriculum_analysis", curriculum)
@@ -180,6 +199,9 @@ def test_historical_version_becomes_active_without_creating_a_new_version() -> N
     assert impact["was_completed"] is True
     assert "curriculum_analysis" in impact["affected_stages"]
     assert restored["learning_outcomes"] == version_one
+    assert restored["learning_outcome_assumptions"] == [
+        "Conhecimentos introdutórios de lógica."
+    ]
     assert restored["versions"]["learning_outcomes"][1] == version_two
     assert len(restored["versions"]["learning_outcomes"]) == 2
     assert len(restored["generation_metadata"]["learning_outcomes"]) == 2
@@ -189,6 +211,31 @@ def test_historical_version_becomes_active_without_creating_a_new_version() -> N
     assert "final_validation" not in restored
     assert any("novamente ativa a versão 1" in item["event"] for item in restored["audit"])
     assert "versão 1" in render_current_artifact(restored)
+    assert "Pressupostos para a formulação" in render_current_artifact(restored)
+
+
+def test_optional_assumptions_can_be_saved_without_changing_outcome_rows() -> None:
+    state = create_session(_course())
+    outcomes = OutcomeProposalAgent().generate("learning_outcomes", state).artifact
+    state = save_manual_draft(state, "learning_outcomes", outcomes)
+
+    updated = save_manual_draft(
+        state,
+        "learning_outcomes",
+        outcomes,
+        stage_context={
+            "learning_outcome_assumptions": [
+                "Os estudantes dominam conceitos básicos de lógica.",
+                "",
+                "Os estudantes dominam conceitos básicos de lógica.",
+            ]
+        },
+    )
+
+    assert updated["learning_outcome_assumptions"] == [
+        "Os estudantes dominam conceitos básicos de lógica."
+    ]
+    assert len(updated["versions"]["learning_outcomes"]) == 2
 
 
 def test_active_and_derived_versions_cannot_be_restored() -> None:

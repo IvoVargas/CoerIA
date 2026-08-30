@@ -18,8 +18,9 @@ from prism.agents import (
     OpenAILocalizedAssistanceAgent,
     OpenAIPedagogicalAgent,
     OpenAIPedagogicalCritic,
-    _validate_artifact,
     _schema_for,
+    _upstream_context,
+    _validate_artifact,
 )
 from prism.curriculum import (
     ASSESSMENT_PURPOSES,
@@ -153,6 +154,23 @@ class WorkflowTests(unittest.TestCase):
             len(request_context["source_coverage_rules"]["sources"]),
             3,
         )
+
+    def test_learning_outcome_context_uses_optional_teacher_assumptions(self) -> None:
+        state = create_session(self.course)
+        state["learning_outcome_assumptions"] = [
+            "Os estudantes dominam conceitos introdutórios."
+        ]
+
+        context = _upstream_context(state, "learning_outcomes")
+        curriculum_schema = _schema_for("curriculum_analysis", state)[
+            "properties"
+        ]["artifact"]
+
+        self.assertEqual(
+            context["optional_assumptions_for_learning_outcomes"],
+            state["learning_outcome_assumptions"],
+        )
+        self.assertNotIn("assumptions", curriculum_schema["properties"])
 
     def test_openai_localized_assistance_uses_the_exact_cell_schema(self) -> None:
         class FakeResponses:
@@ -515,6 +533,49 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("stage_statuses", restored)
         self.assertIn("active_versions", restored)
         self.assertIn("revision_snapshots", restored)
+
+    def test_schema_26_moves_optional_assumptions_to_learning_outcomes(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        state = review_current_stage(state, "approve", agent=self.agent)
+        assumptions = [
+            "Os estudantes possuem conhecimentos introdutórios.",
+            "A unidade dispõe de sessões práticas.",
+        ]
+        state["schema_version"] = 26
+        state.pop("learning_outcome_assumptions", None)
+        state["curriculum_analysis"]["assumptions"] = deepcopy(assumptions)
+        state["versions"]["curriculum_analysis"][-1]["assumptions"] = deepcopy(
+            assumptions
+        )
+        state["revision_snapshots"] = [
+            {
+                "artifacts": {
+                    "curriculum_analysis": {
+                        **deepcopy(state["curriculum_analysis"]),
+                        "assumptions": deepcopy(assumptions),
+                    }
+                }
+            }
+        ]
+
+        with TemporaryDirectory() as temporary_directory:
+            store = SQLiteSessionStore(Path(temporary_directory) / "prism.db")
+            session_id = store.save(state)
+            restored = store.load(session_id)
+
+        self.assertEqual(restored["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(restored["learning_outcome_assumptions"], assumptions)
+        self.assertNotIn("assumptions", restored["curriculum_analysis"])
+        self.assertNotIn(
+            "assumptions",
+            restored["versions"]["curriculum_analysis"][-1],
+        )
+        self.assertNotIn(
+            "assumptions",
+            restored["revision_snapshots"][0]["artifacts"][
+                "curriculum_analysis"
+            ],
+        )
 
     def test_schema_16_session_is_migrated_to_biggs_stage_dependencies(self) -> None:
         state = create_session(self.course, agent=self.agent)

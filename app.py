@@ -484,6 +484,7 @@ class AGIRSoloInterface:
         self.viewed_stage: str | None = None
         self.manual_edit_stage: str | None = None
         self.manual_edit_artifact: Any = None
+        self.manual_edit_stage_context: dict[str, Any] = {}
         self.uploaded_files: dict[str, bytes] = {}
         self.removed_source_files: set[str] = set()
         self.fields: dict[str, Any] = {}
@@ -2070,6 +2071,15 @@ class AGIRSoloInterface:
                 raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
             editor_layout(stage)
             self.manual_edit_artifact = active_stage_artifact(self.state, stage)
+            self.manual_edit_stage_context = (
+                {
+                    "learning_outcome_assumptions": list(
+                        self.state.get("learning_outcome_assumptions", [])
+                    )
+                }
+                if stage == "learning_outcomes"
+                else {}
+            )
         except USER_ERRORS as error:
             self._show_error(error)
             return
@@ -2082,6 +2092,7 @@ class AGIRSoloInterface:
     def _cancel_manual_edit(self) -> None:
         self.manual_edit_stage = None
         self.manual_edit_artifact = None
+        self.manual_edit_stage_context = {}
         self._render_workspace("Edição manual cancelada; a sessão não foi alterada.")
 
     def _open_revision_dialog(self, target_stage: str) -> None:
@@ -3150,6 +3161,20 @@ class AGIRSoloInterface:
             )
             return
         with ui.column().classes("w-full gap-4"):
+            if stage == "learning_outcomes":
+                self._render_manual_field(
+                    self.manual_edit_stage_context,
+                    FieldSpec(
+                        "learning_outcome_assumptions",
+                        "Pressupostos para a formulação — opcional, um por linha",
+                        "lines",
+                    ),
+                ).mark("learning-outcome-assumptions")
+                ui.label(
+                    "Use este campo apenas para condições consideradas na formulação, "
+                    "como conhecimentos prévios ou restrições do contexto. Pode "
+                    "deixá-lo vazio."
+                ).classes("text-xs muted")
             for scalar in layout.fields:
                 parent = (
                     value_at_path(artifact, scalar.path[:-1])
@@ -3954,7 +3979,6 @@ class AGIRSoloInterface:
             special = {
                 "__summary__": f"{root} .artifact-markdown",
                 "__objectives__": f"{root} .artifact-markdown h2:nth-of-type(1)",
-                "__assumptions__": f"{root} .artifact-markdown h2:last-of-type",
             }
             if target_key in special:
                 return special[target_key], ""
@@ -4615,6 +4639,7 @@ class AGIRSoloInterface:
             self.viewed_stage = None
             self.manual_edit_stage = None
             self.manual_edit_artifact = None
+            self.manual_edit_stage_context = {}
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
@@ -4668,10 +4693,12 @@ class AGIRSoloInterface:
                 target_stage,
                 artifact,
                 reason,
+                self.manual_edit_stage_context,
             )
             self.viewed_stage = None
             self.manual_edit_stage = None
             self.manual_edit_artifact = None
+            self.manual_edit_stage_context = {}
             self._set_form_data(self.service.restored_initial_fields(self.state))
             self.show_workspace(message)
             self.refresh_sessions()
@@ -4823,6 +4850,7 @@ class AGIRSoloInterface:
             self.viewed_stage = None
             self.manual_edit_stage = None
             self.manual_edit_artifact = None
+            self.manual_edit_stage_context = {}
             self.show_workspace(message)
             self.refresh_sessions()
         except USER_ERRORS as error:

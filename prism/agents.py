@@ -129,7 +129,7 @@ STAGE_ROLES = {
 
 STAGE_REQUIREMENTS = {
     "curriculum_analysis": (
-        "Objeto com summary, themes, contents, objectives e assumptions. contents contém "
+        "Objeto com summary, themes, contents e objectives. contents contém "
         "4 a 10 objetos {id, title, description, outcome_ids}, com IDs C1, C2, ...; "
         "objectives é um texto livre com os objetivos gerais, sem IDs nem "
         "ligações estruturais. Cada outcome_ids dos conteúdos usa exclusivamente "
@@ -275,10 +275,9 @@ def _schema_for(
                         "required": ["id", "title", "description", "outcome_ids"],
                     },
                 },
-                "assumptions": {"type": "array", "items": string},
             },
             "required": [
-                "summary", "themes", "objectives", "contents", "assumptions"
+                "summary", "themes", "objectives", "contents"
             ],
         },
         "learning_outcomes": {
@@ -724,6 +723,12 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         "feedback_from_teacher": state.get("feedback", {}).get(stage, ""),
         "requested_resource_types": state.get("resource_types", []),
     }
+    if stage == "learning_outcomes":
+        context["optional_assumptions_for_learning_outcomes"] = [
+            str(item).strip()
+            for item in state.get("learning_outcome_assumptions", [])
+            if str(item).strip()
+        ]
     assistance_request = state.get("_ai_assistance_request")
     if isinstance(assistance_request, dict):
         context["teacher_request"] = str(
@@ -2485,7 +2490,10 @@ class OpenAIPedagogicalAgent:
                 "não a copies literalmente: distribui essas ações por resultados diferentes. "
                 "Usa os conteúdos e objetivos introduzidos pelo docente "
                 "apenas como contexto para definir o que o estudante deverá demonstrar; a "
-                "estrutura curricular detalhada será produzida e associada na etapa seguinte."
+                "estrutura curricular detalhada será produzida e associada na etapa seguinte. "
+                "Se optional_assumptions_for_learning_outcomes contiver elementos, considera-os "
+                "como condições contextuais facultativas indicadas pelo docente; se estiver "
+                "vazio, não inventes pressupostos nem bloqueies a formulação."
             )
         if stage == "assessment_activities":
             instructions += (

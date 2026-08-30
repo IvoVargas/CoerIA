@@ -20,7 +20,8 @@ determinística, não de uma decisão declarada pelo modelo.
 ## Fluxo
 
 1. dados iniciais, fontes e caracterização da unidade curricular;
-2. resultados de aprendizagem com nível SOLO ou Bloom e um único verbo de ação principal;
+2. resultados de aprendizagem com nível SOLO ou Bloom, um único verbo de ação
+   principal e pressupostos contextuais opcionais;
 3. conteúdos com IDs associados aos resultados formulados e objetivos gerais em texto livre;
 4. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa e
@@ -99,6 +100,10 @@ divergência. Na edição manual, o seletor de verbos mostra exclusivamente os
 verbos do nível escolhido na mesma linha. Os resultados usam sempre IDs no
 formato `RA1`, `RA2`, …; a geração normaliza-os pela ordem das linhas e o editor
 atribui automaticamente o próximo ID, sem permitir edição livre desse campo.
+Os **Pressupostos para a formulação** surgem nesta mesma etapa como um campo
+opcional. Podem registar conhecimentos prévios ou restrições contextuais que a
+IA deve considerar, mas não são gerados obrigatoriamente, não fazem parte da
+estrutura dos conteúdos e não impedem o avanço quando ficam vazios.
 Biggs e Tang distinguem *Teaching/Learning Activities* e *Assessment Tasks*. Na
 interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
 (atividades de ensino-aprendizagem) e `TA1`, `TA2`, … (tarefas de avaliação).

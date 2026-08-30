@@ -789,10 +789,17 @@ class ApplicationService:
         target_stage: str,
         artifact: Any,
         reason: str = "",
+        stage_context: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
-        updated = apply_manual_edit(state, target_stage, artifact, reason)
+        updated = apply_manual_edit(
+            state,
+            target_stage,
+            artifact,
+            reason,
+            stage_context=stage_context,
+        )
         updated = self._persist(updated)
         return (
             updated,

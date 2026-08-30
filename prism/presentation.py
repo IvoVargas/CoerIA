@@ -344,9 +344,6 @@ def render_artifact(
             for item in contents
         ]
         objectives = str(artifact.get("objectives", "")).strip()
-        assumptions = "\n".join(
-            f"- {item}" for item in artifact.get("assumptions", [])
-        )
         source_rows = [
             [
                 item.get("source", "—"),
@@ -376,7 +373,6 @@ def render_artifact(
                 content_rows,
             )
             + source_section
-            + f"\n\n## Pressupostos\n{assumptions}"
         )
 
     if stage == "learning_outcomes":
@@ -394,7 +390,27 @@ def render_artifact(
             ]
             for item in artifact
         ]
-        return header + _table(
+        metadata_context = (
+            metadata.get("stage_context", {})
+            if isinstance(metadata, dict)
+            else {}
+        )
+        assumptions = metadata_context.get(
+            "learning_outcome_assumptions",
+            state.get("learning_outcome_assumptions", []),
+        )
+        assumption_items = [
+            str(item).strip()
+            for item in assumptions
+            if str(item).strip()
+        ] if isinstance(assumptions, list) else []
+        assumptions_section = (
+            "\n\n## Pressupostos para a formulação dos resultados (opcional)\n\n"
+            + "\n".join(f"- {item}" for item in assumption_items)
+            if assumption_items
+            else ""
+        )
+        return header + assumptions_section + "\n\n" + _table(
             [
                 "ID", "Tipo", "Tema ou objeto", "Nível", "Verbo",
                 "Resultado de aprendizagem",
