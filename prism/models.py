@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from .cnaef import canonicalize_cnaef
 from .curriculum import TAXONOMY_SOLO, validate_taxonomy_choice
 from .isced import canonicalize_isced_f
 
@@ -107,6 +108,10 @@ class CourseInput:
                 raise ValueError(f"{label} não pode ser negativo.")
             return result
 
+        validated_cnaef_code, validated_cnaef_name = canonicalize_cnaef(
+            cnaef_code,
+            cnaef_name,
+        )
         validated_isced_code, validated_isced_name = canonicalize_isced_f(
             isced_f_code,
             isced_f_name,
@@ -122,8 +127,8 @@ class CourseInput:
             program_type=(program_type or "").strip(),
             academic_year=(academic_year or "").strip(),
             semester=validate_semester(semester),
-            cnaef_code=(cnaef_code or "").strip(),
-            cnaef_name=(cnaef_name or "").strip(),
+            cnaef_code=validated_cnaef_code,
+            cnaef_name=validated_cnaef_name,
             isced_f_code=validated_isced_code,
             isced_f_name=validated_isced_name,
             ects_credits=non_negative_number(ects_credits, "Os créditos ECTS"),

@@ -31,11 +31,17 @@ materiais produzidos.
   autónomo e bibliografia a validar pelo docente.
 - Registar CNAEF e ISCED-F como classificações independentes, em pares de código
   e designação, sem inferir nem exigir correspondência entre ambas.
+- Disponibilizar o catálogo oficial CNAEF aprovado pela Portaria n.º 256/2005,
+  aceitar apenas códigos existentes com 3 dígitos e preencher automaticamente a
+  designação canónica.
 - Disponibilizar o catálogo oficial ISCED-F 2013 em português, aceitar apenas
   códigos existentes com 2, 3 ou 4 dígitos e preencher automaticamente a
   designação canónica. Recomendar o nível detalhado de quatro dígitos sem impedir
   o uso dos níveis geral ou específico quando sejam os únicos dados
   institucionais disponíveis.
+- Apresentar código e designação durante a pesquisa nos dois catálogos, mas
+  mostrar apenas o código depois da seleção, mantendo a área visível no campo de
+  designação adjacente.
 - Calcular a duração total pela soma das horas de contacto e do trabalho
   autónomo, sem pedir ao docente uma duração prevista redundante.
 - Tornar o semestre obrigatório, limitá-lo às opções `1.º semestre` e

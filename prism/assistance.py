@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from .agents import AgentGenerationError, DEFAULT_MODEL, supports_reasoning_effort
 from .branding import config_value
+from .cnaef import CNAEF_CATALOG, canonicalize_cnaef
 from .curriculum import validate_taxonomy_choice
 from .isced import (
     ISCED_F_CATALOG,
@@ -30,7 +31,6 @@ PROPOSAL_FIELDS = (
     "academic_year",
     "semester",
     "cnaef_code",
-    "cnaef_name",
     "isced_f_code",
     "ects_credits",
     "contact_hours",
@@ -59,6 +59,11 @@ def _proposed_value_is_valid(field: str, value: Any) -> bool:
         return len(str(value).strip()) >= 40
     if field == "semester":
         return str(value).strip() in SEMESTER_OPTIONS
+    if field == "cnaef_code":
+        try:
+            canonicalize_cnaef(str(value))
+        except ValueError:
+            return False
     if field == "isced_f_code":
         try:
             canonicalize_isced_f(str(value))
@@ -94,6 +99,14 @@ def _merge_initial_proposal(
             + ", ".join(fields_not_completed)
             + ". Volte a tentar ou forneça mais contexto."
         )
+    try:
+        cnaef_code, cnaef_name = canonicalize_cnaef(
+            str(merged.get("cnaef_code", "") or "")
+        )
+    except ValueError as error:
+        raise AgentGenerationError(str(error)) from error
+    merged["cnaef_code"] = cnaef_code
+    merged["cnaef_name"] = cnaef_name
     try:
         isced_code, isced_name = canonicalize_isced_f(
             str(merged.get("isced_f_code", "") or "")
@@ -163,6 +176,13 @@ def validate_initial_fields(data: dict[str, Any]) -> dict[str, Any]:
         validate_semester(str(data.get("semester", "") or ""))
     except ValueError as error:
         add_issue(str(error), "semester")
+    try:
+        canonicalize_cnaef(
+            str(data.get("cnaef_code", "") or ""),
+            str(data.get("cnaef_name", "") or ""),
+        )
+    except ValueError as error:
+        add_issue(str(error), "cnaef_code")
     try:
         canonicalize_isced_f(
             str(data.get("isced_f_code", "") or ""),
@@ -244,8 +264,10 @@ class OpenAIInitialFormAssistant:
                 "program_type": {"type": "string"},
                 "academic_year": {"type": "string"},
                 "semester": {"type": "string", "enum": list(SEMESTER_OPTIONS)},
-                "cnaef_code": {"type": "string"},
-                "cnaef_name": {"type": "string"},
+                "cnaef_code": {
+                    "type": "string",
+                    "enum": sorted(CNAEF_CATALOG),
+                },
                 "isced_f_code": {
                     "type": "string",
                     "enum": sorted(ISCED_F_CATALOG),
@@ -263,7 +285,6 @@ class OpenAIInitialFormAssistant:
                 "academic_year",
                 "semester",
                 "cnaef_code",
-                "cnaef_name",
                 "isced_f_code",
                 "ects_credits",
                 "contact_hours",
@@ -280,11 +301,11 @@ class OpenAIInitialFormAssistant:
             "numéricos iguais a zero. Quando source_text estiver em fields_to_complete, "
             "cria uma proposta estruturada de informação de referência com pelo menos "
             "200 caracteres; nunca devolvas apenas um título ou uma frase curta. "
-            "Código e designação CNAEF, ECTS e horas podem ser estimativas "
-            "provisórias, mas a explanation deve identificá-los claramente como dados "
-            "a confirmar. Para ISCED-F 2013, escolhe exclusivamente um código da lista "
-            "permitida pelo esquema; a aplicação obtém a designação oficial. Prefere "
-            "uma área detalhada de quatro dígitos quando o contexto o permitir. "
+            "ECTS e horas podem ser estimativas provisórias, mas a explanation deve "
+            "identificá-los claramente como dados a confirmar. Para CNAEF e ISCED-F "
+            "2013, escolhe exclusivamente códigos das listas permitidas pelo esquema; "
+            "a aplicação obtém as designações oficiais. No ISCED-F, prefere uma área "
+            "detalhada de quatro dígitos quando o contexto o permitir. "
             "Para semester, usa exatamente '1.º semestre' ou '2.º semestre'. "
             "A proposta será revista e aprovada pelo docente antes de ser usada. "
             f"A taxonomia escolhida é exclusivamente {taxonomy_type} e não deve ser "

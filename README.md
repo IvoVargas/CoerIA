@@ -63,11 +63,14 @@ histórico ou institucional.
 
 Nos dados iniciais, o CoerIA regista separadamente a classificação nacional
 CNAEF e a classificação internacional **ISCED-F 2013**, ambas através de código
-e designação, sem exigir correspondência entre ambas. O ISCED-F é escolhido num
-catálogo oficial em português: apenas são aceites códigos existentes nos níveis
-geral (dois dígitos), específico (três dígitos) e detalhado (quatro dígitos), e
-a designação é preenchida automaticamente. O nível detalhado é o recomendado
-quando estiver disponível.
+e designação, sem exigir correspondência entre ambas. Cada classificação é
+escolhida no respetivo catálogo oficial em português e a designação é preenchida
+automaticamente. A CNAEF aceita os códigos nacionais de três dígitos aprovados
+pela Portaria n.º 256/2005. O ISCED-F aceita códigos existentes nos níveis geral
+(dois dígitos), específico (três dígitos) e detalhado (quatro dígitos), sendo o
+nível detalhado recomendado quando estiver disponível. Em ambos os seletores, a
+lista apresenta o código e a designação para facilitar a pesquisa, enquanto o
+valor selecionado mostra apenas o código.
 
 O docente escolhe SOLO ou Bloom no início da sessão; as duas taxonomias nunca
 são combinadas. Cada avaliação é exclusivamente formativa ou sumativa, podendo

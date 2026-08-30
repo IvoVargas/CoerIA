@@ -241,6 +241,15 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     await user.should_see("Nome da unidade curricular ou ação de formação")
     await user.should_see("Curso ou programa em que se integra")
     await user.should_see("Caracterização da unidade curricular")
+    await user.should_see("Código CNAEF")
+    await user.should_see("Área CNAEF")
+    cnaef_code = interfaces[-1].fields["cnaef_code"]
+    cnaef_name = interfaces[-1].fields["cnaef_name"]
+    assert cnaef_code.options["481"].startswith("481 — ")
+    assert cnaef_name._props.get("readonly") is True
+    cnaef_code.set_value("481")
+    assert cnaef_code._props.get("display-value") == "481"
+    await user.should_see("Ciências informáticas")
     await user.should_see("Código ISCED-F")
     await user.should_see("Área ISCED-F")
     isced_code = interfaces[-1].fields["isced_f_code"]
@@ -248,6 +257,7 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     assert isced_code.options["0613"].startswith("0613 — ")
     assert isced_name._props.get("readonly") is True
     isced_code.set_value("0613")
+    assert isced_code._props.get("display-value") == "0613"
     await user.should_see(
         "Desenvolvimento e análise de software e aplicações informáticas"
     )

@@ -47,6 +47,7 @@ from prism.ingestion import (
     configured_max_file_bytes,
     configured_max_total_upload_bytes,
 )
+from prism.cnaef import CNAEF_CATALOG, cnaef_options
 from prism.isced import ISCED_F_CATALOG, isced_f_options
 from prism.manual_editing import (
     FieldSpec,
@@ -857,13 +858,33 @@ class AGIRSoloInterface:
                 label="Semestre",
                 value=SEMESTER_OPTIONS[0],
             ).classes("full-control")
-            self.fields["cnaef_code"] = ui.input("Código CNAEF").classes("full-control")
-            self.fields["cnaef_name"] = ui.input("Área CNAEF").classes("full-control")
+            def update_cnaef_name(event: Any) -> None:
+                code = str(event.value or "")
+                event.sender.props.set_optional("display-value", code or None)
+                name_control = self.fields.get("cnaef_name")
+                if name_control is not None:
+                    name_control.set_value(
+                        CNAEF_CATALOG.get(code, "")
+                    )
+
+            self.fields["cnaef_code"] = ui.select(
+                cnaef_options(),
+                label="Código CNAEF",
+                with_input=True,
+                clearable=True,
+                on_change=update_cnaef_name,
+            ).props("options-dense").classes("full-control")
+            self.fields["cnaef_name"] = ui.input(
+                "Área CNAEF"
+            ).props("readonly").classes("full-control")
+
             def update_isced_name(event: Any) -> None:
+                code = str(event.value or "")
+                event.sender.props.set_optional("display-value", code or None)
                 name_control = self.fields.get("isced_f_name")
                 if name_control is not None:
                     name_control.set_value(
-                        ISCED_F_CATALOG.get(str(event.value or ""), "")
+                        ISCED_F_CATALOG.get(code, "")
                     )
 
             self.fields["isced_f_code"] = ui.select(
@@ -981,6 +1002,13 @@ class AGIRSoloInterface:
                 value = data[name]
                 if name == "semester" and value not in SEMESTER_OPTIONS:
                     value = SEMESTER_OPTIONS[0]
+                if name == "cnaef_code" and str(value or "") not in CNAEF_CATALOG:
+                    value = None
+                if name == "cnaef_name":
+                    value = CNAEF_CATALOG.get(
+                        str(data.get("cnaef_code", "") or ""),
+                        "",
+                    )
                 if name == "isced_f_code" and str(value or "") not in ISCED_F_CATALOG:
                     value = None
                 if name == "isced_f_name":
