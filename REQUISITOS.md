@@ -66,6 +66,10 @@ materiais produzidos.
 - Gerar, apenas a pedido, uma proposta inicial editável por IA que preencha todos
   os campos vazios, incluindo a informação de referência, sem substituir valores
   já introduzidos pelo docente.
+- Fornecer à IA as correspondências canónicas `código — designação` dos catálogos
+  CNAEF e ISCED-F, exigir que a classificação seja escolhida pelo conteúdo
+  principal e apresentar ao docente apenas designações obtidas localmente dos
+  catálogos, sem confiar em descrições livres geradas pelo modelo.
 - Não pedir objetivos gerais na criação da sessão; estes são formulados ou
   introduzidos uma única vez na etapa de conteúdos e objetivos curriculares.
 - Exigir a escolha exclusiva entre SOLO e Bloom; nunca combinar as duas numa sessão.

@@ -248,6 +248,9 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     assert cnaef_code.options["481"].startswith("481 — ")
     assert "selected-item" in cnaef_code.slots
     assert "split(' — ')[0]" in str(cnaef_code.slots["selected-item"].template)
+    assert cnaef_code._props.get("use-input") is True
+    assert "hide-selected" not in cnaef_code._props
+    assert "fill-input" not in cnaef_code._props
     assert cnaef_name._props.get("readonly") is True
     cnaef_code.set_value("481")
     await user.should_see("Ciências informáticas")
@@ -258,6 +261,9 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     assert isced_code.options["0613"].startswith("0613 — ")
     assert "selected-item" in isced_code.slots
     assert "split(' — ')[0]" in str(isced_code.slots["selected-item"].template)
+    assert isced_code._props.get("use-input") is True
+    assert "hide-selected" not in isced_code._props
+    assert "fill-input" not in isced_code._props
     assert isced_name._props.get("readonly") is True
     isced_code.set_value("0613")
     await user.should_see(

@@ -115,9 +115,26 @@ def _merge_initial_proposal(
         raise AgentGenerationError(str(error)) from error
     merged["isced_f_code"] = isced_code
     merged["isced_f_name"] = isced_name
-    merged["explanation"] = str(proposal.get("explanation", "")).strip() or (
-        "Os campos vazios foram preenchidos com valores provisórios inferidos dos "
-        "dados disponíveis."
+    classifications = [
+        f"CNAEF {cnaef_code} — {cnaef_name}",
+        f"ISCED-F {isced_code} — {isced_name}",
+    ]
+    estimated_fields = [
+        field
+        for field in NUMERIC_PROPOSAL_FIELDS
+        if _field_is_empty(field, original.get(field))
+    ]
+    merged["explanation"] = (
+        "Proposta inicial gerada a partir dos dados disponíveis. "
+        "Classificações propostas: "
+        + "; ".join(classifications)
+        + ". "
+        + (
+            "Os valores de ECTS e cargas horárias são estimativas provisórias. "
+            if estimated_fields
+            else ""
+        )
+        + "Confirme os dados institucionais antes de guardar."
     )
     return merged
 
@@ -303,9 +320,13 @@ class OpenAIInitialFormAssistant:
             "200 caracteres; nunca devolvas apenas um título ou uma frase curta. "
             "ECTS e horas podem ser estimativas provisórias, mas a explanation deve "
             "identificá-los claramente como dados a confirmar. Para CNAEF e ISCED-F "
-            "2013, escolhe exclusivamente códigos das listas permitidas pelo esquema; "
-            "a aplicação obtém as designações oficiais. No ISCED-F, prefere uma área "
-            "detalhada de quatro dígitos quando o contexto o permitir. "
+            "2013, consulta obrigatoriamente classification_catalogs, que contém a "
+            "correspondência exata entre cada código permitido e a sua designação. "
+            "Escolhe a designação que melhor corresponda ao conteúdo principal da "
+            "unidade curricular e ao curso; não adivinhes o significado de um código "
+            "nem estabeleças uma correspondência automática entre CNAEF e ISCED-F. "
+            "No ISCED-F, prefere uma área detalhada de quatro dígitos quando o contexto "
+            "o permitir. A aplicação obtém e apresenta as designações canónicas. "
             "Para semester, usa exatamente '1.º semestre' ou '2.º semestre'. "
             "A proposta será revista e aprovada pelo docente antes de ser usada. "
             f"A taxonomia escolhida é exclusivamente {taxonomy_type} e não deve ser "
@@ -326,9 +347,15 @@ class OpenAIInitialFormAssistant:
             ) from error
 
         attempts = self.validation_retries + 1
+        classification_catalogs: dict[str, dict[str, str]] = {}
+        if "cnaef_code" in empty_fields:
+            classification_catalogs["CNAEF"] = CNAEF_CATALOG
+        if "isced_f_code" in empty_fields:
+            classification_catalogs["ISCED-F 2013"] = ISCED_F_CATALOG
         request_context: dict[str, Any] = {
             "current_fields": data,
             "fields_to_complete": empty_fields,
+            "classification_catalogs": classification_catalogs,
         }
         previous_proposal: dict[str, Any] | None = None
         for attempt in range(1, attempts + 1):
@@ -362,6 +389,7 @@ class OpenAIInitialFormAssistant:
                 request_context = {
                     "current_fields": data,
                     "fields_to_complete": empty_fields,
+                    "classification_catalogs": classification_catalogs,
                     "previous_proposal": previous_proposal,
                     "automatic_validation_feedback": str(error),
                     "instruction": (

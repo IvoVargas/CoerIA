@@ -872,7 +872,10 @@ class AGIRSoloInterface:
                 with_input=True,
                 clearable=True,
                 on_change=update_cnaef_name,
-            ).props("options-dense").classes("full-control")
+            ).props(
+                "options-dense",
+                remove="hide-selected fill-input",
+            ).classes("full-control")
             self.fields["cnaef_code"].add_slot(
                 "selected-item",
                 """
@@ -897,7 +900,10 @@ class AGIRSoloInterface:
                 with_input=True,
                 clearable=True,
                 on_change=update_isced_name,
-            ).props("options-dense").classes("full-control")
+            ).props(
+                "options-dense",
+                remove="hide-selected fill-input",
+            ).classes("full-control")
             self.fields["isced_f_code"].add_slot(
                 "selected-item",
                 """

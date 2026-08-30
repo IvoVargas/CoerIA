@@ -77,6 +77,10 @@ são combinadas. Cada avaliação é exclusivamente formativa ou sumativa, poden
 uma UC conter apenas avaliações sumativas. O preenchimento inicial pode ser
 validado localmente e, a pedido, ter todos os campos vazios preenchidos por uma
 proposta editável da IA, sem substituir os dados já introduzidos pelo docente.
+Para classificar essa proposta, a IA recebe as correspondências completas entre
+códigos e designações; a aplicação volta a canonicalizar localmente os dois
+valores e constrói a mensagem apresentada ao docente sem reutilizar designações
+livres produzidas pelo modelo.
 
 Durante uma operação de IA pedida explicitamente, a interface identifica o
 âmbito e mostra o indicador de atividade existente e o tempo decorrido. Não é
