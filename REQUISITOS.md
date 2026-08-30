@@ -378,6 +378,12 @@ devem ter finalidade, origem e texto alternativo identificados; os diagramas e
 gráficos devem ser editáveis quando forem criados pelo sistema. Áudio, vídeo e
 storyboards não fazem parte do âmbito.
 
+A apresentação deve incluir, antes da síntese final, uma secção própria de
+avaliação que identifique todas as tarefas `TA`, a respetiva finalidade, os
+resultados abrangidos, a evidência esperada e os critérios aprovados. Quando o
+número de tarefas não couber de forma legível num único slide, a secção deve ser
+dividida por vários slides consecutivos.
+
 As imagens raster tratadas pelo protótipo podem ter uma das seguintes origens:
 
 - imagem extraída de um documento carregado como fonte de referência;

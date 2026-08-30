@@ -20,6 +20,7 @@ from .agents import (
     PedagogicalCritic,
     RESOURCE_ARTIFACT_FIELDS,
     RuleBasedPedagogicalAgent,
+    _canonicalize_presentation_assessment_overview,
     build_localized_assistance_agent,
     build_pedagogical_team,
     validate_artifact,
@@ -607,6 +608,10 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
         },
         "feedback_considered": feedback or None,
     }
+    resources, _ = _canonicalize_presentation_assessment_overview(
+        resources,
+        state,
+    )
     return {
         "resources": resources,
         **_audit_update(

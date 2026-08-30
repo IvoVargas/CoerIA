@@ -40,7 +40,7 @@ from prism.models import (
 )
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import render_current_artifact, render_resource_detail_sections
-from prism.quality import evaluate_quality
+from prism.quality import PRESENTATION_ASSESSMENT_TITLE, evaluate_quality
 from prism.workflow import (
     build_final_validation,
     create_session,
@@ -95,6 +95,25 @@ class ResourceGenerationTests(unittest.TestCase):
                 and slide.get("visual_source")
                 and slide.get("alt_text")
                 for slide in resources["presentation_outline"]
+            )
+        )
+        assessment_slides = [
+            slide
+            for slide in resources["presentation_outline"]
+            if slide["title"].startswith(PRESENTATION_ASSESSMENT_TITLE)
+        ]
+        self.assertTrue(assessment_slides)
+        assessment_text = " ".join(
+            str(text)
+            for slide in assessment_slides
+            for text in [slide["title"], *slide["bullets"]]
+        )
+        self.assertTrue(
+            all(
+                task["id"] in assessment_text
+                and task["assessment_purpose"] in assessment_text
+                and task["criterion"] in assessment_text
+                for task in state["assessment_activities"]
             )
         )
         self.assertTrue(resources["lesson_worksheet"]["sections"])
@@ -397,6 +416,26 @@ class ResourceGenerationTests(unittest.TestCase):
         )
         self.assertFalse(report["passed"])
         self.assertEqual(visual_check["status"], "error")
+
+    def test_quality_rejects_a_presentation_without_the_assessment_overview(self) -> None:
+        state = self._resource_state()
+        tampered = deepcopy(state)
+        tampered["resources"]["presentation_outline"] = [
+            slide
+            for slide in tampered["resources"]["presentation_outline"]
+            if not slide["title"].startswith(PRESENTATION_ASSESSMENT_TITLE)
+        ]
+
+        report = evaluate_quality(tampered, tampered["resources"])
+        assessment_check = next(
+            item
+            for item in report["checks"]
+            if item["id"] == "presentation_assessment_overview"
+        )
+
+        self.assertFalse(report["passed"])
+        self.assertEqual(assessment_check["status"], "error")
+        self.assertIn(PRESENTATION_ASSESSMENT_TITLE, assessment_check["detail"])
 
     def test_quality_explains_the_visual_failure_for_each_slide(self) -> None:
         state = self._resource_state()

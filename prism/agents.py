@@ -51,7 +51,11 @@ from .providers import (
     IAeduResponsesAdapter,
     validate_ai_provider,
 )
-from .quality import presentation_visual_issues
+from .quality import (
+    PRESENTATION_ASSESSMENT_TITLE,
+    presentation_assessment_overview_issues,
+    presentation_visual_issues,
+)
 from .validation_targets import available_validation_targets
 
 
@@ -181,7 +185,9 @@ STAGE_REQUIREMENTS = {
         "aprendizagem, sem usar IDs desconhecidos. No teste, a soma dos pontos das "
         "questões deve ser igual a total_points. Na atividade prática, a união dos "
         "outcome_ids de todas as etapas deve cobrir exatamente todos os resultados e "
-        "os pesos positivos dos critérios devem totalizar exatamente 100."
+        "os pesos positivos dos critérios devem totalizar exatamente 100. Na apresentação, "
+        "a aplicação acrescenta uma secção própria com todas as tarefas e critérios de "
+        "avaliação aprovados."
     ),
 }
 
@@ -197,7 +203,9 @@ RESOURCE_REQUIREMENTS = {
     RESOURCE_PRESENTATION: (
         "Lista de slides com title, bullets, outcome_id, visual_mode, visual_asset_id, "
         "visual_prompt, visual_kind, visual_title, visual_items, visual_source e alt_text. Cobre todos os "
-        "resultados de aprendizagem e inclui slides de capa e síntese."
+        "resultados de aprendizagem e inclui slides de capa e síntese. A aplicação "
+        "acrescenta deterministicamente, antes da síntese, uma secção dedicada às "
+        "tarefas e critérios de avaliação aprovados."
     ),
     RESOURCE_WORKSHEET: (
         "Objeto da ficha com title, overview, instructions e sections. Cada "
@@ -1453,6 +1461,120 @@ def _source_image_text_input(request_context: dict[str, Any]) -> str:
     return json.dumps(sanitized_context, ensure_ascii=False)
 
 
+def _canonicalize_presentation_assessment_overview(
+    artifact: Any,
+    state: dict[str, Any],
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Insere uma secção legível com todas as tarefas de avaliação aprovadas."""
+
+    if not isinstance(artifact, dict):
+        return artifact, []
+    if RESOURCE_PRESENTATION not in set(state.get("resource_types", [])):
+        return artifact, []
+    slides = artifact.get("presentation_outline")
+    if not isinstance(slides, list):
+        return artifact, []
+
+    assessments = [
+        item
+        for item in state.get("assessment_activities", [])
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    ]
+    if not assessments:
+        return artifact, []
+
+    def clean(value: Any) -> str:
+        return re.sub(r"\s+", " ", str(value or "")).strip()
+
+    def compact(value: Any, limit: int = 72) -> str:
+        text = clean(value) or "A confirmar pelo docente"
+        return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+    assessment_slides: list[dict[str, Any]] = []
+    chunks = [
+        assessments[offset : offset + 3]
+        for offset in range(0, len(assessments), 3)
+    ]
+    for chunk_index, chunk in enumerate(chunks, start=1):
+        title = PRESENTATION_ASSESSMENT_TITLE
+        if len(chunks) > 1:
+            title += f" ({chunk_index}/{len(chunks)})"
+        bullets = []
+        visual_items = []
+        task_ids = []
+        for task in chunk:
+            task_id = clean(task.get("id")).upper()
+            purpose = compact(task.get("assessment_purpose"), 24)
+            outcome_ids = ", ".join(
+                clean(identifier).upper()
+                for identifier in task.get("outcome_ids", [])
+                if clean(identifier)
+            )
+            bullets.append(
+                f"{task_id} · {purpose} — {compact(task.get('activity'))}"
+                + (f" | Resultados: {outcome_ids}" if outcome_ids else "")
+                + f" | Evidência: {compact(task.get('evidence'))}"
+                + f" | Critério: {compact(task.get('criterion'))}"
+            )
+            visual_items.append(f"{task_id} · {purpose}")
+            task_ids.append(task_id)
+        if len(visual_items) == 1:
+            visual_items.extend(["Evidência observável", "Critérios explícitos"])
+        assessment_slides.append(
+            {
+                "title": title,
+                "bullets": bullets,
+                "outcome_id": "",
+                "visual_mode": "diagrama",
+                "visual_asset_id": "",
+                "visual_prompt": "",
+                "visual_kind": "processo",
+                "visual_title": "Tarefas, evidências e critérios",
+                "visual_items": visual_items,
+                "visual_source": (
+                    "Diagrama nativo gerado pelo CoerIA a partir das tarefas e "
+                    "critérios aprovados pelo docente."
+                ),
+                "alt_text": (
+                    "Síntese das tarefas de avaliação "
+                    + ", ".join(task_ids)
+                    + ", respetivas evidências e critérios."
+                ),
+            }
+        )
+
+    title_prefix = PRESENTATION_ASSESSMENT_TITLE.casefold()
+    retained_slides = [
+        slide
+        for slide in slides
+        if not (
+            isinstance(slide, dict)
+            and clean(slide.get("title")).casefold().startswith(title_prefix)
+        )
+    ]
+    insert_at = max(len(retained_slides) - 1, 0)
+    normalized_slides = [
+        *retained_slides[:insert_at],
+        *assessment_slides,
+        *retained_slides[insert_at:],
+    ]
+    if normalized_slides == slides:
+        return artifact, []
+    return (
+        {**artifact, "presentation_outline": normalized_slides},
+        [
+            {
+                "resource": RESOURCE_PRESENTATION,
+                "changes": {
+                    "assessment_overview": {
+                        "used": [slide["title"] for slide in assessment_slides]
+                    }
+                },
+            }
+        ],
+    )
+
+
 def _canonicalize_resource_visuals(
     artifact: Any, state: dict[str, Any]
 ) -> tuple[Any, list[dict[str, Any]]]:
@@ -2035,6 +2157,16 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                     + " | ".join(invalid_slides)
                     + "."
                 )
+            assessment_overview_issues = presentation_assessment_overview_issues(
+                state,
+                artifact["presentation_outline"],
+            )
+            if assessment_overview_issues:
+                raise AgentGenerationError(
+                    "A apresentação não inclui corretamente a secção de avaliação — "
+                    + "; ".join(assessment_overview_issues)
+                    + "."
+                )
 
         expected = {item["id"] for item in state["learning_outcomes"]}
         if "Teste" in requested:
@@ -2394,6 +2526,10 @@ class OpenAIPedagogicalAgent:
                 instructions += (
                     " Para cada slide, visual_mode pode ser diagrama, documento ou ia. "
                     "Capa e síntese final devem usar diagrama. "
+                    "Não cries uma síntese global das tarefas de avaliação: depois da "
+                    "resposta, a aplicação insere antes da síntese final uma secção "
+                    f'«{PRESENTATION_ASSESSMENT_TITLE}», construída diretamente a partir '
+                    "das tarefas, evidências e critérios aprovados. "
                 )
                 if any(
                     isinstance(asset, dict)
@@ -2553,12 +2689,19 @@ class OpenAIPedagogicalAgent:
                     artifact, practical_corrections = (
                         _canonicalize_resource_practical(artifact, state)
                     )
+                    artifact, assessment_overview_corrections = (
+                        _canonicalize_presentation_assessment_overview(
+                            artifact,
+                            state,
+                        )
+                    )
                     artifact, visual_corrections = (
                         _canonicalize_resource_visuals(artifact, state)
                     )
                     guardrail_corrections = [
                         *test_corrections,
                         *practical_corrections,
+                        *assessment_overview_corrections,
                         *visual_corrections,
                     ]
                 _validate_artifact(stage, artifact, state)

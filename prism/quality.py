@@ -25,6 +25,9 @@ from .models import (
 from .relationships import derive_alignment_rows
 
 
+PRESENTATION_ASSESSMENT_TITLE = "Avaliação da unidade curricular"
+
+
 def _normalise(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value or "")
     return "".join(char for char in decomposed if not unicodedata.combining(char)).casefold().strip()
@@ -32,6 +35,64 @@ def _normalise(value: str) -> str:
 
 def _check(check_id: str, label: str, status: str, detail: str) -> dict[str, str]:
     return {"id": check_id, "label": label, "status": status, "detail": detail}
+
+
+def presentation_assessment_overview_issues(
+    state: dict[str, Any],
+    slides: list[dict[str, Any]],
+) -> list[str]:
+    """Valida a secção da apresentação dedicada às tarefas de avaliação."""
+
+    expected_ids = {
+        str(item.get("id", "")).strip().upper()
+        for item in state.get("assessment_activities", [])
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    }
+    if not expected_ids:
+        return [
+            "não existem tarefas de avaliação aprovadas para apresentar"
+        ]
+
+    normalized_title = _normalise(PRESENTATION_ASSESSMENT_TITLE)
+    overview_slides = [
+        slide
+        for slide in slides
+        if isinstance(slide, dict)
+        and _normalise(str(slide.get("title", ""))).startswith(normalized_title)
+    ]
+    if not overview_slides:
+        return [
+            f'nenhum slide com o título «{PRESENTATION_ASSESSMENT_TITLE}»'
+        ]
+
+    overview_text = " ".join(
+        text
+        for slide in overview_slides
+        for text in [
+            str(slide.get("title", "")),
+            *[
+                str(item)
+                for item in slide.get("bullets", [])
+                if str(item).strip()
+            ],
+        ]
+    )
+    received_ids = {
+        identifier.upper()
+        for identifier in re.findall(
+            r"\bTA[1-9][0-9]*\b",
+            overview_text,
+            flags=re.IGNORECASE,
+        )
+    }
+    issues: list[str] = []
+    missing = sorted(expected_ids - received_ids)
+    unknown = sorted(received_ids - expected_ids)
+    if missing:
+        issues.append("tarefas em falta: " + ", ".join(missing))
+    if unknown:
+        issues.append("tarefas desconhecidas: " + ", ".join(unknown))
+    return issues
 
 
 def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
@@ -61,7 +122,7 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         target_stage = "assessment_activities"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
-    elif check_id == "presentation_visuals":
+    elif check_id in {"presentation_visuals", "presentation_assessment_overview"}:
         slides = re.findall(r"\bslide\s+(\d+)\b", detail, flags=re.IGNORECASE)
         target_key = f"SLIDE:{slides[0]}" if slides else "RESOURCE:presentation"
     elif "nao selecionado" in _normalise(detail):
@@ -532,6 +593,25 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                     if presentation_slides and not invalid_visual_slides
                     else "Especificação visual incompleta — "
                     + (" | ".join(invalid_visual_slides) or "não existem slides")
+                    + "."
+                ),
+            )
+        )
+        assessment_overview_issues = presentation_assessment_overview_issues(
+            state,
+            presentation_slides,
+        )
+        checks.append(
+            _check(
+                "presentation_assessment_overview",
+                "Avaliação apresentada nos slides",
+                "pass" if not assessment_overview_issues else "error",
+                (
+                    "A secção de avaliação apresenta todas as tarefas e critérios "
+                    "aprovados."
+                    if not assessment_overview_issues
+                    else "Secção de avaliação incompleta — "
+                    + "; ".join(assessment_overview_issues)
                     + "."
                 ),
             )

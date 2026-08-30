@@ -122,7 +122,11 @@ ensino-aprendizagem e tarefas de avaliação.
 Podem ser produzidos quatro tipos de recurso: apresentação PowerPoint, ficha de
 aula, teste com chave de correção e atividade prática. As apresentações devem
 integrar imagens, diagramas, tabelas, gráficos ou outros elementos visuais com
-finalidade pedagógica. Na etapa **Geração de recursos educativos**, cada tipo selecionado
+finalidade pedagógica. Antes da síntese final, a apresentação inclui
+automaticamente uma secção com todas as tarefas de avaliação, respetiva
+finalidade, resultados abrangidos, evidências e critérios aprovados; esta secção
+é repartida por vários slides quando necessário para manter a legibilidade. Na
+etapa **Geração de recursos educativos**, cada tipo selecionado
 tem um separador próprio tanto na consulta como na edição, evitando apresentar
 slides, secções, questões e critérios numa única sequência extensa. No separador
 da apresentação, a consulta integra a miniatura da imagem associada na coluna
