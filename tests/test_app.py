@@ -302,6 +302,24 @@ async def test_application_opens_on_home_before_starting_a_new_session(
 
 
 @pytest.mark.asyncio
+async def test_right_aligned_button_icons_use_a_named_icon(user: User) -> None:
+    invalid_icon_props: list[tuple[str, object]] = []
+
+    @ui.page("/_test_named_right_icons")
+    def named_right_icons_page():
+        app.AGIRSoloInterface()
+        invalid_icon_props.extend(
+            (str(getattr(element, "tag", "")), element._props.get("icon-right"))
+            for element in ui.context.client.elements.values()
+            if element._props.get("icon-right") is True
+        )
+
+    await user.open("/_test_named_right_icons")
+
+    assert invalid_icon_props == []
+
+
+@pytest.mark.asyncio
 async def test_initial_validation_results_focus_the_related_field(
     user: User,
 ) -> None:
@@ -1297,6 +1315,7 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
 
     await user.should_see("Slides da apresentação")
     await user.should_see("Slide 1 —")
+    await user.should_see("Resultados de aprendizagem")
     await user.should_see("Elementos do diagrama — 2 a 4, um por linha")
     await user.should_see("introduza entre 2 e 4 elementos não vazios")
     await user.should_not_see("Origem visual")
@@ -1724,6 +1743,52 @@ async def test_manual_table_editor_renders_for_the_current_stage(
     await user.should_see("MODO DE CONSULTA")
     assert interfaces[-1].manual_edit_stage is None
     assert state == original
+
+
+@pytest.mark.asyncio
+async def test_curriculum_editor_exposes_reduced_source_coverage(user: User) -> None:
+    state = create_session(
+        CourseInput.create(
+            unit_name="Programação",
+            source_text=(
+                "Algoritmos, variáveis, funções e estruturas fundamentais "
+                "de programação."
+            ),
+        ),
+        source_reduction={
+            "applied": True,
+            "sources": [
+                {"source": "Ficheiro: programa.pdf"},
+                {"source": "Texto introduzido pelo docente"},
+            ],
+        },
+    )
+    state["current_stage"] = "curriculum_analysis"
+    state["curriculum_analysis"] = {
+        "contents": [
+            {
+                "id": "C1",
+                "title": "Algoritmos",
+                "description": "Conceitos e estruturas fundamentais.",
+                "outcome_ids": [],
+            }
+        ],
+        "source_coverage": [],
+    }
+
+    @ui.page("/_test_source_coverage_editor")
+    def source_coverage_editor_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_source_coverage_editor")
+    user.find(marker="edit-artifact-content").click()
+
+    await user.should_see("Cobertura das fontes documentais")
+    user.find(marker="add-row-source_coverage").click()
+    await user.should_see("Contributo curricular")
+    await user.should_see("Conteúdos associados")
 
 
 @pytest.mark.asyncio

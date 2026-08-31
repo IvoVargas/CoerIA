@@ -31,6 +31,7 @@ from .resource_catalog import (
     build_assessment_grid,
     build_lesson_plan,
     lesson_scope,
+    slide_outcome_ids,
 )
 from .relationships import derive_alignment_rows
 
@@ -762,11 +763,14 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             )
             expected_scope = set(current_scope.get("outcome_ids", []))
             declared_scope = set(item.get("outcome_ids", []))
-            covered_scope = {
-                str(slide.get("outcome_id", ""))
+            declared_slide_ids = {
+                outcome_id
                 for slide in slides
-                if str(slide.get("outcome_id", "")).strip()
+                if isinstance(slide, dict)
+                for outcome_id in slide_outcome_ids(slide)
             }
+            covered_scope = declared_slide_ids & expected_scope
+            unexpected_scope = declared_slide_ids - expected_scope
             if slide_issues:
                 collection_issues.append(
                     f"Aula {lesson_number}: " + " | ".join(slide_issues)
@@ -779,6 +783,11 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 collection_issues.append(
                     f"Aula {lesson_number}: esperados {sorted(expected_scope)}; "
                     f"cobertos {sorted(covered_scope)}"
+                )
+            if unexpected_scope:
+                collection_issues.append(
+                    f"Aula {lesson_number}: IDs não permitidos "
+                    f"{sorted(unexpected_scope)}"
                 )
             if declared_scope != expected_scope:
                 collection_issues.append(
@@ -799,9 +808,10 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         )
     resource_outcomes: dict[str, set[str]] = {
         RESOURCE_PRESENTATION: {
-            str(item.get("outcome_id", ""))
+            outcome_id
             for item in resource_data.get("presentation_outline", [])
-            if item.get("outcome_id")
+            if isinstance(item, dict)
+            for outcome_id in slide_outcome_ids(item)
         },
         RESOURCE_WORKSHEET: {
             str(outcome_id)
@@ -832,6 +842,7 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         RESOURCE_TEST,
     }:
         covered = resource_outcomes.get(resource_type, set())
+        unexpected = covered - expected_ids
         coverage_status = (
             "warning"
             if not expected_ids
@@ -849,7 +860,15 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                     if not expected_ids
                     else "Todos os resultados estão associados ao recurso."
                     if covered == expected_ids
-                    else f"Esperados: {sorted(expected_ids)}; cobertos: {sorted(covered)}."
+                    else (
+                        f"Esperados: {sorted(expected_ids)}; "
+                        f"cobertos: {sorted(covered & expected_ids)}."
+                        + (
+                            f" IDs não permitidos: {sorted(unexpected)}."
+                            if unexpected
+                            else ""
+                        )
+                    )
                 ),
             )
         )

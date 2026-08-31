@@ -66,6 +66,7 @@ from .quality import (
     presentation_assessment_overview_issues,
     presentation_visual_issues,
 )
+from .resource_catalog import slide_outcome_ids
 from .validation_targets import available_validation_targets
 
 
@@ -215,7 +216,7 @@ RESOURCE_ARTIFACT_FIELDS = {
 
 RESOURCE_REQUIREMENTS = {
     RESOURCE_PRESENTATION: (
-        "Lista de slides com title, bullets, outcome_id, visual_mode, visual_asset_id, "
+        "Lista de slides com title, bullets, outcome_id, outcome_ids, visual_mode, visual_asset_id, "
         "visual_prompt, visual_kind, visual_title, visual_items, visual_source e alt_text. Cobre todos os "
         "resultados de aprendizagem e inclui slides de capa e síntese. A aplicação "
         "acrescenta deterministicamente, antes da síntese, uma secção dedicada às "
@@ -396,6 +397,7 @@ def _schema_for(
                             "title": string,
                             "bullets": {"type": "array", "items": string},
                             "outcome_id": string,
+                            "outcome_ids": {"type": "array", "items": string},
                             "visual_mode": {
                                 "type": "string",
                                 "enum": ["diagrama", "documento", "ia"],
@@ -417,7 +419,7 @@ def _schema_for(
                             "alt_text": string,
                         },
                         "required": [
-                            "title", "bullets", "outcome_id", "visual_mode",
+                            "title", "bullets", "outcome_id", "outcome_ids", "visual_mode",
                             "visual_asset_id", "visual_prompt", "visual_kind", "visual_title",
                             "visual_items", "visual_source", "alt_text"
                         ],
@@ -743,6 +745,21 @@ def _schema_for(
             artifact_schema["properties"]["questions"]["items"]["properties"][
                 "outcome_id"
             ] = {"type": "string", "enum": outcome_ids}
+        elif scoped_resource_type == RESOURCE_PRESENTATION and state:
+            outcome_ids = [
+                str(item["id"])
+                for item in state.get("learning_outcomes", [])
+                if item.get("id")
+            ]
+            slide_properties = artifact_schema["items"]["properties"]
+            slide_properties["outcome_id"] = {
+                "type": "string",
+                "enum": ["", *outcome_ids],
+            }
+            slide_properties["outcome_ids"]["items"] = {
+                "type": "string",
+                "enum": outcome_ids,
+            }
         elif scoped_resource_type == RESOURCE_PRACTICAL and state:
             outcome_ids = [
                 str(item["id"])
@@ -1616,6 +1633,57 @@ def _source_image_text_input(request_context: dict[str, Any]) -> str:
     return json.dumps(sanitized_context, ensure_ascii=False)
 
 
+def _canonicalize_resource_presentation_outcomes(
+    artifact: Any,
+    state: dict[str, Any],
+) -> tuple[Any, list[dict[str, Any]]]:
+    """Normaliza ligações RA dos slides e remove marcadores inventados pelo modelo."""
+
+    if not isinstance(artifact, dict):
+        return artifact, []
+    if RESOURCE_PRESENTATION not in set(state.get("resource_types", [])):
+        return artifact, []
+    slides = artifact.get("presentation_outline")
+    if not isinstance(slides, list):
+        return artifact, []
+
+    allowed_ids = {
+        str(item.get("id", "")).strip().upper()
+        for item in state.get("learning_outcomes", [])
+        if str(item.get("id", "")).strip()
+    }
+    corrections: list[dict[str, Any]] = []
+    for index, slide in enumerate(slides, start=1):
+        if not isinstance(slide, dict):
+            continue
+        received_ids = slide_outcome_ids(slide)
+        normalized_ids = slide_outcome_ids(
+            slide,
+            allowed_ids,
+            infer_from_text=True,
+        )
+        legacy_value = str(slide.get("outcome_id", "")).strip()
+        canonical_legacy = normalized_ids[0] if len(normalized_ids) == 1 else ""
+        if (
+            slide.get("outcome_ids") != normalized_ids
+            or legacy_value != canonical_legacy
+        ):
+            corrections.append(
+                {
+                    "resource": RESOURCE_PRESENTATION,
+                    "changes": {
+                        f"slide_{index}_outcome_ids": {
+                            "received": received_ids,
+                            "used": normalized_ids,
+                        }
+                    },
+                }
+            )
+        slide["outcome_ids"] = normalized_ids
+        slide["outcome_id"] = canonical_legacy
+    return artifact, corrections
+
+
 def _canonicalize_presentation_assessment_overview(
     artifact: Any,
     state: dict[str, Any],
@@ -1657,6 +1725,7 @@ def _canonicalize_presentation_assessment_overview(
         bullets = []
         visual_items = []
         task_ids = []
+        slide_outcomes: list[str] = []
         for task in chunk:
             task_id = clean(task.get("id")).upper()
             purpose = compact(task.get("assessment_purpose"), 24)
@@ -1673,13 +1742,20 @@ def _canonicalize_presentation_assessment_overview(
             )
             visual_items.append(f"{task_id} · {purpose}")
             task_ids.append(task_id)
+            slide_outcomes.extend(
+                clean(identifier).upper()
+                for identifier in task.get("outcome_ids", [])
+                if clean(identifier)
+            )
+        slide_outcomes = list(dict.fromkeys(slide_outcomes))
         if len(visual_items) == 1:
             visual_items.extend(["Evidência observável", "Critérios explícitos"])
         assessment_slides.append(
             {
                 "title": title,
                 "bullets": bullets,
-                "outcome_id": "",
+                "outcome_id": slide_outcomes[0] if len(slide_outcomes) == 1 else "",
+                "outcome_ids": slide_outcomes,
                 "visual_mode": "diagrama",
                 "visual_asset_id": "",
                 "visual_prompt": "",
@@ -1799,7 +1875,8 @@ def _canonicalize_resource_visuals(
             normalized_slides.append(slide)
             continue
 
-        outcome_id = str(slide.get("outcome_id", ""))
+        outcome_links = slide_outcome_ids(slide, set(outcomes))
+        outcome_id = outcome_links[0] if outcome_links else ""
         raw_kind = clean_text(slide.get("visual_kind")).casefold()
         canonical_kind = kind_aliases.get(raw_kind, raw_kind)
         if canonical_kind not in allowed_kinds:
@@ -2975,6 +3052,12 @@ class OpenAIPedagogicalAgent:
                             state,
                         )
                     )
+                    artifact, presentation_outcome_corrections = (
+                        _canonicalize_resource_presentation_outcomes(
+                            artifact,
+                            state,
+                        )
+                    )
                     artifact, visual_corrections = (
                         _canonicalize_resource_visuals(artifact, state)
                     )
@@ -2982,6 +3065,7 @@ class OpenAIPedagogicalAgent:
                         *test_corrections,
                         *practical_corrections,
                         *assessment_overview_corrections,
+                        *presentation_outcome_corrections,
                         *visual_corrections,
                     ]
                 _validate_artifact(stage, artifact, state)

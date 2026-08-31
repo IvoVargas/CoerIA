@@ -15,6 +15,7 @@ from .models import (
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
 )
+from .resource_catalog import slide_outcome_ids
 from .workflow import STAGE_LABELS, STAGE_ORDER
 
 
@@ -239,7 +240,7 @@ def render_resource_detail_sections(
                 [
                     index,
                     slide.get("title", ""),
-                    slide.get("outcome_id", "—"),
+                    ", ".join(slide_outcome_ids(slide)) or "—",
                     " · ".join(str(item) for item in slide.get("bullets", [])),
                     mode_label,
                     slide.get("visual_title", ""),

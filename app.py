@@ -59,6 +59,7 @@ from prism.manual_editing import (
     editor_field_value,
     editor_reference_options,
     editor_reference_value,
+    editor_table_is_applicable,
     editor_taxonomy_level_options,
     editor_taxonomy_verb_options,
     editor_layout,
@@ -90,6 +91,7 @@ from prism.presentation import (
     render_resource_detail_sections,
     render_stage_artifact,
 )
+from prism.resource_catalog import slide_outcome_ids
 from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
 from prism.session_backup import configured_session_backup_max_bytes
 from prism.workflow import (
@@ -606,9 +608,10 @@ class AGIRSoloInterface:
                 with ui.row().classes("w-full gap-3 mt-2"):
                     start_session_button = ui.button(
                         "Iniciar nova sessão",
-                        icon="play_arrow",
                         on_click=self.show_new_session,
-                    ).props("unelevated no-caps size=lg icon-right").classes(
+                    ).props(
+                        "unelevated no-caps size=lg icon-right=play_arrow"
+                    ).classes(
                         "primary-action px-6"
                     )
                     start_session_button.mark("start-new-session")
@@ -711,9 +714,10 @@ class AGIRSoloInterface:
                     ui.label("Dados iniciais").classes("toolbar-stage-title")
                 ui.button(
                     "Etapa seguinte",
-                    icon="arrow_forward",
                     on_click=self._handle_initial_toolbar_next,
-                ).props("unelevated no-caps icon-right").classes("primary-action")
+                ).props(
+                    "unelevated no-caps icon-right=arrow_forward"
+                ).classes("primary-action")
                 with ui.row().classes(
                     "stage-toolbar-controls items-center gap-2 flex-wrap"
                 ):
@@ -775,9 +779,10 @@ class AGIRSoloInterface:
                 ui.space()
                 self.create_session_button = ui.button(
                     "Iniciar desenho curricular alinhado",
-                    icon="play_arrow",
                     on_click=self.handle_start_session,
-                ).props("unelevated no-caps size=lg icon-right").classes(
+                ).props(
+                    "unelevated no-caps size=lg icon-right=play_arrow"
+                ).classes(
                     "primary-action px-6"
                 )
                 self.create_session_button.mark("create-pedagogical-session")
@@ -2238,7 +2243,9 @@ class AGIRSoloInterface:
                             with ui.element("td"):
                                 ui.label(str(slide.get("title", "")))
                             with ui.element("td"):
-                                ui.label(str(slide.get("outcome_id", "") or "—"))
+                                ui.label(
+                                    ", ".join(slide_outcome_ids(slide)) or "—"
+                                )
                             with ui.element("td"):
                                 ui.label(
                                     " · ".join(
@@ -2870,7 +2877,12 @@ class AGIRSoloInterface:
                                 slide, FieldSpec("title", "Título do slide")
                             )
                             self._render_manual_field(
-                                slide, FieldSpec("outcome_id", "Resultado de aprendizagem")
+                                slide,
+                                FieldSpec(
+                                    "outcome_ids",
+                                    "Resultados de aprendizagem",
+                                    "linked_outcomes",
+                                ),
                             )
                         self._render_manual_field(
                             slide,
@@ -3358,9 +3370,11 @@ class AGIRSoloInterface:
             with ui.row().classes("w-full items-center"):
                 ui.label(table.title).classes("text-lg font-bold")
                 ui.space()
-                ui.button("Adicionar linha", icon="add", on_click=add_row).props(
-                    "outline no-caps"
-                ).classes("secondary-action")
+                add_button = ui.button(
+                    "Adicionar linha", icon="add", on_click=add_row
+                ).props("outline no-caps").classes("secondary-action")
+                table_marker = "-".join(str(value) for value in table.path) or "root"
+                add_button.mark(f"add-row-{table_marker}")
             render_rows()
 
     def _render_inline_manual_editor(self, stage: str) -> None:
@@ -3409,6 +3423,8 @@ class AGIRSoloInterface:
                     FieldSpec(scalar.path[-1], scalar.label, scalar.kind),
                 )
             for table in layout.tables:
+                if not editor_table_is_applicable(self.state or {}, table):
+                    continue
                 self._render_manual_table(artifact, table)
 
     @staticmethod
@@ -3541,6 +3557,8 @@ class AGIRSoloInterface:
                         )
 
             for table in layout.tables:
+                if not editor_table_is_applicable(state, table):
+                    continue
                 rows = value_at_path(artifact, table.path)
                 if not isinstance(rows, list):
                     continue
@@ -3916,7 +3934,7 @@ class AGIRSoloInterface:
         stage: str,
         state: dict[str, Any],
     ) -> None:
-        scopes = assistance_scope_options(stage, state[stage])
+        scopes = assistance_scope_options(stage, state[stage], state)
         scope_by_key = {str(index): item for index, item in enumerate(scopes)}
         with ui.dialog() as dialog, ui.card().classes(
             "w-full max-w-2xl p-6 gap-4"
@@ -4043,11 +4061,12 @@ class AGIRSoloInterface:
                     ui.label(STAGE_LABELS[stage]).classes("toolbar-stage-title")
                 next_button = ui.button(
                     "Etapa seguinte",
-                    icon="arrow_forward",
                     on_click=lambda: self._navigate_manual_stage(
                         STAGE_ORDER[current_index + 1]
                     ),
-                ).props("unelevated no-caps icon-right").classes("primary-action")
+                ).props(
+                    "unelevated no-caps icon-right=arrow_forward"
+                ).classes("primary-action")
 
                 with ui.row().classes(
                     "stage-toolbar-controls items-center gap-2 flex-wrap"
@@ -4703,8 +4722,8 @@ class AGIRSoloInterface:
                         ui.label(STAGE_LABELS["final_validation"]).classes(
                             "toolbar-stage-title"
                         )
-                    ui.button("Etapa seguinte", icon="arrow_forward").props(
-                        "unelevated no-caps icon-right disable"
+                    ui.button("Etapa seguinte").props(
+                        "unelevated no-caps icon-right=arrow_forward disable"
                     ).classes("primary-action")
                     with ui.row().classes(
                         "stage-toolbar-controls items-center gap-2"
@@ -4939,9 +4958,10 @@ class AGIRSoloInterface:
 
             ui.button(
                 "Concluir validação" if final else "Registar decisão e continuar",
-                icon="arrow_forward",
                 on_click=submit_decision,
-            ).props("unelevated no-caps icon-right").classes("primary-action w-full mt-3")
+            ).props(
+                "unelevated no-caps icon-right=arrow_forward"
+            ).classes("primary-action w-full mt-3")
 
     async def handle_review(
         self,

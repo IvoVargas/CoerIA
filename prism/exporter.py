@@ -43,6 +43,7 @@ from .models import (
 )
 from .quality import attach_quality_report
 from .relationships import derive_alignment_rows
+from .resource_catalog import slide_outcome_ids
 
 
 LOGGER = logging.getLogger(__name__)
@@ -1401,13 +1402,14 @@ def export_presentation(state: dict[str, Any], output_path: Path | str | None = 
             color=PPT_NAVY,
             bold=True,
         )
-        outcome_id = str(slide_data.get("outcome_id", "")).strip()
-        if outcome_id:
+        outcome_label = ", ".join(slide_outcome_ids(slide_data))
+        if outcome_label:
+            pill_width = min(max(1.0, 0.18 * len(outcome_label) + 0.5), 4.5)
             pill = slide.shapes.add_shape(
                 MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE,
                 Inches(0.78),
                 Inches(1.4),
-                Inches(1.0),
+                Inches(pill_width),
                 Inches(0.42),
             )
             pill.fill.solid()
@@ -1416,7 +1418,7 @@ def export_presentation(state: dict[str, Any], output_path: Path | str | None = 
             pill.text_frame.clear()
             pill.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
             paragraph = pill.text_frame.paragraphs[0]
-            paragraph.text = outcome_id
+            paragraph.text = outcome_label
             paragraph.alignment = PP_ALIGN.CENTER
             paragraph.font.size = Pt(13)
             paragraph.font.bold = True

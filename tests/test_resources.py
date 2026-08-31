@@ -44,7 +44,11 @@ from prism.models import (
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import render_current_artifact, render_resource_detail_sections
 from prism.quality import PRESENTATION_ASSESSMENT_TITLE, evaluate_quality
-from prism.resource_catalog import build_assessment_grid, build_lesson_plan
+from prism.resource_catalog import (
+    build_assessment_grid,
+    build_lesson_plan,
+    slide_outcome_ids,
+)
 from prism.workflow import (
     build_final_validation,
     create_session,
@@ -138,13 +142,21 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertTrue(
             all(
                 {
-                    slide["outcome_id"]
+                    outcome_id
                     for slide in item["presentation_outline"]
-                    if slide.get("outcome_id")
+                    for outcome_id in slide_outcome_ids(slide)
                 }
                 == lesson_outcomes[item["lesson_number"]]
                 for item in resources["lesson_presentations"]
             )
+        )
+        self.assertEqual(
+            {
+                outcome_id
+                for slide in assessment_slides
+                for outcome_id in slide_outcome_ids(slide)
+            },
+            {item["id"] for item in state["learning_outcomes"]},
         )
         self.assertEqual(
             [item["assessment_task_id"] for item in resources["tests"]],
@@ -216,6 +228,29 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertIn("tests", properties)
         self.assertIn("lesson_plan", properties)
         self.assertIn("assessment_grid", properties)
+
+    def test_presentation_schema_accepts_empty_and_multiple_outcome_links(self) -> None:
+        state = self._resource_state()
+        scoped_state = {
+            **state,
+            "resource_types": [RESOURCE_PRESENTATION],
+            "resource_generation_scope": RESOURCE_PRESENTATION,
+        }
+
+        slide_schema = _schema_for("resources", scoped_state)["properties"][
+            "artifact"
+        ]["items"]
+        allowed = [item["id"] for item in state["learning_outcomes"]]
+
+        self.assertIn("outcome_ids", slide_schema["required"])
+        self.assertEqual(
+            slide_schema["properties"]["outcome_id"]["enum"],
+            ["", *allowed],
+        )
+        self.assertEqual(
+            slide_schema["properties"]["outcome_ids"]["items"]["enum"],
+            allowed,
+        )
 
     def test_manual_selection_requires_an_explicit_test_target(self) -> None:
         state = self._resource_state()
@@ -678,6 +713,9 @@ class ResourceGenerationTests(unittest.TestCase):
                     artifact["presentation_outline"][1]["outcome_id"] = (
                         "RA_INEXISTENTE"
                     )
+                    artifact["presentation_outline"][1]["outcome_ids"] = [
+                        "RA_INEXISTENTE"
+                    ]
                 return GenerationResult(
                     artifact=artifact,
                     metadata={

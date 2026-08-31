@@ -70,6 +70,22 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 ),
                 {"id": "", "title": "", "description": "", "outcome_ids": []},
             ),
+            TableSpec(
+                "Cobertura das fontes documentais",
+                ("source_coverage",),
+                (
+                    _field("source", "Fonte", "source_reference"),
+                    _field("contribution", "Contributo curricular", "long"),
+                    _field("key_concepts", "Conceitos-chave", "lines"),
+                    _field("content_ids", "Conteúdos associados", "csv"),
+                ),
+                {
+                    "source": "",
+                    "contribution": "",
+                    "key_concepts": [],
+                    "content_ids": [],
+                },
+            ),
         ),
     ),
     "learning_outcomes": EditorLayout(
@@ -204,7 +220,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (
                     _field("title", "Título"),
                     _field("bullets", "Pontos — um por linha", "lines"),
-                    _field("outcome_id", "Resultado"),
+                    _field("outcome_ids", "Resultados", "linked_outcomes"),
                     _field("visual_mode", "Modo visual"),
                     _field("visual_asset_id", "Imagem associada"),
                     _field("visual_prompt", "Instrução da imagem IA", "long"),
@@ -222,6 +238,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "title": "",
                     "bullets": [],
                     "outcome_id": "",
+                    "outcome_ids": [],
                     "visual_mode": "diagrama",
                     "visual_asset_id": "",
                     "visual_prompt": "",
@@ -739,6 +756,12 @@ def editor_reference_options(
 
     if field.kind in {"ai_mode", "inherited_ai_mode"}:
         return dict(AI_MODE_LABELS)
+    if field.kind == "source_reference":
+        return {
+            source: source
+            for item in state.get("source_reduction", {}).get("sources", [])
+            if (source := str(item.get("source", "")).strip())
+        }
     if field.key == "visual_mode":
         return {
             "diagrama": "Diagrama nativo editável",
@@ -801,7 +824,30 @@ def editor_reference_options(
     return options
 
 
-def assistance_scope_options(stage: str, artifact: Any) -> list[dict[str, Any]]:
+def editor_table_is_applicable(
+    state: dict[str, Any],
+    table: TableSpec,
+) -> bool:
+    """Oculta tabelas condicionais quando não existe contexto para as preencher."""
+
+    if table.path != ("source_coverage",):
+        return True
+    reduction = state.get("source_reduction", {})
+    return bool(
+        reduction.get("applied")
+        and any(
+            str(item.get("source", "")).strip()
+            for item in reduction.get("sources", [])
+            if isinstance(item, dict)
+        )
+    )
+
+
+def assistance_scope_options(
+    stage: str,
+    artifact: Any,
+    state: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Lista âmbitos estáveis que o docente pode entregar explicitamente à IA."""
 
     layout = editor_layout(stage)
@@ -845,7 +891,12 @@ def assistance_scope_options(stage: str, artifact: Any) -> list[dict[str, Any]]:
     for scalar in layout.fields:
         options.append({"label": f"Campo: {scalar.label}", "path": list(scalar.path)})
     for table in layout.tables:
-        rows = value_at_path(artifact, table.path)
+        if state is not None and not editor_table_is_applicable(state, table):
+            continue
+        try:
+            rows = value_at_path(artifact, table.path)
+        except (KeyError, TypeError):
+            continue
         if table.path:
             options.append(
                 {"label": f"Tabela completa: {table.title}", "path": list(table.path)}
@@ -1029,6 +1080,23 @@ def new_table_row(
         row["id"] = next_structured_activity_id(existing_rows or [], "AE")
     elif any(field.kind == "assessment_task_id" for field in table.fields):
         row["id"] = next_structured_activity_id(existing_rows or [], "TA")
+    if state is not None and any(
+        field.kind == "source_reference" for field in table.fields
+    ):
+        used_sources = {
+            str(item.get("source", "")).strip()
+            for item in (existing_rows or [])
+            if isinstance(item, dict) and str(item.get("source", "")).strip()
+        }
+        row["source"] = next(
+            (
+                source
+                for item in state.get("source_reduction", {}).get("sources", [])
+                if (source := str(item.get("source", "")).strip())
+                and source not in used_sources
+            ),
+            "",
+        )
     if state is not None and "taxonomy" in row:
         row["taxonomy"] = validate_taxonomy_choice(
             str(state.get("course", {}).get("taxonomy_type", "SOLO"))

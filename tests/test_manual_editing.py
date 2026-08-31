@@ -7,6 +7,7 @@ from prism.manual_editing import (
     editor_field_value,
     editor_reference_options,
     editor_reference_value,
+    editor_table_is_applicable,
     editor_taxonomy_level_options,
     editor_taxonomy_verb_options,
     editor_layout,
@@ -172,7 +173,7 @@ def test_ai_assistance_scopes_omit_technical_id_fields() -> None:
         artifact = active_stage_artifact(state, stage)
         labels = [
             option["label"]
-            for option in assistance_scope_options(stage, artifact)
+            for option in assistance_scope_options(stage, artifact, state)
         ]
 
         assert all("campo ID" not in label for label in labels)
@@ -183,7 +184,7 @@ def test_presentation_assistance_omits_internal_visual_fields() -> None:
 
     labels = [
         option["label"]
-        for option in assistance_scope_options("resources", state["resources"])
+        for option in assistance_scope_options("resources", state["resources"], state)
     ]
 
     assert all("Origem visual" not in label for label in labels)
@@ -394,7 +395,10 @@ def test_curriculum_editor_only_links_curricular_contents() -> None:
     layout = editor_layout("curriculum_analysis")
 
     assert layout.fields == ()
-    assert [table.title for table in layout.tables] == ["Conteúdos identificados"]
+    assert [table.title for table in layout.tables] == [
+        "Conteúdos identificados",
+        "Cobertura das fontes documentais",
+    ]
     outcome_field = next(
         field for field in layout.tables[0].fields if field.key == "outcome_ids"
     )
@@ -410,6 +414,33 @@ def test_curriculum_editor_only_links_curricular_contents() -> None:
     assert next(
         field for field in layout.tables[0].fields if field.key == "id"
     ).kind == "content_id"
+    coverage_table = layout.tables[1]
+    assert next(
+        field for field in coverage_table.fields if field.key == "source"
+    ).kind == "source_reference"
+    assert next(
+        field for field in coverage_table.fields if field.key == "content_ids"
+    ).kind == "csv"
+
+
+def test_source_coverage_editor_is_only_visible_for_reduced_sources() -> None:
+    state = _completed_state()
+    coverage_table = editor_layout("curriculum_analysis").tables[1]
+
+    assert not editor_table_is_applicable(state, coverage_table)
+    state["source_reduction"] = {
+        "applied": True,
+        "sources": [{"source": "Documento A"}, {"source": "Documento B"}],
+    }
+
+    assert editor_table_is_applicable(state, coverage_table)
+    source_field = next(
+        field for field in coverage_table.fields if field.key == "source"
+    )
+    assert editor_reference_options(state, source_field) == {
+        "Documento A": "Documento A",
+        "Documento B": "Documento B",
+    }
 
 
 def test_new_curriculum_content_row_uses_the_next_readonly_identifier() -> None:

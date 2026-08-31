@@ -77,6 +77,45 @@ class WorkflowTests(unittest.TestCase):
             "Geração de recursos educativos",
         )
 
+    def test_schema_31_presentation_links_are_migrated_without_regeneration(self) -> None:
+        state = create_session(self.course)
+        state["schema_version"] = 31
+        state["learning_outcomes"] = [
+            {"id": "RA1"},
+            {"id": "RA2"},
+        ]
+        state["resources"]["presentation_outline"] = [
+            {
+                "title": "Resultados de aprendizagem",
+                "bullets": ["RA1 — Identificar", "RA2 — Aplicar"],
+                "outcome_id": ".",
+            },
+        ]
+        state["resources"]["lesson_presentations"] = [
+            {
+                "lesson_number": 1,
+                "presentation_outline": [
+                    {
+                        "title": "Avaliação",
+                        "bullets": ["Resultados: RA2"],
+                        "outcome_id": "",
+                    }
+                ],
+            }
+        ]
+
+        migrated = migrate_legacy_state(deepcopy(state))
+
+        general_slide = migrated["resources"]["presentation_outline"][0]
+        lesson_slide = migrated["resources"]["lesson_presentations"][0][
+            "presentation_outline"
+        ][0]
+        self.assertEqual(migrated["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(general_slide["outcome_ids"], ["RA1", "RA2"])
+        self.assertEqual(general_slide["outcome_id"], "")
+        self.assertEqual(lesson_slide["outcome_ids"], ["RA2"])
+        self.assertEqual(lesson_slide["outcome_id"], "RA2")
+
     def test_reduced_sources_require_explicit_curriculum_coverage(self) -> None:
         reduction = {
             "applied": True,

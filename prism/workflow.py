@@ -28,6 +28,7 @@ from .agents import (
     RESOURCE_ARTIFACT_FIELDS,
     RuleBasedPedagogicalAgent,
     _canonicalize_presentation_assessment_overview,
+    _canonicalize_resource_presentation_outcomes,
     build_localized_assistance_agent,
     build_pedagogical_team,
     validate_artifact,
@@ -157,7 +158,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -250,6 +251,7 @@ def analyse_curriculum(state: PrismState) -> dict[str, Any]:
             }
             for index, topic in enumerate(topics)
         ],
+        "source_coverage": [],
         "feedback_considered": feedback or None,
     }
     reduction_sources = [
@@ -505,6 +507,7 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 ]
             ),
             "outcome_id": "",
+            "outcome_ids": [],
             "visual_mode": "diagrama",
             "visual_asset_id": "",
             "visual_prompt": "",
@@ -534,6 +537,7 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                     assessment_for(outcome["id"])["criterion"],
                 ],
                 "outcome_id": outcome["id"],
+                "outcome_ids": [outcome["id"]],
                 "visual_mode": "diagrama",
                 "visual_asset_id": "",
                 "visual_prompt": "",
@@ -560,6 +564,7 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 "Registar feedback para uma futura reformulação.",
             ],
             "outcome_id": "",
+            "outcome_ids": [],
             "visual_mode": "diagrama",
             "visual_asset_id": "",
             "visual_prompt": "",
@@ -663,6 +668,10 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
         resources,
         state,
     )
+    resources, _ = _canonicalize_resource_presentation_outcomes(
+        resources,
+        state,
+    )
     return {
         "resources": resources,
         **_audit_update(
@@ -688,6 +697,7 @@ def blank_artifact(stage: str, state: PrismState) -> Any:
     if stage == "curriculum_analysis":
         return {
             "contents": [],
+            "source_coverage": [],
         }
     if stage == "assessment_activities":
         return []
@@ -715,6 +725,9 @@ def ensure_manual_artifacts(state: PrismState) -> PrismState:
     for stage in AUTHORING_STAGES:
         if stage not in state:
             state[stage] = blank_artifact(stage, state)
+    curriculum = state.get("curriculum_analysis")
+    if isinstance(curriculum, dict):
+        curriculum.setdefault("source_coverage", [])
     state["learning_outcome_assumptions"] = _clean_learning_outcome_assumptions(
         state.get("learning_outcome_assumptions", [])
     )

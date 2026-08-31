@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Any
 
@@ -11,6 +12,46 @@ from .models import (
     RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_TEST,
 )
+
+
+def slide_outcome_ids(
+    slide: dict[str, Any],
+    allowed_ids: set[str] | None = None,
+    *,
+    infer_from_text: bool = False,
+) -> list[str]:
+    """Normaliza os resultados associados a um slide.
+
+    ``outcome_id`` é mantido como compatibilidade com apresentações anteriores.
+    A inferência textual destina-se exclusivamente à migração de sessões antigas:
+    só reconhece identificadores RA explícitos e, quando fornecido, limita-os ao
+    catálogo aprovado da sessão.
+    """
+
+    identifiers: list[str] = []
+    raw_identifiers = slide.get("outcome_ids", [])
+    if isinstance(raw_identifiers, list):
+        identifiers.extend(str(value).strip().upper() for value in raw_identifiers)
+    legacy_identifier = str(slide.get("outcome_id", "")).strip().upper()
+    if legacy_identifier:
+        identifiers.append(legacy_identifier)
+    if infer_from_text:
+        bullets = slide.get("bullets", [])
+        text = " ".join(
+            [
+                str(slide.get("title", "")),
+                *(str(value) for value in bullets if isinstance(bullets, list)),
+            ]
+        )
+        identifiers.extend(re.findall(r"(?<![A-Z0-9_])RA\d+(?![A-Z0-9_])", text.upper()))
+
+    normalized: list[str] = []
+    for identifier in identifiers:
+        if not identifier or (allowed_ids is not None and identifier not in allowed_ids):
+            continue
+        if identifier not in normalized:
+            normalized.append(identifier)
+    return normalized
 
 
 def lesson_scope(state: dict[str, Any], lesson_number: int) -> dict[str, Any]:

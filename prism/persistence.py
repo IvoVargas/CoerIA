@@ -24,6 +24,7 @@ from .curriculum import (
 )
 from .providers import AI_PROVIDER_OPENAI, validate_ai_provider
 from .models import RESOURCE_TEST
+from .resource_catalog import slide_outcome_ids
 
 
 DEFAULT_DATABASE_PATH = Path(__file__).resolve().parents[1] / "data" / "prism.db"
@@ -33,9 +34,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 31:
+    if previous_version < 32:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 31
+    state["schema_version"] = 32
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -84,6 +85,18 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         for slide in slides:
             if not isinstance(slide, dict):
                 continue
+            allowed_ids = {
+                str(item.get("id", "")).strip().upper()
+                for item in state.get("learning_outcomes", [])
+                if str(item.get("id", "")).strip()
+            }
+            outcome_ids = slide_outcome_ids(
+                slide,
+                allowed_ids,
+                infer_from_text=previous_version < 32,
+            )
+            slide["outcome_ids"] = outcome_ids
+            slide["outcome_id"] = outcome_ids[0] if len(outcome_ids) == 1 else ""
             slide.setdefault("visual_mode", "diagrama")
             slide.setdefault("visual_asset_id", "")
             slide.setdefault("visual_prompt", "")
@@ -96,6 +109,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         resources.setdefault("tests", [])
         resources.setdefault("lesson_plan", {"lessons": []})
         resources.setdefault("assessment_grid", {"rows": []})
+        for entry in resources.get("lesson_presentations", []):
+            if isinstance(entry, dict):
+                migrate_presentation_visuals(entry)
 
     migrate_presentation_visuals(state.get("resources"))
     migrate_extended_resources(state.get("resources"))
@@ -160,6 +176,12 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             migrate_presentation_visuals(artifacts.get("resources"))
             migrate_extended_resources(artifacts.get("resources"))
             remove_curriculum_assumptions(artifacts.get("curriculum_analysis"))
+    for proposal in state.get("ai_proposals", []):
+        if not isinstance(proposal, dict) or proposal.get("stage") != "resources":
+            continue
+        for key in ("before", "after", "edited_after"):
+            migrate_presentation_visuals(proposal.get(key))
+            migrate_extended_resources(proposal.get(key))
 
     if previous_version < 31:
         selected_types = list(state.get("resource_types", []))
