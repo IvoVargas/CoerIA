@@ -10,14 +10,20 @@ from .isced import canonicalize_isced_f
 
 
 RESOURCE_PRESENTATION = "Apresentação PowerPoint"
+RESOURCE_LESSON_PRESENTATIONS = "Apresentações das aulas"
 RESOURCE_WORKSHEET = "Ficha de aula"
 RESOURCE_TEST = "Teste"
 RESOURCE_PRACTICAL = "Atividade prática"
+RESOURCE_LESSON_PLAN = "Plano de aulas"
+RESOURCE_ASSESSMENT_GRID = "Grelha de avaliação"
 SUPPORTED_RESOURCE_TYPES = (
     RESOURCE_PRESENTATION,
+    RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_WORKSHEET,
     RESOURCE_TEST,
     RESOURCE_PRACTICAL,
+    RESOURCE_LESSON_PLAN,
+    RESOURCE_ASSESSMENT_GRID,
 )
 
 SEMESTER_OPTIONS = ("1.º semestre", "2.º semestre")

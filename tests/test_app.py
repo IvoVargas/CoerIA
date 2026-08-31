@@ -15,6 +15,7 @@ from prism.models import (
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
+    SUPPORTED_RESOURCE_TYPES,
 )
 from prism.persistence import SQLiteSessionStore
 from prism.workflow import (
@@ -1280,18 +1281,18 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
     await user.should_not_see("AVISOS VISUAIS")
     await user.should_not_see("IMAGENS SELECIONADAS")
     assert len(user.find(marker="presentation-view-thumbnail-5").elements) == 1
-    for tab_id in ("presentation", "worksheet", "test", "practical"):
+    for tab_id in ("presentation", "worksheet", "tests", "practical"):
         assert len(user.find(marker=f"resource-view-tab-{tab_id}").elements) == 1
 
     user.find(marker="resource-view-tab-worksheet").click()
     await user.should_see("Enquadramento:")
-    user.find(marker="resource-view-tab-test").click()
+    user.find(marker="resource-view-tab-tests").click()
     await user.should_see("Chave de correção")
     user.find(marker="resource-view-tab-practical").click()
     await user.should_see("Entregáveis:")
 
     user.find(marker="edit-artifact-content").click()
-    for tab_id in ("presentation", "worksheet", "test", "practical"):
+    for tab_id in ("presentation", "worksheet", "tests", "practical"):
         assert len(user.find(marker=f"resource-edit-tab-{tab_id}").elements) == 1
 
     await user.should_see("Slides da apresentação")
@@ -1323,10 +1324,53 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
     await user.should_see("Visual exclusivo do slide 5")
     user.find(marker="resource-edit-tab-worksheet").click()
     await user.should_see("Ficha — enquadramento")
-    user.find(marker="resource-edit-tab-test").click()
+    user.find(marker="resource-edit-tab-tests").click()
     await user.should_see("Teste — cotação total")
     user.find(marker="resource-edit-tab-practical").click()
     await user.should_see("Critérios da atividade prática")
+
+
+@pytest.mark.asyncio
+async def test_expanded_resource_collections_have_clear_tabs(user: User) -> None:
+    agent = create_test_agent()
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        ),
+        resource_types=list(SUPPORTED_RESOURCE_TYPES),
+        agent=agent,
+    )
+    for _ in range(5):
+        state = review_current_stage(state, "approve", agent=agent)
+    state["orchestration"]["mode"] = "manual-first"
+
+    @ui.page("/_test_expanded_resource_tabs")
+    def expanded_resource_tabs_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_expanded_resource_tabs")
+
+    await user.should_see("Apresentações PowerPoint das aulas")
+    await user.should_see("Testes por tarefa de avaliação")
+    await user.should_see("Grelha de avaliação")
+    for tab_id in (
+        "lesson-plan",
+        "assessment-grid",
+        "presentation",
+        "lesson-presentations",
+        "worksheet",
+        "tests",
+        "practical",
+    ):
+        assert len(user.find(marker=f"resource-view-tab-{tab_id}").elements) == 1
+
+    user.find(marker="resource-view-tab-lesson-presentations").click()
+    await user.should_see("Aula 1")
+    user.find(marker="resource-view-tab-tests").click()
+    await user.should_see("TA1")
 
 
 @pytest.mark.asyncio

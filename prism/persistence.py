@@ -23,6 +23,7 @@ from .curriculum import (
     validate_taxonomy_choice,
 )
 from .providers import AI_PROVIDER_OPENAI, validate_ai_provider
+from .models import RESOURCE_TEST
 
 
 DEFAULT_DATABASE_PATH = Path(__file__).resolve().parents[1] / "data" / "prism.db"
@@ -32,9 +33,9 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """Acrescenta os campos estruturais novos sem apagar artefactos históricos."""
 
     previous_version = int(state.get("schema_version", 1) or 1)
-    if previous_version < 30:
+    if previous_version < 31:
         state.setdefault("migrated_from_schema_version", previous_version)
-    state["schema_version"] = 30
+    state["schema_version"] = 31
     state["ai_provider"] = validate_ai_provider(
         state.get("ai_provider", AI_PROVIDER_OPENAI)
     )
@@ -88,7 +89,16 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             slide.setdefault("visual_prompt", "")
             slide.setdefault("visual_warning", "")
 
+    def migrate_extended_resources(resources: Any) -> None:
+        if not isinstance(resources, dict):
+            return
+        resources.setdefault("lesson_presentations", [])
+        resources.setdefault("tests", [])
+        resources.setdefault("lesson_plan", {"lessons": []})
+        resources.setdefault("assessment_grid", {"rows": []})
+
     migrate_presentation_visuals(state.get("resources"))
+    migrate_extended_resources(state.get("resources"))
     version_map = state.get("versions", {})
 
     def migrate_ai_mode_rows(rows: Any) -> None:
@@ -139,6 +149,7 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     if isinstance(version_map, dict):
         for resource_version in version_map.get("resources", []):
             migrate_presentation_visuals(resource_version)
+            migrate_extended_resources(resource_version)
         for curriculum_version in version_map.get("curriculum_analysis", []):
             remove_curriculum_assumptions(curriculum_version)
     for snapshot in state.get("revision_snapshots", []):
@@ -147,7 +158,33 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
         artifacts = snapshot.get("artifacts", {})
         if isinstance(artifacts, dict):
             migrate_presentation_visuals(artifacts.get("resources"))
+            migrate_extended_resources(artifacts.get("resources"))
             remove_curriculum_assumptions(artifacts.get("curriculum_analysis"))
+
+    if previous_version < 31:
+        selected_types = list(state.get("resource_types", []))
+        task_ids = [
+            str(item.get("id", "")).strip()
+            for item in state.get("assessment_activities", [])
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        ]
+        state["resource_scopes"] = {
+            "lesson_presentations": [],
+            "tests": task_ids if RESOURCE_TEST in selected_types else [],
+        }
+        for proposal in state.get("ai_proposals", []):
+            if not isinstance(proposal, dict) or proposal.get("stage") != "resources":
+                continue
+            migrate_extended_resources(proposal.get("before"))
+            migrate_extended_resources(proposal.get("after"))
+    else:
+        scopes = state.get("resource_scopes")
+        if not isinstance(scopes, dict):
+            scopes = {}
+        state["resource_scopes"] = {
+            "lesson_presentations": list(scopes.get("lesson_presentations", [])),
+            "tests": list(scopes.get("tests", [])),
+        }
 
     course = state.setdefault("course", {})
     for key, default in {

@@ -140,17 +140,24 @@ sem uma galeria duplicada no cartão da etapa. Os recursos são produzidos com
 base nas relações já registadas entre resultados, conteúdos, atividades de
 ensino-aprendizagem e tarefas de avaliação.
 
-Podem ser produzidos quatro tipos de recurso: apresentação PowerPoint, ficha de
-aula, teste com chave de correção e atividade prática. As apresentações devem
-integrar imagens, diagramas, tabelas, gráficos ou outros elementos visuais com
-finalidade pedagógica. Antes da síntese final, a apresentação inclui
-automaticamente uma secção com todas as tarefas de avaliação, respetiva
-finalidade, resultados abrangidos, evidências e critérios aprovados; esta secção
-é repartida por vários slides quando necessário para manter a legibilidade. Na
-etapa **Geração de recursos educativos**, cada tipo selecionado
-tem um separador próprio tanto na consulta como na edição, evitando apresentar
-slides, secções, questões e critérios numa única sequência extensa. No separador
-da apresentação, a consulta integra a miniatura da imagem associada na coluna
+O docente pode selecionar o plano de aulas, a grelha de avaliação, uma
+apresentação geral da UC, apresentações PowerPoint para aulas concretas, ficha de
+aula, testes associados a tarefas de avaliação concretas e atividade prática. O
+plano e a grelha são derivados deterministicamente dos artefactos aprovados e
+não consomem IA. Cada apresentação de aula e cada teste constituem uma geração
+independente: recebem apenas a aula ou a tarefa escolhida e devem cobrir
+exatamente os resultados de aprendizagem desse âmbito.
+
+As apresentações devem integrar imagens, diagramas, tabelas, gráficos ou outros
+elementos visuais com finalidade pedagógica. Antes da síntese final, a
+apresentação geral inclui automaticamente uma secção com todas as tarefas de
+avaliação; numa apresentação de aula, essa secção fica limitada às tarefas dessa
+aula. São indicadas a finalidade, os resultados abrangidos, as evidências e os
+critérios aprovados, repartindo a secção por vários slides quando necessário
+para manter a legibilidade. Na etapa **Geração de recursos educativos**, cada
+tipo selecionado tem um separador próprio tanto na consulta como na edição; as
+coleções por aula e por tarefa usam ainda separadores internos. No separador da
+apresentação, a consulta integra a miniatura da imagem associada na coluna
 **Modo visual**, sem repetir a proveniência, avisos técnicos ou uma galeria
 separada. A edição é organizada por slide e mostra apenas
 os campos pedagógicos aplicáveis. A imagem associada é escolhida numa galeria de
@@ -167,9 +174,10 @@ o programa da UC — incluindo a política de utilização da IA —, os ficheir
 selecionados, síntese automática do alinhamento,
 auditoria,
 manifesto e estado completo da sessão. Antes de preparar o pacote, o docente
-escolhe se os documentos editáveis — programa da UC, ficha de aula, teste e
-atividade prática — são incluídos em Word (`.docx`), LaTeX (`.tex`) ou em ambos
-os formatos. A apresentação mantém sempre o formato PowerPoint (`.pptx`). Os
+escolhe se os documentos editáveis — programa da UC, plano de aulas, grelha de
+avaliação, ficha de aula, testes e atividade prática — são incluídos em Word
+(`.docx`), LaTeX (`.tex`) ou em ambos os formatos. A apresentação geral e as
+apresentações das aulas mantêm sempre o formato PowerPoint (`.pptx`). Os
 ficheiros LaTeX são documentos autónomos em UTF-8 e escapam o texto gerado ou
 introduzido pelo docente para preservar uma estrutura compilável. Na instalação
 da VPS, a compilação PDF pode ser ativada; nesse caso, cada `.tex` é acompanhado

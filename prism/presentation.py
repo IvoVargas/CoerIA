@@ -7,6 +7,9 @@ from typing import Any
 
 from .curriculum import taxonomy_level_label
 from .models import (
+    RESOURCE_ASSESSMENT_GRID,
+    RESOURCE_LESSON_PLAN,
+    RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
@@ -110,6 +113,12 @@ def _render_resources(artifact: dict[str, Any]) -> str:
             len(artifact.get("presentation_outline", [])),
             "slides",
         ])
+    if RESOURCE_LESSON_PRESENTATIONS in selected:
+        resource_rows.append([
+            RESOURCE_LESSON_PRESENTATIONS,
+            len(artifact.get("lesson_presentations", [])),
+            "apresentações",
+        ])
     if "Ficha de aula" in selected:
         resource_rows.append([
             "Ficha de aula",
@@ -118,15 +127,29 @@ def _render_resources(artifact: dict[str, Any]) -> str:
         ])
     if "Teste" in selected:
         resource_rows.append([
-            "Teste",
-            len(artifact.get("test", {}).get("questions", [])),
-            "questões",
+            "Testes",
+            len(artifact.get("tests", [])) or int(
+                bool(artifact.get("test", {}).get("questions", []))
+            ),
+            "testes",
         ])
     if "Atividade prática" in selected:
         resource_rows.append([
             "Atividade prática",
             len(artifact.get("practical_activity", {}).get("steps", [])),
             "etapas",
+        ])
+    if RESOURCE_LESSON_PLAN in selected:
+        resource_rows.append([
+            RESOURCE_LESSON_PLAN,
+            len(artifact.get("lesson_plan", {}).get("lessons", [])),
+            "aulas",
+        ])
+    if RESOURCE_ASSESSMENT_GRID in selected:
+        resource_rows.append([
+            RESOURCE_ASSESSMENT_GRID,
+            len(artifact.get("assessment_grid", {}).get("rows", [])),
+            "tarefas",
         ])
 
     return (
@@ -143,6 +166,63 @@ def render_resource_detail_sections(
 
     selected = set(artifact.get("selected_types", []))
     sections: list[dict[str, str]] = []
+
+    if RESOURCE_LESSON_PLAN in selected:
+        lesson_rows = [
+            [
+                item.get("lesson_number", index),
+                item.get("duration_minutes", 0),
+                item.get("session_type", ""),
+                ", ".join(item.get("component_ids", [])),
+                item.get("notes", ""),
+            ]
+            for index, item in enumerate(
+                artifact.get("lesson_plan", {}).get("lessons", []), start=1
+            )
+        ]
+        sections.append(
+            {
+                "id": "lesson-plan",
+                "label": "Plano de aulas",
+                "icon": "event_note",
+                "content": _table(
+                    ["Aula", "Duração", "Tipo", "AE/TA", "Organização"],
+                    lesson_rows,
+                ),
+            }
+        )
+
+    if RESOURCE_ASSESSMENT_GRID in selected:
+        grid_rows = [
+            [
+                item.get("assessment_task_id", ""),
+                ", ".join(item.get("teaching_activity_ids", [])),
+                ", ".join(item.get("outcome_ids", [])),
+                " · ".join(
+                    value
+                    for value in (
+                        str(item.get("assessment_purpose", "")).strip(),
+                        str(item.get("work_type", "")).strip(),
+                    )
+                    if value
+                ),
+                item.get("activity", ""),
+                item.get("evidence", ""),
+                item.get("criterion", ""),
+            ]
+            for item in artifact.get("assessment_grid", {}).get("rows", [])
+        ]
+        sections.append(
+            {
+                "id": "assessment-grid",
+                "label": "Grelha de avaliação",
+                "icon": "fact_check",
+                "content": _table(
+                    ["TA", "AE", "RA", "Finalidade / modalidade", "Tarefa", "Evidência", "Critério"],
+                    grid_rows,
+                ),
+            }
+        )
 
     if RESOURCE_PRESENTATION in selected:
         rows = []
@@ -189,6 +269,29 @@ def render_resource_detail_sections(
             }
         )
 
+    if RESOURCE_LESSON_PRESENTATIONS in selected:
+        summary_rows = [
+            [
+                item.get("lesson_number", ""),
+                item.get("duration_minutes", 0),
+                item.get("session_type", ""),
+                ", ".join(item.get("outcome_ids", [])),
+                len(item.get("presentation_outline", [])),
+            ]
+            for item in artifact.get("lesson_presentations", [])
+        ]
+        sections.append(
+            {
+                "id": "lesson-presentations",
+                "label": "Apresentações das aulas",
+                "icon": "co_present",
+                "content": _table(
+                    ["Aula", "Duração", "Tipo", "Resultados", "Slides"],
+                    summary_rows,
+                ),
+            }
+        )
+
     if RESOURCE_WORKSHEET in selected:
         worksheet = artifact.get("lesson_worksheet", {})
         rows = [
@@ -219,39 +322,47 @@ def render_resource_detail_sections(
         )
 
     if RESOURCE_TEST in selected:
-        test = artifact.get("test", {})
-        rows = [
-            [
-                item.get("id", index),
-                item.get("outcome_id", "—"),
-                item.get("question_type", ""),
-                item.get("points", 0),
-                item.get("prompt", ""),
-                item.get("answer_key", ""),
+        test_entries = artifact.get("tests", [])
+        if not test_entries and artifact.get("test", {}).get("questions"):
+            test_entries = [{"assessment_task_id": "", "test": artifact["test"]}]
+        test_blocks: list[str] = []
+        for entry in test_entries:
+            test = entry.get("test", {})
+            rows = [
+                [
+                    item.get("id", index),
+                    item.get("outcome_id", "—"),
+                    item.get("question_type", ""),
+                    item.get("points", 0),
+                    item.get("prompt", ""),
+                    item.get("answer_key", ""),
+                ]
+                for index, item in enumerate(test.get("questions", []), start=1)
             ]
-            for index, item in enumerate(test.get("questions", []), start=1)
-        ]
+            task_id = str(entry.get("assessment_task_id", "")).strip()
+            test_blocks.append(
+                (f"### {task_id}\n\n" if task_id else "")
+                + f"## {test.get('title') or 'Teste'}\n\n"
+                + f"**Instruções:** {test.get('instructions') or '—'}\n\n"
+                + f"**Cotação total:** {test.get('total_points', 0)} pontos\n\n"
+                + _table(
+                    [
+                        "ID",
+                        "Resultado",
+                        "Tipo",
+                        "Pontos",
+                        "Questões",
+                        "Chave de correção",
+                    ],
+                    rows,
+                )
+            )
         sections.append(
             {
-                "id": "test",
-                "label": "Teste",
+                "id": "tests",
+                "label": "Testes",
                 "icon": "quiz",
-                "content": (
-                    f"## {test.get('title') or 'Teste'}\n\n"
-                    f"**Instruções:** {test.get('instructions') or '—'}\n\n"
-                    f"**Cotação total:** {test.get('total_points', 0)} pontos\n\n"
-                    + _table(
-                        [
-                            "ID",
-                            "Resultado",
-                            "Tipo",
-                            "Pontos",
-                            "Questões",
-                            "Chave de correção",
-                        ],
-                        rows,
-                    )
-                ),
+                "content": "\n\n---\n\n".join(test_blocks),
             }
         )
 

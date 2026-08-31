@@ -48,6 +48,9 @@ from .curriculum import (
 )
 from .models import (
     CourseInput,
+    RESOURCE_ASSESSMENT_GRID,
+    RESOURCE_LESSON_PLAN,
+    RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
@@ -55,6 +58,13 @@ from .models import (
     validate_resource_types,
 )
 from .quality import attach_quality_report
+from .resource_catalog import (
+    apply_deterministic_resources,
+    assessment_scope,
+    blank_extended_resources,
+    lesson_scope,
+    validate_resource_scopes,
+)
 from .providers import configured_ai_provider, validate_ai_provider
 from .image_generation import enrich_presentation_with_ai_images
 from .manual_editing import (
@@ -93,7 +103,9 @@ class PrismState(TypedDict, total=False):
     status: str
     review: dict[str, str]
     resource_types: list[str]
+    resource_scopes: dict[str, list[Any]]
     resource_generation_scope: str
+    resource_item_scope: dict[str, Any]
     resource_generation_drafts: dict[str, Any]
     versions: dict[str, list[Any]]
     generation_metadata: dict[str, list[dict[str, Any]]]
@@ -145,7 +157,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 30
+SCHEMA_VERSION = 31
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -429,6 +441,17 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
     course = state["course"]
     selected_types = state.get("resource_types", [RESOURCE_PRESENTATION])
     taxonomy_type = validate_taxonomy_choice(course.get("taxonomy_type", "SOLO"))
+    item_scope = (
+        state.get("resource_item_scope")
+        if isinstance(state.get("resource_item_scope"), dict)
+        else {}
+    )
+    lesson_number = int(item_scope.get("lesson_number", 0) or 0)
+    presentation_title = (
+        f"Aula {lesson_number} — {course['unit_name']}"
+        if item_scope.get("kind") == "lesson"
+        else course["unit_name"]
+    )
 
     def ai_mode_instruction(outcome: dict[str, Any]) -> str:
         mode = str(outcome.get("ai_mode", AI_MODE_OFF))
@@ -467,12 +490,20 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
         )
     slides = [
         {
-            "title": course["unit_name"],
-            "bullets": [
-                f"Público: {course['audience']}",
-                f"Duração: {course['duration_hours']} horas",
-                f"Estrutura alinhada com a Taxonomia {taxonomy_type}.",
-            ],
+            "title": presentation_title,
+            "bullets": (
+                [
+                    f"Duração: {item_scope.get('duration_minutes', 0)} minutos",
+                    f"Tipo: {item_scope.get('session_type', '')}",
+                    str(item_scope.get("notes", "")) or "Organização da aula",
+                ]
+                if item_scope.get("kind") == "lesson"
+                else [
+                    f"Público: {course['audience']}",
+                    f"Duração: {course['duration_hours']} horas",
+                    f"Estrutura alinhada com a Taxonomia {taxonomy_type}.",
+                ]
+            ),
             "outcome_id": "",
             "visual_mode": "diagrama",
             "visual_asset_id": "",
@@ -574,7 +605,11 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
         for index, outcome in enumerate(state["learning_outcomes"])
     ]
     test = {
-        "title": f"Teste — {course['unit_name']}",
+        "title": (
+            f"Teste {item_scope.get('assessment_task_id')} — {course['unit_name']}"
+            if item_scope.get("kind") == "assessment_task"
+            else f"Teste — {course['unit_name']}"
+        ),
         "instructions": "Responda de forma clara e apresente a fundamentação solicitada.",
         "total_points": sum(item["points"] for item in test_questions),
         "questions": test_questions,
@@ -661,38 +696,16 @@ def blank_artifact(stage: str, state: PrismState) -> Any:
     if stage == "teaching_activities":
         return []
     if stage == "resources":
-        return {
-            "selected_types": list(state.get("resource_types", [])),
-            "presentation_outline": [],
-            "lesson_worksheet": {
-                "title": "",
-                "overview": "",
-                "instructions": "",
-                "sections": [],
-            },
-            "test": {
-                "title": "",
-                "instructions": "",
-                "total_points": 0,
-                "questions": [],
-            },
-            "practical_activity": {
-                "title": "",
-                "context": "",
-                "duration_minutes": 0,
-                "materials": [],
-                "steps": [],
-                "deliverables": [],
-                "criteria": [],
-            },
-            "feedback_considered": None,
-            "quality": {
-                "status": "Não calculada",
-                "passed": False,
-                "summary": {"passed": 0, "warnings": 0, "errors": 0},
-                "checks": [],
-            },
+        resources = blank_extended_resources(
+            list(state.get("resource_types", []))
+        )
+        resources["quality"] = {
+            "status": "Não calculada",
+            "passed": False,
+            "summary": {"passed": 0, "warnings": 0, "errors": 0},
+            "checks": [],
         }
+        return resources
     raise ValueError("A etapa selecionada não possui um artefacto editável.")
 
 
@@ -981,6 +994,15 @@ def _remap_list_references(
     return remapped
 
 
+def _synchronize_legacy_test_resource(resources: dict[str, Any]) -> None:
+    """Mantém o teste singular apenas como espelho para sessões antigas."""
+
+    tests = resources.get("tests", [])
+    if isinstance(tests, list) and tests:
+        first_test = tests[0].get("test", {})
+        resources["test"] = deepcopy(first_test) if isinstance(first_test, dict) else {}
+
+
 def save_manual_draft(
     state: PrismState,
     target_stage: str,
@@ -1071,6 +1093,7 @@ def save_manual_draft(
         for resource_type, field in resource_fields.items():
             if resource_type not in selected_types:
                 edited_artifact[field] = deepcopy(blank_resources[field])
+        _synchronize_legacy_test_resource(edited_artifact)
         edited_artifact = attach_quality_report(updated, edited_artifact)
 
     clean_reason = reason.strip() or "Conteúdo alterado diretamente pelo docente."
@@ -1336,6 +1359,7 @@ def reopen_completed_manual_session(
 def update_manual_resource_settings(
     state: PrismState,
     resource_types: list[str],
+    resource_scopes: dict[str, Any] | None = None,
 ) -> PrismState:
     """Atualiza escolhas de recursos sem gerar conteúdo nem avançar a sessão."""
 
@@ -1347,10 +1371,49 @@ def update_manual_resource_settings(
             "A seleção de recursos pertence à etapa Geração de recursos educativos."
         )
     selected = validate_resource_types(resource_types)
+    scopes = validate_resource_scopes(
+        updated,
+        selected,
+        resource_scopes,
+    )
     updated["resource_types"] = selected
+    updated["resource_scopes"] = scopes
 
     resources = deepcopy(updated["resources"])
     resources["selected_types"] = list(selected)
+    if RESOURCE_PRESENTATION not in selected:
+        resources["presentation_outline"] = []
+    if RESOURCE_LESSON_PRESENTATIONS not in selected:
+        resources["lesson_presentations"] = []
+    else:
+        resources["lesson_presentations"] = [
+            item
+            for item in resources.get("lesson_presentations", [])
+            if int(item.get("lesson_number", 0) or 0)
+            in scopes["lesson_presentations"]
+        ]
+    if RESOURCE_WORKSHEET not in selected:
+        resources["lesson_worksheet"] = blank_extended_resources([])[
+            "lesson_worksheet"
+        ]
+    if RESOURCE_TEST not in selected:
+        resources["test"] = blank_extended_resources([])["test"]
+        resources["tests"] = []
+    else:
+        resources["tests"] = [
+            item
+            for item in resources.get("tests", [])
+            if str(item.get("assessment_task_id", "")) in scopes["tests"]
+        ]
+        if resources["tests"]:
+            _synchronize_legacy_test_resource(resources)
+        elif resource_scopes is not None:
+            resources["test"] = blank_extended_resources([])["test"]
+    if RESOURCE_PRACTICAL not in selected:
+        resources["practical_activity"] = blank_extended_resources([])[
+            "practical_activity"
+        ]
+    resources = apply_deterministic_resources(updated, resources)
     updated["resources"] = attach_quality_report(updated, resources)
     statuses = dict(updated.get("stage_statuses", {}))
     statuses["resources"] = (
@@ -1418,8 +1481,10 @@ def request_ai_assistance(
     if target_stage == "resources" and scope_path:
         resource_by_field = {
             "presentation_outline": RESOURCE_PRESENTATION,
+            "lesson_presentations": RESOURCE_LESSON_PRESENTATIONS,
             "lesson_worksheet": RESOURCE_WORKSHEET,
             "test": RESOURCE_TEST,
+            "tests": RESOURCE_TEST,
             "practical_activity": RESOURCE_PRACTICAL,
         }
         scoped_resource = resource_by_field.get(str(scope_path[0]))
@@ -1465,6 +1530,7 @@ def request_ai_assistance(
         after = deepcopy(result.artifact)
         if target_stage == "resources" and isinstance(after, dict):
             proposed_images = after.pop("_generated_images", [])
+            after.pop("_resource_scopes", None)
     if target_stage == "learning_outcomes" and not scope_path:
         after = normalize_learning_outcome_ids(after, sequential=True)
     if before == after:
@@ -1928,10 +1994,31 @@ def create_test_agent() -> RuleBasedPedagogicalAgent:
 def _resource_generation_scope(
     state: PrismState,
     resource_type: str,
+    item_scope: dict[str, Any] | None = None,
 ) -> PrismState:
     scoped = deepcopy(state)
     scoped["resource_types"] = [resource_type]
     scoped["resource_generation_scope"] = resource_type
+    if item_scope:
+        scoped["resource_item_scope"] = deepcopy(item_scope)
+        scoped["learning_outcomes"] = deepcopy(
+            item_scope.get("learning_outcomes", [])
+        )
+        scoped["teaching_activities"] = deepcopy(
+            item_scope.get("teaching_activities", [])
+        )
+        scoped["assessment_activities"] = deepcopy(
+            item_scope.get("assessment_activities", [])
+            or ([item_scope["assessment_task"]] if item_scope.get("assessment_task") else [])
+        )
+        expected_ids = set(item_scope.get("outcome_ids", []))
+        curriculum = deepcopy(scoped.get("curriculum_analysis", {}))
+        curriculum["contents"] = [
+            item
+            for item in curriculum.get("contents", [])
+            if expected_ids & set(item.get("outcome_ids", []))
+        ]
+        scoped["curriculum_analysis"] = curriculum
     return scoped
 
 
@@ -1943,6 +2030,7 @@ def _resource_draft_fingerprint(
         "ai_provider": state.get("ai_provider"),
         "course": state.get("course"),
         "resource_types": selected_types,
+        "resource_scopes": state.get("resource_scopes", {}),
         **{
             stage: state.get(stage)
             for stage in STAGE_ORDER[: STAGE_ORDER.index("resources")]
@@ -1990,6 +2078,17 @@ def _matching_resource_drafts(
 def _aggregate_resource_metadata(
     records: list[tuple[str, list[GenerationResult], int]],
 ) -> dict[str, Any]:
+    if not records:
+        return {
+            "provider": "CoerIA",
+            "model": "Derivação determinística",
+            "duration_ms": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "validation_attempts": 0,
+            "resource_generations": [],
+        }
     rows: list[dict[str, Any]] = []
     for resource_type, generations, quality_revisions in records:
         attempts = [deepcopy(generation.metadata) for generation in generations]
@@ -2116,6 +2215,71 @@ def _aggregate_resource_metadata(
     return metadata
 
 
+def _resource_generation_jobs(
+    state: PrismState,
+    selected_types: list[str],
+) -> list[dict[str, Any]]:
+    """Expande tipos compostos em gerações independentes e rastreáveis."""
+
+    scopes = validate_resource_scopes(
+        state,
+        selected_types,
+        state.get("resource_scopes"),
+        migrate_missing=not is_manual_first(state),
+    )
+    jobs: list[dict[str, Any]] = []
+    for resource_type in selected_types:
+        if resource_type in {RESOURCE_LESSON_PLAN, RESOURCE_ASSESSMENT_GRID}:
+            continue
+        if resource_type == RESOURCE_LESSON_PRESENTATIONS:
+            for lesson_number in scopes["lesson_presentations"]:
+                scope = lesson_scope(state, lesson_number)
+                jobs.append(
+                    {
+                        "key": f"lesson-presentation:{lesson_number}",
+                        "label": f"Apresentação da aula {lesson_number}",
+                        "selected_type": resource_type,
+                        "generator_type": RESOURCE_PRESENTATION,
+                        "scope": scope,
+                    }
+                )
+            continue
+        if resource_type == RESOURCE_TEST:
+            for task_id in scopes["tests"]:
+                scope = assessment_scope(state, task_id)
+                jobs.append(
+                    {
+                        "key": f"test:{task_id}",
+                        "label": f"Teste de {task_id}",
+                        "selected_type": resource_type,
+                        "generator_type": RESOURCE_TEST,
+                        "scope": scope,
+                    }
+                )
+            continue
+        jobs.append(
+            {
+                "key": resource_type,
+                "label": resource_type,
+                "selected_type": resource_type,
+                "generator_type": resource_type,
+                "scope": None,
+            }
+        )
+    return jobs
+
+
+def _isolated_resource_quality_errors(artifact: dict[str, Any]) -> list[str]:
+    """Ignora controlos globais quando a geração está limitada a um recurso."""
+
+    return [
+        str(check.get("detail", ""))
+        for check in artifact.get("quality", {}).get("checks", [])
+        if check.get("status") == "error"
+        and check.get("target_stage") == "resources"
+    ]
+
+
 class _SeparateResourceAgent:
     """Gera e valida cada tipo de recurso sem repetir os restantes."""
 
@@ -2132,7 +2296,8 @@ class _SeparateResourceAgent:
             return self.agent.generate(stage, state)
 
         selected_types = validate_resource_types(state.get("resource_types"))
-        total_resources = len(selected_types)
+        jobs = _resource_generation_jobs(state, selected_types)
+        total_resources = len(jobs)
         max_quality_revisions = max(
             0,
             int(config_value("RESOURCE_QUALITY_MAX_REVISIONS", "1")),
@@ -2144,11 +2309,18 @@ class _SeparateResourceAgent:
             selected_types,
         )
         records: list[tuple[str, list[GenerationResult], int]] = []
-        generated_artifacts: list[tuple[str, dict[str, Any]]] = []
+        generated_artifacts: list[tuple[dict[str, Any], dict[str, Any]]] = []
 
-        for index, resource_type in enumerate(selected_types, start=1):
-            working_state = _resource_generation_scope(state, resource_type)
-            cached_entry = draft_entries.get(resource_type, {})
+        for index, job in enumerate(jobs, start=1):
+            job_key = str(job["key"])
+            resource_label = str(job["label"])
+            generator_type = str(job["generator_type"])
+            working_state = _resource_generation_scope(
+                state,
+                generator_type,
+                job.get("scope"),
+            )
+            cached_entry = draft_entries.get(job_key, {})
             cached_metadata = cached_entry.get("generation_metadata", [])
             cached_artifact = deepcopy(cached_entry.get("artifact", {}))
             if (
@@ -2160,7 +2332,7 @@ class _SeparateResourceAgent:
                     working_state,
                     cached_artifact,
                 )
-                if cached_quality.get("quality", {}).get("passed"):
+                if not _isolated_resource_quality_errors(cached_quality):
                     cached_generations = [
                         GenerationResult(
                             artifact=deepcopy(cached_artifact),
@@ -2170,23 +2342,23 @@ class _SeparateResourceAgent:
                     ]
                     records.append(
                         (
-                            resource_type,
+                            resource_label,
                             cached_generations,
                             int(cached_entry.get("quality_revisions", 0) or 0),
                         )
                     )
                     generated_artifacts.append(
-                        (resource_type, cached_artifact)
+                        (job, cached_artifact)
                     )
                     _report_progress(
                         self.progress_callback,
                         (
                             f"Recurso {index} de {total_resources} reutilizado: "
-                            f"{resource_type}."
+                            f"{resource_label}."
                         ),
                     )
                     continue
-            draft_entries.pop(resource_type, None)
+            draft_entries.pop(job_key, None)
 
             quality_revision = 0
             generations: list[GenerationResult] = []
@@ -2194,7 +2366,7 @@ class _SeparateResourceAgent:
                 action = "A gerar" if quality_revision == 0 else "A corrigir"
                 _report_progress(
                     self.progress_callback,
-                    f"{action} recurso {index} de {total_resources}: {resource_type}…",
+                    f"{action} recurso {index} de {total_resources}: {resource_label}…",
                 )
                 try:
                     generation = self.agent.generate("resources", working_state)
@@ -2225,27 +2397,25 @@ class _SeparateResourceAgent:
                 artifact = deepcopy(generation.artifact)
                 checked_artifact = attach_quality_report(working_state, artifact)
                 if (
-                    checked_artifact.get("quality", {}).get("passed")
+                    not _isolated_resource_quality_errors(checked_artifact)
                     or quality_revision >= max_quality_revisions
                 ):
                     break
 
                 quality_revision += 1
-                failed_checks = [
-                    check.get("detail", "")
-                    for check in checked_artifact.get("quality", {}).get("checks", [])
-                    if check.get("status") == "error"
-                ]
+                failed_checks = _isolated_resource_quality_errors(
+                    checked_artifact
+                )
                 working_state = deepcopy(working_state)
                 working_state.setdefault("feedback", {})["resources"] = (
-                    f"Reformulação automática de {resource_type} após validação "
+                    f"Reformulação automática de {resource_label} após validação "
                     "de qualidade: "
                     + "; ".join(failed_checks)
                 )
 
-            records.append((resource_type, generations, quality_revision))
-            generated_artifacts.append((resource_type, artifact))
-            draft_entries[resource_type] = {
+            records.append((resource_label, generations, quality_revision))
+            generated_artifacts.append((job, artifact))
+            draft_entries[job_key] = {
                 "artifact": deepcopy(artifact),
                 "generation_metadata": [
                     deepcopy(item.metadata) for item in generations
@@ -2254,28 +2424,89 @@ class _SeparateResourceAgent:
             }
             conclusion = (
                 "concluído"
-                if checked_artifact.get("quality", {}).get("passed")
+                if not _isolated_resource_quality_errors(checked_artifact)
                 else "concluído com erros de qualidade"
             )
             _report_progress(
                 self.progress_callback,
-                f"Recurso {index} de {total_resources} {conclusion}: {resource_type}.",
+                f"Recurso {index} de {total_resources} {conclusion}: {resource_label}.",
             )
 
-        combined = deepcopy(generated_artifacts[0][1])
-        combined.pop("quality", None)
+        combined = blank_extended_resources(selected_types)
         combined["selected_types"] = list(selected_types)
-        for resource_type, artifact in generated_artifacts:
-            field = RESOURCE_ARTIFACT_FIELDS[resource_type]
-            combined[field] = deepcopy(artifact[field])
+        combined["_resource_scopes"] = validate_resource_scopes(
+            state,
+            selected_types,
+            state.get("resource_scopes"),
+            migrate_missing=not is_manual_first(state),
+        )
+        for job, artifact in generated_artifacts:
+            generator_type = str(job["generator_type"])
+            field = RESOURCE_ARTIFACT_FIELDS[generator_type]
+            if job["selected_type"] == RESOURCE_LESSON_PRESENTATIONS:
+                scope = job["scope"]
+                combined["lesson_presentations"].append(
+                    {
+                        "lesson_number": scope["lesson_number"],
+                        "duration_minutes": scope["duration_minutes"],
+                        "session_type": scope["session_type"],
+                        "component_ids": deepcopy(scope["component_ids"]),
+                        "outcome_ids": deepcopy(scope["outcome_ids"]),
+                        "notes": scope["notes"],
+                        "presentation_outline": deepcopy(artifact[field]),
+                    }
+                )
+            elif job["selected_type"] == RESOURCE_TEST:
+                scope = job["scope"]
+                combined["tests"].append(
+                    {
+                        "assessment_task_id": scope["assessment_task_id"],
+                        "outcome_ids": deepcopy(scope["outcome_ids"]),
+                        "test": deepcopy(artifact[field]),
+                    }
+                )
+            else:
+                combined[field] = deepcopy(artifact[field])
+
+        if combined.get("tests"):
+            # Espelho do primeiro teste para compatibilidade com sessões, cópias de
+            # segurança e integrações anteriores ao suporte de vários testes.
+            combined["test"] = deepcopy(combined["tests"][0]["test"])
+        combined = apply_deterministic_resources(state, combined)
 
         generated_images: list[dict[str, Any]] = []
         image_records: list[dict[str, Any]] = []
-        if RESOURCE_PRESENTATION in selected_types:
+        if RESOURCE_PRESENTATION in selected_types and combined["presentation_outline"]:
             combined, generated_images, image_records = enrich_presentation_with_ai_images(
                 state,
                 combined,
                 progress_callback=self.progress_callback,
+            )
+        for lesson_presentation in combined.get("lesson_presentations", []):
+            lesson_number = int(lesson_presentation.get("lesson_number", 0) or 0)
+            scope = lesson_scope(state, lesson_number)
+            image_artifact = blank_extended_resources([RESOURCE_PRESENTATION])
+            image_artifact["presentation_outline"] = deepcopy(
+                lesson_presentation.get("presentation_outline", [])
+            )
+            image_artifact, lesson_images, lesson_records = (
+                enrich_presentation_with_ai_images(
+                    _resource_generation_scope(
+                        state,
+                        RESOURCE_PRESENTATION,
+                        scope,
+                    ),
+                    image_artifact,
+                    progress_callback=self.progress_callback,
+                )
+            )
+            lesson_presentation["presentation_outline"] = image_artifact[
+                "presentation_outline"
+            ]
+            generated_images.extend(lesson_images)
+            image_records.extend(
+                {"lesson_number": lesson_number, **record}
+                for record in lesson_records
             )
         combined["_generated_images"] = generated_images
         metadata = _aggregate_resource_metadata(records)
@@ -2295,6 +2526,10 @@ def _stage_node(stage: str, agent: PedagogicalAgent):
         state_updates: dict[str, Any] = {}
         if stage == "resources" and isinstance(artifact, dict):
             state_updates["generated_images"] = artifact.pop("_generated_images", [])
+            state_updates["resource_scopes"] = artifact.pop(
+                "_resource_scopes",
+                deepcopy(state.get("resource_scopes", {})),
+            )
         metadata = deepcopy(state.get("generation_metadata", {}))
         metadata.setdefault(stage, []).append(
             _version_metadata(state, stage, generation.metadata)
@@ -2556,6 +2791,7 @@ def apply_manual_edit(
 
     updated = deepcopy(state)
     if target_stage == "resources":
+        _synchronize_legacy_test_resource(edited_artifact)
         validate_artifact(target_stage, edited_artifact, updated)
         edited_artifact = attach_quality_report(updated, edited_artifact)
     else:
@@ -2735,6 +2971,10 @@ def create_session(
         "ai_proposals": [],
         "ai_reviews": {},
         "resource_types": selected_resource_types,
+        "resource_scopes": {
+            "lesson_presentations": [],
+            "tests": [],
+        },
         "generated_images": [],
         "source_reduction": deepcopy(source_reduction or {}),
         "learning_outcome_assumptions": [],
@@ -2776,9 +3016,18 @@ def create_session(
 def _mark_selected_images_approved(state: PrismState) -> None:
     """Regista as imagens documentais ou geradas aceites pelo docente."""
 
+    all_slides = list(
+        state.get("resources", {}).get("presentation_outline", [])
+    )
+    all_slides.extend(
+        slide
+        for entry in state.get("resources", {}).get("lesson_presentations", [])
+        if isinstance(entry, dict)
+        for slide in entry.get("presentation_outline", [])
+    )
     selected_ids = {
         str(slide.get("visual_asset_id", "")).strip()
-        for slide in state.get("resources", {}).get("presentation_outline", [])
+        for slide in all_slides
         if isinstance(slide, dict)
         and slide.get("visual_mode") in {"documento", "ia"}
         and str(slide.get("visual_asset_id", "")).strip()

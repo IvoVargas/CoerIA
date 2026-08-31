@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import zipfile
+from copy import deepcopy
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Any
@@ -32,6 +33,9 @@ from pptx.util import Inches, Pt
 from .ai_modes import AI_MODE_DESCRIPTIONS, AI_MODES
 from .branding import APP_FULL_NAME, APP_NAME
 from .models import (
+    RESOURCE_ASSESSMENT_GRID,
+    RESOURCE_LESSON_PLAN,
+    RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
@@ -1490,8 +1494,12 @@ def _export_worksheet(state: dict[str, Any], output_path: Path) -> None:
     document.save(output_path)
 
 
-def _export_test(state: dict[str, Any], output_path: Path) -> None:
-    data = state["resources"]["test"]
+def _export_test(
+    state: dict[str, Any],
+    output_path: Path,
+    data: dict[str, Any] | None = None,
+) -> None:
+    data = data or state["resources"]["test"]
     document = Document()
     _set_document_defaults(document)
     _add_document_title(document, data["title"], state["course"]["unit_name"])
@@ -1574,8 +1582,12 @@ def _export_worksheet_latex(state: dict[str, Any], output_path: Path) -> None:
     _write_latex_document(content, output_path, prefix="coeria_ficha_")
 
 
-def _export_test_latex(state: dict[str, Any], output_path: Path) -> None:
-    data = state["resources"]["test"]
+def _export_test_latex(
+    state: dict[str, Any],
+    output_path: Path,
+    data: dict[str, Any] | None = None,
+) -> None:
+    data = data or state["resources"]["test"]
     body = [
         _latex_escape(data.get("instructions", "")),
         rf"\textbf{{Cotação total:}} {_latex_escape(data.get('total_points', 0))} pontos",
@@ -1650,6 +1662,134 @@ def _export_practical_activity_latex(state: dict[str, Any], output_path: Path) -
     _write_latex_document(content, output_path, prefix="coeria_atividade_")
 
 
+def _export_lesson_plan(state: dict[str, Any], output_path: Path) -> None:
+    data = state["resources"].get("lesson_plan", {})
+    document = Document()
+    _set_document_defaults(document)
+    _add_document_title(
+        document,
+        "Plano de aulas",
+        state["course"]["unit_name"],
+    )
+    table = document.add_table(rows=1, cols=5)
+    for item in data.get("lessons", []):
+        cells = table.add_row().cells
+        values = (
+            item.get("lesson_number", ""),
+            item.get("duration_minutes", 0),
+            item.get("session_type", ""),
+            ", ".join(item.get("component_ids", [])),
+            item.get("notes", ""),
+        )
+        for cell, value in zip(cells, values):
+            cell.text = str(value)
+    _format_table(
+        table,
+        ["Aula", "Duração", "Tipo", "AE/TA", "Organização"],
+        [650, 950, 1550, 1500, 5310],
+    )
+    document.save(output_path)
+
+
+def _export_assessment_grid(state: dict[str, Any], output_path: Path) -> None:
+    data = state["resources"].get("assessment_grid", {})
+    document = Document()
+    _set_document_defaults(document)
+    _add_document_title(
+        document,
+        "Grelha de avaliação",
+        state["course"]["unit_name"],
+    )
+    table = document.add_table(rows=1, cols=7)
+    for item in data.get("rows", []):
+        cells = table.add_row().cells
+        values = (
+            item.get("assessment_task_id", ""),
+            ", ".join(item.get("teaching_activity_ids", [])),
+            ", ".join(item.get("outcome_ids", [])),
+            " · ".join(
+                value
+                for value in (
+                    str(item.get("assessment_purpose", "")).strip(),
+                    str(item.get("work_type", "")).strip(),
+                )
+                if value
+            ),
+            item.get("activity", ""),
+            item.get("evidence", ""),
+            item.get("criterion", ""),
+        )
+        for cell, value in zip(cells, values):
+            cell.text = str(value)
+    _format_table(
+        table,
+        ["TA", "AE", "RA", "Finalidade / modalidade", "Tarefa", "Evidência", "Critério"],
+        [550, 700, 700, 950, 2150, 2150, 2760],
+    )
+    document.save(output_path)
+
+
+def _export_lesson_plan_latex(state: dict[str, Any], output_path: Path) -> None:
+    rows = [
+        [
+            item.get("lesson_number", ""),
+            item.get("duration_minutes", 0),
+            item.get("session_type", ""),
+            ", ".join(item.get("component_ids", [])),
+            item.get("notes", ""),
+        ]
+        for item in state["resources"].get("lesson_plan", {}).get("lessons", [])
+    ]
+    content = _latex_document(
+        "Plano de aulas",
+        str(state.get("course", {}).get("unit_name", "")),
+        [
+            _latex_table(
+                ["Aula", "Duração", "Tipo", "AE/TA", "Organização"],
+                rows,
+                [0.07, 0.10, 0.16, 0.16, 0.43],
+            )
+        ],
+    )
+    _write_latex_document(content, output_path, prefix="coeria_plano_aulas_")
+
+
+def _export_assessment_grid_latex(
+    state: dict[str, Any], output_path: Path
+) -> None:
+    rows = [
+        [
+            item.get("assessment_task_id", ""),
+            ", ".join(item.get("teaching_activity_ids", [])),
+            ", ".join(item.get("outcome_ids", [])),
+            " · ".join(
+                value
+                for value in (
+                    str(item.get("assessment_purpose", "")).strip(),
+                    str(item.get("work_type", "")).strip(),
+                )
+                if value
+            ),
+            item.get("activity", ""),
+            item.get("evidence", ""),
+            item.get("criterion", ""),
+        ]
+        for item in state["resources"].get("assessment_grid", {}).get("rows", [])
+    ]
+    content = _latex_document(
+        "Grelha de avaliação",
+        str(state.get("course", {}).get("unit_name", "")),
+        [
+            _latex_table(
+                ["TA", "AE", "RA", "Finalidade / modalidade", "Tarefa", "Evidência", "Critério"],
+                rows,
+                [0.05, 0.07, 0.07, 0.10, 0.19, 0.20, 0.20],
+            )
+        ],
+    )
+    _write_latex_document(content, output_path, prefix="coeria_grelha_")
+
+
 def _csv_bytes(headers: list[str], rows: list[list[Any]]) -> bytes:
     stream = io.StringIO(newline="")
     writer = csv.writer(stream)
@@ -1719,6 +1859,21 @@ def export_resource_package(
             path = temporary_path / f"{course_stem}_apresentacao.pptx"
             export_presentation(state, path)
             generated.append((path, path.name))
+        if RESOURCE_LESSON_PRESENTATIONS in selected:
+            for entry in resources.get("lesson_presentations", []):
+                lesson_number = int(entry.get("lesson_number", 0) or 0)
+                lesson_state = deepcopy(state)
+                lesson_state["resources"] = {
+                    **deepcopy(resources),
+                    "presentation_outline": deepcopy(
+                        entry.get("presentation_outline", [])
+                    ),
+                }
+                path = temporary_path / (
+                    f"{course_stem}_aula_{lesson_number:02d}_apresentacao.pptx"
+                )
+                export_presentation(lesson_state, path)
+                generated.append((path, path.name))
         if RESOURCE_WORKSHEET in selected:
             if DOCUMENT_FORMAT_WORD in formats:
                 path = temporary_path / f"{course_stem}_ficha_aula.docx"
@@ -1729,14 +1884,22 @@ def export_resource_package(
                 _export_worksheet_latex(state, path)
                 _register_latex_document(generated, path, compiled_pdfs)
         if RESOURCE_TEST in selected:
-            if DOCUMENT_FORMAT_WORD in formats:
-                path = temporary_path / f"{course_stem}_teste.docx"
-                _export_test(state, path)
-                generated.append((path, path.name))
-            if DOCUMENT_FORMAT_LATEX in formats:
-                path = temporary_path / f"{course_stem}_teste.tex"
-                _export_test_latex(state, path)
-                _register_latex_document(generated, path, compiled_pdfs)
+            test_entries = resources.get("tests", [])
+            if not test_entries and resources.get("test", {}).get("questions"):
+                test_entries = [
+                    {"assessment_task_id": "", "test": resources["test"]}
+                ]
+            for entry in test_entries:
+                raw_task_id = str(entry.get("assessment_task_id", "")).strip()
+                task_suffix = f"_{_safe_stem(raw_task_id)}" if raw_task_id else ""
+                if DOCUMENT_FORMAT_WORD in formats:
+                    path = temporary_path / f"{course_stem}_teste{task_suffix}.docx"
+                    _export_test(state, path, entry.get("test", {}))
+                    generated.append((path, path.name))
+                if DOCUMENT_FORMAT_LATEX in formats:
+                    path = temporary_path / f"{course_stem}_teste{task_suffix}.tex"
+                    _export_test_latex(state, path, entry.get("test", {}))
+                    _register_latex_document(generated, path, compiled_pdfs)
         if RESOURCE_PRACTICAL in selected:
             if DOCUMENT_FORMAT_WORD in formats:
                 path = temporary_path / f"{course_stem}_atividade_pratica.docx"
@@ -1745,6 +1908,24 @@ def export_resource_package(
             if DOCUMENT_FORMAT_LATEX in formats:
                 path = temporary_path / f"{course_stem}_atividade_pratica.tex"
                 _export_practical_activity_latex(state, path)
+                _register_latex_document(generated, path, compiled_pdfs)
+        if RESOURCE_LESSON_PLAN in selected:
+            if DOCUMENT_FORMAT_WORD in formats:
+                path = temporary_path / f"{course_stem}_plano_aulas.docx"
+                _export_lesson_plan(state, path)
+                generated.append((path, path.name))
+            if DOCUMENT_FORMAT_LATEX in formats:
+                path = temporary_path / f"{course_stem}_plano_aulas.tex"
+                _export_lesson_plan_latex(state, path)
+                _register_latex_document(generated, path, compiled_pdfs)
+        if RESOURCE_ASSESSMENT_GRID in selected:
+            if DOCUMENT_FORMAT_WORD in formats:
+                path = temporary_path / f"{course_stem}_grelha_avaliacao.docx"
+                _export_assessment_grid(state, path)
+                generated.append((path, path.name))
+            if DOCUMENT_FORMAT_LATEX in formats:
+                path = temporary_path / f"{course_stem}_grelha_avaliacao.tex"
+                _export_assessment_grid_latex(state, path)
                 _register_latex_document(generated, path, compiled_pdfs)
 
         alignment_csv_rows = [
@@ -1766,6 +1947,14 @@ def export_resource_package(
             [item.get("timestamp", ""), item.get("stage", ""), item.get("event", ""), item.get("feedback", "")]
             for item in state.get("audit", [])
         ]
+        presentation_slides = list(resources.get("presentation_outline", []))
+        presentation_slides.extend(
+            slide
+            for entry in resources.get("lesson_presentations", [])
+            if isinstance(entry, dict)
+            for slide in entry.get("presentation_outline", [])
+            if isinstance(slide, dict)
+        )
         manifest = {
             "application": APP_NAME,
             "application_name": APP_FULL_NAME,
@@ -1774,6 +1963,7 @@ def export_resource_package(
             "course": state.get("course", {}),
             "taxonomy": state.get("course", {}).get("taxonomy_type", "SOLO"),
             "selected_resources": list(resources.get("selected_types", [])),
+            "resource_scopes": deepcopy(state.get("resource_scopes", {})),
             "document_formats": list(formats),
             "latex_pdf_compilation": {
                 "enabled": pdf_compilation_enabled,
@@ -1800,7 +1990,7 @@ def export_resource_package(
                         "used_in_presentation": str(asset.get("id", ""))
                         in {
                             str(slide.get("visual_asset_id", ""))
-                            for slide in resources.get("presentation_outline", [])
+                            for slide in presentation_slides
                             if isinstance(slide, dict)
                         },
                     }

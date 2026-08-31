@@ -191,9 +191,14 @@ etapa **Geração de recursos educativos**. Esta configuração pertence ao arte
 recursos. A geração recebe diretamente os resultados, conteúdos, atividades de
 ensino-aprendizagem e tarefas de avaliação como contexto de alinhamento.
 
-Quando a assistência abrange toda a etapa de recursos, cada tipo selecionado
-continua a ser gerado e validado separadamente. Num âmbito inferior, a IA devolve
-somente a tabela, linha ou campo escolhido e não dispara geração de imagens. As
+Quando a assistência abrange toda a etapa de recursos, cada recurso global e
+cada instância selecionada por aula ou tarefa de avaliação é gerada e validada
+separadamente. As apresentações das aulas recebem apenas o contexto curricular
+da aula; cada teste recebe apenas a tarefa `TA`, as atividades `AE` e os
+resultados `RA` associados. O plano de aulas e a grelha de avaliação são
+materializados deterministicamente a partir dos artefactos aprovados e não
+originam chamadas à IA. Num âmbito inferior, a IA devolve somente a tabela,
+linha ou campo escolhido e não dispara geração de imagens. As
 imagens geradas numa proposta integral permanecem fora da chamada estrutural e
 só são associadas ao estado se a proposta correspondente for aceite. A geração
 de imagens exige consentimento explícito e `OPENAI_API_KEY`.
@@ -220,10 +225,13 @@ interna e entrega os resultados aos mesmos esquemas e guardrails.
 
 ## Migração e rastreabilidade
 
-Sessões anteriores são migradas para o esquema 30 sem apagar artefactos ou
+Sessões anteriores são migradas para o esquema 31 sem apagar artefactos ou
 versões. O ponto corrente é preservado, as estruturas ausentes são inicializadas
-vazias e estados antigos como `stale` passam a `needs_review`. As propostas e
-pareceres futuros ficam separados em `ai_proposals` e `ai_reviews`.
+vazias e estados antigos como `stale` passam a `needs_review`. Nas sessões que já
+tinham o teste singular selecionado, a migração conserva esse recurso e prepara
+como âmbito as tarefas de avaliação existentes; as novas coleções permanecem
+compatíveis com o campo legado durante a transição. As propostas e pareceres
+futuros ficam separados em `ai_proposals` e `ai_reviews`.
 
 As cópias de segurança por sessão usam um ZIP com duas representações
 complementares. `sessao.json` é indentado, organizado por secções em português e

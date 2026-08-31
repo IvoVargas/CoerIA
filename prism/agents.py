@@ -62,6 +62,7 @@ from .providers import (
 )
 from .quality import (
     PRESENTATION_ASSESSMENT_TITLE,
+    evaluate_quality,
     presentation_assessment_overview_issues,
     presentation_visual_issues,
 )
@@ -180,9 +181,11 @@ STAGE_REQUIREMENTS = {
         "acompanhamento e feedback."
     ),
     "resources": (
-        "Objeto com selected_types, presentation_outline, lesson_worksheet, test e "
-        "practical_activity. Preenche apenas os recursos pedidos e mantém vazios os "
-        "restantes. Cada elemento deve indicar os resultados de aprendizagem associados. "
+        "Conjunto de recursos selecionados pelo docente. A aplicação gera cada recurso "
+        "generativo isoladamente; as apresentações das aulas são limitadas à aula atual "
+        "e cada teste é limitado à respetiva tarefa de avaliação. O plano de aulas e a "
+        "grelha de avaliação são derivados deterministicamente dos artefactos aprovados. "
+        "Cada elemento deve indicar os resultados de aprendizagem associados ao seu âmbito. "
         "Cada slide da apresentação inclui visual_mode, visual_asset_id, visual_prompt, visual_kind, "
         "visual_title, visual_items, visual_source e alt_text. visual_mode é diagrama, "
         "documento ou ia. visual_asset_id fica vazio em diagrama, contém um ID válido "
@@ -193,7 +196,7 @@ STAGE_REQUIREMENTS = {
         "podem estar vazios. Os "
         "elementos visuais devem apoiar o conteúdo e não servir apenas de decoração. "
         "Cada recurso pedido deve cobrir exatamente todos os IDs dos resultados de "
-        "aprendizagem, sem usar IDs desconhecidos. No teste, a soma dos pontos das "
+        "aprendizagem do respetivo âmbito, sem usar IDs desconhecidos. No teste, a soma dos pontos das "
         "questões deve ser igual a total_points. Na atividade prática, a união dos "
         "outcome_ids de todas as etapas deve cobrir exatamente todos os resultados e "
         "os pesos positivos dos critérios devem totalizar exatamente 100. Na apresentação, "
@@ -519,6 +522,114 @@ def _schema_for(
         },
     }
     artifact_schema = artifact_schemas[stage]
+    if stage == "resources":
+        artifact_schema = deepcopy(artifact_schema)
+        presentation_schema = deepcopy(
+            artifact_schema["properties"]["presentation_outline"]
+        )
+        test_schema = deepcopy(artifact_schema["properties"]["test"])
+        artifact_schema["properties"].update(
+            {
+                "lesson_presentations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "lesson_number": {"type": "integer", "minimum": 1},
+                            "outcome_ids": {"type": "array", "items": string},
+                            "presentation_outline": presentation_schema,
+                        },
+                        "required": [
+                            "lesson_number",
+                            "outcome_ids",
+                            "presentation_outline",
+                        ],
+                    },
+                },
+                "tests": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "assessment_task_id": string,
+                            "outcome_ids": {"type": "array", "items": string},
+                            "test": test_schema,
+                        },
+                        "required": ["assessment_task_id", "outcome_ids", "test"],
+                    },
+                },
+                "lesson_plan": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "lessons": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "lesson_number": {"type": "integer"},
+                                    "duration_minutes": {"type": "integer"},
+                                    "session_type": string,
+                                    "component_ids": {"type": "array", "items": string},
+                                    "notes": string,
+                                },
+                                "required": [
+                                    "lesson_number",
+                                    "duration_minutes",
+                                    "session_type",
+                                    "component_ids",
+                                    "notes",
+                                ],
+                            },
+                        }
+                    },
+                    "required": ["lessons"],
+                },
+                "assessment_grid": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "rows": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "assessment_task_id": string,
+                                    "teaching_activity_ids": {
+                                        "type": "array",
+                                        "items": string,
+                                    },
+                                    "outcome_ids": {"type": "array", "items": string},
+                                    "assessment_purpose": string,
+                                    "work_type": string,
+                                    "activity": string,
+                                    "evidence": string,
+                                    "criterion": string,
+                                },
+                                "required": [
+                                    "assessment_task_id",
+                                    "teaching_activity_ids",
+                                    "outcome_ids",
+                                    "assessment_purpose",
+                                    "work_type",
+                                    "activity",
+                                    "evidence",
+                                    "criterion",
+                                ],
+                            },
+                        }
+                    },
+                    "required": ["rows"],
+                },
+            }
+        )
+        artifact_schema["required"].extend(
+            ["lesson_presentations", "tests", "lesson_plan", "assessment_grid"]
+        )
     if stage == "curriculum_analysis" and state:
         artifact_schema = deepcopy(artifact_schema)
         outcome_ids = [
@@ -732,6 +843,8 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         "feedback_from_teacher": state.get("feedback", {}).get(stage, ""),
         "requested_resource_types": state.get("resource_types", []),
     }
+    if stage == "resources" and isinstance(state.get("resource_item_scope"), dict):
+        context["resource_item_scope"] = deepcopy(state["resource_item_scope"])
     if stage == "learning_outcomes":
         context["optional_assumptions_for_learning_outcomes"] = [
             str(item).strip()
@@ -2220,6 +2333,50 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         if selected != requested or len(artifact["selected_types"]) != len(selected):
             raise AgentGenerationError("Os recursos devolvidos não respeitam a seleção do docente.")
 
+        if not state.get("resource_generation_scope"):
+            quality = evaluate_quality(state, artifact)
+            errors = [
+                str(check.get("detail", ""))
+                for check in quality.get("checks", [])
+                if check.get("status") == "error"
+            ]
+            if RESOURCE_TEST in requested:
+                test_entries = artifact.get("tests", [])
+                if not test_entries and artifact.get("test", {}).get("questions"):
+                    test_entries = [{"test": artifact["test"]}]
+                for entry in test_entries:
+                    test_data = entry.get("test", {})
+                    question_ids = [
+                        str(item.get("id", ""))
+                        for item in test_data.get("questions", [])
+                    ]
+                    if len(question_ids) != len(set(question_ids)):
+                        errors.append("Um teste contém IDs de questão duplicados.")
+                    if any(
+                        int(item.get("points", 0) or 0) <= 0
+                        for item in test_data.get("questions", [])
+                    ):
+                        errors.append("Todas as questões devem ter cotação positiva.")
+            if RESOURCE_PRACTICAL in requested:
+                practical = artifact.get("practical_activity", {})
+                if int(practical.get("duration_minutes", 0) or 0) <= 0:
+                    errors.append("A duração deve ser positiva.")
+                if any(
+                    int(item.get("order", 0) or 0) <= 0
+                    for item in practical.get("steps", [])
+                ):
+                    errors.append("A ordem das etapas da atividade deve ser positiva.")
+                if any(
+                    int(item.get("weight", 0) or 0) <= 0
+                    for item in practical.get("criteria", [])
+                ):
+                    errors.append("Os critérios da atividade devem ter peso positivo.")
+            if errors:
+                raise AgentGenerationError(
+                    "Os recursos contêm incoerências: " + "; ".join(errors)
+                )
+            return
+
         resource_content = {
             "Apresentação PowerPoint": artifact["presentation_outline"],
             "Ficha de aula": artifact["lesson_worksheet"]["sections"],
@@ -2627,6 +2784,24 @@ class OpenAIPedagogicalAgent:
                 "responsabilidade e verificação humanas; on-AI solicita evidências do "
                 "processo, revisão crítica ou justificação da (não) utilização da IA."
             )
+            item_scope = state.get("resource_item_scope")
+            if isinstance(item_scope, dict) and item_scope.get("kind") == "lesson":
+                instructions += (
+                    " Esta apresentação destina-se exclusivamente à aula indicada em "
+                    "resource_item_scope. Usa a duração, o tipo, as notas e apenas os "
+                    "componentes e resultados desse âmbito. Inclui uma agenda da aula, "
+                    "conteúdo para lecionação, atividades previstas e uma síntese. "
+                    "Não introduzas resultados ou avaliações de outras aulas."
+                )
+            if (
+                isinstance(item_scope, dict)
+                and item_scope.get("kind") == "assessment_task"
+            ):
+                instructions += (
+                    " Este teste corresponde exclusivamente à tarefa indicada em "
+                    "resource_item_scope. Usa a sua finalidade, modalidade, evidência e "
+                    "critério; cobre exatamente os resultados associados a essa tarefa."
+                )
             if scoped_resource_type in {None, RESOURCE_PRESENTATION}:
                 instructions += (
                     " Para cada slide, visual_mode pode ser diagrama, documento ou ia. "

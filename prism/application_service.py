@@ -518,12 +518,14 @@ class ApplicationService:
         self,
         state: dict[str, Any] | None,
         resource_types: list[str],
+        resource_scopes: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str]:
         if not state:
             raise ValueError("Inicie ou retome primeiro uma sessão pedagógica.")
         updated = update_manual_resource_settings(
             state,
             resource_types,
+            resource_scopes,
         )
         return self._persist(updated), "Seleção de recursos guardada sem executar a IA."
 

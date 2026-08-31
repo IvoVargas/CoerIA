@@ -331,7 +331,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   apresentar cada controlo, respetivo estado `✅`/`⚠️`/`❌` e detalhe apenas na
   etapa de validação final, evitando um bloco de «Validação automática» na
   etapa de recursos.
-- Gerar e validar separadamente cada tipo de recurso selecionado.
+- Gerar e validar separadamente cada recurso global e cada instância selecionada
+  por aula ou por tarefa de avaliação.
 - Pedir ao fornecedor apenas o conteúdo do recurso corrente e derivar
   deterministicamente a seleção e os campos vazios dos restantes recursos.
 - Reformular automaticamente apenas o recurso inválido até ao limite
@@ -339,7 +340,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Persistir como rascunhos técnicos os recursos já validados quando um tipo
   posterior falha e retomá-los apenas se a seleção e todas as entradas
   pedagógicas permanecerem inalteradas.
-- Derivar deterministicamente os IDs sequenciais e a cotação total do teste e
+- Derivar deterministicamente os IDs sequenciais e a cotação total de cada teste e
   indicar explicitamente os resultados de aprendizagem em falta quando a
   cobertura estiver incompleta.
 - Na atividade prática, filtrar IDs desconhecidos, ordenar as etapas,
@@ -356,8 +357,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir avaliações formativas e sumativas, mas nunca uma finalidade mista.
 - Não obrigar à existência de avaliação formativa.
 - Estruturar atividades de ensino-aprendizagem com prática, acompanhamento e estratégia de feedback.
-- Apresentar a seleção dos tipos de recursos no início da etapa **Recursos
-  educativos**, antes de qualquer geração, sem repetir essa decisão no formulário
+- Apresentar a seleção dos tipos de recursos no início da etapa **Geração de
+  recursos educativos**, antes de qualquer geração, sem repetir essa decisão no formulário
   inicial.
 - Apresentar cada tipo de recurso selecionado num separador próprio, tanto em
   consulta, edição e revisão de uma proposta completa da IA, preservando dentro
@@ -383,16 +384,26 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 
 Gerar efetivamente cada tipo selecionado pelo docente:
 
-- apresentação PowerPoint;
+- plano de aulas, derivado deterministicamente do planeamento aprovado;
+- grelha de avaliação, derivada deterministicamente das tarefas e ligações
+  `RA ↔ AE ↔ TA` aprovadas;
+- apresentação PowerPoint geral da unidade curricular;
+- apresentações PowerPoint das aulas explicitamente selecionadas;
 - ficha de aula;
-- teste com chave de correção;
+- um teste com chave de correção por tarefa de avaliação selecionada;
 - atividade prática com etapas, entregáveis e critérios.
 
-Cada tipo deve corresponder a uma execução independente, com indicação do tipo
-corrente e da posição no conjunto selecionado. No fim, o sistema deve validar
-também o conjunto agregado antes de o apresentar ao docente.
+Cada recurso global e cada instância por aula ou tarefa deve corresponder a uma
+execução independente, com indicação do recurso corrente e da posição no
+conjunto selecionado. O plano de aulas e a grelha de avaliação não devem chamar
+um fornecedor de IA. No fim, o sistema deve validar também o conjunto agregado
+antes de o apresentar ao docente.
 
-Cada recurso deve indicar os resultados de aprendizagem a que está associado.
+Cada apresentação de aula e cada teste deve indicar e cobrir exatamente os
+resultados de aprendizagem do respetivo âmbito, calculado a partir dos
+artefactos aprovados e nunca apenas dos IDs declarados pelo próprio recurso.
+Os restantes recursos generativos devem indicar os resultados de aprendizagem a
+que estão associados.
 Recursos não selecionados devem permanecer vazios e não ser exportados.
 
 A apresentação PowerPoint deve combinar texto com imagens, diagramas, tabelas,
@@ -401,11 +412,12 @@ devem ter finalidade, origem e texto alternativo identificados; os diagramas e
 gráficos devem ser editáveis quando forem criados pelo sistema. Áudio, vídeo e
 storyboards não fazem parte do âmbito.
 
-A apresentação deve incluir, antes da síntese final, uma secção própria de
+A apresentação geral deve incluir, antes da síntese final, uma secção própria de
 avaliação que identifique todas as tarefas `TA`, a respetiva finalidade, os
-resultados abrangidos, a evidência esperada e os critérios aprovados. Quando o
-número de tarefas não couber de forma legível num único slide, a secção deve ser
-dividida por vários slides consecutivos.
+resultados abrangidos, a evidência esperada e os critérios aprovados. A
+apresentação de uma aula deve aplicar a mesma regra apenas às tarefas dessa aula.
+Quando o número de tarefas não couber de forma legível num único slide, a secção
+deve ser dividida por vários slides consecutivos.
 
 As imagens raster tratadas pelo protótipo podem ter uma das seguintes origens:
 
@@ -488,9 +500,10 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   docente.
 - Antes de preparar o ZIP, permitir ao docente escolher Word (`.docx`), LaTeX
   (`.tex`) ou ambos para todos os documentos textuais exportáveis: programa da
-  UC, ficha de aula, teste com chave de correção e atividade prática.
-- Manter a apresentação no formato PowerPoint (`.pptx`), independentemente da
-  escolha dos formatos documentais.
+  UC, plano de aulas, grelha de avaliação, ficha de aula, testes com chave de
+  correção e atividade prática.
+- Manter a apresentação geral e as apresentações das aulas no formato PowerPoint
+  (`.pptx`), independentemente da escolha dos formatos documentais.
 - Produzir ficheiros LaTeX autónomos em UTF-8, com texto livre devidamente
   escapado e conteúdo equivalente ao documento Word correspondente.
 - Quando a compilação PDF estiver configurada no servidor, compilar cada `.tex`
@@ -608,14 +621,16 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   os resultados avaliados.
 - A síntese automática assinala incoerências sem depender da opinião declarada
   pelo LLM.
-- Cada tipo de recurso selecionado gera um ficheiro utilizável.
+- Cada recurso global e cada aula ou tarefa selecionada gera um ficheiro utilizável;
+  os recursos determinísticos não consomem IA.
 - Uma sessão persistida pode ser retomada numa nova instância da aplicação.
 - A aplicação funciona nos testes sem chaves de API e falha explicitamente
   quando se tenta usar OpenAI ou IAedu sem a respetiva chave.
 - O pacote exportado contém recursos, síntese automática do alinhamento,
   auditoria e manifesto coerentes.
-- A escolha Word, LaTeX ou ambos é respeitada para o programa da UC, ficha de
-  aula, teste e atividade prática, sem alterar a exportação da apresentação.
+- A escolha Word, LaTeX ou ambos é respeitada para o programa da UC, plano de
+  aulas, grelha de avaliação, ficha de aula, testes e atividade prática, sem
+  alterar a exportação das apresentações.
 - O pacote exportado contém o programa da UC em português e apresentações com
   elementos visuais pedagogicamente relevantes.
 - O programa exportado comunica os modos `AI-off`, `AI-on` e `on-AI` aplicáveis

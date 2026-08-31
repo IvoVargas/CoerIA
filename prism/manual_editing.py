@@ -808,6 +808,40 @@ def assistance_scope_options(stage: str, artifact: Any) -> list[dict[str, Any]]:
     options: list[dict[str, Any]] = [
         {"label": "Toda a etapa", "path": []},
     ]
+    if stage == "resources" and isinstance(artifact, dict):
+        if artifact.get("presentation_outline"):
+            options.append(
+                {
+                    "label": "Apresentação geral da UC",
+                    "path": ["presentation_outline"],
+                }
+            )
+        for index, entry in enumerate(artifact.get("lesson_presentations", [])):
+            lesson_number = entry.get("lesson_number", index + 1)
+            options.append(
+                {
+                    "label": f"Apresentação da aula {lesson_number}",
+                    "path": ["lesson_presentations", index, "presentation_outline"],
+                }
+            )
+        if artifact.get("lesson_worksheet", {}).get("sections"):
+            options.append(
+                {"label": "Ficha de aula", "path": ["lesson_worksheet"]}
+            )
+        test_entries = artifact.get("tests", [])
+        for index, entry in enumerate(test_entries):
+            task_id = str(entry.get("assessment_task_id", "")).strip()
+            options.append(
+                {
+                    "label": f"Teste {task_id or index + 1}",
+                    "path": ["tests", index, "test"],
+                }
+            )
+        if artifact.get("practical_activity", {}).get("steps"):
+            options.append(
+                {"label": "Atividade prática", "path": ["practical_activity"]}
+            )
+        return options
     for scalar in layout.fields:
         options.append({"label": f"Campo: {scalar.label}", "path": list(scalar.path)})
     for table in layout.tables:

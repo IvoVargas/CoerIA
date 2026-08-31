@@ -70,12 +70,14 @@ from prism.manual_editing import (
     value_at_path,
 )
 from prism.models import (
+    RESOURCE_ASSESSMENT_GRID,
+    RESOURCE_LESSON_PLAN,
+    RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
     SEMESTER_OPTIONS,
-    SUPPORTED_RESOURCE_TYPES,
 )
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import (
@@ -106,11 +108,13 @@ from prism.validation_targets import (
 SESSION_STORE = SQLiteSessionStore()
 SERVICE = ApplicationService(SESSION_STORE)
 LOGIN_THROTTLE = LoginThrottle()
-RESOURCE_TYPES = list(SUPPORTED_RESOURCE_TYPES)
 RESOURCE_TAB_CONFIG = (
-    (RESOURCE_PRESENTATION, "presentation", "Apresentação", "slideshow", "presentation_outline"),
+    (RESOURCE_LESSON_PLAN, "lesson-plan", "Plano de aulas", "event_note", "lesson_plan"),
+    (RESOURCE_ASSESSMENT_GRID, "assessment-grid", "Grelha de avaliação", "fact_check", "assessment_grid"),
+    (RESOURCE_PRESENTATION, "presentation", "Apresentação geral", "slideshow", "presentation_outline"),
+    (RESOURCE_LESSON_PRESENTATIONS, "lesson-presentations", "Apresentações das aulas", "co_present", "lesson_presentations"),
     (RESOURCE_WORKSHEET, "worksheet", "Ficha de aula", "description", "lesson_worksheet"),
-    (RESOURCE_TEST, "test", "Teste", "quiz", "test"),
+    (RESOURCE_TEST, "tests", "Testes", "quiz", "tests"),
     (RESOURCE_PRACTICAL, "practical", "Atividade prática", "construction", "practical_activity"),
 )
 LATEX_PDF_ENABLED = latex_pdf_compilation_enabled()
@@ -2192,10 +2196,12 @@ class AGIRSoloInterface:
         self,
         state: dict[str, Any],
         artifact: dict[str, Any],
+        *,
+        slides: list[dict[str, Any]] | None = None,
     ) -> None:
         """Mostra os slides com a miniatura integrada na coluna visual."""
 
-        slides = artifact.get("presentation_outline", [])
+        slides = artifact.get("presentation_outline", []) if slides is None else slides
         ui.label(f"{len(slides)} slides").classes("font-semibold mb-3")
         headers = (
             "Slide",
@@ -2272,6 +2278,76 @@ class AGIRSoloInterface:
                             with ui.element("td"):
                                 ui.label(str(slide.get("alt_text", "")))
 
+    def _render_lesson_presentations_resource_view(
+        self,
+        state: dict[str, Any],
+        artifact: dict[str, Any],
+    ) -> None:
+        entries = artifact.get("lesson_presentations", [])
+        if not entries:
+            ui.label("Ainda não existem apresentações das aulas.").classes(
+                "text-sm muted"
+            )
+            return
+        with ui.tabs().props("no-caps align=left").classes("w-full") as lesson_tabs:
+            tab_map = {
+                int(entry.get("lesson_number", index) or index): ui.tab(
+                    f"lesson-{index}",
+                    label=f"Aula {entry.get('lesson_number', index)}",
+                    icon="co_present",
+                )
+                for index, entry in enumerate(entries, start=1)
+            }
+        first_number = int(entries[0].get("lesson_number", 1) or 1)
+        with ui.tab_panels(lesson_tabs, value=tab_map[first_number]).classes("w-full"):
+            for index, entry in enumerate(entries, start=1):
+                lesson_number = int(entry.get("lesson_number", index) or index)
+                with ui.tab_panel(tab_map[lesson_number]).classes("px-0"):
+                    ui.label(
+                        f"Aula {lesson_number} · {entry.get('duration_minutes', 0)} min · "
+                        f"{entry.get('session_type', '')}"
+                    ).classes("font-semibold")
+                    self._render_presentation_resource_view(
+                        state,
+                        artifact,
+                        slides=entry.get("presentation_outline", []),
+                    )
+
+    @staticmethod
+    def _test_entries(artifact: dict[str, Any]) -> list[dict[str, Any]]:
+        entries = list(artifact.get("tests", []))
+        if not entries and artifact.get("test", {}).get("questions"):
+            entries = [{"assessment_task_id": "Teste", "test": artifact["test"]}]
+        return entries
+
+    def _render_tests_resource_view(self, artifact: dict[str, Any]) -> None:
+        entries = self._test_entries(artifact)
+        if not entries:
+            ui.label("Ainda não existem testes.").classes("text-sm muted")
+            return
+        with ui.tabs().props("no-caps align=left").classes("w-full") as test_tabs:
+            tabs = [
+                ui.tab(
+                    f"test-{index}",
+                    label=str(entry.get("assessment_task_id", "")).strip()
+                    or f"Teste {index}",
+                    icon="quiz",
+                )
+                for index, entry in enumerate(entries, start=1)
+            ]
+        with ui.tab_panels(test_tabs, value=tabs[0]).classes("w-full"):
+            for tab, entry in zip(tabs, entries):
+                with ui.tab_panel(tab).classes("px-0"):
+                    temporary = {
+                        "selected_types": [RESOURCE_TEST],
+                        "tests": [],
+                        "test": entry.get("test", {}),
+                    }
+                    section = render_resource_detail_sections(temporary)[0]
+                    ui.markdown(section["content"], extras=["tables"]).classes(
+                        "artifact-markdown overflow-x-auto"
+                    )
+
     @staticmethod
     def _selected_resource_tab_config(
         state: dict[str, Any],
@@ -2320,6 +2396,10 @@ class AGIRSoloInterface:
                 ):
                     if section["id"] == "presentation":
                         self._render_presentation_resource_view(state, artifact)
+                    elif section["id"] == "lesson-presentations":
+                        self._render_lesson_presentations_resource_view(state, artifact)
+                    elif section["id"] == "tests":
+                        self._render_tests_resource_view(artifact)
                     else:
                         ui.markdown(
                             section["content"], extras=["tables"]
@@ -2854,6 +2934,104 @@ class AGIRSoloInterface:
             for _, tab_id, _, _, root_path in resource_configs:
                 with ui.tab_panel(tab_by_id[tab_id]).classes("px-0"):
                     with ui.column().classes("w-full gap-4"):
+                        if tab_id in {"lesson-plan", "assessment-grid"}:
+                            ui.label(
+                                "Este recurso é derivado das etapas anteriores e não "
+                                "necessita de geração por IA. Para o alterar, edite o "
+                                "planeamento das aulas ou as tarefas de avaliação."
+                            ).classes("text-sm muted soft-surface p-3")
+                            matching = next(
+                                (
+                                    section
+                                    for section in render_resource_detail_sections(artifact)
+                                    if section["id"] == tab_id
+                                ),
+                                None,
+                            )
+                            if matching:
+                                ui.markdown(
+                                    matching["content"], extras=["tables"]
+                                ).classes("artifact-markdown overflow-x-auto")
+                            continue
+                        if tab_id == "lesson-presentations":
+                            entries = artifact.get("lesson_presentations", [])
+                            if not entries:
+                                ui.label(
+                                    "Crie primeiro as apresentações selecionadas com IA."
+                                ).classes("text-sm muted")
+                                continue
+                            presentation_table = next(
+                                table
+                                for table in layout.tables
+                                if table.path == ("presentation_outline",)
+                            )
+                            with ui.tabs().props("no-caps align=left").classes(
+                                "w-full"
+                            ) as nested_tabs:
+                                nested = [
+                                    ui.tab(
+                                        f"edit-lesson-{index}",
+                                        label=f"Aula {entry.get('lesson_number', index)}",
+                                        icon="co_present",
+                                    )
+                                    for index, entry in enumerate(entries, start=1)
+                                ]
+                            with ui.tab_panels(
+                                nested_tabs, value=nested[0]
+                            ).classes("w-full"):
+                                for nested_tab, entry in zip(nested, entries):
+                                    with ui.tab_panel(nested_tab).classes("px-0"):
+                                        self._render_presentation_editor(
+                                            entry,
+                                            presentation_table,
+                                            state,
+                                        )
+                            continue
+                        if tab_id == "tests":
+                            entries = self._test_entries(artifact)
+                            if not entries:
+                                ui.label("Crie primeiro os testes selecionados com IA.").classes(
+                                    "text-sm muted"
+                                )
+                                continue
+                            with ui.tabs().props("no-caps align=left").classes(
+                                "w-full"
+                            ) as nested_tabs:
+                                nested = [
+                                    ui.tab(
+                                        f"edit-test-{index}",
+                                        label=str(entry.get("assessment_task_id", "")).strip()
+                                        or f"Teste {index}",
+                                        icon="quiz",
+                                    )
+                                    for index, entry in enumerate(entries, start=1)
+                                ]
+                            with ui.tab_panels(
+                                nested_tabs, value=nested[0]
+                            ).classes("w-full"):
+                                for nested_tab, entry in zip(nested, entries):
+                                    with ui.tab_panel(nested_tab).classes("px-0"):
+                                        temporary = {"test": entry.get("test", {})}
+                                        for scalar in layout.fields:
+                                            if scalar.path[0] != "test":
+                                                continue
+                                            parent = value_at_path(
+                                                temporary, scalar.path[:-1]
+                                            )
+                                            self._render_manual_field(
+                                                parent,
+                                                FieldSpec(
+                                                    scalar.path[-1],
+                                                    scalar.label,
+                                                    scalar.kind,
+                                                ),
+                                            )
+                                        for table in layout.tables:
+                                            if table.path[0] == "test":
+                                                self._render_manual_table(
+                                                    temporary, table
+                                                )
+                            continue
                         for scalar in layout.fields:
                             if scalar.path[0] != root_path:
                                 continue
@@ -4038,9 +4216,12 @@ class AGIRSoloInterface:
         if stage == "resources" and isinstance(artifact, dict):
             tab_by_target = {
                 "RESOURCE:presentation": "presentation",
+                "RESOURCE:lesson-presentations": "lesson-presentations",
                 "RESOURCE:worksheet": "worksheet",
-                "RESOURCE:test": "test",
+                "RESOURCE:tests": "tests",
                 "RESOURCE:practical": "practical",
+                "RESOURCE:lesson-plan": "lesson-plan",
+                "RESOURCE:assessment-grid": "assessment-grid",
             }
             if target_key in tab_by_target:
                 tab = tab_by_target[target_key]
@@ -4073,12 +4254,27 @@ class AGIRSoloInterface:
                     row_selector(index, panel="practical"),
                     ".validation-resource-tab-practical",
                 )
+            if target_key.startswith("TEST:"):
+                _, task_id, question_id = target_key.split(":", 2)
+                entries = self._test_entries(artifact)
+                for entry in entries:
+                    if str(entry.get("assessment_task_id", "")) != task_id:
+                        continue
+                    if any(
+                        str(question.get("id", "")).casefold()
+                        == question_id.casefold()
+                        for question in entry.get("test", {}).get("questions", [])
+                    ):
+                        return (
+                            f".validation-resource-panel-tests",
+                            ".validation-resource-tab-tests",
+                        )
             questions = artifact.get("test", {}).get("questions", [])
             index = matching_index(questions, "id")
             if index is not None:
                 return (
-                    row_selector(index, panel="test"),
-                    ".validation-resource-tab-test",
+                    row_selector(index, panel="tests"),
+                    ".validation-resource-tab-tests",
                 )
         return heading, ""
 
@@ -4165,13 +4361,86 @@ class AGIRSoloInterface:
                         "e reutiliza as que forem adequadas antes de propor novas imagens."
                     ).classes("text-sm muted")
                 selected_resources = set(state.get("resource_types", []))
-                resource_checks = {
-                    resource_type: ui.checkbox(
-                        resource_type,
-                        value=resource_type in selected_resources,
-                    )
-                    for resource_type in RESOURCE_TYPES
+                saved_scopes = state.get("resource_scopes", {})
+                selected_lesson_numbers = {
+                    int(value)
+                    for value in saved_scopes.get("lesson_presentations", [])
+                    if str(value).isdigit()
                 }
+                selected_test_tasks = {
+                    str(value) for value in saved_scopes.get("tests", [])
+                }
+                resource_checks: dict[str, Any] = {}
+                ui.label("Recursos globais").classes("font-semibold mt-1")
+                with ui.element("div").classes(
+                    "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 w-full"
+                ):
+                    for resource_type, label in (
+                        (RESOURCE_LESSON_PLAN, "Plano de aulas"),
+                        (RESOURCE_ASSESSMENT_GRID, "Grelha de avaliação"),
+                        (RESOURCE_PRESENTATION, "Apresentação geral da UC"),
+                        (RESOURCE_WORKSHEET, "Ficha de aula"),
+                        (RESOURCE_PRACTICAL, "Atividade prática"),
+                    ):
+                        resource_checks[resource_type] = ui.checkbox(
+                            label,
+                            value=resource_type in selected_resources,
+                        )
+
+                ui.label("Recursos por aula").classes("font-semibold mt-3")
+                resource_checks[RESOURCE_LESSON_PRESENTATIONS] = ui.checkbox(
+                    "Apresentações PowerPoint das aulas",
+                    value=RESOURCE_LESSON_PRESENTATIONS in selected_resources,
+                )
+                ui.label(
+                    "Selecione as aulas para as quais pretende produzir uma apresentação."
+                ).classes("text-xs muted")
+                lesson_scope_checks: dict[int, Any] = {}
+                with ui.column().classes("soft-surface w-full gap-1 p-3"):
+                    lessons = state.get("pedagogical_design", {}).get("lessons", [])
+                    if not lessons:
+                        ui.label("Ainda não existem aulas planeadas.").classes(
+                            "text-sm muted"
+                        )
+                    for lesson_number, lesson in enumerate(lessons, start=1):
+                        notes = str(lesson.get("notes", "")).strip()
+                        detail = (
+                            f"{lesson.get('duration_minutes', 0)} min · "
+                            f"{lesson.get('session_type', '')}"
+                            + (f" · {notes[:90]}" if notes else "")
+                        )
+                        lesson_scope_checks[lesson_number] = ui.checkbox(
+                            f"Aula {lesson_number} — {detail}",
+                            value=lesson_number in selected_lesson_numbers,
+                        )
+
+                ui.label("Recursos de avaliação").classes("font-semibold mt-3")
+                resource_checks[RESOURCE_TEST] = ui.checkbox(
+                    "Testes por tarefa de avaliação",
+                    value=RESOURCE_TEST in selected_resources,
+                )
+                ui.label(
+                    "Cada tarefa selecionada origina um teste independente, limitado aos seus resultados."
+                ).classes("text-xs muted")
+                test_scope_checks: dict[str, Any] = {}
+                with ui.column().classes("soft-surface w-full gap-1 p-3"):
+                    tasks = state.get("assessment_activities", [])
+                    if not tasks:
+                        ui.label("Ainda não existem tarefas de avaliação.").classes(
+                            "text-sm muted"
+                        )
+                    for task in tasks:
+                        task_id = str(task.get("id", "")).strip()
+                        if not task_id:
+                            continue
+                        activity = str(task.get("activity", "")).strip()
+                        outcomes = ", ".join(task.get("outcome_ids", []))
+                        purpose = str(task.get("assessment_purpose", ""))
+                        test_scope_checks[task_id] = ui.checkbox(
+                            f"{task_id} — {purpose} · {outcomes}"
+                            + (f" — {activity[:90]}" if activity else ""),
+                            value=task_id in selected_test_tasks,
+                        )
 
                 async def save_resource_settings() -> None:
                     selected = [
@@ -4179,11 +4448,24 @@ class AGIRSoloInterface:
                         for name, checkbox in resource_checks.items()
                         if checkbox.value
                     ]
+                    scopes = {
+                        "lesson_presentations": [
+                            number
+                            for number, checkbox in lesson_scope_checks.items()
+                            if checkbox.value
+                        ],
+                        "tests": [
+                            task_id
+                            for task_id, checkbox in test_scope_checks.items()
+                            if checkbox.value
+                        ],
+                    }
                     try:
                         self.state, message = await run.io_bound(
                             self.service.update_resource_settings,
                             self.state,
                             selected,
+                            scopes,
                         )
                         self.show_workspace(message)
                         self.refresh_sessions()
@@ -4259,6 +4541,24 @@ class AGIRSoloInterface:
     def _open_resource_generation_confirmation(self) -> None:
         selected = list((self.state or {}).get("resource_types", []))
         selected_text = ", ".join(selected) or "nenhum recurso"
+        scopes = (self.state or {}).get("resource_scopes", {})
+        generative_count = sum(
+            1
+            for resource_type in selected
+            if resource_type
+            not in {
+                RESOURCE_LESSON_PLAN,
+                RESOURCE_ASSESSMENT_GRID,
+                RESOURCE_LESSON_PRESENTATIONS,
+                RESOURCE_TEST,
+            }
+        )
+        generative_count += len(scopes.get("lesson_presentations", []))
+        generative_count += len(scopes.get("tests", []))
+        deterministic_count = sum(
+            resource_type in {RESOURCE_LESSON_PLAN, RESOURCE_ASSESSMENT_GRID}
+            for resource_type in selected
+        )
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6 gap-4"):
             ui.label("GERAR RECURSOS COM IA").classes("eyebrow")
             ui.label("Confirmar geração dos recursos selecionados").classes(
@@ -4266,12 +4566,18 @@ class AGIRSoloInterface:
             )
             ui.label(
                 "Esta ação contacta o fornecedor de IA e pode originar várias "
-                "chamadas, uma por tipo de recurso. A apresentação também pode "
+                "chamadas: uma por recurso global e uma por cada aula ou tarefa "
+                "selecionada. As apresentações também podem "
                 "originar chamadas de geração de imagens."
             ).classes("text-sm")
             ui.label(f"Recursos: {selected_text}.").classes(
                 "soft-surface p-3 text-sm font-medium"
             )
+            ui.label(
+                f"Serão efetuadas {generative_count} gerações de texto com IA. "
+                f"{deterministic_count} recursos serão preparados diretamente a partir "
+                "dos dados aprovados, sem chamar a IA."
+            ).classes("text-sm")
             ui.label(
                 "O conteúdo gerado continuará pendente até rever e aceitar a proposta."
             ).classes("text-sm muted")

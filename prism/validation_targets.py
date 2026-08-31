@@ -5,6 +5,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .models import (
+    RESOURCE_ASSESSMENT_GRID,
+    RESOURCE_LESSON_PLAN,
+    RESOURCE_LESSON_PRESENTATIONS,
+)
+
 
 STAGE_ROOT_TARGET = "__stage__"
 
@@ -47,9 +53,12 @@ def available_validation_targets(stage: str, artifact: Any) -> list[dict[str, st
         selected = set(artifact.get("selected_types", []))
         resource_targets = (
             ("Apresentação PowerPoint", "RESOURCE:presentation", "Apresentação"),
+            (RESOURCE_LESSON_PRESENTATIONS, "RESOURCE:lesson-presentations", "Apresentações das aulas"),
             ("Ficha de aula", "RESOURCE:worksheet", "Ficha de aula"),
-            ("Teste", "RESOURCE:test", "Teste"),
+            ("Teste", "RESOURCE:tests", "Testes"),
             ("Atividade prática", "RESOURCE:practical", "Atividade prática"),
+            (RESOURCE_LESSON_PLAN, "RESOURCE:lesson-plan", "Plano de aulas"),
+            (RESOURCE_ASSESSMENT_GRID, "RESOURCE:assessment-grid", "Grelha de avaliação"),
         )
         for resource_type, key, label in resource_targets:
             if resource_type in selected:
@@ -61,10 +70,17 @@ def available_validation_targets(stage: str, artifact: Any) -> list[dict[str, st
         worksheet = artifact.get("lesson_worksheet", {})
         for index, _section in enumerate(worksheet.get("sections", []), start=1):
             add(f"WORKSHEET:{index}", f"Secção {index} da ficha de aula")
-        test = artifact.get("test", {})
-        for index, question in enumerate(test.get("questions", []), start=1):
-            identifier = _clean_identifier(question.get("id")) or f"Q{index}"
-            add(identifier, f"Questão {identifier}")
+        test_entries = artifact.get("tests", [])
+        if not test_entries and artifact.get("test", {}).get("questions"):
+            test_entries = [{"assessment_task_id": "", "test": artifact["test"]}]
+        for test_entry in test_entries:
+            task_id = _clean_identifier(test_entry.get("assessment_task_id"))
+            for index, question in enumerate(
+                test_entry.get("test", {}).get("questions", []), start=1
+            ):
+                identifier = _clean_identifier(question.get("id")) or f"Q{index}"
+                key = f"TEST:{task_id}:{identifier}" if task_id else identifier
+                add(key, f"Questão {identifier}" + (f" de {task_id}" if task_id else ""))
         practical = artifact.get("practical_activity", {})
         for index, _step in enumerate(practical.get("steps", []), start=1):
             add(f"PRACTICAL:{index}", f"Etapa prática {index}")

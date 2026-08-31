@@ -32,6 +32,9 @@ from prism.exporter import (
 )
 from prism.models import (
     CourseInput,
+    RESOURCE_ASSESSMENT_GRID,
+    RESOURCE_LESSON_PLAN,
+    RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
@@ -41,12 +44,14 @@ from prism.models import (
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import render_current_artifact, render_resource_detail_sections
 from prism.quality import PRESENTATION_ASSESSMENT_TITLE, evaluate_quality
+from prism.resource_catalog import build_assessment_grid, build_lesson_plan
 from prism.workflow import (
     build_final_validation,
     create_session,
     create_test_agent,
     navigate_to_stage,
     review_current_stage,
+    update_manual_resource_settings,
 )
 
 
@@ -122,9 +127,122 @@ class ResourceGenerationTests(unittest.TestCase):
         )
         self.assertTrue(resources["lesson_worksheet"]["sections"])
         self.assertTrue(resources["test"]["questions"])
+        self.assertEqual(
+            [item["lesson_number"] for item in resources["lesson_presentations"]],
+            state["resource_scopes"]["lesson_presentations"],
+        )
+        lesson_outcomes = {
+            item["lesson_number"]: set(item["outcome_ids"])
+            for item in resources["lesson_presentations"]
+        }
+        self.assertTrue(
+            all(
+                {
+                    slide["outcome_id"]
+                    for slide in item["presentation_outline"]
+                    if slide.get("outcome_id")
+                }
+                == lesson_outcomes[item["lesson_number"]]
+                for item in resources["lesson_presentations"]
+            )
+        )
+        self.assertEqual(
+            [item["assessment_task_id"] for item in resources["tests"]],
+            state["resource_scopes"]["tests"],
+        )
+        self.assertTrue(
+            all(
+                {
+                    question["outcome_id"]
+                    for question in item["test"]["questions"]
+                }
+                == set(item["outcome_ids"])
+                and sum(
+                    question["points"] for question in item["test"]["questions"]
+                )
+                == item["test"]["total_points"]
+                for item in resources["tests"]
+            )
+        )
+        self.assertEqual(resources["lesson_plan"], build_lesson_plan(state))
+        self.assertEqual(resources["assessment_grid"], build_assessment_grid(state))
         self.assertTrue(resources["practical_activity"]["steps"])
         self.assertTrue(resources["quality"]["passed"])
         self.assertEqual(resources["quality"]["status"], "OK")
+
+    def test_deterministic_resources_do_not_create_ai_generation_jobs(self) -> None:
+        state = create_session(
+            self.course,
+            resource_types=[RESOURCE_LESSON_PLAN, RESOURCE_ASSESSMENT_GRID],
+            agent=self.agent,
+        )
+        for _ in range(5):
+            state = review_current_stage(state, "approve", agent=self.agent)
+
+        self.assertEqual(state["current_stage"], "resources")
+        self.assertEqual(state["resources"]["lesson_plan"], build_lesson_plan(state))
+        self.assertEqual(
+            state["resources"]["assessment_grid"],
+            build_assessment_grid(state),
+        )
+        metadata = state["generation_metadata"]["resources"][-1]
+        self.assertEqual(metadata["provider"], "CoerIA")
+        self.assertEqual(metadata["total_tokens"], 0)
+        self.assertEqual(metadata["resource_generations"], [])
+
+    def test_resource_quality_recalculates_lesson_and_test_scopes(self) -> None:
+        state = self._resource_state()
+        tampered = deepcopy(state)
+        tampered["resources"]["lesson_presentations"][0]["outcome_ids"] = [
+            "RA_INEXISTENTE"
+        ]
+        tampered["resources"]["tests"][0]["outcome_ids"] = ["RA_INEXISTENTE"]
+
+        report = evaluate_quality(tampered, tampered["resources"])
+        checks = {item["id"]: item for item in report["checks"]}
+
+        self.assertEqual(checks["lesson_presentations"]["status"], "error")
+        self.assertIn("âmbito declarado", checks["lesson_presentations"]["detail"])
+        self.assertEqual(checks["test_points"]["status"], "error")
+        self.assertIn("âmbito declarado", checks["test_points"]["detail"])
+
+    def test_resource_schema_exposes_collections_for_localized_assistance(self) -> None:
+        state = self._resource_state()
+        properties = _schema_for("resources", state)["properties"]["artifact"][
+            "properties"
+        ]
+
+        self.assertIn("lesson_presentations", properties)
+        self.assertIn("tests", properties)
+        self.assertIn("lesson_plan", properties)
+        self.assertIn("assessment_grid", properties)
+
+    def test_manual_selection_requires_an_explicit_test_target(self) -> None:
+        state = self._resource_state()
+        state["orchestration"]["mode"] = "manual-first"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Selecione pelo menos uma tarefa de avaliação",
+        ):
+            update_manual_resource_settings(
+                state,
+                [RESOURCE_TEST],
+                {"tests": [], "lesson_presentations": []},
+            )
+
+        updated = update_manual_resource_settings(
+            state,
+            [RESOURCE_TEST],
+            {
+                "tests": [state["assessment_activities"][0]["id"]],
+                "lesson_presentations": [],
+            },
+        )
+        self.assertEqual(
+            updated["resource_scopes"]["tests"],
+            [state["assessment_activities"][0]["id"]],
+        )
 
     def test_resource_detail_sections_include_only_selected_resources(self) -> None:
         state = self._resource_state()
@@ -133,7 +251,7 @@ class ResourceGenerationTests(unittest.TestCase):
 
         sections = render_resource_detail_sections(resources)
 
-        self.assertEqual([item["id"] for item in sections], ["test"])
+        self.assertEqual([item["id"] for item in sections], ["tests"])
         self.assertIn("Questões", sections[0]["content"])
         self.assertNotIn("Enunciado", sections[0]["content"])
         self.assertIn("Chave de correção", sections[0]["content"])
@@ -586,22 +704,28 @@ class ResourceGenerationTests(unittest.TestCase):
                 progress_callback=progress.append,
             )
 
+        test_count = len(alignment_state["assessment_activities"])
         self.assertEqual(
             agent.calls,
-            [RESOURCE_PRESENTATION, RESOURCE_PRESENTATION, RESOURCE_TEST],
+            [RESOURCE_PRESENTATION, RESOURCE_PRESENTATION]
+            + [RESOURCE_TEST] * test_count,
         )
         self.assertTrue(result["resources"]["quality"]["passed"])
         resource_metadata = result["generation_metadata"]["resources"][-1][
             "resource_generations"
         ]
-        self.assertEqual(len(resource_metadata), 2)
+        self.assertEqual(len(resource_metadata), 1 + test_count)
         self.assertEqual(resource_metadata[0]["quality_revisions"], 1)
-        self.assertEqual(resource_metadata[1]["quality_revisions"], 0)
+        self.assertTrue(
+            all(item["quality_revisions"] == 0 for item in resource_metadata[1:])
+        )
         self.assertEqual(len(resource_metadata[0]["attempts"]), 2)
-        self.assertEqual(len(resource_metadata[1]["attempts"]), 1)
+        self.assertTrue(
+            all(len(item["attempts"]) == 1 for item in resource_metadata[1:])
+        )
         self.assertEqual(
             result["generation_metadata"]["resources"][-1]["total_tokens"],
-            45,
+            30 + (15 * test_count),
         )
         self.assertTrue(
             any(
@@ -612,13 +736,13 @@ class ResourceGenerationTests(unittest.TestCase):
         )
         self.assertTrue(
             any(
-                f"A gerar recurso 1 de 2: {RESOURCE_PRESENTATION}" in message
+                f"A gerar recurso 1 de {1 + test_count}: {RESOURCE_PRESENTATION}" in message
                 for message in progress
             )
         )
         self.assertTrue(
             any(
-                f"A gerar recurso 2 de 2: {RESOURCE_TEST}" in message
+                "A gerar recurso 2 de " in message and "Teste de TA1" in message
                 for message in progress
             )
         )
@@ -665,7 +789,7 @@ class ResourceGenerationTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(
                     AgentGenerationError,
-                    "2 recursos já concluídos",
+                    "6 recursos já concluídos",
                 ):
                     service.review_session(
                         alignment_state,
@@ -679,7 +803,14 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertNotIn("resources", persisted)
                 self.assertEqual(
                     set(persisted["resource_generation_drafts"]["entries"]),
-                    {RESOURCE_PRESENTATION, RESOURCE_WORKSHEET},
+                    {
+                        RESOURCE_PRESENTATION,
+                        RESOURCE_WORKSHEET,
+                        "lesson-presentation:1",
+                        "lesson-presentation:2",
+                        "lesson-presentation:3",
+                        "lesson-presentation:4",
+                    },
                 )
                 completed, _ = service.review_session(
                     persisted,
@@ -689,16 +820,10 @@ class ResourceGenerationTests(unittest.TestCase):
 
             stored_completed = service.load_session(completed["session_id"])
 
-        self.assertEqual(
-            agent.calls,
-            [
-                RESOURCE_PRESENTATION,
-                RESOURCE_WORKSHEET,
-                RESOURCE_TEST,
-                RESOURCE_TEST,
-                RESOURCE_PRACTICAL,
-            ],
-        )
+        self.assertEqual(agent.calls.count(RESOURCE_PRESENTATION), 5)
+        self.assertEqual(agent.calls.count(RESOURCE_WORKSHEET), 1)
+        self.assertEqual(agent.calls.count(RESOURCE_TEST), 5)
+        self.assertEqual(agent.calls.count(RESOURCE_PRACTICAL), 1)
         self.assertNotIn("resource_generation_drafts", completed)
         self.assertNotIn("resource_generation_drafts", stored_completed)
         self.assertTrue(completed["resources"]["quality"]["passed"])
@@ -730,8 +855,17 @@ class ResourceGenerationTests(unittest.TestCase):
                     name for name in names if name.endswith("_apresentacao.pptx")
                 )
                 self.assertTrue(any(name.endswith("_ficha_aula.docx") for name in names))
-                self.assertTrue(any(name.endswith("_teste.docx") for name in names))
+                self.assertEqual(
+                    len([name for name in names if "_teste_" in name and name.endswith(".docx")]),
+                    len(state["resource_scopes"]["tests"]),
+                )
                 self.assertTrue(any(name.endswith("_atividade_pratica.docx") for name in names))
+                self.assertTrue(any(name.endswith("_plano_aulas.docx") for name in names))
+                self.assertTrue(any(name.endswith("_grelha_avaliacao.docx") for name in names))
+                self.assertEqual(
+                    len([name for name in names if "_aula_" in name and name.endswith("_apresentacao.pptx")]),
+                    len(state["resource_scopes"]["lesson_presentations"]),
+                )
                 self.assertIn("sintese_alinhamento.csv", names)
                 self.assertIn("rastreabilidade.csv", names)
                 self.assertIn("manifesto.json", names)
@@ -929,9 +1063,9 @@ class ResourceGenerationTests(unittest.TestCase):
                         self.assertEqual(bool(word_names), expects_word)
                         self.assertEqual(bool(latex_names), expects_latex)
                         if expects_word:
-                            self.assertEqual(len(word_names), 4)
+                            self.assertEqual(len(word_names), 9)
                         if expects_latex:
-                            self.assertEqual(len(latex_names), 4)
+                            self.assertEqual(len(latex_names), 9)
                             program_name = next(
                                 name
                                 for name in latex_names
@@ -959,7 +1093,7 @@ class ResourceGenerationTests(unittest.TestCase):
                             test_name = next(
                                 name
                                 for name in latex_names
-                                if name.endswith("_teste.tex")
+                                if "_teste_" in name
                             )
                             test_document = package.read(test_name).decode("utf-8")
                             self.assertIn(
@@ -1141,7 +1275,7 @@ class ResourceGenerationTests(unittest.TestCase):
             with zipfile.ZipFile(package_path) as package:
                 names = set(package.namelist())
                 pdf_names = {name for name in names if name.endswith(".pdf")}
-                self.assertEqual(len(pdf_names), 4)
+                self.assertEqual(len(pdf_names), 9)
                 manifest = json.loads(package.read("manifesto.json"))
                 self.assertTrue(manifest["latex_pdf_compilation"]["enabled"])
                 self.assertEqual(

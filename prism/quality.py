@@ -18,10 +18,19 @@ from .curriculum import (
     validate_taxonomy_choice,
 )
 from .models import (
+    RESOURCE_ASSESSMENT_GRID,
+    RESOURCE_LESSON_PLAN,
+    RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
+)
+from .resource_catalog import (
+    assessment_scope,
+    build_assessment_grid,
+    build_lesson_plan,
+    lesson_scope,
 )
 from .relationships import derive_alignment_rows
 
@@ -107,6 +116,9 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         target_stage = "learning_outcomes"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
+    elif check_id == "lesson_plan_freshness":
+        target_stage = "pedagogical_design"
+        target_key = "__stage__"
     elif check_id == "assessment_coverage":
         target_stage = "assessment_activities"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
@@ -147,12 +159,18 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         target_key = "__stage__"
     elif "apresentacao_powerpoint" in check_id:
         target_key = "RESOURCE:presentation"
+    elif "apresentacoes_das_aulas" in check_id or check_id == "lesson_presentations":
+        target_key = "RESOURCE:lesson-presentations"
+    elif "plano_de_aulas" in check_id:
+        target_key = "RESOURCE:lesson-plan"
+    elif "grelha_de_avaliacao" in check_id:
+        target_key = "RESOURCE:assessment-grid"
     elif "ficha_de_aula" in check_id:
         target_key = "RESOURCE:worksheet"
     elif "atividade_pratica" in check_id or check_id == "practical_weights":
         target_key = "RESOURCE:practical"
     elif "teste" in check_id or check_id == "test_points":
-        target_key = "RESOURCE:test"
+        target_key = "RESOURCE:tests"
     return {"target_stage": target_stage, "target_key": target_key}
 
 
@@ -598,9 +616,17 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
 
     resource_rules = {
         RESOURCE_PRESENTATION: bool(resource_data.get("presentation_outline")),
+        RESOURCE_LESSON_PRESENTATIONS: bool(
+            resource_data.get("lesson_presentations")
+        ),
         RESOURCE_WORKSHEET: bool(resource_data.get("lesson_worksheet", {}).get("sections")),
-        RESOURCE_TEST: bool(resource_data.get("test", {}).get("questions")),
+        RESOURCE_TEST: bool(resource_data.get("tests"))
+        or bool(resource_data.get("test", {}).get("questions")),
         RESOURCE_PRACTICAL: bool(resource_data.get("practical_activity", {}).get("steps")),
+        RESOURCE_LESSON_PLAN: bool(resource_data.get("lesson_plan", {}).get("lessons")),
+        RESOURCE_ASSESSMENT_GRID: bool(
+            resource_data.get("assessment_grid", {}).get("rows")
+        ),
     }
     for resource_type, populated in resource_rules.items():
         requested_resource = resource_type in requested
@@ -645,6 +671,7 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 ),
             )
         )
+
         assessment_overview_issues = presentation_assessment_overview_issues(
             state,
             presentation_slides,
@@ -665,6 +692,111 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             )
         )
 
+    if RESOURCE_LESSON_PLAN in requested:
+        current_plan = resource_data.get("lesson_plan", {})
+        expected_plan = build_lesson_plan(state)
+        checks.append(
+            _check(
+                "lesson_plan_freshness",
+                "Atualidade do plano de aulas",
+                "pass" if current_plan == expected_plan else "error",
+                (
+                    "O plano reproduz exatamente o planeamento de aulas aprovado."
+                    if current_plan == expected_plan
+                    else "O plano deve ser atualizado a partir do planeamento de aulas atual."
+                ),
+            )
+        )
+    if RESOURCE_ASSESSMENT_GRID in requested:
+        current_grid = resource_data.get("assessment_grid", {})
+        expected_grid = build_assessment_grid(state)
+        checks.append(
+            _check(
+                "assessment_grid_freshness",
+                "Atualidade da grelha de avaliação",
+                "pass" if current_grid == expected_grid else "error",
+                (
+                    "A grelha reproduz exatamente as tarefas e ligações aprovadas."
+                    if current_grid == expected_grid
+                    else "A grelha deve ser atualizada a partir das tarefas de avaliação atuais."
+                ),
+            )
+        )
+
+    if RESOURCE_LESSON_PRESENTATIONS in requested:
+        lesson_presentations = resource_data.get("lesson_presentations", [])
+        expected_lessons = set(
+            state.get("resource_scopes", {}).get("lesson_presentations", [])
+        )
+        received_lessons = {
+            int(item.get("lesson_number", 0) or 0)
+            for item in lesson_presentations
+            if isinstance(item, dict)
+        }
+        collection_issues: list[str] = []
+        if len(received_lessons) != len(lesson_presentations):
+            collection_issues.append(
+                "cada aula deve ter exatamente uma apresentação"
+            )
+        if received_lessons != expected_lessons:
+            collection_issues.append(
+                f"aulas esperadas: {sorted(expected_lessons)}; recebidas: {sorted(received_lessons)}"
+            )
+        for item in lesson_presentations:
+            lesson_number = int(item.get("lesson_number", 0) or 0)
+            slides = item.get("presentation_outline", [])
+            slide_issues = [
+                f"slide {index}: " + "; ".join(presentation_visual_issues(state, slide))
+                for index, slide in enumerate(slides, start=1)
+                if presentation_visual_issues(state, slide)
+            ]
+            try:
+                current_scope = lesson_scope(state, lesson_number)
+                scoped_state = {**state, **current_scope}
+            except ValueError as error:
+                collection_issues.append(str(error))
+                continue
+            assessment_issues = presentation_assessment_overview_issues(
+                scoped_state,
+                slides,
+            )
+            expected_scope = set(current_scope.get("outcome_ids", []))
+            declared_scope = set(item.get("outcome_ids", []))
+            covered_scope = {
+                str(slide.get("outcome_id", ""))
+                for slide in slides
+                if str(slide.get("outcome_id", "")).strip()
+            }
+            if slide_issues:
+                collection_issues.append(
+                    f"Aula {lesson_number}: " + " | ".join(slide_issues)
+                )
+            if assessment_issues:
+                collection_issues.append(
+                    f"Aula {lesson_number}: " + "; ".join(assessment_issues)
+                )
+            if covered_scope != expected_scope:
+                collection_issues.append(
+                    f"Aula {lesson_number}: esperados {sorted(expected_scope)}; "
+                    f"cobertos {sorted(covered_scope)}"
+                )
+            if declared_scope != expected_scope:
+                collection_issues.append(
+                    f"Aula {lesson_number}: âmbito declarado {sorted(declared_scope)}; "
+                    f"esperado {sorted(expected_scope)}"
+                )
+        checks.append(
+            _check(
+                "lesson_presentations",
+                "Apresentações PowerPoint das aulas",
+                "pass" if lesson_presentations and not collection_issues else "error",
+                (
+                    "Todas as apresentações selecionadas respeitam o âmbito das aulas."
+                    if lesson_presentations and not collection_issues
+                    else "; ".join(collection_issues) or "Não existem apresentações."
+                ),
+            )
+        )
     resource_outcomes: dict[str, set[str]] = {
         RESOURCE_PRESENTATION: {
             str(item.get("outcome_id", ""))
@@ -678,6 +810,12 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         },
         RESOURCE_TEST: {
             str(item.get("outcome_id", ""))
+            for test_entry in resource_data.get("tests", [])
+            for item in test_entry.get("test", {}).get("questions", [])
+            if item.get("outcome_id")
+        }
+        or {
+            str(item.get("outcome_id", ""))
             for item in resource_data.get("test", {}).get("questions", [])
             if item.get("outcome_id")
         },
@@ -687,7 +825,12 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             for outcome_id in step.get("outcome_ids", [])
         },
     }
-    for resource_type in requested:
+    for resource_type in requested - {
+        RESOURCE_LESSON_PLAN,
+        RESOURCE_ASSESSMENT_GRID,
+        RESOURCE_LESSON_PRESENTATIONS,
+        RESOURCE_TEST,
+    }:
         covered = resource_outcomes.get(resource_type, set())
         coverage_status = (
             "warning"
@@ -712,15 +855,78 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         )
 
     if RESOURCE_TEST in requested:
-        test_data = resource_data.get("test", {})
-        calculated_points = sum(item.get("points", 0) for item in test_data.get("questions", []))
-        declared_points = test_data.get("total_points", 0)
+        test_entries = resource_data.get("tests", [])
+        if not test_entries and resource_data.get("test", {}).get("questions"):
+            test_entries = [
+                {
+                    "assessment_task_id": "legado",
+                    "outcome_ids": sorted(expected_ids),
+                    "test": resource_data.get("test", {}),
+                }
+            ]
+        test_issues: list[str] = []
+        legacy_test = bool(
+            len(test_entries) == 1
+            and str(test_entries[0].get("assessment_task_id", "")) == "legado"
+        )
+        expected_tasks = set(state.get("resource_scopes", {}).get("tests", []))
+        received_tasks = {
+            str(item.get("assessment_task_id", ""))
+            for item in test_entries
+            if str(item.get("assessment_task_id", "")) != "legado"
+        }
+        if not legacy_test and len(received_tasks) != len(test_entries):
+            test_issues.append("cada tarefa deve ter exatamente um teste")
+        if not legacy_test and received_tasks != expected_tasks:
+            test_issues.append(
+                f"tarefas esperadas: {sorted(expected_tasks)}; recebidas: {sorted(received_tasks)}"
+            )
+        for entry in test_entries:
+            task_id = str(entry.get("assessment_task_id", ""))
+            test_data = entry.get("test", {})
+            calculated_points = sum(
+                item.get("points", 0) for item in test_data.get("questions", [])
+            )
+            declared_points = test_data.get("total_points", 0)
+            if task_id == "legado":
+                expected_test_outcomes = set(expected_ids)
+            else:
+                try:
+                    current_scope = assessment_scope(state, task_id)
+                    expected_test_outcomes = set(current_scope.get("outcome_ids", []))
+                except ValueError as error:
+                    test_issues.append(str(error))
+                    expected_test_outcomes = set()
+            declared_test_outcomes = set(entry.get("outcome_ids", []))
+            covered_test_outcomes = {
+                str(item.get("outcome_id", ""))
+                for item in test_data.get("questions", [])
+                if str(item.get("outcome_id", "")).strip()
+            }
+            if calculated_points != declared_points or declared_points <= 0:
+                test_issues.append(
+                    f"{task_id}: cotação declarada {declared_points}; soma {calculated_points}"
+                )
+            if covered_test_outcomes != expected_test_outcomes:
+                test_issues.append(
+                    f"{task_id}: esperados {sorted(expected_test_outcomes)}; "
+                    f"cobertos {sorted(covered_test_outcomes)}"
+                )
+            if declared_test_outcomes != expected_test_outcomes:
+                test_issues.append(
+                    f"{task_id}: âmbito declarado {sorted(declared_test_outcomes)}; "
+                    f"esperado {sorted(expected_test_outcomes)}"
+                )
         checks.append(
             _check(
                 "test_points",
-                "Cotação total do teste",
-                "pass" if calculated_points == declared_points and declared_points > 0 else "error",
-                f"Cotação declarada: {declared_points}; soma das questões: {calculated_points}.",
+                "Testes por tarefa de avaliação",
+                "pass" if test_entries and not test_issues else "error",
+                (
+                    "Todos os testes cobrem a respetiva tarefa e apresentam cotação coerente."
+                    if test_entries and not test_issues
+                    else "; ".join(test_issues) or "Não existem testes."
+                ),
             )
         )
 
