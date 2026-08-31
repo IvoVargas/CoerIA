@@ -38,18 +38,24 @@ AI* é implementado como uma dimensão adicional e independente da taxonomia. O
 campo `ai_mode` pertence a cada `RA<n>` e aceita `AI-off`, `AI-on` ou `on-AI`,
 com `AI-off` por defeito. As linhas `AE<n>` e `TA<n>` guardam o modo herdado dos
 resultados associados; os esquemas, a canonicalização e os validadores impedem
-que uma única linha combine resultados com modos diferentes. O módulo
+que uma única linha combine resultados com modos diferentes. Como se trata de
+um campo derivado, qualquer alteração nos modos dos RA recalcula imediatamente
+as AE e TA já guardadas; uma combinação incompatível fica sem modo até as
+relações serem corrigidas. O planeamento rejeita também uma aula que combine
+AE/TA de modos diferentes. O módulo
 `prism/ai_modes.py` concentra o vocabulário e as regras, enquanto a validação
-final confirma a coerência do modo em toda a cadeia `RA ↔ AE ↔ TA`.
+final confirma a coerência do modo em toda a cadeia `RA ↔ AE ↔ TA` e nas aulas.
 
 Na etapa de conteúdos, o contrato estruturado separa também a função linguística
-dos campos. `objectives` contém finalidades gerais e pode usar verbos; `title` é
-uma designação temática nominal; `description` delimita conceitos, princípios,
-processos, aplicações e limites em linguagem expositiva. O prompt inclui esta
-distinção e o validador das propostas deteta descrições iniciadas pelos verbos
-controlados de SOLO/Bloom ou por verbos frequentes de objetivos. Uma violação
-faz repetir apenas a proposta de IA e identifica os conteúdos envolvidos; não
-limita a liberdade da edição manual nem altera versões existentes.
+dos campos. `title` é uma designação temática nominal e `description` delimita
+conceitos, princípios, processos, aplicações e limites em linguagem expositiva.
+Os objetivos gerais, quando necessários, pertencem aos dados iniciais e não são
+duplicados no artefacto de conteúdos nem usados como uma relação de alinhamento.
+O prompt inclui esta distinção e o validador das propostas deteta descrições
+iniciadas pelos verbos controlados de SOLO/Bloom ou por verbos frequentes de
+objetivos. Uma violação faz repetir apenas a proposta de IA e identifica os
+conteúdos envolvidos; não limita a liberdade da edição manual nem altera versões
+existentes.
 Na apresentação ao docente e nos documentos exportados, estes campos internos
 surgem como **Tema** e **Descrição do tema**. A entidade continua a representar
 um conteúdo programático com ID `C<n>`; a alteração é exclusivamente semântica e
@@ -214,7 +220,7 @@ interna e entrega os resultados aos mesmos esquemas e guardrails.
 
 ## Migração e rastreabilidade
 
-Sessões anteriores são migradas para o esquema 21 sem apagar artefactos ou
+Sessões anteriores são migradas para o esquema 30 sem apagar artefactos ou
 versões. O ponto corrente é preservado, as estruturas ausentes são inicializadas
 vazias e estados antigos como `stale` passam a `needs_review`. As propostas e
 pareceres futuros ficam separados em `ai_proposals` e `ai_reviews`.

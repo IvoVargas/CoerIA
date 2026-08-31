@@ -123,6 +123,23 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         target_stage = "assessment_activities"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
+    elif check_id == "ai_mode_alignment":
+        lesson = re.search(r"\bAula\s+(\d+)\b", detail, flags=re.IGNORECASE)
+        assessment = re.search(r"\bTA\d+\b", detail, flags=re.IGNORECASE)
+        teaching = re.search(r"\bAE\d+\b", detail, flags=re.IGNORECASE)
+        outcome = re.search(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
+        if lesson:
+            target_stage = "pedagogical_design"
+            target_key = f"LESSON:{lesson.group(1)}"
+        elif assessment:
+            target_stage = "assessment_activities"
+            target_key = assessment.group(0).upper()
+        elif teaching:
+            target_stage = "teaching_activities"
+            target_key = teaching.group(0).upper()
+        else:
+            target_stage = "learning_outcomes"
+            target_key = outcome.group(0).upper() if outcome else "__stage__"
     elif check_id in {"presentation_visuals", "presentation_assessment_overview"}:
         slides = re.findall(r"\bslide\s+(\d+)\b", detail, flags=re.IGNORECASE)
         target_key = f"SLIDE:{slides[0]}" if slides else "RESOURCE:presentation"

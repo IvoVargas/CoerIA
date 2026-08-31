@@ -22,6 +22,7 @@ from .ai_modes import (
     AI_MODE_ON,
     AI_MODES,
     canonical_ai_mode,
+    lesson_ai_mode_issues,
     linked_ai_mode,
 )
 from .branding import config_value
@@ -1030,7 +1031,7 @@ def _canonicalize_assessment_activities(
             "id": f"TA{index}",
             "teaching_activity_ids": teaching_links,
             "outcome_ids": outcome_links,
-            "ai_mode": inherited_mode or canonical_ai_mode(item.get("ai_mode")),
+            "ai_mode": inherited_mode or "",
             "assessment_purpose": canonical_purpose,
         }
         changes = {
@@ -1076,7 +1077,7 @@ def _canonicalize_teaching_activities(
             outcome_ids,
             state.get("learning_outcomes", []),
         )
-        canonical_mode = inherited_mode or canonical_ai_mode(item.get("ai_mode"))
+        canonical_mode = inherited_mode or ""
         if item.get("ai_mode") != canonical_mode:
             changes["ai_mode"] = {
                 "received": item.get("ai_mode"),
@@ -2203,6 +2204,11 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                     f"{planned_minutes} minutos; deve corresponder às horas de contacto "
                     f"({expected_contact_minutes} minutos)"
                 )
+        invalid_lessons.extend(
+            lesson_ai_mode_issues(
+                {**state, "pedagogical_design": artifact}
+            )
+        )
         if invalid_lessons:
             raise AgentGenerationError(
                 "O planeamento das aulas está incompleto. " + "; ".join(invalid_lessons)

@@ -16,6 +16,7 @@ from .ai_modes import (
     AI_MODE_OFF,
     AI_MODE_ON,
     ai_mode_alignment_issues,
+    synchronize_state_ai_modes,
 )
 from .agents import (
     AgentGenerationError,
@@ -704,6 +705,7 @@ def ensure_manual_artifacts(state: PrismState) -> PrismState:
     state["learning_outcome_assumptions"] = _clean_learning_outcome_assumptions(
         state.get("learning_outcome_assumptions", [])
     )
+    synchronize_state_ai_modes(state)
     state.setdefault("ai_proposals", [])
     state.setdefault("ai_reviews", {})
     return state
@@ -1076,6 +1078,8 @@ def save_manual_draft(
     if target_stage == "learning_outcomes":
         updated["learning_outcome_assumptions"] = edited_assumptions
     updated[target_stage] = edited_artifact
+    synchronize_state_ai_modes(updated)
+    edited_artifact = deepcopy(updated[target_stage])
     updated.setdefault("feedback", {})[target_stage] = clean_reason
     _append_version(
         updated,
@@ -1208,6 +1212,7 @@ def restore_stage_version(
         artifact["selected_types"] = list(selected_types)
         artifact = attach_quality_report(restored, artifact)
     restored[stage] = artifact
+    synchronize_state_ai_modes(restored)
     restored.setdefault("active_versions", {})[stage] = int(
         impact["version_number"]
     )
@@ -1823,7 +1828,9 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
         "",
     )
     ai_mode_target_stage = (
-        "assessment_activities"
+        "pedagogical_design"
+        if first_ai_mode_problem.startswith("Aula ")
+        else "assessment_activities"
         if first_ai_mode_problem.startswith("TA")
         else "teaching_activities"
         if first_ai_mode_problem.startswith("AE")
@@ -2566,6 +2573,8 @@ def apply_manual_edit(
     updated[target_stage] = edited_artifact
     if target_stage == "learning_outcomes":
         updated["learning_outcome_assumptions"] = edited_assumptions
+    synchronize_state_ai_modes(updated)
+    edited_artifact = deepcopy(updated[target_stage])
     updated.setdefault("feedback", {})[target_stage] = clean_reason
 
     versions = deepcopy(updated.get("versions", {}))
@@ -2651,6 +2660,7 @@ def run_current_stage(
                 progress_callback,
             )
         generated = build_stage_executor(execution_agent).invoke(state)
+        synchronize_state_ai_modes(generated)
 
         if stage == "resources":
             _report_progress(

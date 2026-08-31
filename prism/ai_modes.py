@@ -87,6 +87,75 @@ def sync_inherited_ai_mode(
     return row["ai_mode"]
 
 
+def synchronize_state_ai_modes(state: dict[str, Any]) -> dict[str, Any]:
+    """Recalcula os campos derivados de AE/TA a partir dos RA atuais.
+
+    ``ai_mode`` é uma decisão do resultado de aprendizagem. As cópias presentes
+    nas atividades e tarefas existem para leitura/exportação, mas nunca são uma
+    segunda fonte de verdade. Uma combinação de RA incompatíveis fica vazia para
+    que o docente corrija as relações, em vez de conservar um valor antigo.
+    """
+
+    outcomes = [
+        item
+        for item in state.get("learning_outcomes", [])
+        if isinstance(item, dict)
+    ]
+    for stage in ("teaching_activities", "assessment_activities"):
+        rows = state.get(stage, [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if isinstance(row, dict):
+                sync_inherited_ai_mode(row, outcomes)
+    return state
+
+
+def lesson_ai_mode_issues(state: dict[str, Any]) -> list[str]:
+    """Identifica aulas que combinam AE/TA de modos de IA diferentes."""
+
+    outcomes = [
+        item
+        for item in state.get("learning_outcomes", [])
+        if isinstance(item, dict)
+    ]
+    component_modes: dict[str, str] = {}
+    for stage in ("teaching_activities", "assessment_activities"):
+        rows = state.get(stage, [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            identifier = str(row.get("id", "")).strip()
+            outcome_ids = row.get("outcome_ids") or [row.get("outcome_id", "")]
+            inherited = linked_ai_mode(outcome_ids, outcomes)
+            if identifier and inherited in AI_MODES:
+                component_modes[identifier] = inherited
+
+    design = state.get("pedagogical_design", {})
+    lessons = design.get("lessons", []) if isinstance(design, dict) else []
+    issues: list[str] = []
+    for index, lesson in enumerate(lessons, start=1):
+        if not isinstance(lesson, dict):
+            continue
+        component_ids = lesson.get("component_ids", [])
+        if not isinstance(component_ids, list):
+            continue
+        modes = {
+            component_modes[str(identifier).strip()]
+            for identifier in component_ids
+            if str(identifier).strip() in component_modes
+        }
+        if len(modes) > 1:
+            ordered_modes = [mode for mode in AI_MODES if mode in modes]
+            issues.append(
+                f"Aula {index}: combina componentes com modos de IA diferentes "
+                f"({', '.join(ordered_modes)})"
+            )
+    return issues
+
+
 def ai_mode_alignment_issues(state: dict[str, Any]) -> list[str]:
     """Deteta desalinhamentos AI-mode nas relações RA–AE–TA."""
 
@@ -170,4 +239,5 @@ def ai_mode_alignment_issues(state: dict[str, Any]) -> list[str]:
                 f"{identifier}: modo de IA diferente das atividades de ensino associadas"
             )
 
+    issues.extend(lesson_ai_mode_issues(state))
     return list(dict.fromkeys(issues))

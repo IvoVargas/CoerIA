@@ -57,8 +57,10 @@ O enquadramento de Brabrand e Denny em *Constructive Alignment in the Age of AI*
 acrescenta uma dimensão ortogonal: cada resultado indica `AI-off` (aprendizagem
 sem IA), `AI-on` (aprendizagem com IA como meio) ou `on-AI` (aprendizagem sobre
 a utilização da IA). `AI-off` é o valor por defeito. As atividades e tarefas
-herdam o modo dos resultados associados; uma linha que junte resultados com
-modos diferentes deve ser dividida. Esta classificação refere-se ao trabalho do
+herdam dinamicamente o modo dos resultados associados; alterar um RA recalcula
+as linhas já guardadas. Uma linha que junte resultados com modos diferentes deve
+ser dividida, e uma aula não pode combinar AE/TA de modos diferentes. Esta
+classificação refere-se ao trabalho do
 estudante e não à utilização facultativa da IA pelo CoerIA para apoiar o docente.
 O protótipo usa conteúdos com IDs estáveis, 4 a 10 resultados de aprendizagem
 (preferencialmente 5 a 7), tipos de resultado, verbos taxonómicos controlados e
@@ -111,7 +113,9 @@ atribui automaticamente o próximo ID, sem permitir edição livre desse campo.
 O campo **Modo de IA** é editável na mesma tabela através de uma lista controlada
 e começa em `AI-off`. Nas tabelas de atividades e tarefas, o modo é apresentado
 como valor informativo herdado dos resultados selecionados, evitando repetir a
-mesma decisão.
+mesma decisão. A herança é recalculada quando o modo do RA ou as relações mudam;
+o planeamento assinala como inválida uma aula que misture componentes de modos
+diferentes.
 Os **Pressupostos para a formulação** surgem nesta mesma etapa como um campo
 opcional. Podem registar conhecimentos prévios ou restrições contextuais que a
 IA deve considerar, mas não são gerados obrigatoriamente, não fazem parte da

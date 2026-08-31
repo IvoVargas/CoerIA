@@ -19,6 +19,7 @@ from prism.agents import (
     OpenAILocalizedAssistanceAgent,
     OpenAIPedagogicalAgent,
     OpenAIPedagogicalCritic,
+    _canonicalize_assessment_activities,
     _schema_for,
     _upstream_context,
     _validate_artifact,
@@ -300,6 +301,75 @@ class WorkflowTests(unittest.TestCase):
                 state["teaching_activities"],
                 state,
             )
+
+    def test_mixed_assessment_modes_are_canonicalized_to_an_empty_value(self) -> None:
+        state = {
+            "learning_outcomes": [
+                {"id": "RA1", "ai_mode": AI_MODE_OFF},
+                {"id": "RA2", "ai_mode": AI_MODE_ON},
+            ],
+            "teaching_activities": [],
+        }
+        artifact = [
+            {
+                "id": "TA9",
+                "outcome_ids": ["RA1", "RA2"],
+                "teaching_activity_ids": [],
+                "ai_mode": AI_MODE_ON,
+                "assessment_purpose": "Sumativa",
+            }
+        ]
+
+        canonical, _corrections = _canonicalize_assessment_activities(
+            artifact,
+            state,
+        )
+
+        self.assertEqual(canonical[0]["ai_mode"], "")
+
+    def test_lesson_cannot_mix_components_with_different_ai_modes(self) -> None:
+        state = {
+            "course": {"contact_hours": 2},
+            "learning_outcomes": [
+                {"id": "RA1", "ai_mode": AI_MODE_OFF},
+                {"id": "RA2", "ai_mode": AI_MODE_ON},
+            ],
+            "teaching_activities": [
+                {"id": "AE1", "outcome_ids": ["RA1"], "ai_mode": AI_MODE_OFF}
+            ],
+            "assessment_activities": [
+                {
+                    "id": "TA1",
+                    "outcome_ids": ["RA2"],
+                    "teaching_activity_ids": [],
+                    "ai_mode": AI_MODE_ON,
+                }
+            ],
+        }
+        design = {
+            "lessons": [
+                {
+                    "duration_minutes": 120,
+                    "session_type": "Teórico-prática",
+                    "component_ids": ["AE1", "TA1"],
+                    "notes": "",
+                }
+            ]
+        }
+
+        with self.assertRaisesRegex(AgentGenerationError, "modos de IA diferentes"):
+            _validate_artifact("pedagogical_design", design, state)
+
+        validation = build_final_validation(
+            {**state, "pedagogical_design": design}
+        )
+        mode_check = next(
+            item
+            for item in validation["checks"]
+            if item["id"] == "ai_mode_alignment"
+        )
+        self.assertFalse(mode_check["passed"])
+        self.assertEqual(mode_check["target_stage"], "pedagogical_design")
 
     def test_schema_30_migrates_existing_sessions_to_ai_off(self) -> None:
         state = create_session(self.course, agent=self.agent)

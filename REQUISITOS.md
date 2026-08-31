@@ -116,7 +116,7 @@ ortogonal à taxonomia: `AI-off` representa aprendizagem sem IA, `AI-on` usa a I
 como meio para uma tarefa disciplinar e `on-AI` torna a utilização, supervisão ou
 avaliação da própria IA objeto de aprendizagem. O modo é definido por resultado,
 com `AI-off` por defeito, e deve manter-se coerente nas atividades e tarefas
-associadas. A utilização do CoerIA pelo docente não altera o modo de aprendizagem
+associadas e nas aulas que as organizam. A utilização do CoerIA pelo docente não altera o modo de aprendizagem
 do estudante. O sistema deriva uma síntese automática destas relações para as tornar explícitas
 e verificáveis, sem criar uma etapa de autoria adicional.
 
@@ -175,8 +175,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Associar a cada resultado um modo controlado `AI-off`, `AI-on` ou `on-AI`,
   apresentando `AI-off` por defeito.
 - Herdar e apresentar o modo nas atividades de ensino-aprendizagem e tarefas de
-  avaliação. Se uma linha associar resultados com modos diferentes, exigir a sua
-  divisão em linhas pedagogicamente inequívocas.
+  avaliação, recalculando os valores já guardados sempre que mudar o modo de um
+  resultado ou a respetiva relação. Se uma linha associar resultados com modos
+  diferentes, exigir a sua divisão em linhas pedagogicamente inequívocas. Não
+  permitir que uma aula combine componentes `AE`/`TA` de modos diferentes.
 - Usar um único verbo de ação principal pertencente ao vocabulário controlado do nível declarado; infinitivos subordinados podem ser usados em complementos, mas não como ações principais coordenadas.
 - Na opção SOLO, não usar o nível pré-estrutural para formular resultados.
 - Integrar a classificação taxonómica na primeira etapa, como atributo de cada

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
+from prism.ai_modes import AI_MODE_OFF, AI_MODE_ON
 from prism.agents import CritiqueResult, GenerationResult
 from prism.application_service import ApplicationService
 from prism.models import CourseInput, RESOURCE_TEST
@@ -145,6 +146,40 @@ def test_earlier_edit_preserves_later_work_and_marks_it_for_review() -> None:
 
     assert state["pedagogical_design"] == preserved
     assert state["stage_statuses"]["pedagogical_design"] == "needs_review"
+
+
+def test_changing_an_outcome_mode_refreshes_existing_activities_and_tasks() -> None:
+    state = create_session(_course())
+    outcomes = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar os elementos fundamentais de um algoritmo.",
+            "ai_mode": AI_MODE_OFF,
+        }
+    ]
+    state = save_manual_draft(state, "learning_outcomes", outcomes)
+    state["teaching_activities"] = [
+        {"id": "AE1", "outcome_ids": ["RA1"], "ai_mode": AI_MODE_OFF}
+    ]
+    state["assessment_activities"] = [
+        {
+            "id": "TA1",
+            "outcome_ids": ["RA1"],
+            "teaching_activity_ids": ["AE1"],
+            "ai_mode": AI_MODE_OFF,
+        }
+    ]
+
+    changed = deepcopy(outcomes)
+    changed[0]["ai_mode"] = AI_MODE_ON
+    updated = save_manual_draft(state, "learning_outcomes", changed)
+
+    assert updated["teaching_activities"][0]["ai_mode"] == AI_MODE_ON
+    assert updated["assessment_activities"][0]["ai_mode"] == AI_MODE_ON
 
 
 def test_historical_version_becomes_active_without_creating_a_new_version() -> None:
