@@ -129,6 +129,62 @@ STAGE_LABELS = {
     "final_validation": "Validação final da estrutura e do alinhamento",
 }
 
+
+AI_REVIEW_CRITERION_LABELS = {
+    "mapping_of_learning_outcomes": "Correspondência dos resultados de aprendizagem",
+    "learning_outcome_mapping": "Correspondência dos resultados de aprendizagem",
+    "outcome_mapping": "Correspondência dos resultados de aprendizagem",
+    "taxonomy_adequacy": "Adequação taxonómica",
+    "clarity_of_content": "Clareza dos conteúdos",
+    "clarity_of_learning_outcomes": "Clareza dos resultados de aprendizagem",
+    "pedagogical_coherence": "Coerência pedagógica",
+    "constructive_alignment": "Alinhamento construtivo",
+    "feasibility": "Exequibilidade",
+    "progression": "Progressão pedagógica",
+}
+
+
+DETERMINISTIC_AI_REVIEW_CRITERIA = {
+    "unique_outcomes",
+    "taxonomy_outcomes",
+    "assessment_coverage",
+    "assessment_purposes",
+    "assessment_teaching_alignment",
+    "teaching_coverage",
+    "formative_activity_structure",
+    "constructive_alignment",
+    "resource_selection",
+    "presentation_visuals",
+    "test_points",
+    "practical_weights",
+    "mapping_of_learning_outcomes",
+    "learning_outcome_mapping",
+    "outcome_mapping",
+}
+
+
+def ai_review_criterion_label(value: Any) -> str:
+    """Converte identificadores internos do crítico num rótulo para o docente."""
+
+    criterion = str(value or "").strip()
+    normalized = criterion.casefold().replace("-", "_").replace(" ", "_")
+    if normalized in AI_REVIEW_CRITERION_LABELS:
+        return AI_REVIEW_CRITERION_LABELS[normalized]
+    if "_" in criterion or "-" in criterion:
+        return "Observação pedagógica"
+    return criterion or "Observação pedagógica"
+
+
+def ai_review_finding_is_deterministic(finding: dict[str, Any]) -> bool:
+    """Identifica controlos objetivos que não devem ser repetidos pelo crítico de IA."""
+
+    criterion = str(finding.get("criterion", "")).strip().casefold()
+    normalized = criterion.replace("-", "_").replace(" ", "_")
+    return normalized in DETERMINISTIC_AI_REVIEW_CRITERIA or normalized.startswith(
+        ("resource_", "coverage_")
+    )
+
+
 STAGE_ORDER = (
     "learning_outcomes",
     "curriculum_analysis",
@@ -1723,28 +1779,10 @@ def verify_stage_with_ai(
         updated,
         updated[target_stage],
     )
-    deterministic_criteria = {
-        "unique_outcomes",
-        "taxonomy_outcomes",
-        "assessment_coverage",
-        "assessment_purposes",
-        "assessment_teaching_alignment",
-        "teaching_coverage",
-        "formative_activity_structure",
-        "constructive_alignment",
-        "resource_selection",
-        "presentation_visuals",
-        "test_points",
-        "practical_weights",
-    }
     ignored_findings = [
         finding
         for finding in result.findings
-        if str(finding.get("criterion", "")).strip().casefold()
-        in deterministic_criteria
-        or str(finding.get("criterion", "")).strip().casefold().startswith(
-            ("resource_", "coverage_")
-        )
+        if ai_review_finding_is_deterministic(finding)
     ]
     findings = [
         finding for finding in result.findings if finding not in ignored_findings
@@ -1752,6 +1790,9 @@ def verify_stage_with_ai(
     findings = [
         {
             **deepcopy(finding),
+            "criterion_label": ai_review_criterion_label(
+                finding.get("criterion", "")
+            ),
             "target": resolve_validation_target(
                 target_stage,
                 updated[target_stage],

@@ -869,6 +869,7 @@ async def test_ai_review_findings_focus_the_related_artifact(
         state, "learning_outcomes"
     )
     focus_handlers: list[AsyncMock] = []
+    solution_handlers: list[AsyncMock] = []
 
     @ui.page("/_test_ai_review_focus")
     def ai_review_focus_page():
@@ -877,11 +878,17 @@ async def test_ai_review_findings_focus_the_related_artifact(
         async def record_focus(*_args, **_kwargs) -> None:
             ui.notify("Artefacto localizado.")
 
+        async def record_solution(*_args, **_kwargs) -> None:
+            ui.notify("Proposta solicitada.")
+
         handler = AsyncMock(side_effect=record_focus)
+        solution_handler = AsyncMock(side_effect=record_solution)
         interface._focus_stage_finding = handler
+        interface._handle_ai_assistance = solution_handler
         interface.state = state
         interface.show_workspace()
         focus_handlers.append(handler)
+        solution_handlers.append(solution_handler)
 
     await user.open("/_test_ai_review_focus")
 
@@ -894,6 +901,19 @@ async def test_ai_review_findings_focus_the_related_artifact(
     await user.should_see("Artefacto localizado.")
 
     focus_handlers[-1].assert_awaited_once_with(finding)
+    user.find(marker="ai-review-solution-0").click()
+    await user.should_see("Proposta de solução para a observação")
+    await user.should_see("Âmbito localizado: Resultados de aprendizagem — linha 1 (RA1)")
+    user.find(marker="submit-ai-finding-solution").click()
+    await user.should_see("Proposta solicitada.")
+    solution_handlers[-1].assert_awaited_once()
+    solution_args = solution_handlers[-1].await_args.args
+    assert solution_args[:3] == (
+        "learning_outcomes",
+        [0],
+        "Resultados de aprendizagem — linha 1 (RA1)",
+    )
+    assert "Clarificar o enunciado do RA1" in solution_args[3]
     selector, activate_selector = app.AGIRSoloInterface._structured_focus_plan(
         state,
         "learning_outcomes",
@@ -901,6 +921,66 @@ async def test_ai_review_findings_focus_the_related_artifact(
     )
     assert selector.endswith("tbody tr:nth-child(1)")
     assert activate_selector == ""
+
+
+@pytest.mark.asyncio
+async def test_existing_ai_review_hides_deterministic_findings_and_localizes_codes(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    state["learning_outcomes"] = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar os elementos de um algoritmo.",
+        }
+    ]
+    review = {
+        "timestamp": "2026-09-01 12:00:00 UTC",
+        "context_signature": "",
+        "passed": False,
+        "findings": [
+            {
+                "severity": "blocking",
+                "criterion": "mapping_of_learning_outcomes",
+                "message": "Os IDs não correspondem.",
+                "target": "RA1",
+            },
+            {
+                "severity": "warning",
+                "criterion": "taxonomy_adequacy",
+                "message": "Rever a exigência cognitiva.",
+                "target": "RA1",
+            },
+        ],
+        "revision_instructions": "Rever o resultado.",
+        "metadata": {"provider": "Teste", "model": "critic-fake"},
+        "non_blocking": True,
+    }
+    state["ai_reviews"] = {"learning_outcomes": [review]}
+    review["context_signature"] = ai_review_context_signature(
+        state, "learning_outcomes"
+    )
+
+    @ui.page("/_test_existing_ai_review_labels")
+    def existing_ai_review_labels_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_existing_ai_review_labels")
+    await user.should_not_see("mapping_of_learning_outcomes")
+    await user.should_not_see("Os IDs não correspondem.")
+    await user.should_see("Aviso — Adequação taxonómica")
+    assert len(user.find(marker="ai-review-solution-0").elements) == 1
 
 
 def test_structured_focus_distinguishes_ra1_from_ra10() -> None:

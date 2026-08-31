@@ -20,6 +20,7 @@ from .curriculum import (
     taxonomy_level_options,
     validate_taxonomy_choice,
 )
+from .validation_targets import STAGE_ROOT_TARGET
 
 
 @dataclass(frozen=True)
@@ -933,6 +934,144 @@ def assistance_scope_options(
                             }
                         )
     return options
+
+
+def assistance_scope_for_validation_target(
+    stage: str,
+    artifact: Any,
+    target_key: str,
+    state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Converte o destino de um parecer num âmbito seguro de assistência localizada."""
+
+    fallback = {"label": "Toda a etapa", "path": []}
+    target = str(target_key or "").strip()
+    if not target or target == STAGE_ROOT_TARGET:
+        return fallback
+
+    layout = editor_layout(stage)
+    requested = target.casefold()
+    identity_keys = ("id", "outcome_id", "title", "heading")
+    for table in layout.tables:
+        if state is not None and not editor_table_is_applicable(state, table):
+            continue
+        try:
+            rows = value_at_path(artifact, table.path)
+        except (KeyError, IndexError, TypeError):
+            continue
+        if not isinstance(rows, list):
+            continue
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            identifier = next(
+                (
+                    str(row.get(key, "")).strip()
+                    for key in identity_keys
+                    if str(row.get(key, "")).strip()
+                ),
+                "",
+            )
+            if identifier.casefold() != requested:
+                continue
+            return {
+                "label": f"{table.title} — linha {index + 1} ({identifier})",
+                "path": [*table.path, index],
+            }
+
+    if stage == "pedagogical_design" and requested.startswith("lesson:"):
+        number = target.partition(":")[2]
+        if number.isdigit():
+            index = int(number) - 1
+            lessons = (
+                artifact.get("lessons", [])
+                if isinstance(artifact, dict)
+                else []
+            )
+            if 0 <= index < len(lessons):
+                return {
+                    "label": f"Aula {number}",
+                    "path": ["lessons", index],
+                }
+
+    if stage != "resources" or not isinstance(artifact, dict):
+        return fallback
+
+    resource_paths = {
+        "resource:presentation": (
+            "Apresentação geral da UC",
+            ["presentation_outline"],
+        ),
+        "resource:lesson-presentations": (
+            "Apresentações das aulas",
+            ["lesson_presentations"],
+        ),
+        "resource:worksheet": ("Ficha de aula", ["lesson_worksheet"]),
+        "resource:tests": ("Testes", ["tests"]),
+        "resource:practical": ("Atividade prática", ["practical_activity"]),
+        "resource:lesson-plan": ("Plano de aulas", ["lesson_plan"]),
+        "resource:assessment-grid": ("Grelha de avaliação", ["assessment_grid"]),
+    }
+    if requested in resource_paths:
+        label, path = resource_paths[requested]
+        return {"label": label, "path": path}
+
+    numbered_paths = (
+        ("slide:", "Slide", ["presentation_outline"]),
+        ("worksheet:", "Secção da ficha", ["lesson_worksheet", "sections"]),
+        (
+            "practical_criterion:",
+            "Critério da atividade prática",
+            ["practical_activity", "criteria"],
+        ),
+        (
+            "practical:",
+            "Etapa da atividade prática",
+            ["practical_activity", "steps"],
+        ),
+    )
+    for prefix, label, base_path in numbered_paths:
+        if not requested.startswith(prefix):
+            continue
+        number = target.partition(":")[2]
+        if not number.isdigit():
+            return fallback
+        index = int(number) - 1
+        try:
+            rows = value_at_path(artifact, base_path)
+        except (KeyError, IndexError, TypeError):
+            return fallback
+        if 0 <= index < len(rows):
+            return {
+                "label": f"{label} {number}",
+                "path": [*base_path, index],
+            }
+        return fallback
+
+    if requested.startswith("test:"):
+        _prefix, task_id, question_id = target.split(":", 2)
+        for test_index, entry in enumerate(artifact.get("tests", [])):
+            current_task_id = str(
+                entry.get("assessment_task_id", "")
+            ).strip()
+            if current_task_id.casefold() != task_id.casefold():
+                continue
+            questions = entry.get("test", {}).get("questions", [])
+            for question_index, question in enumerate(questions):
+                current_question_id = str(question.get("id", "")).strip()
+                if current_question_id.casefold() != question_id.casefold():
+                    continue
+                return {
+                    "label": f"Questão {question_id} de {task_id}",
+                    "path": [
+                        "tests",
+                        test_index,
+                        "test",
+                        "questions",
+                        question_index,
+                    ],
+                }
+    return fallback
 
 
 def synchronize_inherited_ai_mode(

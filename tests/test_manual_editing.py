@@ -2,6 +2,7 @@ from prism.manual_editing import (
     FieldSpec,
     apply_editor_field_value,
     apply_presentation_image_choice,
+    assistance_scope_for_validation_target,
     assistance_scope_options,
     available_presentation_images,
     editor_field_value,
@@ -177,6 +178,35 @@ def test_ai_assistance_scopes_omit_technical_id_fields() -> None:
         ]
 
         assert all("campo ID" not in label for label in labels)
+
+
+def test_validation_target_becomes_a_localized_ai_assistance_scope() -> None:
+    state = _completed_state()
+
+    curriculum_scope = assistance_scope_for_validation_target(
+        "curriculum_analysis",
+        state["curriculum_analysis"],
+        "C2",
+        state,
+    )
+    outcome_scope = assistance_scope_for_validation_target(
+        "learning_outcomes",
+        state["learning_outcomes"],
+        "RA1",
+        state,
+    )
+    lesson_scope = assistance_scope_for_validation_target(
+        "pedagogical_design",
+        state["pedagogical_design"],
+        "LESSON:1",
+        state,
+    )
+
+    assert curriculum_scope["path"] == ["contents", 1]
+    assert "C2" in curriculum_scope["label"]
+    assert outcome_scope["path"] == [0]
+    assert "RA1" in outcome_scope["label"]
+    assert lesson_scope["path"] == ["lessons", 0]
 
 
 def test_presentation_assistance_omits_internal_visual_fields() -> None:

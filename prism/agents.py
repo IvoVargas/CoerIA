@@ -3382,8 +3382,10 @@ class OpenAIPedagogicalCritic:
             "exequibilidade. Não alteres "
             "o artefacto. Marca passed=false apenas quando existir pelo menos um finding "
             "blocking; sugestões opcionais são warning. A validação determinística de IDs, "
-            "cobertura e somas já foi executada. Em cada finding, usa em target exatamente "
-            "uma das chaves fornecidas em available_finding_targets. Escolhe o elemento "
+            "cobertura e somas já foi executada: não repitas nem contradigas esses controlos. "
+            "Em criterion escreve um rótulo curto e legível em português europeu; nunca uses "
+            "identificadores técnicos, inglês ou snake_case. Em cada finding, usa em target "
+            "exatamente uma das chaves fornecidas em available_finding_targets. Escolhe o elemento "
             "mais específico relacionado com a observação e usa __stage__ apenas quando a "
             "observação se aplicar realmente a toda a etapa."
         )

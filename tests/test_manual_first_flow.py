@@ -14,6 +14,7 @@ from prism.presentation import render_current_artifact
 from prism.source_reduction import SourceReductionResult, reduce_source_text
 from prism.workflow import (
     STAGE_ORDER,
+    ai_review_criterion_label,
     ai_review_is_current,
     create_session,
     decide_ai_proposal,
@@ -639,8 +640,13 @@ def test_ai_review_discards_deterministic_coverage_claims() -> None:
                         "message": "RA1, RA2, RA3, RA4 e RA5 estão em falta.",
                     },
                     {
+                        "severity": "blocking",
+                        "criterion": "mapping_of_learning_outcomes",
+                        "message": "Os resultados não estão todos ligados.",
+                    },
+                    {
                         "severity": "warning",
-                        "criterion": "Clareza pedagógica",
+                        "criterion": "clarity_of_content",
                         "message": "Explicitar melhor a transição entre atividades.",
                     },
                 ],
@@ -656,12 +662,23 @@ def test_ai_review_discards_deterministic_coverage_claims() -> None:
     review = reviewed["ai_reviews"]["resources"][-1]
 
     assert [item["criterion"] for item in review["findings"]] == [
-        "Clareza pedagógica"
+        "clarity_of_content"
     ]
+    assert review["findings"][0]["criterion_label"] == "Clareza dos conteúdos"
     assert review["passed"]
-    assert review["metadata"]["ignored_deterministic_findings"][0][
-        "criterion"
-    ] == "assessment_coverage"
+    assert [
+        item["criterion"]
+        for item in review["metadata"]["ignored_deterministic_findings"]
+    ] == ["assessment_coverage", "mapping_of_learning_outcomes"]
+
+
+def test_ai_review_criterion_labels_never_expose_unknown_technical_codes() -> None:
+    assert (
+        ai_review_criterion_label("mapping_of_learning_outcomes")
+        == "Correspondência dos resultados de aprendizagem"
+    )
+    assert ai_review_criterion_label("unknown_internal_code") == "Observação pedagógica"
+    assert ai_review_criterion_label("Clareza pedagógica") == "Clareza pedagógica"
 
 
 def test_resource_selection_can_change_without_generation() -> None:

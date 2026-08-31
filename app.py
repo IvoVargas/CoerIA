@@ -52,6 +52,7 @@ from prism.isced import ISCED_F_CATALOG, isced_f_options
 from prism.manual_editing import (
     FieldSpec,
     TableSpec,
+    assistance_scope_for_validation_target,
     assistance_scope_options,
     apply_editor_field_value,
     apply_presentation_image_choice,
@@ -97,6 +98,8 @@ from prism.session_backup import configured_session_backup_max_bytes
 from prism.workflow import (
     STAGE_LABELS,
     STAGE_ORDER,
+    ai_review_criterion_label,
+    ai_review_finding_is_deterministic,
     ai_review_is_current,
     is_manual_first,
     revision_targets_for_state,
@@ -337,6 +340,9 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 }
 .validation-result-link:hover { background: #f8fbfa; box-shadow: 0 4px 11px rgba(31, 71, 75, .09); }
 .validation-results-list { width: 100%; gap: 8px; }
+.validation-result-row { width: 100%; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.validation-result-row .validation-result-link { width: auto; flex: 1 1 520px; }
+.validation-solution-action { flex: 0 1 auto; min-height: 42px; white-space: normal; }
 .validation-result-link.validation-issue { border-color: #e7aaa5; color: #8e2f2a; }
 .validation-result-link.validation-suggestion { border-color: #9fc9c1; color: #245f5a; }
 .validation-result-link.validation-pass { border-color: #8fc7a1; color: #176b38; }
@@ -1158,13 +1164,13 @@ class AGIRSoloInterface:
         kind: str,
         marker: str,
         on_click: Any,
-    ) -> None:
+    ) -> Any:
         icons = {
             "issue": "error_outline",
             "suggestion": "lightbulb",
             "pass": "check_circle",
         }
-        ui.button(
+        return ui.button(
             message,
             icon=icons.get(kind, "info_outline"),
             on_click=on_click,
@@ -3983,6 +3989,73 @@ class AGIRSoloInterface:
                 )
         dialog.open()
 
+    def _open_ai_finding_solution_dialog(
+        self,
+        stage: str,
+        state: dict[str, Any],
+        finding: dict[str, Any],
+    ) -> None:
+        artifact = active_stage_artifact(state, stage)
+        target_key = resolve_validation_target(stage, artifact, finding)
+        scope = assistance_scope_for_validation_target(
+            stage,
+            artifact,
+            target_key,
+            state,
+        )
+        criterion = ai_review_criterion_label(
+            finding.get("criterion_label") or finding.get("criterion", "")
+        )
+        message = str(finding.get("message", "")).strip()
+        default_instruction = (
+            f"Proponha uma correção localizada para esta observação: {message} "
+            "Preserve todos os elementos que não seja necessário alterar e mantenha "
+            "os identificadores e as relações já aprovados."
+        )
+        with ui.dialog() as dialog, ui.card().classes(
+            "w-full max-w-2xl p-6 gap-4"
+        ).mark("ai-finding-solution-dialog"):
+            ui.label("ASSISTÊNCIA COM IA").classes("eyebrow")
+            ui.label("Proposta de solução para a observação").classes(
+                "section-title"
+            )
+            ui.label(f"{criterion}: {message}").classes(
+                "soft-surface p-3 text-sm"
+            )
+            ui.label(f"Âmbito localizado: {scope['label']}").classes(
+                "text-sm font-medium"
+            )
+            ui.label(
+                "A IA prepara apenas uma proposta. Nenhuma alteração é aplicada sem "
+                "a sua aprovação posterior."
+            ).classes("text-sm muted")
+            instruction = ui.textarea(
+                "Instrução para a proposta",
+                value=default_instruction,
+            ).props("outlined autogrow").classes("w-full")
+
+            async def ask_for_solution() -> None:
+                dialog.close()
+                await self._handle_ai_assistance(
+                    stage,
+                    list(scope["path"]),
+                    str(scope["label"]),
+                    str(instruction.value or ""),
+                )
+
+            with ui.row().classes("w-full justify-end gap-2 flex-wrap"):
+                ui.button("Cancelar", on_click=dialog.close).props(
+                    "flat no-caps"
+                ).mark("cancel-ai-finding-solution")
+                ui.button(
+                    "Pedir proposta de solução à IA",
+                    icon="auto_awesome",
+                    on_click=ask_for_solution,
+                ).props("unelevated no-caps").classes("primary-action").mark(
+                    "submit-ai-finding-solution"
+                )
+        dialog.open()
+
     def _open_manual_save_dialog(
         self,
         state: dict[str, Any],
@@ -4523,7 +4596,11 @@ class AGIRSoloInterface:
                     ui.label("ÚLTIMA VERIFICAÇÃO FACULTATIVA DA IA").classes(
                         "eyebrow"
                     )
-                    findings = latest.get("findings", [])
+                    findings = [
+                        finding
+                        for finding in latest.get("findings", [])
+                        if not ai_review_finding_is_deterministic(finding)
+                    ]
                     if not findings:
                         ui.label("A IA não assinalou problemas.").classes("text-sm")
                     else:
@@ -4543,15 +4620,38 @@ class AGIRSoloInterface:
                                     if finding.get("severity") == "blocking"
                                     else "suggestion"
                                 )
-                                self._render_validation_result_button(
-                                    f"{severity} — {finding.get('criterion', '')}: "
-                                    f"{finding.get('message', '')}",
-                                    kind,
-                                    f"ai-review-finding-{index}",
-                                    lambda selected=deepcopy(finding): (
-                                        self._focus_stage_finding(selected)
-                                    ),
+                                criterion = ai_review_criterion_label(
+                                    finding.get("criterion_label")
+                                    or finding.get("criterion", "")
                                 )
+                                with ui.row().classes("validation-result-row"):
+                                    self._render_validation_result_button(
+                                        f"{severity} — {criterion}: "
+                                        f"{finding.get('message', '')}",
+                                        kind,
+                                        f"ai-review-finding-{index}",
+                                        lambda selected=deepcopy(finding): (
+                                            self._focus_stage_finding(selected)
+                                        ),
+                                    )
+                                    solution_button = ui.button(
+                                        "Pedir proposta de solução à IA",
+                                        icon="auto_awesome",
+                                        on_click=lambda selected=deepcopy(finding): (
+                                            self._open_ai_finding_solution_dialog(
+                                                stage,
+                                                state,
+                                                selected,
+                                            )
+                                        ),
+                                    ).props("outline no-caps").classes(
+                                        "secondary-action validation-solution-action"
+                                    ).mark(f"ai-review-solution-{index}")
+                                    if proposal is not None:
+                                        solution_button.disable()
+                                        solution_button.tooltip(
+                                            "Decida primeiro a proposta que está pendente."
+                                        )
                     ui.label(
                         "Este parecer não bloqueia a passagem à etapa seguinte."
                     ).classes("text-xs muted")
