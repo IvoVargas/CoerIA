@@ -862,6 +862,22 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     }
     if stage == "resources" and isinstance(state.get("resource_item_scope"), dict):
         context["resource_item_scope"] = deepcopy(state["resource_item_scope"])
+        if state["resource_item_scope"].get("kind") == "lesson":
+            peers = state.get("lesson_presentation_peers", [])
+            if isinstance(peers, list) and peers:
+                context["previous_lesson_presentations_to_avoid_repeating"] = [
+                    {
+                        "lesson_number": int(item.get("lesson_number", 0) or 0),
+                        "slide_titles": [
+                            str(slide.get("title", "")).strip()
+                            for slide in item.get("presentation_outline", [])
+                            if isinstance(slide, dict)
+                            and str(slide.get("title", "")).strip()
+                        ],
+                    }
+                    for item in peers
+                    if isinstance(item, dict)
+                ]
     if stage == "learning_outcomes":
         context["optional_assumptions_for_learning_outcomes"] = [
             str(item).strip()
@@ -2863,12 +2879,23 @@ class OpenAIPedagogicalAgent:
             )
             item_scope = state.get("resource_item_scope")
             if isinstance(item_scope, dict) and item_scope.get("kind") == "lesson":
+                lesson_number = int(item_scope.get("lesson_number", 0) or 0)
                 instructions += (
                     " Esta apresentação destina-se exclusivamente à aula indicada em "
                     "resource_item_scope. Usa a duração, o tipo, as notas e apenas os "
                     "componentes e resultados desse âmbito. Inclui uma agenda da aula, "
                     "conteúdo para lecionação, atividades previstas e uma síntese. "
-                    "Não introduzas resultados ou avaliações de outras aulas."
+                    "Não introduzas resultados ou avaliações de outras aulas. "
+                    f'O primeiro slide tem um título que começa por «Aula {lesson_number} —» '
+                    "e identifica o tema específico indicado nas notas. O segundo slide "
+                    "chama-se «Agenda da aula» e apresenta a progressão concreta desta "
+                    "sessão. Inclui pelo menos dois slides de desenvolvimento: um explica "
+                    "os conceitos necessários e outro orienta a prática prevista na atividade "
+                    "de ensino-aprendizagem. Termina com «Síntese da aula». Não uses as "
+                    "secções globais «Objetivo da Unidade Curricular», «Conteúdos da "
+                    "Unidade Curricular» ou «Metodologia de Ensino». Não reutilizes os "
+                    "mesmos títulos e textos das apresentações de aulas anteriores, exceto "
+                    "elementos puramente visuais da identidade CoerIA."
                 )
             if (
                 isinstance(item_scope, dict)

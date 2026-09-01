@@ -402,6 +402,12 @@ antes de o apresentar ao docente.
 Cada apresentação de aula e cada teste deve indicar e cobrir exatamente os
 resultados de aprendizagem do respetivo âmbito, calculado a partir dos
 artefactos aprovados e nunca apenas dos IDs declarados pelo próprio recurso.
+Cada apresentação de aula deve identificar o número e o tema da sessão,
+incluir uma agenda, pelo menos dois slides de desenvolvimento específico
+(explicação e prática) e uma síntese. O sistema deve rejeitar secções globais
+da unidade curricular reutilizadas em várias aulas e detetar a repetição de
+dois ou mais slides sem ligação a resultados concretos. A reutilização de um
+slide associado ao mesmo resultado em aulas diferentes continua permitida.
 Os restantes recursos generativos devem indicar os resultados de aprendizagem a
 que estão associados.
 Recursos não selecionados devem permanecer vazios e não ser exportados.

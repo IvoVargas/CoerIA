@@ -38,6 +38,47 @@ from .relationships import derive_alignment_rows
 
 PRESENTATION_ASSESSMENT_TITLE = "Avaliação da unidade curricular"
 
+_GENERIC_LESSON_SLIDE_TITLES = {
+    "objetivo da unidade curricular",
+    "conteudos da unidade curricular",
+    "metodologia de ensino",
+}
+_AGENDA_TITLE_TERMS = (
+    "agenda",
+    "roteiro da aula",
+    "plano da aula",
+    "percurso da aula",
+)
+_SYNTHESIS_TITLE_TERMS = (
+    "sintese",
+    "resumo",
+    "conclusao",
+    "fecho",
+)
+_LESSON_TOKEN_STOPWORDS = {
+    "aula",
+    "alunos",
+    "aprendizagem",
+    "atividade",
+    "atividades",
+    "atraves",
+    "avaliacao",
+    "conteudo",
+    "conteudos",
+    "devera",
+    "deverao",
+    "docente",
+    "ensino",
+    "grupo",
+    "inteligencia",
+    "resultado",
+    "resultados",
+    "serao",
+    "sobre",
+    "utilizacao",
+    "utilizar",
+}
+
 
 def _normalise(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value or "")
@@ -46,6 +87,167 @@ def _normalise(value: str) -> str:
 
 def _check(check_id: str, label: str, status: str, detail: str) -> dict[str, str]:
     return {"id": check_id, "label": label, "status": status, "detail": detail}
+
+
+def _presentation_slide_text(slide: dict[str, Any]) -> str:
+    bullets = slide.get("bullets", [])
+    bullet_texts = (
+        [str(item) for item in bullets if str(item).strip()]
+        if isinstance(bullets, list)
+        else []
+    )
+    return " ".join(
+        [
+            str(slide.get("title", "")),
+            *bullet_texts,
+        ]
+    ).strip()
+
+
+def _presentation_slide_signature(slide: dict[str, Any]) -> str:
+    return " ".join(_normalise(_presentation_slide_text(slide)).split())
+
+
+def _lesson_content_slides(
+    slides: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    content: list[dict[str, Any]] = []
+    assessment_title = _normalise(PRESENTATION_ASSESSMENT_TITLE)
+    for index, slide in enumerate(slides):
+        if not isinstance(slide, dict) or index == 0:
+            continue
+        title = _normalise(str(slide.get("title", "")))
+        if title.startswith(assessment_title):
+            continue
+        if any(term in title for term in _AGENDA_TITLE_TERMS):
+            continue
+        if any(term in title for term in _SYNTHESIS_TITLE_TERMS):
+            continue
+        content.append(slide)
+    return content
+
+
+def _lesson_keywords(value: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", _normalise(value))
+        if len(token) >= 5 and token not in _LESSON_TOKEN_STOPWORDS
+    }
+
+
+def lesson_presentation_specificity_issues(
+    lesson: dict[str, Any],
+    slides: list[dict[str, Any]],
+) -> list[str]:
+    """Valida se uma apresentação desenvolve efetivamente a aula indicada."""
+
+    lesson_number = int(lesson.get("lesson_number", 0) or 0)
+    if not slides:
+        return ["não existem slides"]
+
+    issues: list[str] = []
+    first_title = _normalise(str(slides[0].get("title", "")))
+    lesson_marker = re.compile(rf"\baula\s*0*{lesson_number}\b")
+    if lesson_number < 1 or not lesson_marker.search(first_title):
+        issues.append(
+            f'o primeiro slide deve identificar explicitamente «Aula {lesson_number}»'
+        )
+
+    titles = [
+        _normalise(str(slide.get("title", "")))
+        for slide in slides
+        if isinstance(slide, dict)
+    ]
+    generic_titles = sorted(
+        {
+            str(slide.get("title", "")).strip()
+            for slide in slides
+            if isinstance(slide, dict)
+            and _normalise(str(slide.get("title", "")))
+            in _GENERIC_LESSON_SLIDE_TITLES
+        }
+    )
+    if generic_titles:
+        issues.append(
+            "secções globais da unidade curricular reutilizadas: "
+            + ", ".join(generic_titles)
+        )
+    if not any(
+        any(term in title for term in _AGENDA_TITLE_TERMS)
+        for title in titles
+    ):
+        issues.append("falta uma agenda específica da aula")
+    if not any(
+        any(term in title for term in _SYNTHESIS_TITLE_TERMS)
+        for title in titles
+    ):
+        issues.append("falta uma síntese ou fecho específico da aula")
+
+    content_slides = _lesson_content_slides(slides)
+    if len(content_slides) < 2:
+        issues.append(
+            "são necessários pelo menos dois slides de desenvolvimento "
+            "específico (explicação e prática da aula)"
+        )
+
+    notes = str(lesson.get("notes", "")).strip()
+    note_keywords = _lesson_keywords(notes)
+    content_keywords = _lesson_keywords(
+        " ".join(_presentation_slide_text(slide) for slide in content_slides)
+    )
+    if note_keywords and not note_keywords.intersection(content_keywords):
+        issues.append(
+            "os slides de desenvolvimento não refletem o tema indicado nas notas da aula"
+        )
+    return issues
+
+
+def lesson_presentation_repetition_issues(
+    lesson_presentations: list[dict[str, Any]],
+) -> list[str]:
+    """Deteta repetição substantiva entre apresentações de aulas diferentes."""
+
+    issues: list[str] = []
+    prepared: list[tuple[int, dict[str, str]]] = []
+    assessment_title = _normalise(PRESENTATION_ASSESSMENT_TITLE)
+    for item in lesson_presentations:
+        lesson_number = int(item.get("lesson_number", 0) or 0)
+        signatures: dict[str, str] = {}
+        for index, slide in enumerate(item.get("presentation_outline", [])):
+            if not isinstance(slide, dict) or index == 0:
+                continue
+            title = str(slide.get("title", "")).strip()
+            if _normalise(title).startswith(assessment_title):
+                continue
+            # Um RA pode legitimamente ser desenvolvido em mais do que uma aula.
+            # A repetição problemática é a de secções globais, sem ligação a
+            # resultados concretos (objetivos da UC, metodologia, sínteses genéricas).
+            if slide_outcome_ids(slide):
+                continue
+            signature = _presentation_slide_signature(slide)
+            if signature:
+                signatures.setdefault(signature, title or f"slide {index + 1}")
+        prepared.append((lesson_number, signatures))
+
+    for index, (lesson_number, signatures) in enumerate(prepared):
+        for peer_number, peer_signatures in prepared[index + 1 :]:
+            repeated = sorted(set(signatures).intersection(peer_signatures))
+            if len(repeated) < 2:
+                continue
+            repeated_titles = [signatures[signature] for signature in repeated]
+            issues.append(
+                f"Aulas {lesson_number} e {peer_number}: repetem "
+                f"{len(repeated)} slides ("
+                + ", ".join(repeated_titles[:4])
+                + ("…" if len(repeated_titles) > 4 else "")
+                + ")"
+            )
+    if len(issues) > 5:
+        return [
+            *issues[:5],
+            f"{len(issues) - 5} outros pares de aulas repetem secções globais",
+        ]
+    return issues
 
 
 def presentation_assessment_overview_issues(
@@ -153,9 +355,19 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         else:
             target_stage = "learning_outcomes"
             target_key = outcome.group(0).upper() if outcome else "__stage__"
-    elif check_id in {"presentation_visuals", "presentation_assessment_overview"}:
+    elif check_id in {
+        "presentation_visuals",
+        "presentation_assessment_overview",
+        "lesson_presentation_specificity",
+    }:
         slides = re.findall(r"\bslide\s+(\d+)\b", detail, flags=re.IGNORECASE)
-        target_key = f"SLIDE:{slides[0]}" if slides else "RESOURCE:presentation"
+        target_key = (
+            f"SLIDE:{slides[0]}"
+            if slides
+            else "RESOURCE:lesson-presentations"
+            if check_id == "lesson_presentation_specificity"
+            else "RESOURCE:presentation"
+        )
     elif "nao selecionado" in _normalise(detail):
         target_key = "__stage__"
     elif "apresentacao_powerpoint" in check_id:
@@ -693,6 +905,43 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             )
         )
 
+        item_scope = state.get("resource_item_scope", {})
+        if isinstance(item_scope, dict) and item_scope.get("kind") == "lesson":
+            specificity_issues = lesson_presentation_specificity_issues(
+                item_scope,
+                presentation_slides,
+            )
+            peer_presentations = state.get("lesson_presentation_peers", [])
+            if isinstance(peer_presentations, list) and peer_presentations:
+                specificity_issues.extend(
+                    lesson_presentation_repetition_issues(
+                        [
+                            *[
+                                item
+                                for item in peer_presentations
+                                if isinstance(item, dict)
+                            ],
+                            {
+                                "lesson_number": item_scope.get("lesson_number", 0),
+                                "presentation_outline": presentation_slides,
+                            },
+                        ]
+                    )
+                )
+            checks.append(
+                _check(
+                    "lesson_presentation_specificity",
+                    "Especificidade da apresentação da aula",
+                    "pass" if not specificity_issues else "error",
+                    (
+                        "A apresentação desenvolve o tema, a atividade e o fecho "
+                        "específicos desta aula."
+                        if not specificity_issues
+                        else "; ".join(specificity_issues)
+                    ),
+                )
+            )
+
     if RESOURCE_LESSON_PLAN in requested:
         current_plan = resource_data.get("lesson_plan", {})
         expected_plan = build_lesson_plan(state)
@@ -761,6 +1010,10 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 scoped_state,
                 slides,
             )
+            specificity_issues = lesson_presentation_specificity_issues(
+                current_scope,
+                slides,
+            )
             expected_scope = set(current_scope.get("outcome_ids", []))
             declared_scope = set(item.get("outcome_ids", []))
             declared_slide_ids = {
@@ -779,6 +1032,10 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 collection_issues.append(
                     f"Aula {lesson_number}: " + "; ".join(assessment_issues)
                 )
+            if specificity_issues:
+                collection_issues.append(
+                    f"Aula {lesson_number}: " + "; ".join(specificity_issues)
+                )
             if covered_scope != expected_scope:
                 collection_issues.append(
                     f"Aula {lesson_number}: esperados {sorted(expected_scope)}; "
@@ -794,6 +1051,9 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                     f"Aula {lesson_number}: âmbito declarado {sorted(declared_scope)}; "
                     f"esperado {sorted(expected_scope)}"
                 )
+        collection_issues.extend(
+            lesson_presentation_repetition_issues(lesson_presentations)
+        )
         checks.append(
             _check(
                 "lesson_presentations",

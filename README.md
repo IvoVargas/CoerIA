@@ -147,6 +147,10 @@ plano e a grelha são derivados deterministicamente dos artefactos aprovados e
 não consomem IA. Cada apresentação de aula e cada teste constituem uma geração
 independente: recebem apenas a aula ou a tarefa escolhida e devem cobrir
 exatamente os resultados de aprendizagem desse âmbito.
+As apresentações das aulas distinguem explicitamente a sessão, a respetiva
+agenda, o desenvolvimento conceptual, a prática e a síntese. A validação rejeita
+introduções globais repetidas e compara as apresentações entre si, preservando
+apenas a reutilização pedagogicamente legítima de slides ligados ao mesmo RA.
 
 As apresentações devem integrar imagens, diagramas, tabelas, gráficos ou outros
 elementos visuais com finalidade pedagógica. Antes da síntese final, a

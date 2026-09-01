@@ -43,10 +43,16 @@ from prism.models import (
 )
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import render_current_artifact, render_resource_detail_sections
-from prism.quality import PRESENTATION_ASSESSMENT_TITLE, evaluate_quality
+from prism.quality import (
+    PRESENTATION_ASSESSMENT_TITLE,
+    evaluate_quality,
+    lesson_presentation_repetition_issues,
+    lesson_presentation_specificity_issues,
+)
 from prism.resource_catalog import (
     build_assessment_grid,
     build_lesson_plan,
+    lesson_scope,
     slide_outcome_ids,
 )
 from prism.workflow import (
@@ -217,6 +223,59 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertIn("âmbito declarado", checks["lesson_presentations"]["detail"])
         self.assertEqual(checks["test_points"]["status"], "error")
         self.assertIn("âmbito declarado", checks["test_points"]["detail"])
+
+    def test_lesson_presentations_are_specific_and_not_repeated(self) -> None:
+        state = self._resource_state()
+        presentations = state["resources"]["lesson_presentations"]
+
+        self.assertEqual(
+            lesson_presentation_repetition_issues(presentations),
+            [],
+        )
+        for item in presentations:
+            lesson_number = item["lesson_number"]
+            slides = item["presentation_outline"]
+            self.assertEqual(
+                lesson_presentation_specificity_issues(
+                    lesson_scope(state, lesson_number),
+                    slides,
+                ),
+                [],
+            )
+            self.assertTrue(slides[0]["title"].startswith(f"Aula {lesson_number} —"))
+            self.assertIn("Agenda da aula", [slide["title"] for slide in slides])
+            self.assertIn("Síntese da aula", [slide["title"] for slide in slides])
+
+    def test_lesson_presentation_quality_rejects_global_and_repeated_decks(self) -> None:
+        state = self._resource_state()
+        first = deepcopy(state["resources"]["lesson_presentations"][0])
+        generic_slides = deepcopy(first["presentation_outline"])
+        generic_slides[0]["title"] = "Capa"
+        generic_slides[1]["title"] = "Objetivo da Unidade Curricular"
+        generic_slides[2]["title"] = "Conteúdos da Unidade Curricular"
+
+        specificity = lesson_presentation_specificity_issues(
+            lesson_scope(state, first["lesson_number"]),
+            generic_slides,
+        )
+        self.assertTrue(
+            any("primeiro slide" in issue for issue in specificity)
+        )
+        self.assertTrue(
+            any("secções globais" in issue for issue in specificity)
+        )
+
+        repeated = lesson_presentation_repetition_issues(
+            [
+                first,
+                {
+                    **deepcopy(first),
+                    "lesson_number": first["lesson_number"] + 1,
+                },
+            ]
+        )
+        self.assertTrue(repeated)
+        self.assertIn("repetem", repeated[0])
 
     def test_resource_schema_exposes_collections_for_localized_assistance(self) -> None:
         state = self._resource_state()

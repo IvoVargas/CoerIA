@@ -581,6 +581,41 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
             ),
         }
     ]
+    if item_scope.get("kind") == "lesson":
+        component_ids = [
+            str(value)
+            for value in item_scope.get("component_ids", [])
+            if str(value).strip()
+        ]
+        agenda_items = component_ids[:3] or ["Explicação", "Prática", "Síntese"]
+        if len(agenda_items) == 1:
+            agenda_items.append("Síntese")
+        slides.append(
+            {
+                "title": "Agenda da aula",
+                "bullets": [
+                    str(item_scope.get("notes", "")) or "Tema da aula",
+                    "Desenvolvimento dos conceitos associados aos resultados previstos.",
+                    "Prática orientada e verificação da aprendizagem.",
+                ],
+                "outcome_id": "",
+                "outcome_ids": [],
+                "visual_mode": "diagrama",
+                "visual_asset_id": "",
+                "visual_prompt": "",
+                "visual_kind": "processo",
+                "visual_title": f"Percurso da aula {lesson_number}",
+                "visual_items": agenda_items,
+                "visual_source": (
+                    "Diagrama nativo gerado pelo CoerIA a partir do planeamento "
+                    "aprovado para esta aula."
+                ),
+                "alt_text": (
+                    f"Agenda da aula {lesson_number}, organizada pelos componentes "
+                    "curriculares selecionados."
+                ),
+            }
+        )
     for index, outcome in enumerate(state["learning_outcomes"]):
         theme = outcome["theme"]
         slides.append(
@@ -611,9 +646,60 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 ),
             }
         )
+    if item_scope.get("kind") == "lesson":
+        scoped_outcome_ids = [
+            str(item.get("id", ""))
+            for item in state.get("learning_outcomes", [])
+            if str(item.get("id", "")).strip()
+        ]
+        practice_bullets = [
+            str(item.get("activity") or "").strip()
+            for item in state.get("teaching_activities", [])
+            if str(item.get("activity") or "").strip()
+        ]
+        practice_bullets.extend(
+            str(item.get("practice") or "").strip()
+            for item in state.get("teaching_activities", [])
+            if str(item.get("practice") or "").strip()
+        )
+        practice_bullets.extend(
+            str(item.get("feedback_strategy") or item.get("support") or "").strip()
+            for item in state.get("teaching_activities", [])
+            if str(item.get("feedback_strategy") or item.get("support") or "").strip()
+        )
+        practice_bullets = list(dict.fromkeys(practice_bullets))[:4]
+        slides.append(
+            {
+                "title": "Prática orientada da aula",
+                "bullets": practice_bullets
+                or [
+                    "Aplicar os conceitos num exercício orientado.",
+                    "Registar evidências e rever o resultado com feedback.",
+                ],
+                "outcome_id": scoped_outcome_ids[0] if len(scoped_outcome_ids) == 1 else "",
+                "outcome_ids": scoped_outcome_ids,
+                "visual_mode": "diagrama",
+                "visual_asset_id": "",
+                "visual_prompt": "",
+                "visual_kind": "processo",
+                "visual_title": f"Prática da aula {lesson_number}",
+                "visual_items": ["Preparar", "Aplicar", "Receber feedback"],
+                "visual_source": (
+                    "Diagrama nativo gerado pelo CoerIA a partir das atividades "
+                    "de ensino-aprendizagem aprovadas."
+                ),
+                "alt_text": (
+                    f"Sequência da prática orientada prevista para a aula {lesson_number}."
+                ),
+            }
+        )
     slides.append(
         {
-            "title": "Síntese e próximos passos",
+            "title": (
+                "Síntese da aula"
+                if item_scope.get("kind") == "lesson"
+                else "Síntese e próximos passos"
+            ),
             "bullets": [
                 "Rever os resultados e respetivo alinhamento.",
                 "Adaptar exemplos ao contexto da turma.",
@@ -2374,6 +2460,24 @@ class _SeparateResourceAgent:
                 generator_type,
                 job.get("scope"),
             )
+            if job["selected_type"] == RESOURCE_LESSON_PRESENTATIONS:
+                working_state["lesson_presentation_peers"] = [
+                    {
+                        "lesson_number": int(
+                            previous_job.get("scope", {}).get("lesson_number", 0)
+                            or 0
+                        ),
+                        "presentation_outline": deepcopy(
+                            previous_artifact.get(
+                                RESOURCE_ARTIFACT_FIELDS[RESOURCE_PRESENTATION],
+                                [],
+                            )
+                        ),
+                    }
+                    for previous_job, previous_artifact in generated_artifacts
+                    if previous_job.get("selected_type")
+                    == RESOURCE_LESSON_PRESENTATIONS
+                ]
             cached_entry = draft_entries.get(job_key, {})
             cached_metadata = cached_entry.get("generation_metadata", [])
             cached_artifact = deepcopy(cached_entry.get("artifact", {}))
