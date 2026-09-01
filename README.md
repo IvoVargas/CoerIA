@@ -147,10 +147,16 @@ plano e a grelha são derivados deterministicamente dos artefactos aprovados e
 não consomem IA. Cada apresentação de aula e cada teste constituem uma geração
 independente: recebem apenas a aula ou a tarefa escolhida e devem cobrir
 exatamente os resultados de aprendizagem desse âmbito.
-As apresentações das aulas distinguem explicitamente a sessão, a respetiva
-agenda, o desenvolvimento conceptual, a prática e a síntese. A validação rejeita
-introduções globais repetidas e compara as apresentações entre si, preservando
-apenas a reutilização pedagogicamente legítima de slides ligados ao mesmo RA.
+A interface distingue os recursos globais para a UC — plano, grelha,
+apresentação geral, ficha de aula e atividade prática — dos recursos por
+instância: apresentação por aula e teste por tarefa selecionada. Um âmbito vazio
+nunca é expandido implicitamente para todas as aulas ou tarefas.
+As apresentações das aulas incluem agenda, desenvolvimento conceptual, prática
+e síntese. A validação rejeita repetições substantivas entre aulas, preservando a
+reutilização pedagogicamente legítima de slides ligados ao mesmo RA. O formato
+literal «Aula N», a correspondência lexical com as notas e os títulos
+habitualmente globais são avisos heurísticos; a sobreposição literal com o PPT
+geral é também apresentada separadamente como aviso.
 
 As apresentações devem integrar imagens, diagramas, tabelas, gráficos ou outros
 elementos visuais com finalidade pedagógica. Antes da síntese final, a
@@ -298,6 +304,9 @@ facultativo que nunca impede avançar. O parecer fica identificado pela versão 
 artefactos que analisou; depois de qualquer alteração é apresentado como
 desatualizado até o docente pedir uma nova verificação. Alegações da IA sobre IDs,
 cobertura ou somas não substituem nem contradizem os controlos determinísticos.
+Cada observação desse parecer inclui **Pedir proposta de solução à IA**. A ação
+abre um pedido localizado no elemento identificado e mantém a alteração pendente
+até à aceitação explícita do docente.
 
 Os controlos determinísticos dos recursos são executados durante a produção e a
 edição da etapa **Geração de recursos educativos**, mas o relatório consolidado não é

@@ -93,7 +93,6 @@ def migrate_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
             outcome_ids = slide_outcome_ids(
                 slide,
                 allowed_ids,
-                infer_from_text=previous_version < 32,
             )
             slide["outcome_ids"] = outcome_ids
             slide["outcome_id"] = outcome_ids[0] if len(outcome_ids) == 1 else ""

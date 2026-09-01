@@ -139,39 +139,17 @@ def lesson_presentation_specificity_issues(
     lesson: dict[str, Any],
     slides: list[dict[str, Any]],
 ) -> list[str]:
-    """Valida se uma apresentação desenvolve efetivamente a aula indicada."""
+    """Valida apenas a estrutura objetiva de uma apresentação de aula."""
 
-    lesson_number = int(lesson.get("lesson_number", 0) or 0)
     if not slides:
         return ["não existem slides"]
 
     issues: list[str] = []
-    first_title = _normalise(str(slides[0].get("title", "")))
-    lesson_marker = re.compile(rf"\baula\s*0*{lesson_number}\b")
-    if lesson_number < 1 or not lesson_marker.search(first_title):
-        issues.append(
-            f'o primeiro slide deve identificar explicitamente «Aula {lesson_number}»'
-        )
-
     titles = [
         _normalise(str(slide.get("title", "")))
         for slide in slides
         if isinstance(slide, dict)
     ]
-    generic_titles = sorted(
-        {
-            str(slide.get("title", "")).strip()
-            for slide in slides
-            if isinstance(slide, dict)
-            and _normalise(str(slide.get("title", "")))
-            in _GENERIC_LESSON_SLIDE_TITLES
-        }
-    )
-    if generic_titles:
-        issues.append(
-            "secções globais da unidade curricular reutilizadas: "
-            + ", ".join(generic_titles)
-        )
     if not any(
         any(term in title for term in _AGENDA_TITLE_TERMS)
         for title in titles
@@ -190,16 +168,53 @@ def lesson_presentation_specificity_issues(
             "específico (explicação e prática da aula)"
         )
 
+    return issues
+
+
+def lesson_presentation_specificity_warnings(
+    lesson: dict[str, Any],
+    slides: list[dict[str, Any]],
+) -> list[str]:
+    """Assinala heurísticas úteis sem as transformar em erros bloqueantes."""
+
+    if not slides:
+        return []
+
+    warnings: list[str] = []
+    lesson_number = int(lesson.get("lesson_number", 0) or 0)
+    first_title = _normalise(str(slides[0].get("title", "")))
+    lesson_marker = re.compile(rf"\b(?:aula|sessao)\s*0*{lesson_number}\b")
+    if lesson_number > 0 and not lesson_marker.search(first_title):
+        warnings.append(
+            f'o primeiro slide não identifica claramente a aula ou sessão {lesson_number}'
+        )
+
+    generic_titles = sorted(
+        {
+            str(slide.get("title", "")).strip()
+            for slide in slides
+            if isinstance(slide, dict)
+            and _normalise(str(slide.get("title", "")))
+            in _GENERIC_LESSON_SLIDE_TITLES
+        }
+    )
+    if generic_titles:
+        warnings.append(
+            "contém títulos habitualmente globais da unidade curricular: "
+            + ", ".join(generic_titles)
+        )
+
     notes = str(lesson.get("notes", "")).strip()
     note_keywords = _lesson_keywords(notes)
+    content_slides = _lesson_content_slides(slides)
     content_keywords = _lesson_keywords(
         " ".join(_presentation_slide_text(slide) for slide in content_slides)
     )
     if note_keywords and not note_keywords.intersection(content_keywords):
-        issues.append(
-            "os slides de desenvolvimento não refletem o tema indicado nas notas da aula"
+        warnings.append(
+            "não foi possível confirmar por correspondência lexical o tema das notas da aula"
         )
-    return issues
+    return warnings
 
 
 def lesson_presentation_repetition_issues(
@@ -247,6 +262,48 @@ def lesson_presentation_repetition_issues(
             *issues[:5],
             f"{len(issues) - 5} outros pares de aulas repetem secções globais",
         ]
+    return issues
+
+
+def lesson_presentation_general_overlap_issues(
+    general_slides: list[dict[str, Any]],
+    lesson_presentations: list[dict[str, Any]],
+) -> list[str]:
+    """Assinala sobreposição literal entre o PPT geral e os PPT das aulas."""
+
+    def unscoped_signatures(slides: list[dict[str, Any]]) -> dict[str, str]:
+        signatures: dict[str, str] = {}
+        assessment_title = _normalise(PRESENTATION_ASSESSMENT_TITLE)
+        for index, slide in enumerate(slides):
+            if not isinstance(slide, dict) or index == 0:
+                continue
+            title = str(slide.get("title", "")).strip()
+            if _normalise(title).startswith(assessment_title):
+                continue
+            if slide_outcome_ids(slide):
+                continue
+            signature = _presentation_slide_signature(slide)
+            if signature:
+                signatures.setdefault(signature, title or f"slide {index + 1}")
+        return signatures
+
+    general = unscoped_signatures(general_slides)
+    if not general:
+        return []
+    issues: list[str] = []
+    for item in lesson_presentations:
+        lesson_number = int(item.get("lesson_number", 0) or 0)
+        current = unscoped_signatures(item.get("presentation_outline", []))
+        repeated = sorted(set(general).intersection(current))
+        if len(repeated) < 2:
+            continue
+        titles = [general[signature] for signature in repeated]
+        issues.append(
+            f"Aula {lesson_number}: repete {len(repeated)} slides do PPT geral ("
+            + ", ".join(titles[:4])
+            + ("…" if len(titles) > 4 else "")
+            + ")"
+        )
     return issues
 
 
@@ -359,13 +416,19 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         "presentation_visuals",
         "presentation_assessment_overview",
         "lesson_presentation_specificity",
+        "lesson_presentation_identity",
+        "lesson_presentation_overlap",
     }:
         slides = re.findall(r"\bslide\s+(\d+)\b", detail, flags=re.IGNORECASE)
         target_key = (
             f"SLIDE:{slides[0]}"
             if slides
             else "RESOURCE:lesson-presentations"
-            if check_id == "lesson_presentation_specificity"
+            if check_id in {
+                "lesson_presentation_specificity",
+                "lesson_presentation_identity",
+                "lesson_presentation_overlap",
+            }
             else "RESOURCE:presentation"
         )
     elif "nao selecionado" in _normalise(detail):
@@ -911,6 +974,10 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 item_scope,
                 presentation_slides,
             )
+            specificity_warnings = lesson_presentation_specificity_warnings(
+                item_scope,
+                presentation_slides,
+            )
             peer_presentations = state.get("lesson_presentation_peers", [])
             if isinstance(peer_presentations, list) and peer_presentations:
                 specificity_issues.extend(
@@ -928,6 +995,19 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                         ]
                     )
                 )
+            general_peer = state.get("general_presentation_peer", [])
+            if isinstance(general_peer, list) and general_peer:
+                specificity_warnings.extend(
+                    lesson_presentation_general_overlap_issues(
+                        general_peer,
+                        [
+                            {
+                                "lesson_number": item_scope.get("lesson_number", 0),
+                                "presentation_outline": presentation_slides,
+                            }
+                        ],
+                    )
+                )
             checks.append(
                 _check(
                     "lesson_presentation_specificity",
@@ -938,6 +1018,18 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                         "específicos desta aula."
                         if not specificity_issues
                         else "; ".join(specificity_issues)
+                    ),
+                )
+            )
+            checks.append(
+                _check(
+                    "lesson_presentation_identity",
+                    "Identificação e diferenciação da apresentação da aula",
+                    "warning" if specificity_warnings else "pass",
+                    (
+                        "; ".join(specificity_warnings)
+                        if specificity_warnings
+                        else "O título e o vocabulário distinguem esta apresentação."
                     ),
                 )
             )
@@ -984,6 +1076,7 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             if isinstance(item, dict)
         }
         collection_issues: list[str] = []
+        collection_warnings: list[str] = []
         if len(received_lessons) != len(lesson_presentations):
             collection_issues.append(
                 "cada aula deve ter exatamente uma apresentação"
@@ -1014,6 +1107,10 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 current_scope,
                 slides,
             )
+            specificity_warnings = lesson_presentation_specificity_warnings(
+                current_scope,
+                slides,
+            )
             expected_scope = set(current_scope.get("outcome_ids", []))
             declared_scope = set(item.get("outcome_ids", []))
             declared_slide_ids = {
@@ -1036,6 +1133,10 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 collection_issues.append(
                     f"Aula {lesson_number}: " + "; ".join(specificity_issues)
                 )
+            if specificity_warnings:
+                collection_warnings.append(
+                    f"Aula {lesson_number}: " + "; ".join(specificity_warnings)
+                )
             if covered_scope != expected_scope:
                 collection_issues.append(
                     f"Aula {lesson_number}: esperados {sorted(expected_scope)}; "
@@ -1054,6 +1155,13 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         collection_issues.extend(
             lesson_presentation_repetition_issues(lesson_presentations)
         )
+        if RESOURCE_PRESENTATION in requested:
+            collection_warnings.extend(
+                lesson_presentation_general_overlap_issues(
+                    resource_data.get("presentation_outline", []),
+                    lesson_presentations,
+                )
+            )
         checks.append(
             _check(
                 "lesson_presentations",
@@ -1063,6 +1171,18 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                     "Todas as apresentações selecionadas respeitam o âmbito das aulas."
                     if lesson_presentations and not collection_issues
                     else "; ".join(collection_issues) or "Não existem apresentações."
+                ),
+            )
+        )
+        checks.append(
+            _check(
+                "lesson_presentation_overlap",
+                "Distinção entre o PPT geral e os PPT das aulas",
+                "warning" if collection_warnings else "pass",
+                (
+                    "; ".join(collection_warnings)
+                    if collection_warnings
+                    else "As apresentações das aulas estão identificadas e não repetem secções do PPT geral."
                 ),
             )
         )

@@ -71,13 +71,22 @@ class WorkflowTests(unittest.TestCase):
         )
         self.agent = create_test_agent()
 
+    @staticmethod
+    def _select_all_resource_scopes(state: dict) -> None:
+        state["resource_scopes"] = {
+            "lesson_presentations": list(
+                range(1, len(state["pedagogical_design"]["lessons"]) + 1)
+            ),
+            "tests": [item["id"] for item in state["assessment_activities"]],
+        }
+
     def test_resources_stage_uses_the_generation_title(self) -> None:
         self.assertEqual(
             STAGE_LABELS["resources"],
             "Geração de recursos educativos",
         )
 
-    def test_schema_31_presentation_links_are_migrated_without_regeneration(self) -> None:
+    def test_schema_31_migration_preserves_only_structured_slide_links(self) -> None:
         state = create_session(self.course)
         state["schema_version"] = 31
         state["learning_outcomes"] = [
@@ -88,7 +97,7 @@ class WorkflowTests(unittest.TestCase):
             {
                 "title": "Resultados de aprendizagem",
                 "bullets": ["RA1 — Identificar", "RA2 — Aplicar"],
-                "outcome_id": ".",
+                "outcome_id": "RA1",
             },
         ]
         state["resources"]["lesson_presentations"] = [
@@ -111,10 +120,28 @@ class WorkflowTests(unittest.TestCase):
             "presentation_outline"
         ][0]
         self.assertEqual(migrated["schema_version"], SCHEMA_VERSION)
-        self.assertEqual(general_slide["outcome_ids"], ["RA1", "RA2"])
-        self.assertEqual(general_slide["outcome_id"], "")
-        self.assertEqual(lesson_slide["outcome_ids"], ["RA2"])
-        self.assertEqual(lesson_slide["outcome_id"], "RA2")
+        self.assertEqual(general_slide["outcome_ids"], ["RA1"])
+        self.assertEqual(general_slide["outcome_id"], "RA1")
+        self.assertEqual(lesson_slide["outcome_ids"], [])
+        self.assertEqual(lesson_slide["outcome_id"], "")
+
+    def test_old_sequential_path_stops_before_implicit_scoped_generation(self) -> None:
+        state = create_session(
+            self.course,
+            resource_types=[RESOURCE_TEST],
+            agent=self.agent,
+        )
+        for _ in range(4):
+            state = review_current_stage(state, "approve", agent=self.agent)
+
+        self.assertEqual(state["current_stage"], "pedagogical_design")
+        state = review_current_stage(state, "approve", agent=self.agent)
+
+        self.assertEqual(state["current_stage"], "resources")
+        self.assertEqual(state["orchestration"]["mode"], "manual-first")
+        self.assertEqual(state["resource_scopes"]["tests"], [])
+        self.assertFalse(state["resources"]["tests"])
+        self.assertIn("Selecione explicitamente", state["review"]["message"])
 
     def test_reduced_sources_require_explicit_curriculum_coverage(self) -> None:
         reduction = {
@@ -1647,6 +1674,8 @@ class WorkflowTests(unittest.TestCase):
             agent=self.agent,
         )
         for _ in range(5):
+            if state["current_stage"] == "pedagogical_design":
+                self._select_all_resource_scopes(state)
             state = review_current_stage(state, "approve", agent=self.agent)
 
         valid_state = review_current_stage(deepcopy(state), "approve", agent=self.agent)
@@ -1704,6 +1733,8 @@ class WorkflowTests(unittest.TestCase):
             agent=self.agent,
         )
         for _ in range(5):
+            if state["current_stage"] == "pedagogical_design":
+                self._select_all_resource_scopes(state)
             state = review_current_stage(state, "approve", agent=self.agent)
 
         valid_state = review_current_stage(deepcopy(state), "approve", agent=self.agent)
@@ -1790,6 +1821,8 @@ class WorkflowTests(unittest.TestCase):
             agent=self.agent,
         )
         for _ in range(5):
+            if state["current_stage"] == "pedagogical_design":
+                self._select_all_resource_scopes(state)
             state = review_current_stage(state, "approve", agent=self.agent)
 
         resource_fields = {
@@ -1867,6 +1900,8 @@ class WorkflowTests(unittest.TestCase):
             agent=self.agent,
         )
         for _ in range(5):
+            if state["current_stage"] == "pedagogical_design":
+                self._select_all_resource_scopes(state)
             state = review_current_stage(state, "approve", agent=self.agent)
         state["resource_generation_scope"] = RESOURCE_TEST
         legacy_response = self.agent.generate("resources", state).artifact
@@ -1907,6 +1942,8 @@ class WorkflowTests(unittest.TestCase):
             agent=self.agent,
         )
         for _ in range(5):
+            if state["current_stage"] == "pedagogical_design":
+                self._select_all_resource_scopes(state)
             state = review_current_stage(state, "approve", agent=self.agent)
         state["resource_generation_scope"] = RESOURCE_TEST
         valid_test = deepcopy(

@@ -1319,6 +1319,11 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
         agent=agent,
     )
     for _ in range(5):
+        if state["current_stage"] == "pedagogical_design":
+            state["resource_scopes"] = {
+                "lesson_presentations": [],
+                "tests": [item["id"] for item in state["assessment_activities"]],
+            }
         state = review_current_stage(state, "approve", agent=agent)
     assert state["current_stage"] == "resources"
     state["orchestration"]["mode"] = "manual-first"
@@ -1441,6 +1446,13 @@ async def test_expanded_resource_collections_have_clear_tabs(user: User) -> None
         agent=agent,
     )
     for _ in range(5):
+        if state["current_stage"] == "pedagogical_design":
+            state["resource_scopes"] = {
+                "lesson_presentations": list(
+                    range(1, len(state["pedagogical_design"]["lessons"]) + 1)
+                ),
+                "tests": [item["id"] for item in state["assessment_activities"]],
+            }
         state = review_current_stage(state, "approve", agent=agent)
     state["orchestration"]["mode"] = "manual-first"
 
@@ -1710,6 +1722,11 @@ async def test_completed_view_offers_word_latex_or_both(
     agent = create_test_agent()
     state = create_session(course, resource_types=[RESOURCE_TEST], agent=agent)
     while state.get("status") != "completed":
+        if state["current_stage"] == "pedagogical_design":
+            state["resource_scopes"] = {
+                "lesson_presentations": [],
+                "tests": [item["id"] for item in state["assessment_activities"]],
+            }
         state = review_current_stage(state, "approve", agent=agent)
     interfaces: list[app.AGIRSoloInterface] = []
 

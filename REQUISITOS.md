@@ -244,6 +244,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Permitir pedir uma verificação por IA em qualquer etapa de autoria. O parecer
   deve ser guardado, não deve alterar o artefacto e nunca deve bloquear a
   navegação.
+- Em cada observação do parecer de IA, disponibilizar uma proposta de solução
+  localizada, sujeita à mesma revisão e aprovação humana das restantes propostas.
 - Apresentar primeiro **Criar etapa completa com IA** na área de IA da barra,
   para obter uma proposta completa com base no contexto, no rascunho atual e nos
   artefactos anteriores. A proposta só se torna uma nova versão depois da
@@ -398,6 +400,11 @@ execução independente, com indicação do recurso corrente e da posição no
 conjunto selecionado. O plano de aulas e a grelha de avaliação não devem chamar
 um fornecedor de IA. No fim, o sistema deve validar também o conjunto agregado
 antes de o apresentar ao docente.
+Os alvos das apresentações das aulas e dos testes devem ser sempre selecionados
+explicitamente. Nem a migração de uma sessão antiga nem o caminho sequencial
+podem interpretar um âmbito vazio como «todas as aulas» ou «todas as tarefas».
+Plano de aulas, grelha de avaliação, apresentação geral, ficha de aula e atividade
+prática permanecem recursos globais, identificados como tal na interface.
 
 Cada apresentação de aula e cada teste deve indicar e cobrir exatamente os
 resultados de aprendizagem do respetivo âmbito, calculado a partir dos
@@ -408,6 +415,10 @@ incluir uma agenda, pelo menos dois slides de desenvolvimento específico
 da unidade curricular reutilizadas em várias aulas e detetar a repetição de
 dois ou mais slides sem ligação a resultados concretos. A reutilização de um
 slide associado ao mesmo resultado em aulas diferentes continua permitida.
+Heurísticas lexicais — formato literal do título, interseção de palavras com as
+notas e uma lista de títulos habitualmente globais — devem originar avisos, não
+erros bloqueantes. A sobreposição literal entre a apresentação geral e as
+apresentações das aulas deve ser apresentada num controlo próprio.
 Os restantes recursos generativos devem indicar os resultados de aprendizagem a
 que estão associados.
 Recursos não selecionados devem permanecer vazios e não ser exportados.

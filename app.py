@@ -4464,6 +4464,11 @@ class AGIRSoloInterface:
                 }
                 resource_checks: dict[str, Any] = {}
                 ui.label("Recursos globais").classes("font-semibold mt-1")
+                ui.label(
+                    "Cada opção deste grupo produz um único recurso para o conjunto "
+                    "da unidade curricular. As apresentações das aulas e os testes, "
+                    "abaixo, são os únicos recursos gerados por instância."
+                ).classes("text-xs muted")
                 with ui.element("div").classes(
                     "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 w-full"
                 ):
@@ -4471,8 +4476,8 @@ class AGIRSoloInterface:
                         (RESOURCE_LESSON_PLAN, "Plano de aulas"),
                         (RESOURCE_ASSESSMENT_GRID, "Grelha de avaliação"),
                         (RESOURCE_PRESENTATION, "Apresentação geral da UC"),
-                        (RESOURCE_WORKSHEET, "Ficha de aula"),
-                        (RESOURCE_PRACTICAL, "Atividade prática"),
+                        (RESOURCE_WORKSHEET, "Ficha de aula (global)"),
+                        (RESOURCE_PRACTICAL, "Atividade prática (global)"),
                     ):
                         resource_checks[resource_type] = ui.checkbox(
                             label,

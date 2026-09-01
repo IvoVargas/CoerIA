@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from copy import deepcopy
 from typing import Any
 
@@ -17,15 +16,12 @@ from .models import (
 def slide_outcome_ids(
     slide: dict[str, Any],
     allowed_ids: set[str] | None = None,
-    *,
-    infer_from_text: bool = False,
 ) -> list[str]:
     """Normaliza os resultados associados a um slide.
 
     ``outcome_id`` é mantido como compatibilidade com apresentações anteriores.
-    A inferência textual destina-se exclusivamente à migração de sessões antigas:
-    só reconhece identificadores RA explícitos e, quando fornecido, limita-os ao
-    catálogo aprovado da sessão.
+    As ligações são lidas apenas dos campos estruturados: mencionar ``RA1`` num
+    título ou bullet não cria, por si só, uma relação pedagógica.
     """
 
     identifiers: list[str] = []
@@ -35,15 +31,6 @@ def slide_outcome_ids(
     legacy_identifier = str(slide.get("outcome_id", "")).strip().upper()
     if legacy_identifier:
         identifiers.append(legacy_identifier)
-    if infer_from_text:
-        bullets = slide.get("bullets", [])
-        text = " ".join(
-            [
-                str(slide.get("title", "")),
-                *(str(value) for value in bullets if isinstance(bullets, list)),
-            ]
-        )
-        identifiers.extend(re.findall(r"(?<![A-Z0-9_])RA\d+(?![A-Z0-9_])", text.upper()))
 
     normalized: list[str] = []
     for identifier in identifiers:
@@ -175,10 +162,12 @@ def validate_resource_scopes(
     state: dict[str, Any],
     selected_types: list[str],
     scopes: dict[str, Any] | None,
-    *,
-    migrate_missing: bool = False,
 ) -> dict[str, list[Any]]:
-    """Normaliza os alvos selecionados e rejeita referências desatualizadas."""
+    """Normaliza alvos explícitos e rejeita referências desatualizadas.
+
+    Nunca expande uma seleção vazia para todas as aulas ou tarefas: cada
+    instância generativa deve resultar de uma escolha consciente do docente.
+    """
 
     raw = scopes if isinstance(scopes, dict) else {}
     lesson_count = len(state.get("pedagogical_design", {}).get("lessons", []))
@@ -202,15 +191,6 @@ def validate_resource_scopes(
         if str(value).strip() in allowed_tasks
     ]
     task_ids = list(dict.fromkeys(task_ids))
-
-    if migrate_missing:
-        if (
-            RESOURCE_LESSON_PRESENTATIONS in selected_types
-            and not lesson_numbers
-        ):
-            lesson_numbers = allowed_lessons
-        if RESOURCE_TEST in selected_types and not task_ids:
-            task_ids = allowed_tasks
 
     if (
         RESOURCE_LESSON_PRESENTATIONS in selected_types

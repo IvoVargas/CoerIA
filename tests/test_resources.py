@@ -46,14 +46,17 @@ from prism.presentation import render_current_artifact, render_resource_detail_s
 from prism.quality import (
     PRESENTATION_ASSESSMENT_TITLE,
     evaluate_quality,
+    lesson_presentation_general_overlap_issues,
     lesson_presentation_repetition_issues,
     lesson_presentation_specificity_issues,
+    lesson_presentation_specificity_warnings,
 )
 from prism.resource_catalog import (
     build_assessment_grid,
     build_lesson_plan,
     lesson_scope,
     slide_outcome_ids,
+    validate_resource_scopes,
 )
 from prism.workflow import (
     build_final_validation,
@@ -95,6 +98,18 @@ class ResourceGenerationTests(unittest.TestCase):
             agent=self.agent,
         )
         for _ in range(5):
+            if state["current_stage"] == "pedagogical_design":
+                state["resource_scopes"] = {
+                    "lesson_presentations": list(
+                        range(
+                            1,
+                            len(state["pedagogical_design"]["lessons"]) + 1,
+                        )
+                    ),
+                    "tests": [
+                        item["id"] for item in state["assessment_activities"]
+                    ],
+                }
             state = review_current_stage(state, "approve", agent=self.agent)
         self.assertEqual(state["current_stage"], "resources")
         return state
@@ -258,12 +273,13 @@ class ResourceGenerationTests(unittest.TestCase):
             lesson_scope(state, first["lesson_number"]),
             generic_slides,
         )
-        self.assertTrue(
-            any("primeiro slide" in issue for issue in specificity)
+        warnings = lesson_presentation_specificity_warnings(
+            lesson_scope(state, first["lesson_number"]),
+            generic_slides,
         )
-        self.assertTrue(
-            any("secções globais" in issue for issue in specificity)
-        )
+        self.assertFalse(any("primeiro slide" in issue for issue in specificity))
+        self.assertTrue(any("primeiro slide" in issue for issue in warnings))
+        self.assertTrue(any("títulos habitualmente globais" in issue for issue in warnings))
 
         repeated = lesson_presentation_repetition_issues(
             [
@@ -276,6 +292,32 @@ class ResourceGenerationTests(unittest.TestCase):
         )
         self.assertTrue(repeated)
         self.assertIn("repetem", repeated[0])
+
+        overlap = lesson_presentation_general_overlap_issues(
+            generic_slides,
+            [
+                {
+                    **deepcopy(first),
+                    "presentation_outline": deepcopy(generic_slides),
+                }
+            ],
+        )
+        self.assertTrue(overlap)
+        self.assertIn("PPT geral", overlap[0])
+
+    def test_old_orchestration_never_expands_empty_resource_scopes(self) -> None:
+        state = self._resource_state()
+        state["orchestration"]["mode"] = "bounded-generator-critic"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Selecione pelo menos uma aula",
+        ):
+            validate_resource_scopes(
+                state,
+                [RESOURCE_LESSON_PRESENTATIONS],
+                {"lesson_presentations": [], "tests": []},
+            )
 
     def test_resource_schema_exposes_collections_for_localized_assistance(self) -> None:
         state = self._resource_state()
@@ -754,6 +796,12 @@ class ResourceGenerationTests(unittest.TestCase):
             alignment_state = review_current_stage(
                 alignment_state, "approve", agent=self.agent
             )
+        alignment_state["resource_scopes"] = {
+            "lesson_presentations": [],
+            "tests": [
+                item["id"] for item in alignment_state["assessment_activities"]
+            ],
+        }
 
         class SelectiveRetryAgent:
             def __init__(self):
@@ -856,6 +904,17 @@ class ResourceGenerationTests(unittest.TestCase):
                 "approve",
                 agent=self.agent,
             )
+        alignment_state["resource_scopes"] = {
+            "lesson_presentations": list(
+                range(
+                    1,
+                    len(alignment_state["pedagogical_design"]["lessons"]) + 1,
+                )
+            ),
+            "tests": [
+                item["id"] for item in alignment_state["assessment_activities"]
+            ],
+        }
 
         class FailTestOnceAgent:
             def __init__(self):

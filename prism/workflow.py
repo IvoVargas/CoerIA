@@ -1518,8 +1518,6 @@ def update_manual_resource_settings(
 ) -> PrismState:
     """Atualiza escolhas de recursos sem gerar conteúdo nem avançar a sessão."""
 
-    if not is_manual_first(state):
-        raise ValueError("Esta operação aplica-se apenas ao fluxo de autoria manual.")
     updated = ensure_manual_artifacts(deepcopy(state))
     if updated.get("current_stage") != "resources":
         raise ValueError(
@@ -2365,7 +2363,6 @@ def _resource_generation_jobs(
         state,
         selected_types,
         state.get("resource_scopes"),
-        migrate_missing=not is_manual_first(state),
     )
     jobs: list[dict[str, Any]] = []
     for resource_type in selected_types:
@@ -2461,6 +2458,31 @@ class _SeparateResourceAgent:
                 job.get("scope"),
             )
             if job["selected_type"] == RESOURCE_LESSON_PRESENTATIONS:
+                generated_general = next(
+                    (
+                        previous_artifact.get("presentation_outline", [])
+                        for previous_job, previous_artifact in reversed(
+                            generated_artifacts
+                        )
+                        if previous_job.get("selected_type")
+                        == RESOURCE_PRESENTATION
+                    ),
+                    None,
+                )
+                existing_general = state.get("resources", {}).get(
+                    "presentation_outline", []
+                )
+                general_peer = (
+                    generated_general
+                    if isinstance(generated_general, list)
+                    else existing_general
+                    if isinstance(existing_general, list)
+                    else []
+                )
+                if general_peer:
+                    working_state["general_presentation_peer"] = deepcopy(
+                        general_peer
+                    )
                 working_state["lesson_presentation_peers"] = [
                     {
                         "lesson_number": int(
@@ -2596,7 +2618,6 @@ class _SeparateResourceAgent:
             state,
             selected_types,
             state.get("resource_scopes"),
-            migrate_missing=not is_manual_first(state),
         )
         for job, artifact in generated_artifacts:
             generator_type = str(job["generator_type"])
@@ -3283,7 +3304,48 @@ def review_current_stage(
             }
             return state
 
-        state["current_stage"] = STAGE_ORDER[current_index + 1]
+        next_stage = STAGE_ORDER[current_index + 1]
+        if next_stage == "resources":
+            try:
+                validate_resource_scopes(
+                    state,
+                    validate_resource_types(state.get("resource_types")),
+                    state.get("resource_scopes"),
+                )
+            except ValueError as error:
+                # Sessões do orquestrador sequencial antigo não podem transformar
+                # um âmbito omisso numa geração de todas as aulas/tarefas. Nesse
+                # ponto passam para autoria manual e aguardam uma seleção explícita.
+                orchestration = dict(state.get("orchestration", {}))
+                orchestration.update(
+                    {
+                        "mode": MANUAL_FIRST_MODE,
+                        "human_approval_required": False,
+                        "llm_optional": True,
+                        "proposal_approval_required": True,
+                    }
+                )
+                state["orchestration"] = orchestration
+                ensure_manual_artifacts(state)
+                state["current_stage"] = "resources"
+                state["status"] = "drafting"
+                state.setdefault("stage_statuses", {})["resources"] = "draft"
+                state["review"] = {
+                    "stage": "resources",
+                    "label": STAGE_LABELS["resources"],
+                    "message": (
+                        "Selecione explicitamente as aulas e tarefas antes de "
+                        f"gerar recursos. {error}"
+                    ),
+                }
+                _record_decision(
+                    state,
+                    "resources",
+                    "Geração automática suspensa para pedir âmbitos explícitos.",
+                )
+                return state
+
+        state["current_stage"] = next_stage
         state["status"] = "generating"
         return run_current_stage(
             state,
