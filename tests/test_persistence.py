@@ -4,6 +4,7 @@ import sqlite3
 import pytest
 
 from prism.persistence import SQLiteSessionStore
+from prism.session_schema import SESSION_SCHEMA_VERSION
 
 
 def test_default_database_path_can_be_configured_from_environment(
@@ -36,6 +37,7 @@ def test_explicit_database_path_has_priority_over_environment(
 
 def _minimal_state(title: str) -> dict:
     return {
+        "schema_version": SESSION_SCHEMA_VERSION,
         "course": {"unit_name": title},
         "current_stage": "contents",
         "status": "in_progress",
@@ -72,7 +74,7 @@ def test_session_cannot_be_overwritten_by_another_owner(tmp_path: Path) -> None:
     assert store.load(session_id, owner_id="D01")["course"]["unit_name"] == "UC A"
 
 
-def test_legacy_database_is_migrated_to_a_reserved_owner(tmp_path: Path) -> None:
+def test_legacy_database_schema_is_rejected(tmp_path: Path) -> None:
     database_path = tmp_path / "legacy.db"
     with sqlite3.connect(database_path) as connection:
         connection.executescript(
@@ -101,10 +103,30 @@ def test_legacy_database_is_migrated_to_a_reserved_owner(tmp_path: Path) -> None
             """
         )
 
-    store = SQLiteSessionStore(database_path)
+    with pytest.raises(RuntimeError, match="já não é suportada"):
+        SQLiteSessionStore(database_path)
 
-    assert store.load("old-session", owner_id="D01") is None
-    assert store.load("old-session", owner_id="LEGACY") is not None
+
+def test_session_state_from_an_older_schema_is_rejected(tmp_path: Path) -> None:
+    store = SQLiteSessionStore(tmp_path / "coeria.db")
+    state = _minimal_state("UC antiga")
+    state["schema_version"] = SESSION_SCHEMA_VERSION - 1
+
+    with pytest.raises(ValueError, match="já não é suportada"):
+        store.save(state, owner_id="D01")
+
+
+@pytest.mark.parametrize("invalid_version", [None, "33", 33.0, True])
+def test_session_schema_version_must_be_the_exact_current_integer(
+    tmp_path: Path,
+    invalid_version: object,
+) -> None:
+    store = SQLiteSessionStore(tmp_path / "coeria.db")
+    state = _minimal_state("UC com versão inválida")
+    state["schema_version"] = invalid_version
+
+    with pytest.raises(ValueError, match="versão do estado|versão do CoerIA"):
+        store.save(state, owner_id="D01")
 
 
 def test_session_delete_removes_state_and_audit_events(tmp_path: Path) -> None:

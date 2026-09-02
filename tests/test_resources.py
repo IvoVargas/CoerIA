@@ -151,7 +151,6 @@ class ResourceGenerationTests(unittest.TestCase):
             )
         )
         self.assertTrue(resources["lesson_worksheet"]["sections"])
-        self.assertTrue(resources["test"]["questions"])
         self.assertEqual(
             [item["lesson_number"] for item in resources["lesson_presentations"]],
             state["resource_scopes"]["lesson_presentations"],
@@ -344,10 +343,7 @@ class ResourceGenerationTests(unittest.TestCase):
         allowed = [item["id"] for item in state["learning_outcomes"]]
 
         self.assertIn("outcome_ids", slide_schema["required"])
-        self.assertEqual(
-            slide_schema["properties"]["outcome_id"]["enum"],
-            ["", *allowed],
-        )
+        self.assertNotIn("outcome_id", slide_schema["properties"])
         self.assertEqual(
             slide_schema["properties"]["outcome_ids"]["items"]["enum"],
             allowed,
@@ -817,9 +813,6 @@ class ResourceGenerationTests(unittest.TestCase):
                     resource_type == RESOURCE_PRESENTATION
                     and self.calls.count(resource_type) == 1
                 ):
-                    artifact["presentation_outline"][1]["outcome_id"] = (
-                        "RA_INEXISTENTE"
-                    )
                     artifact["presentation_outline"][1]["outcome_ids"] = [
                         "RA_INEXISTENTE"
                     ]

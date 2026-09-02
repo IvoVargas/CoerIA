@@ -324,8 +324,6 @@ def render_resource_detail_sections(
 
     if RESOURCE_TEST in selected:
         test_entries = artifact.get("tests", [])
-        if not test_entries and artifact.get("test", {}).get("questions"):
-            test_entries = [{"assessment_task_id": "", "test": artifact["test"]}]
         test_blocks: list[str] = []
         for entry in test_entries:
             test = entry.get("test", {})
@@ -585,7 +583,7 @@ def render_artifact(
         rows = [
             [
                 item.get("id", "—"),
-                ", ".join(item.get("outcome_ids", [item.get("outcome_id", "")])),
+                ", ".join(item.get("outcome_ids", [])),
                 item.get("ai_mode", "AI-off"),
                 item.get("learning_context", "—"),
                 item["activity"],

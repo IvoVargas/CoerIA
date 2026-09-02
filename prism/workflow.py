@@ -73,6 +73,7 @@ from .manual_editing import (
     proposal_review_changes,
 )
 from .relationships import derive_alignment_rows
+from .session_schema import SESSION_SCHEMA_VERSION
 from .validation_targets import resolve_validation_target
 
 
@@ -214,7 +215,7 @@ def _report_progress(
         progress_callback(message)
 
 
-SCHEMA_VERSION = 32
+SCHEMA_VERSION = SESSION_SCHEMA_VERSION
 
 MANUAL_FIRST_MODE = "manual-first"
 AUTHORING_STAGES = STAGE_ORDER[:-1]
@@ -390,8 +391,7 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
             str(activity.get("id", ""))
             for activity in state.get("teaching_activities", [])
             if str(activity.get("id", "")).strip()
-            and set(activity.get("outcome_ids") or [activity.get("outcome_id")])
-            & set(outcome_ids)
+            and set(activity.get("outcome_ids", [])) & set(outcome_ids)
         ]
         assessments.append({
             "id": f"TA{index + 1}",
@@ -441,8 +441,7 @@ def create_pedagogical_design(state: PrismState) -> dict[str, Any]:
                     *[
                         str(item.get("id", ""))
                         for item in state.get("teaching_activities", [])
-                        if outcome["id"]
-                        in (item.get("outcome_ids") or [item.get("outcome_id")])
+                        if outcome["id"] in item.get("outcome_ids", [])
                     ],
                     *[
                         str(item.get("id", ""))
@@ -471,7 +470,6 @@ def propose_teaching_activities(state: PrismState) -> dict[str, Any]:
     activities = [
         {
             "id": f"AE{index + 1}",
-            "outcome_id": outcome["id"],
             "outcome_ids": [outcome["id"]],
             "learning_context": LEARNING_CONTEXTS[index % len(LEARNING_CONTEXTS)],
             "ai_mode": outcome.get("ai_mode", AI_MODE_OFF),
@@ -544,7 +542,7 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
         return next(
             item
             for item in state["teaching_activities"]
-            if outcome_id in item.get("outcome_ids", [item.get("outcome_id")])
+            if outcome_id in item.get("outcome_ids", [])
         )
     slides = [
         {
@@ -562,7 +560,6 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                     f"Estrutura alinhada com a Taxonomia {taxonomy_type}.",
                 ]
             ),
-            "outcome_id": "",
             "outcome_ids": [],
             "visual_mode": "diagrama",
             "visual_asset_id": "",
@@ -598,7 +595,6 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                     "Desenvolvimento dos conceitos associados aos resultados previstos.",
                     "Prática orientada e verificação da aprendizagem.",
                 ],
-                "outcome_id": "",
                 "outcome_ids": [],
                 "visual_mode": "diagrama",
                 "visual_asset_id": "",
@@ -627,7 +623,6 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                     teaching_for(outcome["id"])["activity"],
                     assessment_for(outcome["id"])["criterion"],
                 ],
-                "outcome_id": outcome["id"],
                 "outcome_ids": [outcome["id"]],
                 "visual_mode": "diagrama",
                 "visual_asset_id": "",
@@ -676,7 +671,6 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                     "Aplicar os conceitos num exercício orientado.",
                     "Registar evidências e rever o resultado com feedback.",
                 ],
-                "outcome_id": scoped_outcome_ids[0] if len(scoped_outcome_ids) == 1 else "",
                 "outcome_ids": scoped_outcome_ids,
                 "visual_mode": "diagrama",
                 "visual_asset_id": "",
@@ -705,7 +699,6 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 "Adaptar exemplos ao contexto da turma.",
                 "Registar feedback para uma futura reformulação.",
             ],
-            "outcome_id": "",
             "outcome_ids": [],
             "visual_mode": "diagrama",
             "visual_asset_id": "",
@@ -791,21 +784,48 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
             },
         ],
     }
-    resources = {
-        "selected_types": selected_types,
-        "presentation_outline": slides if RESOURCE_PRESENTATION in selected_types else [],
-        "lesson_worksheet": worksheet if RESOURCE_WORKSHEET in selected_types else {
-            "title": "", "overview": "", "instructions": "", "sections": []
-        },
-        "test": test if RESOURCE_TEST in selected_types else {
-            "title": "", "instructions": "", "total_points": 0, "questions": []
-        },
-        "practical_activity": practical if RESOURCE_PRACTICAL in selected_types else {
-            "title": "", "context": "", "duration_minutes": 0, "materials": [],
-            "steps": [], "deliverables": [], "criteria": []
-        },
-        "feedback_considered": feedback or None,
-    }
+    resources = blank_extended_resources(selected_types)
+    resources["presentation_outline"] = (
+        slides if RESOURCE_PRESENTATION in selected_types else []
+    )
+    if RESOURCE_WORKSHEET in selected_types:
+        resources["lesson_worksheet"] = worksheet
+    if RESOURCE_PRACTICAL in selected_types:
+        resources["practical_activity"] = practical
+    if RESOURCE_TEST in selected_types:
+        if state.get("resource_generation_scope") == RESOURCE_TEST:
+            # Contrato interno da geração isolada; o agregador converte-o em
+            # ``tests`` antes de persistir a etapa.
+            resources["test"] = test
+        else:
+            for assessment in state.get("assessment_activities", []):
+                task_id = str(assessment.get("id", "")).strip()
+                task_outcomes = {
+                    str(value).strip()
+                    for value in assessment.get("outcome_ids", [])
+                    if str(value).strip()
+                }
+                questions = [
+                    deepcopy(question)
+                    for question in test_questions
+                    if question.get("outcome_id") in task_outcomes
+                ]
+                resources["tests"].append(
+                    {
+                        "assessment_task_id": task_id,
+                        "outcome_ids": sorted(task_outcomes),
+                        "test": {
+                            **deepcopy(test),
+                            "title": f"Teste {task_id} — {course['unit_name']}",
+                            "total_points": sum(
+                                int(question.get("points", 0) or 0)
+                                for question in questions
+                            ),
+                            "questions": questions,
+                        },
+                    }
+                )
+    resources["feedback_considered"] = feedback or None
     resources, _ = _canonicalize_presentation_assessment_overview(
         resources,
         state,
@@ -1149,15 +1169,6 @@ def _remap_list_references(
     return remapped
 
 
-def _synchronize_legacy_test_resource(resources: dict[str, Any]) -> None:
-    """Mantém o teste singular apenas como espelho para sessões antigas."""
-
-    tests = resources.get("tests", [])
-    if isinstance(tests, list) and tests:
-        first_test = tests[0].get("test", {})
-        resources["test"] = deepcopy(first_test) if isinstance(first_test, dict) else {}
-
-
 def save_manual_draft(
     state: PrismState,
     target_stage: str,
@@ -1241,14 +1252,13 @@ def save_manual_draft(
         resource_fields = {
             RESOURCE_PRESENTATION: "presentation_outline",
             RESOURCE_WORKSHEET: "lesson_worksheet",
-            RESOURCE_TEST: "test",
+            RESOURCE_TEST: "tests",
             RESOURCE_PRACTICAL: "practical_activity",
         }
         edited_artifact["selected_types"] = list(selected_types)
         for resource_type, field in resource_fields.items():
             if resource_type not in selected_types:
                 edited_artifact[field] = deepcopy(blank_resources[field])
-        _synchronize_legacy_test_resource(edited_artifact)
         edited_artifact = attach_quality_report(updated, edited_artifact)
 
     clean_reason = reason.strip() or "Conteúdo alterado diretamente pelo docente."
@@ -1550,7 +1560,6 @@ def update_manual_resource_settings(
             "lesson_worksheet"
         ]
     if RESOURCE_TEST not in selected:
-        resources["test"] = blank_extended_resources([])["test"]
         resources["tests"] = []
     else:
         resources["tests"] = [
@@ -1558,10 +1567,6 @@ def update_manual_resource_settings(
             for item in resources.get("tests", [])
             if str(item.get("assessment_task_id", "")) in scopes["tests"]
         ]
-        if resources["tests"]:
-            _synchronize_legacy_test_resource(resources)
-        elif resource_scopes is not None:
-            resources["test"] = blank_extended_resources([])["test"]
     if RESOURCE_PRACTICAL not in selected:
         resources["practical_activity"] = blank_extended_resources([])[
             "practical_activity"
@@ -1942,7 +1947,7 @@ def ai_review_is_current(
     target_stage: str,
     review: dict[str, Any],
 ) -> bool:
-    """Distingue um parecer atual de um parecer histórico ou legado."""
+    """Distingue um parecer atual de um parecer histórico ou desatualizado."""
 
     signature = str(review.get("context_signature", "")).strip()
     return bool(signature) and signature == ai_review_context_signature(
@@ -2647,10 +2652,6 @@ class _SeparateResourceAgent:
             else:
                 combined[field] = deepcopy(artifact[field])
 
-        if combined.get("tests"):
-            # Espelho do primeiro teste para compatibilidade com sessões, cópias de
-            # segurança e integrações anteriores ao suporte de vários testes.
-            combined["test"] = deepcopy(combined["tests"][0]["test"])
         combined = apply_deterministic_resources(state, combined)
 
         generated_images: list[dict[str, Any]] = []
@@ -2970,7 +2971,6 @@ def apply_manual_edit(
 
     updated = deepcopy(state)
     if target_stage == "resources":
-        _synchronize_legacy_test_resource(edited_artifact)
         validate_artifact(target_stage, edited_artifact, updated)
         edited_artifact = attach_quality_report(updated, edited_artifact)
     else:

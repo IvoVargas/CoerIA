@@ -25,14 +25,16 @@ from .ingestion import (
     configured_max_total_upload_bytes,
     source_file_names,
 )
+from .session_schema import (
+    SESSION_SCHEMA_VERSION,
+    require_current_session_schema,
+)
 
 
 BACKUP_FORMAT = "coeria-session-backup"
-BACKUP_FORMAT_VERSION = 2
-LEGACY_BACKUP_FORMAT_VERSION = 1
+BACKUP_FORMAT_VERSION = 3
 BACKUP_MANIFEST_NAME = "manifest.json"
 BACKUP_STATE_NAME = "estado_tecnico.json"
-LEGACY_BACKUP_STATE_NAME = "estado_sessao.json"
 BACKUP_READABLE_STATE_NAME = "sessao.json"
 BACKUP_ATTACHMENT_INDEX_NAME = "anexos/indice.json"
 BACKUP_README_NAME = "LEIA-ME.txt"
@@ -422,7 +424,7 @@ def _readme_text(attachment_index: dict[str, Any]) -> str:
         "estado_tecnico.json e manifest.json\n"
         "  Ficheiros necessários ao restauro automático. Não os altere.\n\n"
         "As chaves de API não são incluídas nesta cópia.\n\n"
-        "Fontes originais referenciadas por sessões antigas mas não disponíveis:\n"
+        "Fontes originais referenciadas mas não disponíveis:\n"
         f"{missing_note}\n"
     )
 
@@ -442,6 +444,7 @@ def create_session_backup(state: dict[str, Any]) -> str:
 
     if not isinstance(state, dict):
         raise ValueError("Não foi possível preparar a cópia da sessão.")
+    require_current_session_schema(state)
     created_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     technical_state, attachment_index, attachment_files = (
         _extract_backup_attachments(state)
@@ -470,6 +473,7 @@ def create_session_backup(state: dict[str, Any]) -> str:
     manifest = {
         "format": BACKUP_FORMAT,
         "format_version": BACKUP_FORMAT_VERSION,
+        "session_schema_version": SESSION_SCHEMA_VERSION,
         "app_version": APP_VERSION,
         "created_at": created_at,
         "source_session_id": str(state.get("session_id", "")),
@@ -554,7 +558,7 @@ def _read_json_object(data: bytes, error_message: str) -> dict[str, Any]:
     return value
 
 
-def _restore_v2_attachments(
+def _restore_current_attachments(
     archive: zipfile.ZipFile,
     state: dict[str, Any],
     attachment_index: dict[str, Any],
@@ -612,7 +616,7 @@ def _restore_v2_attachments(
 
 
 def read_session_backup(data: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Valida backups v1/v2 e reconstitui o estado integral da sessão."""
+    """Valida o formato atual e reconstitui o estado integral da sessão."""
 
     if not isinstance(data, bytes) or not data:
         raise ValueError("Selecione uma cópia de segurança válida.")
@@ -652,23 +656,10 @@ def read_session_backup(data: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
             if manifest.get("format") != BACKUP_FORMAT:
                 raise ValueError("O ficheiro não pertence ao formato de backup do CoerIA.")
             version = manifest.get("format_version")
-            if version not in (LEGACY_BACKUP_FORMAT_VERSION, BACKUP_FORMAT_VERSION):
+            if version != BACKUP_FORMAT_VERSION:
                 raise ValueError("A versão do formato de backup não é suportada.")
-
-            if version == LEGACY_BACKUP_FORMAT_VERSION:
-                if names != {BACKUP_MANIFEST_NAME, LEGACY_BACKUP_STATE_NAME}:
-                    raise ValueError(
-                        "A cópia de segurança não contém a estrutura esperada do CoerIA."
-                    )
-                if manifest.get("state_file") != LEGACY_BACKUP_STATE_NAME:
-                    raise ValueError("O manifesto referencia um estado inválido.")
-                state_bytes = archive.read(LEGACY_BACKUP_STATE_NAME)
-                _verify_declared_file(manifest, "state", state_bytes)
-                state = _read_json_object(
-                    state_bytes,
-                    "A cópia de segurança contém um estado JSON inválido.",
-                )
-                return state, manifest
+            if manifest.get("session_schema_version") != SESSION_SCHEMA_VERSION:
+                raise ValueError("A versão do estado da sessão não é suportada.")
 
             required_names = {
                 BACKUP_MANIFEST_NAME,
@@ -701,6 +692,7 @@ def read_session_backup(data: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
                 state_bytes,
                 "A cópia de segurança contém um estado JSON inválido.",
             )
+            require_current_session_schema(state)
             _read_json_object(
                 readable_bytes,
                 "A cópia de segurança contém um JSON de consulta inválido.",
@@ -709,7 +701,7 @@ def read_session_backup(data: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
                 index_bytes,
                 "A cópia de segurança contém um índice de anexos inválido.",
             )
-            attachment_paths = _restore_v2_attachments(
+            attachment_paths = _restore_current_attachments(
                 archive,
                 state,
                 attachment_index,

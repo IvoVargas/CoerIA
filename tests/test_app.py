@@ -18,6 +18,7 @@ from prism.models import (
     SUPPORTED_RESOURCE_TYPES,
 )
 from prism.persistence import SQLiteSessionStore
+from prism.session_schema import SESSION_SCHEMA_VERSION
 from prism.workflow import (
     ai_review_context_signature,
     create_session,
@@ -2030,6 +2031,7 @@ def test_application_service_cannot_load_another_owner_session(tmp_path: Path) -
     store = SQLiteSessionStore(tmp_path / "coeria.db")
     session_id = store.save(
         {
+            "schema_version": SESSION_SCHEMA_VERSION,
             "course": {"unit_name": "UC reservada"},
             "current_stage": "contents",
             "status": "in_progress",
@@ -2051,6 +2053,7 @@ def test_application_service_deletes_only_owner_session(tmp_path: Path) -> None:
     store = SQLiteSessionStore(tmp_path / "coeria.db")
     session_id = store.save(
         {
+            "schema_version": SESSION_SCHEMA_VERSION,
             "course": {"unit_name": "UC a eliminar"},
             "current_stage": "contents",
             "status": "in_progress",

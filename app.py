@@ -2328,10 +2328,7 @@ class AGIRSoloInterface:
 
     @staticmethod
     def _test_entries(artifact: dict[str, Any]) -> list[dict[str, Any]]:
-        entries = list(artifact.get("tests", []))
-        if not entries and artifact.get("test", {}).get("questions"):
-            entries = [{"assessment_task_id": "Teste", "test": artifact["test"]}]
-        return entries
+        return list(artifact.get("tests", []))
 
     def _render_tests_resource_view(self, artifact: dict[str, Any]) -> None:
         entries = self._test_entries(artifact)
@@ -2353,8 +2350,7 @@ class AGIRSoloInterface:
                 with ui.tab_panel(tab).classes("px-0"):
                     temporary = {
                         "selected_types": [RESOURCE_TEST],
-                        "tests": [],
-                        "test": entry.get("test", {}),
+                        "tests": [entry],
                     }
                     section = render_resource_detail_sections(temporary)[0]
                     ui.markdown(section["content"], extras=["tables"]).classes(
@@ -4361,13 +4357,6 @@ class AGIRSoloInterface:
                             f".validation-resource-panel-tests",
                             ".validation-resource-tab-tests",
                         )
-            questions = artifact.get("test", {}).get("questions", [])
-            index = matching_index(questions, "id")
-            if index is not None:
-                return (
-                    row_selector(index, panel="tests"),
-                    ".validation-resource-tab-tests",
-                )
         return heading, ""
 
     async def _focus_structured_target(

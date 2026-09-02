@@ -187,7 +187,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 ),
                 {
                     "id": "",
-                    "outcome_id": "",
                     "outcome_ids": [],
                     "ai_mode": AI_MODE_OFF,
                     "learning_context": "Presencial",
@@ -238,7 +237,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 {
                     "title": "",
                     "bullets": [],
-                    "outcome_id": "",
                     "outcome_ids": [],
                     "visual_mode": "diagrama",
                     "visual_asset_id": "",
@@ -651,7 +649,7 @@ def editor_field_value(target: dict[str, Any], field: FieldSpec) -> Any:
             if item.get("content_id")
         )
     if field.kind == "linked_outcomes":
-        identifiers = target.get(field.key) or [target.get("outcome_id", "")]
+        identifiers = target.get(field.key, [])
         return ", ".join(str(item) for item in identifiers if item)
     return format_editor_value(target.get(field.key), field.kind)
 
@@ -1129,7 +1127,7 @@ def editor_reference_value(target: dict[str, Any], field: FieldSpec) -> Any:
             if item.get("content_id")
         ]
     if field.kind == "linked_outcomes":
-        return list(target.get(field.key) or [target.get("outcome_id", "")])
+        return list(target.get(field.key, []))
     if field.kind == "csv":
         return list(target.get(field.key) or [])
     if field.kind == "taxonomy_verb":
@@ -1166,7 +1164,6 @@ def apply_editor_field_value(
     if field.kind == "linked_outcomes":
         identifiers = parse_editor_value(value, "csv")
         target[field.key] = identifiers
-        target["outcome_id"] = identifiers[0] if identifiers else ""
         return
     if field.kind == "alignment_status":
         status = str(value or "").strip()

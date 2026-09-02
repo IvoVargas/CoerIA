@@ -198,8 +198,9 @@ As versões, decisões, propostas de IA e respetivas decisões são guardadas em
 SQLite, por predefinição em `data/prism.db`. Na instalação pública, cada sessão
 fica associada ao identificador pseudónimo do docente autenticado e não é
 listada nem carregada por outro participante. O nome técnico do ficheiro e o
-pacote Python `prism` são mantidos temporariamente por compatibilidade com
-sessões anteriores. A interface permite retomar e eliminar as próprias sessões.
+pacote Python `prism` permanecem nomes exclusivamente internos do código e não
+implicam suporte a sessões antigas. A interface permite retomar e eliminar as
+próprias sessões.
 Ao entrar, o docente encontra primeiro uma página inicial e escolhe explicitamente
 se pretende iniciar uma nova sessão; as sessões guardadas permanecem acessíveis no
 menu lateral. A configuração da nova sessão apresenta contexto, fontes e
@@ -340,14 +341,13 @@ origem, tipo, dimensão e SHA-256. O estado técnico restaurável fica separado 
 `estado_tecnico.json` e o `LEIA-ME.txt` explica a estrutura do pacote.
 
 A ação **Restaurar cópia de segurança** valida a estrutura, os anexos e a
-compatibilidade do esquema antes de criar uma nova sessão na conta autenticada;
-as cópias da versão anterior, com `estado_sessao.json`, continuam a ser aceites.
+correspondência exata com o formato de backup e o esquema de sessão atuais antes
+de criar uma nova sessão na conta autenticada. Cópias produzidas por versões
+anteriores do CoerIA são rejeitadas explicitamente.
 O restauro nunca substitui a sessão de origem nem outra sessão existente. Os
 ficheiros carregados passam a ser preservados integralmente nas novas sessões.
-Numa sessão antiga, criada antes desta preservação, o ZIP inclui o texto já
-extraído e as imagens disponíveis, mas identifica os ficheiros originais que já
-não podem ser recuperados. Como a cópia pode conter materiais fornecidos pelo
-docente, deve ser guardada num local protegido. As chaves de API pertencem à
+Como a cópia pode conter materiais fornecidos pelo docente, deve ser guardada
+num local protegido. As chaves de API pertencem à
 configuração do servidor e não são incluídas. Descarregar a cópia é uma operação
 de leitura: não atualiza a sessão nem acrescenta um evento de auditoria. Depois
 de os bytes serem entregues à interface, o ficheiro ZIP temporário é eliminado;

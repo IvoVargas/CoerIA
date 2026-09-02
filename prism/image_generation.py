@@ -16,6 +16,7 @@ from .providers import (
     IAeduResponsesAdapter,
     validate_ai_provider,
 )
+from .resource_catalog import slide_outcome_ids
 
 
 DEFAULT_IMAGE_MODEL = "gpt-image-2"
@@ -168,7 +169,7 @@ def suggest_image_prompt(
         "publico": str(course.get("audience", "")),
         "numero_slide": slide_number,
         "titulo_slide": str(slide.get("title", "")),
-        "resultado_aprendizagem": str(slide.get("outcome_id", "")),
+        "resultados_aprendizagem": slide_outcome_ids(slide),
         "conteudo": [
             str(item) for item in slide.get("bullets", []) if str(item).strip()
         ],
@@ -233,7 +234,7 @@ def build_image_prompt(
         if str(item).strip()
     ]
     requested = str(slide.get("visual_prompt", "")).strip()
-    outcome_id = str(slide.get("outcome_id", "")).strip()
+    outcome_ids = slide_outcome_ids(slide)
 
     parts = [
         f"Cria uma ilustração educativa horizontal 16:9 para o slide {slide_number} "
@@ -245,8 +246,10 @@ def build_image_prompt(
         "Evita usar texto dentro da própria imagem; privilegia representação visual, "
         "objetos, relações, processos ou metáforas visuais claras.",
     ]
-    if outcome_id:
-        parts.append(f"Resultado de aprendizagem associado: {outcome_id}.")
+    if outcome_ids:
+        parts.append(
+            "Resultados de aprendizagem associados: " + ", ".join(outcome_ids) + "."
+        )
     if title:
         parts.append(f"Finalidade visual: {title}.")
     if items:

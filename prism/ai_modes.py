@@ -81,7 +81,7 @@ def sync_inherited_ai_mode(
 ) -> str:
     """Atualiza uma AE/TA com o modo comum dos resultados associados."""
 
-    outcome_ids = row.get("outcome_ids") or [row.get("outcome_id", "")]
+    outcome_ids = row.get("outcome_ids", [])
     inherited = linked_ai_mode(outcome_ids, outcomes)
     row["ai_mode"] = inherited or ""
     return row["ai_mode"]
@@ -128,7 +128,7 @@ def lesson_ai_mode_issues(state: dict[str, Any]) -> list[str]:
             if not isinstance(row, dict):
                 continue
             identifier = str(row.get("id", "")).strip()
-            outcome_ids = row.get("outcome_ids") or [row.get("outcome_id", "")]
+            outcome_ids = row.get("outcome_ids", [])
             inherited = linked_ai_mode(outcome_ids, outcomes)
             if identifier and inherited in AI_MODES:
                 component_modes[identifier] = inherited
@@ -180,10 +180,7 @@ def ai_mode_alignment_issues(state: dict[str, Any]) -> list[str]:
         teaching_by_id[identifier] = activity
         outcome_ids = [
             str(value).strip()
-            for value in (
-                activity.get("outcome_ids")
-                or [activity.get("outcome_id", "")]
-            )
+            for value in activity.get("outcome_ids", [])
             if str(value).strip()
         ]
         expected_modes = {

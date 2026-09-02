@@ -71,8 +71,6 @@ def available_validation_targets(stage: str, artifact: Any) -> list[dict[str, st
         for index, _section in enumerate(worksheet.get("sections", []), start=1):
             add(f"WORKSHEET:{index}", f"Secção {index} da ficha de aula")
         test_entries = artifact.get("tests", [])
-        if not test_entries and artifact.get("test", {}).get("questions"):
-            test_entries = [{"assessment_task_id": "", "test": artifact["test"]}]
         for test_entry in test_entries:
             task_id = _clean_identifier(test_entry.get("assessment_task_id"))
             for index, question in enumerate(

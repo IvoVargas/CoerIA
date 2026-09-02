@@ -119,7 +119,7 @@ class SourceImageSelectionTests(unittest.TestCase):
                 {
                     "title": "Capa",
                     "bullets": ["Introdução"],
-                    "outcome_id": "",
+                    "outcome_ids": [],
                     "visual_mode": "diagrama",
                     "visual_asset_id": "",
                     "visual_prompt": "",
@@ -132,7 +132,7 @@ class SourceImageSelectionTests(unittest.TestCase):
                 {
                     "title": "Conteúdo",
                     "bullets": ["Ponto 1", "Ponto 2"],
-                    "outcome_id": "A1",
+                    "outcome_ids": ["A1"],
                     "visual_mode": "diagrama",
                     "visual_asset_id": "",
                     "visual_prompt": "",
@@ -145,7 +145,7 @@ class SourceImageSelectionTests(unittest.TestCase):
                 {
                     "title": "Síntese",
                     "bullets": ["Conclusão"],
-                    "outcome_id": "",
+                    "outcome_ids": [],
                     "visual_mode": "diagrama",
                     "visual_asset_id": "",
                     "visual_prompt": "",

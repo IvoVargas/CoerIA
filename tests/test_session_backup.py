@@ -17,11 +17,11 @@ from prism.models import CourseInput
 from prism.persistence import SQLiteSessionStore
 from prism.session_backup import (
     BACKUP_ATTACHMENT_INDEX_NAME,
+    BACKUP_FORMAT_VERSION,
     BACKUP_MANIFEST_NAME,
     BACKUP_READABLE_STATE_NAME,
     BACKUP_README_NAME,
     BACKUP_STATE_NAME,
-    LEGACY_BACKUP_STATE_NAME,
     capture_source_attachments,
     create_session_backup,
     read_session_backup,
@@ -93,27 +93,45 @@ def _stored_session(service: ApplicationService, tmp_path: Path) -> dict:
     return state
 
 
-def _legacy_v1_backup(state: dict) -> bytes:
-    state_bytes = json.dumps(
-        state,
+def _rewritten_backup(
+    state: dict,
+    *,
+    format_version: int | None = None,
+    schema_version: int | None = None,
+) -> bytes:
+    backup_path = Path(create_session_backup(state))
+    try:
+        with zipfile.ZipFile(backup_path, "r") as archive:
+            archived_files = {
+                name: archive.read(name)
+                for name in archive.namelist()
+            }
+    finally:
+        backup_path.unlink(missing_ok=True)
+    manifest = json.loads(archived_files[BACKUP_MANIFEST_NAME].decode("utf-8"))
+    if format_version is not None:
+        manifest["format_version"] = format_version
+    if schema_version is not None:
+        technical_state = json.loads(
+            archived_files[BACKUP_STATE_NAME].decode("utf-8")
+        )
+        technical_state["schema_version"] = schema_version
+        state_bytes = json.dumps(
+            technical_state,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        archived_files[BACKUP_STATE_NAME] = state_bytes
+        manifest["state_bytes"] = len(state_bytes)
+        manifest["state_sha256"] = hashlib.sha256(state_bytes).hexdigest()
+    archived_files[BACKUP_MANIFEST_NAME] = json.dumps(
+        manifest,
         ensure_ascii=False,
-        separators=(",", ":"),
     ).encode("utf-8")
-    manifest = {
-        "format": "coeria-session-backup",
-        "format_version": 1,
-        "source_session_id": state["session_id"],
-        "state_file": LEGACY_BACKUP_STATE_NAME,
-        "state_bytes": len(state_bytes),
-        "state_sha256": hashlib.sha256(state_bytes).hexdigest(),
-    }
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(
-            BACKUP_MANIFEST_NAME,
-            json.dumps(manifest, ensure_ascii=False).encode("utf-8"),
-        )
-        archive.writestr(LEGACY_BACKUP_STATE_NAME, state_bytes)
+        for name, file_data in archived_files.items():
+            archive.writestr(name, file_data)
     return buffer.getvalue()
 
 
@@ -218,7 +236,8 @@ def test_backup_contains_readable_json_and_real_attachment_files(
     )
     assert decoded["source_attachments"][0]["data_base64"]
     assert manifest["format"] == "coeria-session-backup"
-    assert manifest["format_version"] == 2
+    assert manifest["format_version"] == BACKUP_FORMAT_VERSION
+    assert manifest["session_schema_version"] == SCHEMA_VERSION
     assert manifest["source_session_id"] == state["session_id"]
     assert manifest["unit_name"] == "Introdução à Psicologia"
     assert manifest["attachment_count"] == 3
@@ -356,19 +375,21 @@ def test_session_creation_and_initial_edit_preserve_then_remove_source_file(
         ).fetchone()[0] == 0
 
 
-def test_restore_accepts_legacy_v1_backup(tmp_path: Path) -> None:
+@pytest.mark.parametrize("format_version", [1, 2])
+def test_restore_rejects_older_backup_formats(
+    tmp_path: Path,
+    format_version: int,
+) -> None:
     service = ApplicationService(
         SQLiteSessionStore(tmp_path / "coeria.db"),
         owner_id="D01",
     )
     original = _stored_session(service, tmp_path)
 
-    restored = service.restore_session_backup(_legacy_v1_backup(original))
-
-    assert restored["session_id"] != original["session_id"]
-    assert restored["course"] == original["course"]
-    assert restored["source_images"] == original["source_images"]
-    assert restored["restored_from_backup"]["format_version"] == 1
+    with pytest.raises(ValueError, match="formato de backup não é suportada"):
+        service.restore_session_backup(
+            _rewritten_backup(original, format_version=format_version)
+        )
 
 
 def test_restore_rejects_a_tampered_state(tmp_path: Path) -> None:
@@ -418,8 +439,25 @@ def test_restore_rejects_a_backup_from_a_future_schema(tmp_path: Path) -> None:
         owner_id="D01",
     )
     state = _stored_session(service, tmp_path)
-    state["schema_version"] = SCHEMA_VERSION + 1
-    backup_data = Path(create_session_backup(state)).read_bytes()
+    backup_data = _rewritten_backup(
+        state,
+        schema_version=SCHEMA_VERSION + 1,
+    )
 
-    with pytest.raises(ValueError, match="versão mais recente"):
+    with pytest.raises(ValueError, match="já não é suportada"):
+        service.restore_session_backup(backup_data)
+
+
+def test_restore_rejects_a_backup_from_an_older_schema(tmp_path: Path) -> None:
+    service = ApplicationService(
+        SQLiteSessionStore(tmp_path / "coeria.db"),
+        owner_id="D01",
+    )
+    state = _stored_session(service, tmp_path)
+    backup_data = _rewritten_backup(
+        state,
+        schema_version=SCHEMA_VERSION - 1,
+    )
+
+    with pytest.raises(ValueError, match="já não é suportada"):
         service.restore_session_backup(backup_data)

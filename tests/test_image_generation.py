@@ -72,7 +72,7 @@ class ImageGenerationTests(unittest.TestCase):
             "presentation_outline": [
                 {
                     "title": "Capa",
-                    "outcome_id": "",
+                    "outcome_ids": [],
                     "visual_mode": "diagrama",
                     "visual_asset_id": "",
                     "visual_prompt": "",
@@ -83,7 +83,7 @@ class ImageGenerationTests(unittest.TestCase):
                 },
                 {
                     "title": "Conceito",
-                    "outcome_id": "RA1",
+                    "outcome_ids": ["RA1"],
                     "visual_mode": "ia",
                     "visual_asset_id": "",
                     "visual_prompt": "Representar um processo em três etapas, sem texto.",

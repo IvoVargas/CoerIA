@@ -17,10 +17,9 @@ def slide_outcome_ids(
     slide: dict[str, Any],
     allowed_ids: set[str] | None = None,
 ) -> list[str]:
-    """Normaliza os resultados associados a um slide.
+    """Normaliza os resultados associados a um slide no esquema atual.
 
-    ``outcome_id`` é mantido como compatibilidade com apresentações anteriores.
-    As ligações são lidas apenas dos campos estruturados: mencionar ``RA1`` num
+    As ligações são lidas apenas de ``outcome_ids``: mencionar ``RA1`` num
     título ou bullet não cria, por si só, uma relação pedagógica.
     """
 
@@ -28,10 +27,6 @@ def slide_outcome_ids(
     raw_identifiers = slide.get("outcome_ids", [])
     if isinstance(raw_identifiers, list):
         identifiers.extend(str(value).strip().upper() for value in raw_identifiers)
-    legacy_identifier = str(slide.get("outcome_id", "")).strip().upper()
-    if legacy_identifier:
-        identifiers.append(legacy_identifier)
-
     normalized: list[str] = []
     for identifier in identifiers:
         if not identifier or (allowed_ids is not None and identifier not in allowed_ids):
@@ -252,7 +247,7 @@ def build_assessment_grid(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def blank_extended_resources(selected_types: list[str]) -> dict[str, Any]:
-    """Estrutura comum para sessões novas e migrações."""
+    """Estrutura comum dos recursos nas sessões atuais."""
 
     return {
         "selected_types": list(selected_types),
@@ -263,12 +258,6 @@ def blank_extended_resources(selected_types: list[str]) -> dict[str, Any]:
             "overview": "",
             "instructions": "",
             "sections": [],
-        },
-        "test": {
-            "title": "",
-            "instructions": "",
-            "total_points": 0,
-            "questions": [],
         },
         "tests": [],
         "practical_activity": {

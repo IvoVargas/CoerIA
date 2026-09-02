@@ -1,9 +1,4 @@
-"""Relações curriculares derivadas dos artefactos aprovados.
-
-As sessões atuais guardam as ligações aos resultados nos conteúdos. As sessões
-anteriores à versão 12 podem ainda guardá-las nos próprios resultados; o fallback
-abaixo mantém essas sessões consultáveis durante a migração.
-"""
+"""Relações curriculares derivadas dos artefactos aprovados."""
 
 from __future__ import annotations
 
@@ -22,20 +17,6 @@ def content_ids_for_outcome(state: dict[str, Any], outcome_id: str) -> list[str]
         and outcome_id in content.get("outcome_ids", [])
         and content.get("id")
     ]
-    if not identifiers:
-        outcome = next(
-            (
-                item
-                for item in state.get("learning_outcomes", [])
-                if str(item.get("id", "")) == outcome_id
-            ),
-            {},
-        )
-        identifiers = [
-            str(link.get("content_id", ""))
-            for link in outcome.get("content_links", [])
-            if link.get("content_id")
-        ]
     return list(dict.fromkeys(identifiers))
 
 
@@ -61,7 +42,7 @@ def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
             item
             for item in state.get("teaching_activities", [])
             if isinstance(item, dict)
-            and outcome_id in (item.get("outcome_ids") or [item.get("outcome_id")])
+            and outcome_id in item.get("outcome_ids", [])
         ]
         content_ids = content_ids_for_outcome(state, outcome_id)
         teaching_ids = sorted(

@@ -175,7 +175,7 @@ STAGE_REQUIREMENTS = {
         "A soma das durações corresponde exatamente às horas de contacto."
     ),
     "teaching_activities": (
-        "Lista de objetos {id, outcome_id, outcome_ids, learning_context, "
+        "Lista de objetos {id, outcome_ids, learning_context, "
         "ai_mode, activity, method, practice, support, feedback_strategy}. Os IDs são "
         "obrigatoriamente AE1, AE2, ... pela ordem das linhas; o conjunto deve "
         "cobrir todos os resultados, herdar o respetivo ai_mode e explicitar prática, "
@@ -216,7 +216,7 @@ RESOURCE_ARTIFACT_FIELDS = {
 
 RESOURCE_REQUIREMENTS = {
     RESOURCE_PRESENTATION: (
-        "Lista de slides com title, bullets, outcome_id, outcome_ids, visual_mode, visual_asset_id, "
+        "Lista de slides com title, bullets, outcome_ids, visual_mode, visual_asset_id, "
         "visual_prompt, visual_kind, visual_title, visual_items, visual_source e alt_text. Cobre todos os "
         "resultados de aprendizagem e inclui slides de capa e síntese. A aplicação "
         "acrescenta deterministicamente, antes da síntese, uma secção dedicada às "
@@ -366,7 +366,6 @@ def _schema_for(
                 "additionalProperties": False,
                 "properties": {
                     "id": {"type": "string", "pattern": "^AE[1-9][0-9]*$"},
-                    "outcome_id": string,
                     "outcome_ids": {"type": "array", "items": string},
                     "ai_mode": {"type": "string", "enum": list(AI_MODES)},
                     "learning_context": {"type": "string", "enum": list(LEARNING_CONTEXTS)},
@@ -377,7 +376,7 @@ def _schema_for(
                     "feedback_strategy": string,
                 },
                 "required": [
-                    "id", "outcome_id", "outcome_ids", "ai_mode",
+                    "id", "outcome_ids", "ai_mode",
                     "learning_context", "activity", "method", "practice",
                     "support", "feedback_strategy"
                 ],
@@ -396,7 +395,6 @@ def _schema_for(
                         "properties": {
                             "title": string,
                             "bullets": {"type": "array", "items": string},
-                            "outcome_id": string,
                             "outcome_ids": {"type": "array", "items": string},
                             "visual_mode": {
                                 "type": "string",
@@ -419,7 +417,7 @@ def _schema_for(
                             "alt_text": string,
                         },
                         "required": [
-                            "title", "bullets", "outcome_id", "outcome_ids", "visual_mode",
+                            "title", "bullets", "outcome_ids", "visual_mode",
                             "visual_asset_id", "visual_prompt", "visual_kind", "visual_title",
                             "visual_items", "visual_source", "alt_text"
                         ],
@@ -530,6 +528,8 @@ def _schema_for(
             artifact_schema["properties"]["presentation_outline"]
         )
         test_schema = deepcopy(artifact_schema["properties"]["test"])
+        artifact_schema["properties"].pop("test")
+        artifact_schema["required"].remove("test")
         artifact_schema["properties"].update(
             {
                 "lesson_presentations": {
@@ -752,10 +752,6 @@ def _schema_for(
                 if item.get("id")
             ]
             slide_properties = artifact_schema["items"]["properties"]
-            slide_properties["outcome_id"] = {
-                "type": "string",
-                "enum": ["", *outcome_ids],
-            }
             slide_properties["outcome_ids"]["items"] = {
                 "type": "string",
                 "enum": outcome_ids,
@@ -949,8 +945,7 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
             "allowed_teaching_activities": [
                 {
                     "id": activity.get("id", ""),
-                    "outcome_ids": activity.get("outcome_ids")
-                    or [activity.get("outcome_id", "")],
+                    "outcome_ids": activity.get("outcome_ids", []),
                     "ai_mode": activity.get("ai_mode", AI_MODE_OFF),
                     "activity": activity.get("activity", ""),
                 }
@@ -1001,8 +996,7 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
             linked_teaching_ids = [
                 str(item["id"])
                 for item in teaching_activities
-                if outcome_id
-                in (item.get("outcome_ids") or [item.get("outcome_id", "")])
+                if outcome_id in item.get("outcome_ids", [])
             ]
             alignment_chains.append(
                 {
@@ -1043,9 +1037,7 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                     "id": str(item["id"]),
                     "kind": "atividade_de_ensino_aprendizagem",
                     "description": str(item.get("activity", "")),
-                    "outcome_ids": list(
-                        item.get("outcome_ids") or [item.get("outcome_id", "")]
-                    ),
+                    "outcome_ids": list(item.get("outcome_ids", [])),
                     "learning_context": str(item.get("learning_context", "")),
                     "practice": str(item.get("practice", "")),
                 }
@@ -1220,13 +1212,14 @@ def _canonicalize_teaching_activities(
     for received, item in zip(artifact, normalized):
         if not isinstance(received, dict) or not isinstance(item, dict):
             continue
+        item.pop("outcome_id", None)
         changes: dict[str, Any] = {}
         if received.get("id") != item.get("id"):
             changes["id"] = {
                 "received": received.get("id"),
                 "used": item.get("id"),
             }
-        outcome_ids = item.get("outcome_ids") or [item.get("outcome_id", "")]
+        outcome_ids = item.get("outcome_ids", [])
         inherited_mode = linked_ai_mode(
             outcome_ids,
             state.get("learning_outcomes", []),
@@ -1685,12 +1678,7 @@ def _canonicalize_resource_presentation_outcomes(
             slide,
             allowed_ids,
         )
-        legacy_value = str(slide.get("outcome_id", "")).strip()
-        canonical_legacy = normalized_ids[0] if len(normalized_ids) == 1 else ""
-        if (
-            slide.get("outcome_ids") != normalized_ids
-            or legacy_value != canonical_legacy
-        ):
+        if slide.get("outcome_ids") != normalized_ids:
             corrections.append(
                 {
                     "resource": RESOURCE_PRESENTATION,
@@ -1703,7 +1691,7 @@ def _canonicalize_resource_presentation_outcomes(
                 }
             )
         slide["outcome_ids"] = normalized_ids
-        slide["outcome_id"] = canonical_legacy
+        slide.pop("outcome_id", None)
     return artifact, corrections
 
 
@@ -1777,7 +1765,6 @@ def _canonicalize_presentation_assessment_overview(
             {
                 "title": title,
                 "bullets": bullets,
-                "outcome_id": slide_outcomes[0] if len(slide_outcomes) == 1 else "",
                 "outcome_ids": slide_outcomes,
                 "visual_mode": "diagrama",
                 "visual_asset_id": "",
@@ -1886,7 +1873,7 @@ def _canonicalize_resource_visuals(
 
     def linked_value(items: list[dict[str, Any]], outcome_id: str, key: str) -> str:
         for item in items:
-            if outcome_id in item.get("outcome_ids", [item.get("outcome_id")]):
+            if outcome_id in item.get("outcome_ids", []):
                 return compact_item(item.get(key))
         return ""
 
@@ -2051,11 +2038,11 @@ def _require_exact_coverage(
         raise AgentGenerationError(message)
 
 
-def _flattened_ids(artifact: list[dict[str, Any]], plural_key: str, legacy_key: str) -> list[str]:
+def _flattened_ids(artifact: list[dict[str, Any]], plural_key: str) -> list[str]:
     return [
         str(identifier)
         for item in artifact
-        for identifier in (item.get(plural_key) or [item.get(legacy_key, "")])
+        for identifier in item.get(plural_key, [])
         if identifier
     ]
 
@@ -2243,7 +2230,7 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
 
     if stage == "teaching_activities":
         expected = {item["id"] for item in state["learning_outcomes"]}
-        covered = set(_flattened_ids(artifact, "outcome_ids", "outcome_id"))
+        covered = set(_flattened_ids(artifact, "outcome_ids"))
         if covered != expected:
             raise AgentGenerationError(
                 "As atividades de ensino-aprendizagem devem cobrir todos e apenas "
@@ -2252,7 +2239,7 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         invalid_ai_mode_rows = []
         for item in artifact:
             inherited_mode = linked_ai_mode(
-                item.get("outcome_ids") or [item.get("outcome_id", "")],
+                item.get("outcome_ids", []),
                 state.get("learning_outcomes", []),
             )
             if (
@@ -2297,8 +2284,7 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 if not any(
                     outcome_id
                     in (
-                        teaching_by_id[teaching_id].get("outcome_ids")
-                        or [teaching_by_id[teaching_id].get("outcome_id", "")]
+                        teaching_by_id[teaching_id].get("outcome_ids", [])
                     )
                     for teaching_id in teaching_links
                     if teaching_id in teaching_by_id
@@ -2442,8 +2428,6 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             ]
             if RESOURCE_TEST in requested:
                 test_entries = artifact.get("tests", [])
-                if not test_entries and artifact.get("test", {}).get("questions"):
-                    test_entries = [{"test": artifact["test"]}]
                 for entry in test_entries:
                     test_data = entry.get("test", {})
                     question_ids = [

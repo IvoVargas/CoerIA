@@ -30,7 +30,7 @@ from .models import (
     SEMESTER_OPTIONS,
     validate_resource_types,
 )
-from .persistence import SQLiteSessionStore, migrate_legacy_state
+from .persistence import SQLiteSessionStore
 from .quality import attach_quality_report
 from .source_reduction import reduce_source_text
 from .providers import configured_ai_provider
@@ -39,9 +39,9 @@ from .session_backup import (
     create_session_backup,
     read_session_backup,
 )
+from .session_schema import require_current_session_schema
 from .workflow import (
     ResourceGenerationError,
-    SCHEMA_VERSION,
     STAGE_LABELS,
     STAGE_ORDER,
     apply_manual_edit,
@@ -152,19 +152,10 @@ class ApplicationService:
 
         imported_state, manifest = read_session_backup(data)
         try:
-            imported_schema = int(imported_state.get("schema_version", 1) or 1)
+            restored = deepcopy(require_current_session_schema(imported_state))
         except (TypeError, ValueError) as error:
-            raise ValueError("A cópia contém uma versão de dados inválida.") from error
-        if imported_schema > SCHEMA_VERSION:
             raise ValueError(
-                "A cópia foi criada por uma versão mais recente do CoerIA. "
-                "Atualize a aplicação antes de restaurar."
-            )
-        try:
-            restored = migrate_legacy_state(deepcopy(imported_state))
-        except (AttributeError, KeyError, TypeError, ValueError) as error:
-            raise ValueError(
-                "A cópia contém um estado de sessão incompatível ou incompleto."
+                "A cópia pertence a uma versão do CoerIA que já não é suportada."
             ) from error
         course = restored.get("course")
         if not isinstance(course, dict) or not str(course.get("unit_name", "")).strip():

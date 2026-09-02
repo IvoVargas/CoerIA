@@ -473,7 +473,7 @@ def _many_to_many_coverage_check(
     received = {
         str(identifier)
         for item in items
-        for identifier in (item.get("outcome_ids") or [item.get("outcome_id", "")])
+        for identifier in item.get("outcome_ids", [])
         if identifier
     }
     identifiers = [str(item.get("id", "")) for item in items]
@@ -896,8 +896,11 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             resource_data.get("lesson_presentations")
         ),
         RESOURCE_WORKSHEET: bool(resource_data.get("lesson_worksheet", {}).get("sections")),
-        RESOURCE_TEST: bool(resource_data.get("tests"))
-        or bool(resource_data.get("test", {}).get("questions")),
+        RESOURCE_TEST: bool(
+            resource_data.get("test", {}).get("questions")
+            if state.get("resource_generation_scope") == RESOURCE_TEST
+            else resource_data.get("tests")
+        ),
         RESOURCE_PRACTICAL: bool(resource_data.get("practical_activity", {}).get("steps")),
         RESOURCE_LESSON_PLAN: bool(resource_data.get("lesson_plan", {}).get("lessons")),
         RESOURCE_ASSESSMENT_GRID: bool(
@@ -1203,11 +1206,6 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             for test_entry in resource_data.get("tests", [])
             for item in test_entry.get("test", {}).get("questions", [])
             if item.get("outcome_id")
-        }
-        or {
-            str(item.get("outcome_id", ""))
-            for item in resource_data.get("test", {}).get("questions", [])
-            if item.get("outcome_id")
         },
         RESOURCE_PRACTICAL: {
             str(outcome_id)
@@ -1254,29 +1252,39 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         )
 
     if RESOURCE_TEST in requested:
-        test_entries = resource_data.get("tests", [])
-        if not test_entries and resource_data.get("test", {}).get("questions"):
+        if state.get("resource_generation_scope") == RESOURCE_TEST:
+            item_scope = state.get("resource_item_scope", {})
             test_entries = [
                 {
-                    "assessment_task_id": "legado",
-                    "outcome_ids": sorted(expected_ids),
+                    "assessment_task_id": item_scope.get(
+                        "assessment_task_id", ""
+                    ),
+                    "outcome_ids": list(item_scope.get("outcome_ids", [])),
                     "test": resource_data.get("test", {}),
                 }
             ]
+        else:
+            test_entries = resource_data.get("tests", [])
         test_issues: list[str] = []
-        legacy_test = bool(
-            len(test_entries) == 1
-            and str(test_entries[0].get("assessment_task_id", "")) == "legado"
+        expected_tasks = (
+            {
+                str(
+                    state.get("resource_item_scope", {}).get(
+                        "assessment_task_id", ""
+                    )
+                )
+            }
+            if state.get("resource_generation_scope") == RESOURCE_TEST
+            else set(state.get("resource_scopes", {}).get("tests", []))
         )
-        expected_tasks = set(state.get("resource_scopes", {}).get("tests", []))
+        expected_tasks.discard("")
         received_tasks = {
             str(item.get("assessment_task_id", ""))
             for item in test_entries
-            if str(item.get("assessment_task_id", "")) != "legado"
         }
-        if not legacy_test and len(received_tasks) != len(test_entries):
+        if len(received_tasks) != len(test_entries):
             test_issues.append("cada tarefa deve ter exatamente um teste")
-        if not legacy_test and received_tasks != expected_tasks:
+        if received_tasks != expected_tasks:
             test_issues.append(
                 f"tarefas esperadas: {sorted(expected_tasks)}; recebidas: {sorted(received_tasks)}"
             )
@@ -1287,15 +1295,12 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 item.get("points", 0) for item in test_data.get("questions", [])
             )
             declared_points = test_data.get("total_points", 0)
-            if task_id == "legado":
-                expected_test_outcomes = set(expected_ids)
-            else:
-                try:
-                    current_scope = assessment_scope(state, task_id)
-                    expected_test_outcomes = set(current_scope.get("outcome_ids", []))
-                except ValueError as error:
-                    test_issues.append(str(error))
-                    expected_test_outcomes = set()
+            try:
+                current_scope = assessment_scope(state, task_id)
+                expected_test_outcomes = set(current_scope.get("outcome_ids", []))
+            except ValueError as error:
+                test_issues.append(str(error))
+                expected_test_outcomes = set()
             declared_test_outcomes = set(entry.get("outcome_ids", []))
             covered_test_outcomes = {
                 str(item.get("outcome_id", ""))

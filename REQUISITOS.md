@@ -227,8 +227,8 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   **Verificar esta etapa com IA** como ações selecionáveis que desloquem a página
   e realcem o campo, linha, recurso ou artefacto relacionado. Cada observação de
   IA deve guardar um destino estrutural escolhido entre os elementos existentes;
-  não localizar linhas por correspondência textual parcial. Num parecer legado
-  sem destino válido, realçar o título do conteúdo da etapa em vez do cartão
+  não localizar linhas por correspondência textual parcial. Num parecer sem
+  destino válido, realçar o título do conteúdo da etapa em vez do cartão
   inteiro. Usar o mesmo componente visual nos dois tipos de verificação e, após
   **Validar dados**, deslocar automaticamente a página para o conjunto de
   resultados. Para a duração calculada, realçar conjuntamente **Horas de
@@ -401,8 +401,8 @@ conjunto selecionado. O plano de aulas e a grelha de avaliação não devem cham
 um fornecedor de IA. No fim, o sistema deve validar também o conjunto agregado
 antes de o apresentar ao docente.
 Os alvos das apresentações das aulas e dos testes devem ser sempre selecionados
-explicitamente. Nem a migração de uma sessão antiga nem o caminho sequencial
-podem interpretar um âmbito vazio como «todas as aulas» ou «todas as tarefas».
+explicitamente. Nenhum caminho da aplicação pode interpretar um âmbito vazio
+como «todas as aulas» ou «todas as tarefas».
 Plano de aulas, grelha de avaliação, apresentação geral, ficha de aula e atividade
 prática permanecem recursos globais, identificados como tal na interface.
 
@@ -489,15 +489,14 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
 - Incluir um JSON indentado e organizado para consulta humana e cópia manual dos
   textos, separando-o do estado técnico necessário ao restauro.
 - Disponibilizar os anexos como ficheiros normais dentro do ZIP e incluir um
-  índice legível com nome, origem, tipo, dimensão e SHA-256; quando uma sessão
-  antiga apenas conservar o texto extraído, identificar a fonte original como
-  indisponível em vez de simular a sua recuperação.
+  índice legível com nome, origem, tipo, dimensão e SHA-256.
 - Incluir na cópia um manifesto versionado com dimensão e SHA-256 dos estados e
-  rejeitar ficheiros incompletos, adulterados, excessivos ou criados por um
-  esquema de dados posterior ao suportado.
+  rejeitar ficheiros incompletos, adulterados, excessivos ou cujo formato de
+  backup ou esquema de sessão não corresponda exatamente à versão atual.
 - Restaurar uma cópia como uma nova sessão pertencente ao utilizador autenticado,
   sem substituir a sessão de origem ou qualquer sessão existente, permitindo
-  repetir o mesmo restauro de forma segura e importar o formato anterior.
+  repetir o mesmo restauro de forma segura. Não importar formatos ou esquemas
+  pertencentes a versões anteriores da aplicação.
 - Tratar a descarga da cópia como leitura, sem alterar a data, o estado ou a
   auditoria da sessão de origem, e eliminar o ZIP temporário depois de preparar
   a resposta de download.

@@ -416,8 +416,16 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
             }
         ],
     }
-    state["resources"]["test"]["questions"] = [
-        {"id": "Q1", "outcome_ids": ["RA3"], "question": "Analise o caso."}
+    state["resources"]["tests"] = [
+        {
+            "assessment_task_id": "TA1",
+            "outcome_ids": ["RA3"],
+            "test": {
+                "questions": [
+                    {"id": "Q1", "outcome_id": "RA3", "question": "Analise o caso."}
+                ]
+            },
+        }
     ]
 
     class CompactOutcomeProposalAgent:
@@ -450,7 +458,9 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
     assert accepted["assessment_activities"][0]["teaching_activity_ids"] == ["AE1"]
     assert accepted["assessment_activities"][0]["outcome_ids"] == ["RA2"]
     assert accepted["pedagogical_design"] == state["pedagogical_design"]
-    assert accepted["resources"]["test"]["questions"][0]["outcome_ids"] == ["RA2"]
+    assert accepted["resources"]["tests"][0]["test"]["questions"][0][
+        "outcome_id"
+    ] == "RA2"
 
 
 def test_localized_assistance_generates_only_the_selected_fragment() -> None:
@@ -687,7 +697,7 @@ def test_resource_selection_can_change_without_generation() -> None:
 
     assert updated["resource_types"] == [RESOURCE_TEST]
     assert updated["resources"]["selected_types"] == [RESOURCE_TEST]
-    assert updated["resources"]["test"]["questions"] == []
+    assert updated["resources"]["tests"] == []
 
 
 def test_resource_selection_is_restricted_to_the_resources_stage() -> None:

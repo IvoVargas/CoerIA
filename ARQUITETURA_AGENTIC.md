@@ -76,7 +76,7 @@ Os resultados da validação inicial transportam um destino estrutural explícit
 O esquema do crítico obriga também cada observação a escolher um destino entre os
 elementos existentes no artefacto. A interface converte essa chave num seletor
 derivado da estrutura e da posição da linha, slide ou secção, sem procurar texto
-parcial. Pareceres legados sem destino válido recaem no título do conteúdo. A
+parcial. Pareceres sem destino estrutural válido recaem no título do conteúdo. A
 deslocação é acompanhada por um realce temporário; na carga de trabalho, o destino
 agrupa horas de contacto e trabalho autónomo. A validação inicial desloca
 automaticamente a página para o parecer e reutiliza o mesmo componente dos
@@ -223,15 +223,12 @@ consultada quando o docente pede uma operação de IA. A OpenAI usa a Responses
 API com saídas estruturadas; o adaptador IAedu conserva a mesma interface
 interna e entrega os resultados aos mesmos esquemas e guardrails.
 
-## Migração e rastreabilidade
+## Persistência e rastreabilidade
 
-Sessões anteriores são migradas para o esquema 31 sem apagar artefactos ou
-versões. O ponto corrente é preservado, as estruturas ausentes são inicializadas
-vazias e estados antigos como `stale` passam a `needs_review`. Nas sessões que já
-tinham o teste singular selecionado, a migração conserva esse recurso e prepara
-como âmbito as tarefas de avaliação existentes; as novas coleções permanecem
-compatíveis com o campo legado durante a transição. As propostas e pareceres
-futuros ficam separados em `ai_proposals` e `ai_reviews`.
+Cada sessão nova é gravada exclusivamente no esquema corrente. A leitura, a
+gravação e o restauro verificam a versão exata e rejeitam estados de versões
+anteriores ou posteriores; não existe um caminho de migração histórica. As
+propostas e pareceres ficam separados em `ai_proposals` e `ai_reviews`.
 
 As cópias de segurança por sessão usam um ZIP com duas representações
 complementares. `sessao.json` é indentado, organizado por secções em português e
@@ -246,19 +243,17 @@ binários e as miniaturas. O `LEIA-ME.txt` documenta a estrutura para o docente.
 Os novos carregamentos são conservados integralmente numa tabela binária de
 anexos associada à sessão, além do texto e das imagens extraídos. O JSON de
 estado guarda apenas os metadados destes ficheiros, evitando que a listagem de
-sessões carregue representações Base64 potencialmente grandes. Para sessões
-criadas antes desta regra, o pacote não
-inventa os documentos já eliminados do servidor: inclui os textos e imagens que
-a sessão ainda possui e enumera as fontes originais indisponíveis. O manifesto
+sessões carregue representações Base64 potencialmente grandes. O pacote inclui
+os textos, imagens e ficheiros originais que pertencem à sessão atual. O manifesto
 identifica o formato e a aplicação de origem e protege os JSON por dimensão e
 SHA-256; o índice protege individualmente os anexos. Antes do restauro são
 verificados o tamanho comprimido e descomprimido, caminhos, duplicados,
-encriptação, estrutura, integridade e compatibilidade de esquema. O leitor
-continua a aceitar o formato 1, composto por `manifest.json` e
-`estado_sessao.json`. O estado aceite passa pelas mesmas migrações da persistência
-normal, perde o identificador anterior e é guardado com um UUID novo sob o
-utilizador autenticado; desta forma, a importação não pode sobrescrever sessões
-nem apropriar-se do identificador de outro utilizador.
+encriptação, estrutura, integridade e correspondência exata com o formato de
+backup e o esquema de sessão atuais. Não existem migrações de estados
+históricos: cópias de versões anteriores são rejeitadas. O estado aceite perde o
+identificador anterior e é guardado com um UUID novo sob o utilizador
+autenticado; desta forma, a importação não pode sobrescrever sessões nem
+apropriar-se do identificador de outro utilizador.
 
 A descarga de uma cópia é deliberadamente um caso de uso de leitura: carrega a
 sessão com os anexos binários, constrói o ZIP e não chama a persistência nem

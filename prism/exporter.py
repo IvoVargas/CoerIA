@@ -1499,9 +1499,8 @@ def _export_worksheet(state: dict[str, Any], output_path: Path) -> None:
 def _export_test(
     state: dict[str, Any],
     output_path: Path,
-    data: dict[str, Any] | None = None,
+    data: dict[str, Any],
 ) -> None:
-    data = data or state["resources"]["test"]
     document = Document()
     _set_document_defaults(document)
     _add_document_title(document, data["title"], state["course"]["unit_name"])
@@ -1587,9 +1586,8 @@ def _export_worksheet_latex(state: dict[str, Any], output_path: Path) -> None:
 def _export_test_latex(
     state: dict[str, Any],
     output_path: Path,
-    data: dict[str, Any] | None = None,
+    data: dict[str, Any],
 ) -> None:
-    data = data or state["resources"]["test"]
     body = [
         _latex_escape(data.get("instructions", "")),
         rf"\textbf{{Cotação total:}} {_latex_escape(data.get('total_points', 0))} pontos",
@@ -1887,10 +1885,6 @@ def export_resource_package(
                 _register_latex_document(generated, path, compiled_pdfs)
         if RESOURCE_TEST in selected:
             test_entries = resources.get("tests", [])
-            if not test_entries and resources.get("test", {}).get("questions"):
-                test_entries = [
-                    {"assessment_task_id": "", "test": resources["test"]}
-                ]
             for entry in test_entries:
                 raw_task_id = str(entry.get("assessment_task_id", "")).strip()
                 task_suffix = f"_{_safe_stem(raw_task_id)}" if raw_task_id else ""
