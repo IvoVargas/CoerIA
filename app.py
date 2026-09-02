@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 import json
 import logging
 from pathlib import Path
 from queue import Empty, SimpleQueue
+from secrets import token_urlsafe
 from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Any
+from urllib.parse import quote
 
-from fastapi import Request
-from fastapi.responses import RedirectResponse
+from fastapi import HTTPException, Request
+from fastapi.responses import RedirectResponse, Response
 from nicegui import app, events, run, ui
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -147,6 +150,8 @@ USER_ERRORS = (
 LOGGER = logging.getLogger(__name__)
 UNRESTRICTED_PAGE_ROUTES = {"/favicon.ico", "/login"}
 ERROR_NOTIFICATION_TIMEOUT_SECONDS = 12
+DOWNLOAD_PAYLOAD_TTL_SECONDS = 300
+_PENDING_DOWNLOADS: dict[str, tuple[bytes, str, str]] = {}
 INITIAL_DATA_STAGE = "initial_data"
 INITIAL_DATA_LABEL = "Dados iniciais"
 DISPLAY_STAGE_COUNT = len(STAGE_ORDER) + 1
@@ -161,6 +166,41 @@ STAGE_STATUS_CSS_CLASSES = {
     "awaiting_review": "stage-status-awaiting-review",
     "generating": "stage-status-generating",
 }
+
+
+async def _expire_download_payload(token: str) -> None:
+    await asyncio.sleep(DOWNLOAD_PAYLOAD_TTL_SECONDS)
+    _PENDING_DOWNLOADS.pop(token, None)
+
+
+def _register_download_payload(
+    content: bytes,
+    filename: str,
+    media_type: str,
+) -> str:
+    """Regista um download em memória, de utilização única e curta duração."""
+
+    token = token_urlsafe(32)
+    _PENDING_DOWNLOADS[token] = (content, filename, media_type)
+    asyncio.get_running_loop().create_task(_expire_download_payload(token))
+    return f"/_coeria/download/{token}"
+
+
+@app.get("/_coeria/download/{token}")
+def _serve_download_payload(token: str) -> Response:
+    payload = _PENDING_DOWNLOADS.pop(token, None)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Download indisponível ou expirado.")
+    content, filename, media_type = payload
+    encoded_filename = quote(filename, safe="")
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 def _replace_error_notification(current: Any | None, message: str) -> Any:
@@ -1773,8 +1813,13 @@ class AGIRSoloInterface:
                 self.service.backup_session,
                 session_id,
             )
-            ui.download(
+            download_url = _register_download_payload(
                 backup_data,
+                backup_filename,
+                "application/zip",
+            )
+            ui.download(
+                download_url,
                 filename=backup_filename,
                 media_type="application/zip",
             )
@@ -5325,8 +5370,13 @@ class AGIRSoloInterface:
                     self.export_document_format
                 ),
             )
-            ui.download(
+            download_url = _register_download_payload(
                 package_data,
+                package_filename,
+                "application/zip",
+            )
+            ui.download(
+                download_url,
                 filename=package_filename,
                 media_type="application/zip",
             )

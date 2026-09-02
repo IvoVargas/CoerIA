@@ -2045,10 +2045,19 @@ async def test_export_does_not_rebuild_workspace_before_download(monkeypatch) ->
     interface._hide_busy = lambda: events.append("hide")
     interface._render_workspace = lambda _message: events.append("unexpected-render")
 
+    def register_download(content, filename, media_type):
+        assert content == b"zip-data"
+        assert filename == "coeria_teste.zip"
+        assert media_type == "application/zip"
+        events.append("register")
+        return "/_coeria/download/test-token"
+
+    monkeypatch.setattr(app, "_register_download_payload", register_download)
+
     monkeypatch.setattr(
         app.ui,
         "download",
-        lambda *_args, **_kwargs: events.append("download"),
+        lambda source, **_kwargs: events.append(f"download:{source}"),
     )
 
     def notify_without_render(*_args, **_kwargs) -> None:
@@ -2059,7 +2068,30 @@ async def test_export_does_not_rebuild_workspace_before_download(monkeypatch) ->
 
     await interface.handle_export()
 
-    assert events == ["busy", "download", "notify", "hide"]
+    assert events == [
+        "busy",
+        "register",
+        "download:/_coeria/download/test-token",
+        "notify",
+        "hide",
+    ]
+
+
+def test_registered_download_response_is_single_use() -> None:
+    token = "single-use-token"
+    app._PENDING_DOWNLOADS[token] = (
+        b"zip-data",
+        "pacote pedagógico.zip",
+        "application/zip",
+    )
+
+    response = app._serve_download_payload(token)
+
+    assert response.body == b"zip-data"
+    assert response.media_type == "application/zip"
+    assert response.headers["cache-control"] == "no-store"
+    assert "pacote%20pedag%C3%B3gico.zip" in response.headers["content-disposition"]
+    assert token not in app._PENDING_DOWNLOADS
 
 
 def test_application_service_cannot_load_another_owner_session(tmp_path: Path) -> None:
