@@ -5330,9 +5330,9 @@ class AGIRSoloInterface:
                 filename=package_filename,
                 media_type="application/zip",
             )
-            ui.notify("Pacote de recursos preparado.", type="positive")
-            self._render_workspace(
-                "Pacote exportado e evento registado na rastreabilidade."
+            ui.notify(
+                "Pacote preparado e evento registado na rastreabilidade.",
+                type="positive",
             )
         except USER_ERRORS as error:
             self._show_error(error)

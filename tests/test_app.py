@@ -2028,7 +2028,7 @@ def test_opening_a_previous_stage_is_read_only() -> None:
 
 
 @pytest.mark.asyncio
-async def test_export_notifies_before_workspace_is_rebuilt(monkeypatch) -> None:
+async def test_export_does_not_rebuild_workspace_before_download(monkeypatch) -> None:
     events: list[str] = []
 
     class ExportService:
@@ -2043,7 +2043,7 @@ async def test_export_notifies_before_workspace_is_rebuilt(monkeypatch) -> None:
     interface.export_document_format = "word"
     interface._show_busy = lambda _message: events.append("busy")
     interface._hide_busy = lambda: events.append("hide")
-    interface._render_workspace = lambda _message: events.append("render")
+    interface._render_workspace = lambda _message: events.append("unexpected-render")
 
     monkeypatch.setattr(
         app.ui,
@@ -2051,15 +2051,15 @@ async def test_export_notifies_before_workspace_is_rebuilt(monkeypatch) -> None:
         lambda *_args, **_kwargs: events.append("download"),
     )
 
-    def notify_before_render(*_args, **_kwargs) -> None:
-        assert "render" not in events
+    def notify_without_render(*_args, **_kwargs) -> None:
+        assert "unexpected-render" not in events
         events.append("notify")
 
-    monkeypatch.setattr(app.ui, "notify", notify_before_render)
+    monkeypatch.setattr(app.ui, "notify", notify_without_render)
 
     await interface.handle_export()
 
-    assert events == ["busy", "download", "notify", "render", "hide"]
+    assert events == ["busy", "download", "notify", "hide"]
 
 
 def test_application_service_cannot_load_another_owner_session(tmp_path: Path) -> None:
