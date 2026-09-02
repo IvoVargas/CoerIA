@@ -1046,6 +1046,35 @@ def _add_ppt_textbox(
     return box
 
 
+def _visual_card_layout(item_count: int) -> list[tuple[float, float, float, float]]:
+    """Distribui os elementos sem obrigar palavras longas a partir-se ao meio."""
+
+    if item_count == 4:
+        card_width = 2.46
+        card_height = 1.08
+        horizontal_gap = 0.27
+        vertical_gap = 0.43
+        left = 6.83
+        top = 2.55
+        right = left + card_width + horizontal_gap
+        bottom = top + card_height + vertical_gap
+        return [
+            (left, top, card_width, card_height),
+            (right, top, card_width, card_height),
+            (right, bottom, card_width, card_height),
+            (left, bottom, card_width, card_height),
+        ]
+
+    gap = 0.18
+    usable_width = 5.35
+    card_width = (usable_width - gap * (item_count - 1)) / item_count
+    start_x = 6.83
+    return [
+        (start_x + index * (card_width + gap), 2.65, card_width, 1.8)
+        for index in range(item_count)
+    ]
+
+
 def _add_visual_panel(slide: Any, slide_data: dict[str, Any]) -> None:
     visual_items = [
         str(item) for item in slide_data.get("visual_items", []) if str(item).strip()
@@ -1080,33 +1109,40 @@ def _add_visual_panel(slide: Any, slide_data: dict[str, Any]) -> None:
     )
 
     item_count = len(visual_items)
-    gap = 0.18
-    usable_width = 5.35
-    card_width = (usable_width - gap * (item_count - 1)) / item_count
-    start_x = 6.83
+    card_layout = _visual_card_layout(item_count)
     kind = str(slide_data.get("visual_kind", "conceito"))
     palette = (PPT_BLUE, PPT_TEAL, PPT_GOLD, PPT_NAVY)
     if kind == "processo":
-        for index in range(item_count - 1):
-            x = start_x + card_width * (index + 1) + gap * index + 0.02
+        for current, following in zip(card_layout, card_layout[1:]):
+            current_x, current_y, current_width, current_height = current
+            next_x, next_y, next_width, next_height = following
+            if abs(current_y - next_y) < 0.01:
+                starts_on_left = current_x > next_x
+                start_x = current_x if starts_on_left else current_x + current_width
+                end_x = next_x + next_width if starts_on_left else next_x
+                start_y = end_y = current_y + current_height / 2
+            else:
+                start_x = end_x = current_x + current_width / 2
+                start_y = current_y + current_height
+                end_y = next_y
             connector = slide.shapes.add_connector(
                 MSO_CONNECTOR.STRAIGHT,
-                Inches(x),
-                Inches(3.55),
-                Inches(x + gap - 0.04),
-                Inches(3.55),
+                Inches(start_x),
+                Inches(start_y),
+                Inches(end_x),
+                Inches(end_y),
             )
             connector.line.color.rgb = PPT_MUTED
             connector.line.width = Pt(2)
 
-    for index, item in enumerate(visual_items):
-        x = start_x + index * (card_width + gap)
+    for index, (item, layout) in enumerate(zip(visual_items, card_layout)):
+        x, y, card_width, card_height = layout
         card = slide.shapes.add_shape(
             MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE,
             Inches(x),
-            Inches(2.65),
+            Inches(y),
             Inches(card_width),
-            Inches(1.8),
+            Inches(card_height),
         )
         card.fill.solid()
         card.fill.fore_color.rgb = PPT_WHITE
@@ -1129,7 +1165,7 @@ def _add_visual_panel(slide: Any, slide_data: dict[str, Any]) -> None:
         number = slide.shapes.add_shape(
             MSO_AUTO_SHAPE_TYPE.OVAL,
             Inches(x + card_width / 2 - 0.21),
-            Inches(2.4),
+            Inches(y - 0.21),
             Inches(0.42),
             Inches(0.42),
         )
@@ -1149,7 +1185,7 @@ def _add_visual_panel(slide: Any, slide_data: dict[str, Any]) -> None:
         slide,
         kind.upper(),
         8.45,
-        4.85,
+        5.45 if item_count == 4 else 4.85,
         2.2,
         0.38,
         size=11,

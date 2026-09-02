@@ -24,6 +24,7 @@ from prism.agents import (
 from prism.application_service import ApplicationService
 from prism.exporter import (
     _latex_itemize,
+    _visual_card_layout,
     compile_latex_pdf,
     export_presentation,
     export_program_document,
@@ -66,6 +67,17 @@ from prism.workflow import (
     review_current_stage,
     update_manual_resource_settings,
 )
+
+
+def test_four_visual_items_use_a_wide_two_by_two_layout() -> None:
+    layout = _visual_card_layout(4)
+
+    assert len(layout) == 4
+    assert len({y for _x, y, _width, _height in layout}) == 2
+    assert all(width >= 2.4 for _x, _y, width, _height in layout)
+    assert layout[0][0] < layout[1][0]
+    assert layout[1][0] == layout[2][0]
+    assert layout[2][0] > layout[3][0]
 
 
 class ResourceGenerationTests(unittest.TestCase):

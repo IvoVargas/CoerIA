@@ -2027,6 +2027,41 @@ def test_opening_a_previous_stage_is_read_only() -> None:
     assert state == original
 
 
+@pytest.mark.asyncio
+async def test_export_notifies_before_workspace_is_rebuilt(monkeypatch) -> None:
+    events: list[str] = []
+
+    class ExportService:
+        @staticmethod
+        def export_session(state, document_formats):
+            assert document_formats == ("word",)
+            return b"zip-data", "coeria_teste.zip", state
+
+    interface = object.__new__(app.AGIRSoloInterface)
+    interface.state = {"status": "completed"}
+    interface.service = ExportService()
+    interface.export_document_format = "word"
+    interface._show_busy = lambda _message: events.append("busy")
+    interface._hide_busy = lambda: events.append("hide")
+    interface._render_workspace = lambda _message: events.append("render")
+
+    monkeypatch.setattr(
+        app.ui,
+        "download",
+        lambda *_args, **_kwargs: events.append("download"),
+    )
+
+    def notify_before_render(*_args, **_kwargs) -> None:
+        assert "render" not in events
+        events.append("notify")
+
+    monkeypatch.setattr(app.ui, "notify", notify_before_render)
+
+    await interface.handle_export()
+
+    assert events == ["busy", "download", "notify", "render", "hide"]
+
+
 def test_application_service_cannot_load_another_owner_session(tmp_path: Path) -> None:
     store = SQLiteSessionStore(tmp_path / "coeria.db")
     session_id = store.save(
