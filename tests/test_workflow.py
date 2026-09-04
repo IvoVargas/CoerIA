@@ -808,6 +808,7 @@ class WorkflowTests(unittest.TestCase):
                 "candidate_kind": "embedded",
                 "width_px": 800,
                 "height_px": 450,
+                "description": "Diagrama conceptual relevante para a apresentação.",
                 "thumbnail_base64": "PRIVATE_THUMBNAIL_BYTES",
                 "data_base64": "PRIVATE_ORIGINAL_BYTES",
             }

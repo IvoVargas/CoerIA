@@ -384,11 +384,14 @@ o limite do catálogo visual; imagens pequenas e fragmentos são filtrados, os
 candidatos são normalizados para PNG/JPEG RGB e distribuídos entre páginas.
 Objetos raster próximos que formem uma figura composta são renderizados como um
 recorte único. Todas as imagens documentais candidatas ficam disponíveis no popup
-de seleção de cada slide. O modelo recebe somente o catálogo textual das candidatas
-(ID, descrição disponível, ficheiro, página ou slide, tipo e dimensões); os bytes e
-as miniaturas permanecem locais e não são anexados ao pedido de IA. Com base nesse
-catálogo, o modelo pode sugerir uma candidata quando a descrição for suficiente,
-mas a seleção visual continua sob controlo do docente. Uma imagem documental
+de seleção de cada slide. O modelo recebe somente as candidatas que tenham uma
+descrição semântica explícita, num catálogo textual com ID, descrição, ficheiro,
+página ou slide, tipo e dimensões; página, tipo e dimensões, por si só, não tornam
+uma imagem elegível para escolha automática. Os bytes e as miniaturas permanecem
+locais e não são anexados ao pedido de IA. As restantes candidatas continuam no
+popup para escolha humana. Com base nesse catálogo, o modelo pode sugerir uma
+candidata quando a descrição for suficiente, mas a seleção visual continua sob
+controlo do docente. Uma imagem documental
 claramente adequada tem prioridade sobre a geração de uma nova imagem por IA. A possibilidade
 de gerar imagens por IA fica ativa por defeito
 nas novas sessões; cada imagem gerada continua identificada e sujeita à revisão e

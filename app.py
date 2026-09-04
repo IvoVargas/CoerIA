@@ -1861,7 +1861,6 @@ class AGIRSoloInterface:
             )
             self.refresh_sessions()
             self.drawer.hide()
-            ui.notify("Sessão restaurada com sucesso.", type="positive")
         except USER_ERRORS as error:
             self._show_error(error)
         finally:
@@ -1902,10 +1901,10 @@ class AGIRSoloInterface:
             is_current = bool(
                 self.state and self.state.get("session_id") == session_id
             )
+            ui.notify("Sessão eliminada definitivamente.", type="positive")
             if is_current:
                 self.show_home()
             self.refresh_sessions()
-            ui.notify("Sessão eliminada definitivamente.", type="positive")
         except USER_ERRORS as error:
             self._show_error(error)
 
@@ -1945,9 +1944,9 @@ class AGIRSoloInterface:
         self.header_context.set_text(
             f"{course.get('unit_name', 'Sessão')} · {self.state.get('ai_provider', 'OpenAI')}"
         )
-        self._render_workspace(message)
         if message:
             ui.notify(message, type="positive", multi_line=True)
+        self._render_workspace(message)
 
     def _render_workspace(self, message: str = "") -> None:
         if not self.state:

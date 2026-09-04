@@ -15,7 +15,7 @@ from prism.models import RESOURCE_PRESENTATION
 
 
 class SourceImageSelectionTests(unittest.TestCase):
-    def test_all_document_images_reach_resource_context(self) -> None:
+    def test_only_semantically_described_document_images_reach_context(self) -> None:
         state = {
             "course": {"unit_name": "UC", "taxonomy_type": "SOLO"},
             "feedback": {},
@@ -30,6 +30,7 @@ class SourceImageSelectionTests(unittest.TestCase):
                     "candidate_kind": "composite_render",
                     "width_px": 900,
                     "height_px": 500,
+                    "description": "Diagrama das relações entre os conceitos do modelo.",
                 },
                 {
                     "id": "document-not-selected",
@@ -57,13 +58,13 @@ class SourceImageSelectionTests(unittest.TestCase):
         context = _upstream_context(state, "resources")
 
         catalogue = context["source_image_catalogue"]
-        self.assertEqual(len(catalogue), 2)
-        self.assertEqual(
-            [item["id"] for item in catalogue],
-            ["document-selected", "document-not-selected"],
-        )
+        self.assertEqual(len(catalogue), 1)
+        self.assertEqual([item["id"] for item in catalogue], ["document-selected"])
         self.assertEqual(catalogue[0]["candidate_kind"], "composite_render")
-        self.assertIn("apoio.pdf", catalogue[0]["description"])
+        self.assertEqual(
+            catalogue[0]["description"],
+            "Diagrama das relações entre os conceitos do modelo.",
+        )
         self.assertNotIn("thumbnail_base64", catalogue[0])
         self.assertNotIn("data_base64", catalogue[0])
 
@@ -107,6 +108,7 @@ class SourceImageSelectionTests(unittest.TestCase):
                     "id": "document-selected",
                     "source_file": "apoio.pdf",
                     "source_location": "Página 5",
+                    "description": "Esquema do conceito apresentado no slide.",
                 }
             ],
             "learning_outcomes": [{"id": "A1", "theme": "Tema"}],
@@ -183,6 +185,72 @@ class SourceImageSelectionTests(unittest.TestCase):
         self.assertEqual(selected_slide["visual_asset_id"], "document-selected")
         self.assertIn("apoio.pdf", selected_slide["visual_source"])
         self.assertIn("Página 5", selected_slide["visual_source"])
+
+    def test_undescribed_document_selected_by_agent_falls_back_to_diagram(self) -> None:
+        state = {
+            "resource_types": [RESOURCE_PRESENTATION],
+            "source_images": [
+                {
+                    "id": "document-without-description",
+                    "source_file": "apoio.pdf",
+                    "source_location": "Página 7",
+                }
+            ],
+            "learning_outcomes": [{"id": "RA1", "theme": "Tema"}],
+            "teaching_activities": [],
+            "assessment_activities": [],
+            "ai_image_generation_enabled": False,
+        }
+        artifact = {
+            "presentation_outline": [
+                {
+                    "title": "Capa",
+                    "bullets": ["Introdução"],
+                    "outcome_ids": [],
+                    "visual_mode": "diagrama",
+                    "visual_asset_id": "",
+                    "visual_prompt": "",
+                    "visual_kind": "capa",
+                    "visual_title": "Capa",
+                    "visual_items": ["Programa", "Resultados"],
+                    "visual_source": "Diagrama nativo.",
+                    "alt_text": "Capa.",
+                },
+                {
+                    "title": "Conteúdo",
+                    "bullets": ["Ponto 1", "Ponto 2"],
+                    "outcome_ids": ["RA1"],
+                    "visual_mode": "documento",
+                    "visual_asset_id": "document-without-description",
+                    "visual_prompt": "",
+                    "visual_kind": "conceito",
+                    "visual_title": "Tema",
+                    "visual_items": ["Conceito", "Aplicação"],
+                    "visual_source": "",
+                    "alt_text": "",
+                },
+                {
+                    "title": "Síntese",
+                    "bullets": ["Conclusão"],
+                    "outcome_ids": [],
+                    "visual_mode": "diagrama",
+                    "visual_asset_id": "",
+                    "visual_prompt": "",
+                    "visual_kind": "sintese",
+                    "visual_title": "Síntese",
+                    "visual_items": ["Rever", "Aplicar"],
+                    "visual_source": "Diagrama nativo.",
+                    "alt_text": "Síntese.",
+                },
+            ]
+        }
+
+        normalized, corrections = _canonicalize_resource_visuals(artifact, state)
+
+        slide = normalized["presentation_outline"][1]
+        self.assertEqual(slide["visual_mode"], "diagrama")
+        self.assertEqual(slide["visual_asset_id"], "")
+        self.assertTrue(corrections)
 
 
 if __name__ == "__main__":

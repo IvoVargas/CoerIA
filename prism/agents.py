@@ -811,32 +811,12 @@ def _schema_for_scope(
     }
 
 
-def _source_image_description(asset: dict[str, Any]) -> str:
-    """Descreve uma candidata documental sem expor os respetivos bytes."""
+def _source_image_semantic_description(asset: dict[str, Any]) -> str:
+    """Obtém apenas uma descrição que diga efetivamente o que a imagem representa."""
 
-    explicit_description = str(
+    return str(
         asset.get("description") or asset.get("alt_text") or asset.get("caption") or ""
     ).strip()
-    if explicit_description:
-        return explicit_description
-
-    kind = (
-        "figura composta reconstruída localmente"
-        if asset.get("candidate_kind") == "composite_render"
-        else "imagem incorporada no documento"
-    )
-    source_file = str(asset.get("source_file", "")).strip()
-    source_location = str(asset.get("source_location", "")).strip()
-    width = int(asset.get("width_px", 0) or 0)
-    height = int(asset.get("height_px", 0) or 0)
-    parts = [kind]
-    if source_file:
-        parts.append(f"extraída de {source_file}")
-    if source_location:
-        parts.append(f"em {source_location}")
-    if width and height:
-        parts.append(f"com dimensões {width} × {height} píxeis")
-    return "; ".join(parts) + "."
 
 
 def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
@@ -1093,6 +1073,9 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                 continue
             if asset.get("origin_type") == "user_uploaded":
                 continue
+            semantic_description = _source_image_semantic_description(asset)
+            if not semantic_description:
+                continue
             source_images.append(
                 {
                     "id": str(asset.get("id", "")),
@@ -1103,7 +1086,7 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                     "candidate_kind": str(asset.get("candidate_kind", "embedded")),
                     "width_px": int(asset.get("width_px", 0) or 0),
                     "height_px": int(asset.get("height_px", 0) or 0),
-                    "description": _source_image_description(asset),
+                    "description": semantic_description,
                 }
             )
         context["source_image_catalogue"] = source_images
@@ -1860,6 +1843,7 @@ def _canonicalize_resource_visuals(
         if isinstance(item, dict)
         and str(item.get("id", "")).strip()
         and item.get("origin_type") != "user_uploaded"
+        and _source_image_semantic_description(item)
     }
 
     def clean_text(value: Any) -> str:
@@ -2909,6 +2893,7 @@ class OpenAIPedagogicalAgent:
                     isinstance(asset, dict)
                     and str(asset.get("id", "")).strip()
                     and asset.get("origin_type") != "user_uploaded"
+                    and _source_image_semantic_description(asset)
                     for asset in state.get("source_images", [])
                 ):
                     instructions += (

@@ -186,9 +186,9 @@ autoria requer uma ação separada, etapa, motivo e confirmação explícita.
 
 ## Recursos e imagens
 
-Os tipos de recurso e as imagens documentais são selecionados no início da
-etapa **Geração de recursos educativos**. Esta configuração pertence ao artefacto de
-recursos. A geração recebe diretamente os resultados, conteúdos, atividades de
+Os tipos de recurso são selecionados no início da etapa **Geração de recursos
+educativos**. As imagens documentais ficam disponíveis no seletor visual de cada
+slide. A geração recebe diretamente os resultados, conteúdos, atividades de
 ensino-aprendizagem e tarefas de avaliação como contexto de alinhamento.
 
 Quando a assistência abrange toda a etapa de recursos, cada recurso global e
@@ -202,6 +202,13 @@ linha ou campo escolhido e não dispara geração de imagens. As
 imagens geradas numa proposta integral permanecem fora da chamada estrutural e
 só são associadas ao estado se a proposta correspondente for aceite. A geração
 de imagens exige consentimento explícito e `OPENAI_API_KEY`.
+
+Para preservar privacidade e custo, a chamada estrutural nunca recebe bytes nem
+miniaturas das imagens documentais. O catálogo textual enviado ao modelo inclui
+apenas candidatas com descrição semântica explícita; proveniência, página, tipo e
+dimensões não bastam para as tornar elegíveis. A normalização da resposta também
+rejeita um ID documental sem descrição e usa um diagrama editável. Todas as
+candidatas extraídas permanecem disponíveis para seleção manual no popup.
 
 ## Fontes extensas
 

@@ -452,11 +452,14 @@ normalizar os candidatos para PNG/JPEG RGB, equilibrar a seleção entre página
 quando objetos próximos constituam uma figura composta, preferir um recorte
 renderizado da figura completa. Todas as imagens documentais candidatas devem ficar
 disponíveis no seletor visual de cada slide. O pedido ao fornecedor de IA deve
-conter apenas um catálogo textual com o identificador, a descrição disponível, a
-proveniência e as dimensões das candidatas; os bytes originais, `data_base64`,
-`thumbnail_base64` e entradas `input_image` não podem ser enviados. A associação
-automática só deve ocorrer quando a descrição textual for suficiente; a seleção
-visual final permanece sob controlo do docente.
+conter apenas as candidatas com descrição semântica explícita, num catálogo
+textual com o identificador, essa descrição, a proveniência e as dimensões; os
+bytes originais, `data_base64`, `thumbnail_base64` e entradas `input_image` não
+podem ser enviados. Metadados genéricos como página, tipo e dimensões não podem
+substituir a descrição nem habilitar a associação automática. As candidatas
+excluídas do pedido permanecem disponíveis para escolha humana no seletor. A
+associação automática só deve ocorrer quando a descrição textual for suficiente;
+a seleção visual final permanece sob controlo do docente.
 Uma imagem documental adequada deve ter prioridade sobre a geração de uma nova
 imagem por IA; nenhuma candidata é de utilização obrigatória. Os
 bytes devolvidos por um gerador de imagens devem ser validados

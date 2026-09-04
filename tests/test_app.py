@@ -578,6 +578,39 @@ async def test_workspace_uses_a_notification_instead_of_a_status_banner(user: Us
     assert ".status-banner" not in app.APP_CSS
 
 
+def test_workspace_notifies_before_replacing_its_content(monkeypatch) -> None:
+    events: list[str] = []
+
+    class ElementStub:
+        def set_visibility(self, _visible: bool) -> None:
+            pass
+
+        def set_text(self, _text: str) -> None:
+            pass
+
+    interface = object.__new__(app.AGIRSoloInterface)
+    interface.state = {
+        "course": {"unit_name": "Programação"},
+        "ai_provider": "OpenAI",
+    }
+    interface.initial_edit_baseline = None
+    interface.home_view = ElementStub()
+    interface.initial_view = ElementStub()
+    interface.workspace_view = ElementStub()
+    interface.header_context = ElementStub()
+    interface._set_initial_view_mode = lambda _editing: None
+    interface._render_workspace = lambda _message: events.append("render")
+    monkeypatch.setattr(
+        app.ui,
+        "notify",
+        lambda *_args, **_kwargs: events.append("notify"),
+    )
+
+    interface.show_workspace("Etapa atualizada.")
+
+    assert events == ["notify", "render"]
+
+
 @pytest.mark.asyncio
 async def test_teacher_decision_is_above_the_current_artifact_in_light_theme(
     user: User,
