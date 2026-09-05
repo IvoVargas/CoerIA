@@ -332,6 +332,10 @@ def render_resource_detail_sections(
                     item.get("id", index),
                     item.get("outcome_id", "—"),
                     item.get("question_type", ""),
+                    "\n".join(
+                        f"{chr(65 + option_index)}. {option}"
+                        for option_index, option in enumerate(item.get("options", []))
+                    ),
                     item.get("points", 0),
                     item.get("prompt", ""),
                     item.get("answer_key", ""),
@@ -349,6 +353,7 @@ def render_resource_detail_sections(
                         "ID",
                         "Resultado",
                         "Tipo",
+                        "Opções",
                         "Pontos",
                         "Questões",
                         "Chave de correção",

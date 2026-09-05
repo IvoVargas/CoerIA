@@ -132,6 +132,7 @@ HUMAN_KEY_LABELS = {
     "instructions": "instrucoes",
     "questions": "questoes",
     "question": "questao",
+    "options": "opcoes",
     "answer_key": "chave_correcao",
     "points": "pontos",
     "content": "conteudo",

@@ -739,6 +739,7 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 f"{ai_mode_instruction(outcome)}"
             ),
             "question_type": "Resposta estruturada",
+            "options": [],
             "points": 10,
             "answer_key": assessment_for(outcome["id"])["criterion"],
         }

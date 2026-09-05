@@ -486,6 +486,7 @@ def _latex_document(title: str, subtitle: str, body: list[str]) -> str:
             r"\usepackage{array}",
             r"\usepackage{booktabs}",
             r"\usepackage{longtable}",
+            r"\usepackage{pdflscape}",
             r"\usepackage{textcomp}",
             r"\usepackage[hidelinks]{hyperref}",
             r"\setlength{\parindent}{0pt}",
@@ -866,76 +867,120 @@ def export_program_latex(
             ),
             r"\section{Resultados de aprendizagem}",
             _latex_table(
-                ["ID", "Resultado de aprendizagem", "Taxonomia", "Nível", "Verbo", "Modo de IA"],
+                ["ID", "Resultado de aprendizagem", "Nível taxonómico", "Verbo", "Modo de IA"],
                 [
                     [
                         outcome.get("id", ""),
                         outcome.get("statement", ""),
-                        course.get("taxonomy_type", ""),
-                        outcome.get("taxonomy_level", ""),
+                        " — ".join(
+                            value
+                            for value in (
+                                str(course.get("taxonomy_type", "")).strip(),
+                                str(outcome.get("taxonomy_level", "")).strip(),
+                            )
+                            if value
+                        ),
                         outcome.get("action_verb", ""),
                         outcome.get("ai_mode", "AI-off"),
                     ]
                     for outcome in state.get("learning_outcomes", [])
                 ],
-                [0.05, 0.30, 0.09, 0.15, 0.10, 0.11],
+                [0.05, 0.36, 0.18, 0.12, 0.11],
             ),
             r"\section{Política de utilização da IA}",
             _latex_itemize(_ai_policy_entries(state)),
+            r"\begin{landscape}",
             r"\section{Atividades de ensino-aprendizagem}",
             _latex_table(
                 [
                     "ID",
-                    "Contexto",
+                    "Contexto / RA",
                     "Atividade",
-                    "Prática",
-                    "Acompanhamento",
-                    "Feedback",
-                    "Resultados",
-                    "Modo de IA",
+                    "Prática / acompanhamento",
+                    "Feedback / IA",
                 ],
                 [
                     [
                         activity.get("id", ""),
-                        activity.get("learning_context", ""),
+                        "\n".join(
+                            (
+                                f"Contexto: {activity.get('learning_context', '')}",
+                                "Resultados: "
+                                + ", ".join(activity.get("outcome_ids", [])),
+                            )
+                        ),
                         activity.get("activity", ""),
-                        activity.get("practice") or activity.get("method", ""),
-                        activity.get("support", ""),
-                        activity.get("feedback_strategy", ""),
-                        ", ".join(activity.get("outcome_ids", [])),
-                        activity.get("ai_mode", "AI-off"),
+                        "\n".join(
+                            (
+                                "Prática: "
+                                + str(
+                                    activity.get("practice")
+                                    or activity.get("method", "")
+                                ),
+                                "Acompanhamento: "
+                                + str(activity.get("support", "")),
+                            )
+                        ),
+                        "\n".join(
+                            (
+                                "Feedback: "
+                                + str(activity.get("feedback_strategy", "")),
+                                "Modo de IA: "
+                                + str(activity.get("ai_mode", "AI-off")),
+                            )
+                        ),
                     ]
                     for activity in state.get("teaching_activities", [])
                 ],
-                [0.04, 0.08, 0.15, 0.11, 0.13, 0.10, 0.08, 0.09],
+                [0.04, 0.15, 0.21, 0.25, 0.18],
             ),
+            r"\end{landscape}",
+            r"\begin{landscape}",
             r"\section{Tarefas e critérios de avaliação}",
             _latex_table(
                 [
                     "ID",
-                    "Finalidade",
-                    "Modalidade",
-                    "Atividades de ensino-aprendizagem",
-                    "Resultados",
-                    "Tarefa de avaliação",
+                    "Enquadramento",
+                    "Ligações",
+                    "Tarefa e evidência",
                     "Critério",
-                    "Modo de IA",
                 ],
                 [
                     [
                         assessment.get("id", ""),
-                        assessment.get("assessment_purpose", ""),
-                        assessment.get("work_type", ""),
-                        ", ".join(assessment.get("teaching_activity_ids", [])),
-                        ", ".join(assessment.get("outcome_ids", [])),
-                        assessment.get("activity", ""),
+                        "\n".join(
+                            (
+                                "Finalidade: "
+                                + str(assessment.get("assessment_purpose", "")),
+                                "Modalidade: "
+                                + str(assessment.get("work_type", "")),
+                                "Modo de IA: "
+                                + str(assessment.get("ai_mode", "AI-off")),
+                            )
+                        ),
+                        "\n".join(
+                            (
+                                "AE: "
+                                + ", ".join(
+                                    assessment.get("teaching_activity_ids", [])
+                                ),
+                                "RA: "
+                                + ", ".join(assessment.get("outcome_ids", [])),
+                            )
+                        ),
+                        "\n".join(
+                            (
+                                "Tarefa: " + str(assessment.get("activity", "")),
+                                "Evidência: " + str(assessment.get("evidence", "")),
+                            )
+                        ),
                         assessment.get("criterion", ""),
-                        assessment.get("ai_mode", "AI-off"),
                     ]
                     for assessment in state.get("assessment_activities", [])
                 ],
-                [0.035, 0.06, 0.065, 0.10, 0.065, 0.16, 0.15, 0.09],
+                [0.04, 0.17, 0.12, 0.28, 0.22],
             ),
+            r"\end{landscape}",
             r"\section{Planeamento das aulas}",
             _latex_table(
                 ["Aula", "Duração (minutos)", "Tipo de sessão", "Atividades ou avaliação", "Texto opcional"],
@@ -1549,6 +1594,11 @@ def _export_test(
             f"{question['id']} — {question['points']} pontos", level=2
         )
         document.add_paragraph(question["prompt"])
+        for option_index, option in enumerate(question.get("options", [])):
+            document.add_paragraph(
+                f"{chr(65 + option_index)}. {option}",
+                style="List Bullet",
+            )
         document.add_paragraph(
             f"Tipo: {question['question_type']} · Resultado: {question['outcome_id']}"
         )
@@ -1632,10 +1682,15 @@ def _export_test_latex(
     ]
     questions = data.get("questions", [])
     for question in questions:
+        option_lines = [
+            rf"\textbf{{{chr(65 + option_index)}.}} {_latex_escape(option)}\par"
+            for option_index, option in enumerate(question.get("options", []))
+        ]
         body.extend(
             [
                 rf"\subsection{{{_latex_escape(question.get('id', ''))} --- {_latex_escape(question.get('points', 0))} pontos}}",
                 _latex_escape(question.get("prompt", "")) + r"\par",
+                *option_lines,
                 rf"\textbf{{Tipo:}} {_latex_escape(question.get('question_type', ''))}\par",
                 rf"\textbf{{Resultado associado:}} {_latex_escape(question.get('outcome_id', ''))}",
                 r"\vspace{3\baselineskip}",

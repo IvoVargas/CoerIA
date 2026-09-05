@@ -49,6 +49,7 @@ from .curriculum import (
     validate_taxonomy_choice,
 )
 from .models import (
+    QUESTION_TYPES,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
@@ -65,6 +66,7 @@ from .quality import (
     evaluate_quality,
     presentation_assessment_overview_issues,
     presentation_visual_issues,
+    test_question_issues,
 )
 from .resource_catalog import (
     slide_outcome_ids,
@@ -233,9 +235,12 @@ RESOURCE_REQUIREMENTS = {
     ),
     RESOURCE_TEST: (
         "Objeto do teste com title, instructions, total_points e questions. "
-        "Cada questão contém id, outcome_id, prompt, question_type, points e "
-        "answer_key; o conjunto cobre todos os resultados e total_points é a "
-        "soma exata dos pontos."
+        "Cada questão contém id, outcome_id, prompt, question_type, options, points e "
+        "answer_key. question_type usa exclusivamente Escolha múltipla, Resposta curta, "
+        "Resposta aberta ou Resposta estruturada. Numa questão de Escolha múltipla, "
+        "options contém 3 a 5 respostas não vazias e answer_key identifica a opção "
+        "ou as opções corretas; nos restantes tipos, options é uma lista vazia. O conjunto cobre "
+        "todos os resultados e total_points é a soma exata dos pontos."
     ),
     RESOURCE_PRACTICAL: (
         "Objeto da atividade com title, context, duration_minutes, materials, "
@@ -467,11 +472,18 @@ def _schema_for(
                                     "id": string,
                                     "outcome_id": string,
                                     "prompt": string,
-                                    "question_type": string,
+                                    "question_type": {
+                                        "type": "string",
+                                        "enum": list(QUESTION_TYPES),
+                                    },
+                                    "options": {"type": "array", "items": string},
                                     "points": {"type": "integer", "minimum": 1},
                                     "answer_key": string,
                                 },
-                                "required": ["id", "outcome_id", "prompt", "question_type", "points", "answer_key"],
+                                "required": [
+                                    "id", "outcome_id", "prompt", "question_type",
+                                    "options", "points", "answer_key"
+                                ],
                             },
                         },
                     },
@@ -2472,6 +2484,17 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             question_ids = [item["id"] for item in artifact["test"]["questions"]]
             if len(question_ids) != len(set(question_ids)):
                 raise AgentGenerationError("O teste contém identificadores de questão duplicados.")
+            question_problems = [
+                problem
+                for item in artifact["test"]["questions"]
+                for problem in test_question_issues(item)
+            ]
+            if question_problems:
+                raise AgentGenerationError(
+                    "O teste contém questões incompletas. "
+                    + "; ".join(question_problems)
+                    + "."
+                )
             covered = {item["outcome_id"] for item in artifact["test"]["questions"]}
             if covered != expected:
                 missing = sorted(expected - covered)

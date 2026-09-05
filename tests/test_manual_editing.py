@@ -22,7 +22,7 @@ from prism.manual_editing import (
     value_at_path,
 )
 from prism.ai_modes import AI_MODE_OFF, AI_MODE_ON
-from prism.models import CourseInput
+from prism.models import CourseInput, QUESTION_TYPE_MULTIPLE_CHOICE
 from prism.curriculum import taxonomy_level_label
 from prism.presentation import active_stage_artifact, render_stage_artifact
 from prism.workflow import (
@@ -426,6 +426,23 @@ def test_learning_outcome_editor_matches_the_visible_table() -> None:
     assert any(field.key == "theme" for field in table.fields)
     assert next(field for field in table.fields if field.key == "action_verb").kind == (
         "taxonomy_verb"
+    )
+
+
+def test_test_editor_exposes_question_type_and_answer_options() -> None:
+    state = _completed_state()
+    table = next(
+        table
+        for table in editor_layout("resources").tables
+        if table.title == "Questões do teste"
+    )
+    question_type = next(field for field in table.fields if field.key == "question_type")
+    options = next(field for field in table.fields if field.key == "options")
+
+    assert question_type.kind == "question_type"
+    assert options.kind == "lines"
+    assert QUESTION_TYPE_MULTIPLE_CHOICE in editor_reference_options(
+        state, question_type
     )
 
 

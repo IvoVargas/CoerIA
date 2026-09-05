@@ -18,6 +18,8 @@ from .curriculum import (
     validate_taxonomy_choice,
 )
 from .models import (
+    QUESTION_TYPES,
+    QUESTION_TYPE_MULTIPLE_CHOICE,
     RESOURCE_ASSESSMENT_GRID,
     RESOURCE_LESSON_PLAN,
     RESOURCE_LESSON_PRESENTATIONS,
@@ -78,6 +80,73 @@ _LESSON_TOKEN_STOPWORDS = {
     "utilizacao",
     "utilizar",
 }
+
+
+def test_question_issues(question: dict[str, Any]) -> list[str]:
+    """Valida a estrutura pedagógica mínima de uma questão de teste."""
+
+    identifier = str(question.get("id", "?")).strip() or "?"
+    question_type = str(question.get("question_type", "")).strip()
+    options = question.get("options", [])
+    issues: list[str] = []
+    if question_type not in QUESTION_TYPES:
+        issues.append(f"{identifier}: tipo de questão não suportado")
+        return issues
+    if not isinstance(options, list):
+        issues.append(f"{identifier}: as opções devem ser uma lista")
+        return issues
+
+    cleaned_options = [str(option).strip() for option in options if str(option).strip()]
+    if question_type != QUESTION_TYPE_MULTIPLE_CHOICE:
+        if cleaned_options:
+            issues.append(
+                f"{identifier}: só questões de escolha múltipla podem ter opções"
+            )
+        return issues
+
+    if len(cleaned_options) != len(options) or not 3 <= len(cleaned_options) <= 5:
+        issues.append(
+            f"{identifier}: a escolha múltipla deve apresentar entre 3 e 5 opções não vazias"
+        )
+    normalized_options = [option.casefold() for option in cleaned_options]
+    if len(set(normalized_options)) != len(normalized_options):
+        issues.append(f"{identifier}: as opções de resposta devem ser distintas")
+
+    answer_key = str(question.get("answer_key", "")).strip()
+    answer_tokens = [
+        token.strip().strip(".)").upper()
+        for token in re.split(r"[,;/]+|\be\b", answer_key, flags=re.IGNORECASE)
+        if token.strip()
+    ]
+    letter_answers_are_valid = bool(answer_tokens) and all(
+        len(token) == 1
+        and "A" <= token <= chr(ord("A") + len(cleaned_options) - 1)
+        for token in answer_tokens
+    )
+    exact_answers = [
+        token.strip().casefold()
+        for token in re.split(r"[;]+", answer_key)
+        if token.strip()
+    ]
+    exact_answer_is_valid = bool(exact_answers) and all(
+        token in normalized_options for token in exact_answers
+    )
+    prefixed_answer = re.fullmatch(r"([A-Z])[.):\-]\s*(.+)", answer_key, re.IGNORECASE)
+    prefixed_answer_is_valid = bool(
+        prefixed_answer
+        and 0 <= ord(prefixed_answer.group(1).upper()) - ord("A") < len(cleaned_options)
+        and prefixed_answer.group(2).strip().casefold()
+        == normalized_options[ord(prefixed_answer.group(1).upper()) - ord("A")]
+    )
+    if not answer_key or not (
+        letter_answers_are_valid
+        or exact_answer_is_valid
+        or prefixed_answer_is_valid
+    ):
+        issues.append(
+            f"{identifier}: a chave deve identificar uma ou mais opções existentes"
+        )
+    return issues
 
 
 def _normalise(value: str) -> str:
@@ -1334,6 +1403,11 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
         for entry in test_entries:
             task_id = str(entry.get("assessment_task_id", ""))
             test_data = entry.get("test", {})
+            for question in test_data.get("questions", []):
+                test_issues.extend(
+                    f"{task_id}: {issue}"
+                    for issue in test_question_issues(question)
+                )
             calculated_points = sum(
                 item.get("points", 0) for item in test_data.get("questions", [])
             )

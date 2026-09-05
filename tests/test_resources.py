@@ -24,6 +24,8 @@ from prism.agents import (
 from prism.application_service import ApplicationService
 from prism.exporter import (
     _latex_itemize,
+    _export_test,
+    _export_test_latex,
     _visual_card_layout,
     compile_latex_pdf,
     export_presentation,
@@ -33,6 +35,7 @@ from prism.exporter import (
 )
 from prism.models import (
     CourseInput,
+    QUESTION_TYPE_MULTIPLE_CHOICE,
     RESOURCE_ASSESSMENT_GRID,
     RESOURCE_LESSON_PLAN,
     RESOURCE_LESSON_PRESENTATIONS,
@@ -271,6 +274,65 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertIn("âmbito declarado", checks["lesson_presentations"]["detail"])
         self.assertEqual(checks["test_points"]["status"], "error")
         self.assertIn("âmbito declarado", checks["test_points"]["detail"])
+
+    def test_multiple_choice_questions_require_visible_answer_options(self) -> None:
+        state = self._resource_state()
+        question = state["resources"]["tests"][0]["test"]["questions"][0]
+        question["question_type"] = QUESTION_TYPE_MULTIPLE_CHOICE
+        question["options"] = []
+        question["answer_key"] = "B"
+
+        report = evaluate_quality(state, state["resources"])
+        check = next(item for item in report["checks"] if item["id"] == "test_points")
+
+        self.assertEqual(check["status"], "error")
+        self.assertIn("entre 3 e 5 opções", check["detail"])
+
+        question["options"] = ["Opção um", "Opção dois", "Opção três"]
+        question["answer_key"] = "A e C"
+        report = evaluate_quality(state, state["resources"])
+        check = next(item for item in report["checks"] if item["id"] == "test_points")
+        self.assertEqual(check["status"], "pass")
+
+    def test_test_schema_requires_options_and_supported_question_types(self) -> None:
+        state = self._resource_state()
+        scoped_state = {
+            **state,
+            "resource_types": [RESOURCE_TEST],
+            "resource_generation_scope": RESOURCE_TEST,
+        }
+        question_schema = _schema_for("resources", scoped_state)["properties"][
+            "artifact"
+        ]["properties"]["questions"]["items"]
+
+        self.assertIn("options", question_schema["required"])
+        self.assertIn(
+            QUESTION_TYPE_MULTIPLE_CHOICE,
+            question_schema["properties"]["question_type"]["enum"],
+        )
+
+    def test_word_and_latex_tests_export_multiple_choice_options(self) -> None:
+        state = self._resource_state()
+        data = deepcopy(state["resources"]["tests"][0]["test"])
+        question = data["questions"][0]
+        question["question_type"] = QUESTION_TYPE_MULTIPLE_CHOICE
+        question["options"] = ["Opção um", "Opção dois", "Opção três"]
+        question["answer_key"] = "B"
+
+        with TemporaryDirectory() as temporary_directory:
+            word_path = Path(temporary_directory) / "teste.docx"
+            latex_path = Path(temporary_directory) / "teste.tex"
+            _export_test(state, word_path, data)
+            _export_test_latex(state, latex_path, data)
+
+            document = Document(word_path)
+            word_text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+            latex_text = latex_path.read_text(encoding="utf-8")
+
+        self.assertIn("A. Opção um", word_text)
+        self.assertIn("B. Opção dois", word_text)
+        self.assertIn(r"\textbf{A.} Opção um", latex_text)
+        self.assertIn(r"\textbf{B.} Opção dois", latex_text)
 
     def test_lesson_presentations_are_specific_and_not_repeated(self) -> None:
         state = self._resource_state()
@@ -1238,9 +1300,9 @@ class ResourceGenerationTests(unittest.TestCase):
                     )
 
             latex = latex_path.read_text(encoding="utf-8")
-            self.assertIn(r"\textbf{Contexto}", latex)
-            self.assertIn(r"\textbf{Prática}", latex)
-            self.assertIn(r"\textbf{Acompanhamento}", latex)
+            self.assertIn("Contexto:", latex)
+            self.assertIn("Prática:", latex)
+            self.assertIn("Acompanhamento:", latex)
             self.assertIn("Aplicação manual orientada.", latex)
             self.assertIn("Acompanhamento manual do docente.", latex)
             self.assertIn("Tema", latex)
@@ -1253,6 +1315,8 @@ class ResourceGenerationTests(unittest.TestCase):
                 latex,
             )
             self.assertIn(r"\section{Planeamento das aulas}", latex)
+            self.assertIn(r"\usepackage{pdflscape}", latex)
+            self.assertEqual(latex.count(r"\begin{landscape}"), 2)
             self.assertIn(str(lesson["duration_minutes"]), latex)
             self.assertIn(lesson["session_type"], latex)
             self.assertIn(lesson["notes"], latex)

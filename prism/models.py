@@ -26,6 +26,14 @@ SUPPORTED_RESOURCE_TYPES = (
     RESOURCE_ASSESSMENT_GRID,
 )
 
+QUESTION_TYPE_MULTIPLE_CHOICE = "Escolha múltipla"
+QUESTION_TYPES = (
+    QUESTION_TYPE_MULTIPLE_CHOICE,
+    "Resposta curta",
+    "Resposta aberta",
+    "Resposta estruturada",
+)
+
 SEMESTER_OPTIONS = ("1.º semestre", "2.º semestre")
 
 

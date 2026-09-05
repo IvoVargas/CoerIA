@@ -20,6 +20,7 @@ from .curriculum import (
     taxonomy_level_options,
     validate_taxonomy_choice,
 )
+from .models import QUESTION_TYPES
 from .validation_targets import STAGE_ROOT_TARGET
 
 
@@ -266,7 +267,8 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     _field("id", "ID"),
                     _field("outcome_id", "Resultado"),
                     _field("prompt", "Questões", "long"),
-                    _field("question_type", "Tipo"),
+                    _field("question_type", "Tipo", "question_type"),
+                    _field("options", "Opções — uma por linha", "lines"),
                     _field("points", "Pontos", "integer"),
                     _field("answer_key", "Chave de correção", "long"),
                 ),
@@ -275,6 +277,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "outcome_id": "",
                     "prompt": "",
                     "question_type": "Resposta aberta",
+                    "options": [],
                     "points": 1,
                     "answer_key": "",
                 },
@@ -771,6 +774,8 @@ def editor_reference_options(
         }
     if field.key == "session_type":
         return {value: value for value in LESSON_TYPES}
+    if field.kind == "question_type":
+        return {value: value for value in QUESTION_TYPES}
     if field.key == "component_ids":
         options: dict[str, str] = {}
         for stage, description_key in (
