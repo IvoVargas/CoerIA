@@ -711,6 +711,7 @@ def apply_presentation_image_choice(
         slide["visual_mode"] = "diagrama"
         slide["visual_asset_id"] = ""
         slide["visual_prompt"] = ""
+        slide["visual_warning"] = ""
         slide["visual_source"] = (
             "Diagrama nativo gerado pelo CoerIA a partir dos artefactos aprovados."
         )
@@ -722,6 +723,7 @@ def apply_presentation_image_choice(
     is_ai = asset.get("origin_type") == "ai_generated" or identifier.startswith("ai-")
     slide["visual_mode"] = "ia" if is_ai else "documento"
     slide["visual_asset_id"] = identifier
+    slide["visual_warning"] = ""
     if is_ai:
         provider = str(asset.get("provider", "IA")).strip() or "IA"
         model = str(asset.get("model", "")).strip()

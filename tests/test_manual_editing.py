@@ -232,6 +232,7 @@ def test_presentation_image_choice_derives_visual_provenance() -> None:
         "visual_asset_id": "",
         "visual_prompt": "",
         "visual_source": "Diagrama nativo.",
+        "visual_warning": "Aviso de fallback antigo.",
         "alt_text": "Descrição existente.",
     }
     document = {
@@ -247,11 +248,14 @@ def test_presentation_image_choice_derives_visual_provenance() -> None:
     assert slide["visual_mode"] == "documento"
     assert slide["visual_asset_id"] == "document-1"
     assert slide["visual_source"] == "Imagem extraída de apoio.pdf, Página 3."
+    assert slide["visual_warning"] == ""
     assert slide["alt_text"] == "Figura do documento."
 
+    slide["visual_warning"] = "Aviso de fallback antigo."
     apply_presentation_image_choice(slide, None)
     assert slide["visual_mode"] == "diagrama"
     assert slide["visual_asset_id"] == ""
+    assert slide["visual_warning"] == ""
     assert slide["visual_source"].startswith("Diagrama nativo gerado pelo CoerIA")
 
 
