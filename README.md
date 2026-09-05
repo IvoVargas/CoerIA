@@ -163,8 +163,8 @@ elementos visuais com finalidade pedagógica. Antes da síntese final, a
 apresentação geral inclui automaticamente uma secção com todas as tarefas de
 avaliação; numa apresentação de aula, essa secção fica limitada às tarefas dessa
 aula. São indicadas a finalidade, os resultados abrangidos, as evidências e os
-critérios aprovados, repartindo a secção por vários slides quando necessário
-para manter a legibilidade. Na etapa **Geração de recursos educativos**, cada
+critérios aprovados, usando um slide próprio por tarefa para preservar o texto
+integral e a legibilidade. Na etapa **Geração de recursos educativos**, cada
 tipo selecionado tem um separador próprio tanto na consulta como na edição; as
 coleções por aula e por tarefa usam ainda separadores internos. No separador da
 apresentação, a consulta integra a miniatura da imagem associada na coluna
@@ -391,7 +391,9 @@ uma imagem elegível para escolha automática. Os bytes e as miniaturas permanec
 locais e não são anexados ao pedido de IA. As restantes candidatas continuam no
 popup para escolha humana. Com base nesse catálogo, o modelo pode sugerir uma
 candidata quando a descrição for suficiente, mas a seleção visual continua sob
-controlo do docente. Uma imagem documental
+controlo do docente. O manifesto de exportação aplica a mesma semântica: só marca
+`available_to_llm` quando a candidata tem descrição explícita e não foi carregada
+isoladamente pelo docente. Uma imagem documental
 claramente adequada tem prioridade sobre a geração de uma nova imagem por IA. A possibilidade
 de gerar imagens por IA fica ativa por defeito
 nas novas sessões; cada imagem gerada continua identificada e sujeita à revisão e

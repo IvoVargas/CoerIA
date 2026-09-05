@@ -148,7 +148,29 @@ class ResourceGenerationTests(unittest.TestCase):
             for slide in resources["presentation_outline"]
             if slide["title"].startswith(PRESENTATION_ASSESSMENT_TITLE)
         ]
-        self.assertTrue(assessment_slides)
+        self.assertEqual(
+            len(assessment_slides),
+            len(state["assessment_activities"]),
+        )
+        for slide, task in zip(
+            assessment_slides,
+            state["assessment_activities"],
+            strict=True,
+        ):
+            self.assertEqual(
+                slide["title"],
+                f"{PRESENTATION_ASSESSMENT_TITLE}: {task['id']}",
+            )
+            slide_text = "\n".join(slide["bullets"])
+            self.assertIn(task["assessment_purpose"], slide_text)
+            self.assertIn(task["activity"], slide_text)
+            self.assertIn(task["evidence"], slide_text)
+            self.assertIn(task["criterion"], slide_text)
+            self.assertNotIn("…", slide_text)
+            self.assertEqual(
+                slide_outcome_ids(slide),
+                task["outcome_ids"],
+            )
         assessment_text = " ".join(
             str(text)
             for slide in assessment_slides
@@ -703,6 +725,30 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertEqual(assessment_check["status"], "error")
         self.assertIn(PRESENTATION_ASSESSMENT_TITLE, assessment_check["detail"])
 
+    def test_quality_requires_one_complete_assessment_slide_per_task(self) -> None:
+        state = self._resource_state()
+        tampered = deepcopy(state)
+        slides = tampered["resources"]["presentation_outline"]
+        assessment_indexes = [
+            index
+            for index, slide in enumerate(slides)
+            if slide["title"].startswith(PRESENTATION_ASSESSMENT_TITLE)
+        ]
+        first_index, second_index = assessment_indexes[:2]
+        slides[first_index]["title"] = PRESENTATION_ASSESSMENT_TITLE
+        slides[first_index]["bullets"].extend(slides[second_index]["bullets"])
+        slides.pop(second_index)
+
+        report = evaluate_quality(tampered, tampered["resources"])
+        assessment_check = next(
+            item
+            for item in report["checks"]
+            if item["id"] == "presentation_assessment_overview"
+        )
+
+        self.assertEqual(assessment_check["status"], "error")
+        self.assertIn("slide próprio", assessment_check["detail"])
+
     def test_quality_explains_the_visual_failure_for_each_slide(self) -> None:
         state = self._resource_state()
         visual_items_schema = _schema_for("resources", state)["properties"][
@@ -1005,6 +1051,30 @@ class ResourceGenerationTests(unittest.TestCase):
         state = review_current_stage(self._resource_state(), "approve", agent=self.agent)
         self.assertEqual(state["current_stage"], "final_validation")
         state = review_current_stage(state, "approve", agent=self.agent)
+        state["source_images"] = [
+            {
+                "id": "document-described",
+                "origin_type": "document",
+                "source_file": "apoio.pdf",
+                "source_location": "Página 2",
+                "description": "Diagrama que representa a relação entre os conceitos.",
+                "approved": False,
+            },
+            {
+                "id": "document-undescribed",
+                "origin_type": "document",
+                "source_file": "apoio.pdf",
+                "source_location": "Página 4",
+                "approved": False,
+            },
+            {
+                "id": "user-uploaded",
+                "origin_type": "user_uploaded",
+                "source_file": "imagem-local.png",
+                "description": "Imagem carregada diretamente pelo docente.",
+                "approved": False,
+            },
+        ]
         package_path = Path(export_resource_package(state))
         try:
             with zipfile.ZipFile(package_path) as package:
@@ -1041,6 +1111,19 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertIn("visual_assets", manifest)
                 self.assertIn("document_images", manifest["visual_assets"])
                 self.assertIn("ai_generated_images", manifest["visual_assets"])
+                document_images = {
+                    item["id"]: item
+                    for item in manifest["visual_assets"]["document_images"]
+                }
+                self.assertTrue(
+                    document_images["document-described"]["available_to_llm"]
+                )
+                self.assertFalse(
+                    document_images["document-undescribed"]["available_to_llm"]
+                )
+                self.assertFalse(
+                    document_images["user-uploaded"]["available_to_llm"]
+                )
                 program = Document(BytesIO(package.read(program_name)))
                 program_text = "\n".join(
                     [paragraph.text for paragraph in program.paragraphs]

@@ -26,7 +26,7 @@ from docx.shared import Cm, Pt as DocxPt, RGBColor
 from pptx import Presentation
 from pptx.dml.color import RGBColor as PptxRGBColor
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_CONNECTOR
-from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
 from pptx.parts.image import Image as PptxImage
 from pptx.util import Inches, Pt
 
@@ -43,7 +43,7 @@ from .models import (
 )
 from .quality import attach_quality_report
 from .relationships import derive_alignment_rows
-from .resource_catalog import slide_outcome_ids
+from .resource_catalog import slide_outcome_ids, source_image_available_to_llm
 
 
 LOGGER = logging.getLogger(__name__)
@@ -1466,6 +1466,7 @@ def export_presentation(state: dict[str, Any], output_path: Path | str | None = 
         bullet_frame = bullet_box.text_frame
         bullet_frame.clear()
         bullet_frame.word_wrap = True
+        bullet_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         bullet_frame.margin_left = Inches(0.18)
         bullet_frame.margin_right = Inches(0.12)
         for bullet_index, bullet in enumerate(bullets):
@@ -2017,8 +2018,7 @@ def export_resource_package(
                                 "height_px", "image_mode", "approved",
                             )
                         },
-                        "available_to_llm": asset.get("origin_type")
-                        != "user_uploaded",
+                        "available_to_llm": source_image_available_to_llm(asset),
                         "used_in_presentation": str(asset.get("id", ""))
                         in {
                             str(slide.get("visual_asset_id", ""))

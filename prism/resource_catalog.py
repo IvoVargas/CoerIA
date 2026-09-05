@@ -13,6 +13,24 @@ from .models import (
 )
 
 
+def source_image_semantic_description(asset: dict[str, Any]) -> str:
+    """Devolve apenas uma descrição explícita do conteúdo visual da imagem."""
+
+    return str(
+        asset.get("description") or asset.get("alt_text") or asset.get("caption") or ""
+    ).strip()
+
+
+def source_image_available_to_llm(asset: dict[str, Any]) -> bool:
+    """Indica se os metadados textuais da imagem podem apoiar uma decisão do LLM."""
+
+    return (
+        str(asset.get("origin_type", "")).strip() != "user_uploaded"
+        and bool(str(asset.get("id", "")).strip())
+        and bool(source_image_semantic_description(asset))
+    )
+
+
 def slide_outcome_ids(
     slide: dict[str, Any],
     allowed_ids: set[str] | None = None,

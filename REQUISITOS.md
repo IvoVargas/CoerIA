@@ -433,8 +433,8 @@ A apresentação geral deve incluir, antes da síntese final, uma secção próp
 avaliação que identifique todas as tarefas `TA`, a respetiva finalidade, os
 resultados abrangidos, a evidência esperada e os critérios aprovados. A
 apresentação de uma aula deve aplicar a mesma regra apenas às tarefas dessa aula.
-Quando o número de tarefas não couber de forma legível num único slide, a secção
-deve ser dividida por vários slides consecutivos.
+Cada tarefa deve ocupar um slide próprio, com o texto integral, sem truncagem e
+sem sobreposição entre os blocos de texto e o visual associado.
 
 As imagens raster tratadas pelo protótipo podem ter uma das seguintes origens:
 
@@ -460,6 +460,9 @@ substituir a descrição nem habilitar a associação automática. As candidatas
 excluídas do pedido permanecem disponíveis para escolha humana no seletor. A
 associação automática só deve ocorrer quando a descrição textual for suficiente;
 a seleção visual final permanece sob controlo do docente.
+O manifesto de exportação deve aplicar o mesmo critério ao campo
+`available_to_llm`: apenas `true` para uma candidata com descrição semântica
+explícita que não tenha sido carregada isoladamente pelo docente.
 Uma imagem documental adequada deve ter prioridade sobre a geração de uma nova
 imagem por IA; nenhuma candidata é de utilização obrigatória. Os
 bytes devolvidos por um gerador de imagens devem ser validados

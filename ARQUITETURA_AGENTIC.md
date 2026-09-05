@@ -203,12 +203,20 @@ imagens geradas numa proposta integral permanecem fora da chamada estrutural e
 só são associadas ao estado se a proposta correspondente for aceite. A geração
 de imagens exige consentimento explícito e `OPENAI_API_KEY`.
 
+Depois da resposta do modelo, a canonicalização da apresentação acrescenta a
+secção de avaliação de forma determinística: cada tarefa `TA` ocupa um slide
+próprio com finalidade, texto integral da tarefa, resultados, evidência e
+critério. Esta separação evita que várias tarefas concorram pelo mesmo espaço e
+torna verificável a ausência de truncagem no ficheiro exportado.
+
 Para preservar privacidade e custo, a chamada estrutural nunca recebe bytes nem
 miniaturas das imagens documentais. O catálogo textual enviado ao modelo inclui
 apenas candidatas com descrição semântica explícita; proveniência, página, tipo e
 dimensões não bastam para as tornar elegíveis. A normalização da resposta também
 rejeita um ID documental sem descrição e usa um diagrama editável. Todas as
 candidatas extraídas permanecem disponíveis para seleção manual no popup.
+O manifesto reutiliza a mesma decisão semântica no campo `available_to_llm`,
+incluindo também a exclusão das imagens carregadas isoladamente pelo docente.
 
 ## Fontes extensas
 

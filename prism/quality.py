@@ -362,6 +362,49 @@ def presentation_assessment_overview_issues(
         issues.append("tarefas em falta: " + ", ".join(missing))
     if unknown:
         issues.append("tarefas desconhecidas: " + ", ".join(unknown))
+
+    task_slides: dict[str, list[dict[str, Any]]] = {
+        identifier: [] for identifier in expected_ids
+    }
+    for slide in overview_slides:
+        title_ids = {
+            identifier.upper()
+            for identifier in re.findall(
+                r"\bTA[1-9][0-9]*\b",
+                str(slide.get("title", "")),
+                flags=re.IGNORECASE,
+            )
+            if identifier.upper() in expected_ids
+        }
+        if len(title_ids) != 1:
+            issues.append(
+                "cada slide de avaliação deve identificar uma única tarefa no título"
+            )
+            continue
+        task_slides[next(iter(title_ids))].append(slide)
+
+    for task in state.get("assessment_activities", []):
+        if not isinstance(task, dict):
+            continue
+        task_id = str(task.get("id", "")).strip().upper()
+        if task_id not in expected_ids:
+            continue
+        matching_slides = task_slides.get(task_id, [])
+        if len(matching_slides) != 1:
+            issues.append(
+                f"{task_id}: deve existir exatamente um slide próprio para esta tarefa"
+            )
+            continue
+        slide_text = _normalise(_presentation_slide_text(matching_slides[0]))
+        for field, label in (
+            ("assessment_purpose", "finalidade"),
+            ("activity", "tarefa"),
+            ("evidence", "evidência"),
+            ("criterion", "critério"),
+        ):
+            expected_text = _normalise(str(task.get(field, "")))
+            if expected_text and expected_text not in slide_text:
+                issues.append(f"{task_id}: {label} incompleto ou truncado")
     return issues
 
 

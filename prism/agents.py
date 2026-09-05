@@ -66,7 +66,11 @@ from .quality import (
     presentation_assessment_overview_issues,
     presentation_visual_issues,
 )
-from .resource_catalog import slide_outcome_ids
+from .resource_catalog import (
+    slide_outcome_ids,
+    source_image_available_to_llm,
+    source_image_semantic_description,
+)
 from .validation_targets import available_validation_targets
 
 
@@ -814,9 +818,7 @@ def _schema_for_scope(
 def _source_image_semantic_description(asset: dict[str, Any]) -> str:
     """Obtém apenas uma descrição que diga efetivamente o que a imagem representa."""
 
-    return str(
-        asset.get("description") or asset.get("alt_text") or asset.get("caption") or ""
-    ).strip()
+    return source_image_semantic_description(asset)
 
 
 def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
@@ -1069,13 +1071,9 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     ):
         source_images = []
         for asset in state.get("source_images", []):
-            if not isinstance(asset, dict) or not str(asset.get("id", "")).strip():
-                continue
-            if asset.get("origin_type") == "user_uploaded":
+            if not isinstance(asset, dict) or not source_image_available_to_llm(asset):
                 continue
             semantic_description = _source_image_semantic_description(asset)
-            if not semantic_description:
-                continue
             source_images.append(
                 {
                     "id": str(asset.get("id", "")),
@@ -1703,66 +1701,54 @@ def _canonicalize_presentation_assessment_overview(
     def clean(value: Any) -> str:
         return re.sub(r"\s+", " ", str(value or "")).strip()
 
-    def compact(value: Any, limit: int = 72) -> str:
-        text = clean(value) or "A confirmar pelo docente"
-        return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
-
     assessment_slides: list[dict[str, Any]] = []
-    chunks = [
-        assessments[offset : offset + 3]
-        for offset in range(0, len(assessments), 3)
-    ]
-    for chunk_index, chunk in enumerate(chunks, start=1):
-        title = PRESENTATION_ASSESSMENT_TITLE
-        if len(chunks) > 1:
-            title += f" ({chunk_index}/{len(chunks)})"
-        bullets = []
-        visual_items = []
-        task_ids = []
-        slide_outcomes: list[str] = []
-        for task in chunk:
-            task_id = clean(task.get("id")).upper()
-            purpose = compact(task.get("assessment_purpose"), 24)
-            outcome_ids = ", ".join(
+    for task in assessments:
+        task_id = clean(task.get("id")).upper()
+        purpose = clean(task.get("assessment_purpose")) or "A confirmar pelo docente"
+        activity = clean(task.get("activity")) or "A confirmar pelo docente"
+        evidence = clean(task.get("evidence")) or "A confirmar pelo docente"
+        criterion = clean(task.get("criterion")) or "A confirmar pelo docente"
+        slide_outcomes = list(
+            dict.fromkeys(
                 clean(identifier).upper()
                 for identifier in task.get("outcome_ids", [])
                 if clean(identifier)
             )
-            bullets.append(
-                f"{task_id} · {purpose} — {compact(task.get('activity'))}"
-                + (f" | Resultados: {outcome_ids}" if outcome_ids else "")
-                + f" | Evidência: {compact(task.get('evidence'))}"
-                + f" | Critério: {compact(task.get('criterion'))}"
-            )
-            visual_items.append(f"{task_id} · {purpose}")
-            task_ids.append(task_id)
-            slide_outcomes.extend(
-                clean(identifier).upper()
-                for identifier in task.get("outcome_ids", [])
-                if clean(identifier)
-            )
-        slide_outcomes = list(dict.fromkeys(slide_outcomes))
-        if len(visual_items) == 1:
-            visual_items.extend(["Evidência observável", "Critérios explícitos"])
+        )
+        bullets = [
+            f"Finalidade: {purpose}",
+            f"Tarefa: {activity}",
+        ]
+        if slide_outcomes:
+            bullets.append("Resultados: " + ", ".join(slide_outcomes))
+        bullets.extend(
+            [
+                f"Evidência: {evidence}",
+                f"Critério: {criterion}",
+            ]
+        )
         assessment_slides.append(
             {
-                "title": title,
+                "title": f"{PRESENTATION_ASSESSMENT_TITLE}: {task_id}",
                 "bullets": bullets,
                 "outcome_ids": slide_outcomes,
                 "visual_mode": "diagrama",
                 "visual_asset_id": "",
                 "visual_prompt": "",
                 "visual_kind": "processo",
-                "visual_title": "Tarefas, evidências e critérios",
-                "visual_items": visual_items,
+                "visual_title": f"{task_id}: evidência e critério",
+                "visual_items": [
+                    f"{task_id} · {purpose}",
+                    "Evidência observável",
+                    "Critérios explícitos",
+                ],
                 "visual_source": (
                     "Diagrama nativo gerado pelo CoerIA a partir das tarefas e "
                     "critérios aprovados pelo docente."
                 ),
                 "alt_text": (
-                    "Síntese das tarefas de avaliação "
-                    + ", ".join(task_ids)
-                    + ", respetivas evidências e critérios."
+                    f"Síntese da tarefa de avaliação {task_id}, respetiva "
+                    "evidência e critério."
                 ),
             }
         )
@@ -1842,8 +1828,7 @@ def _canonicalize_resource_visuals(
         for item in state.get("source_images", [])
         if isinstance(item, dict)
         and str(item.get("id", "")).strip()
-        and item.get("origin_type") != "user_uploaded"
-        and _source_image_semantic_description(item)
+        and source_image_available_to_llm(item)
     }
 
     def clean_text(value: Any) -> str:
@@ -2892,8 +2877,7 @@ class OpenAIPedagogicalAgent:
                 if any(
                     isinstance(asset, dict)
                     and str(asset.get("id", "")).strip()
-                    and asset.get("origin_type") != "user_uploaded"
-                    and _source_image_semantic_description(asset)
+                    and source_image_available_to_llm(asset)
                     for asset in state.get("source_images", [])
                 ):
                     instructions += (
