@@ -23,6 +23,7 @@ from prism.agents import (
 )
 from prism.application_service import ApplicationService
 from prism.exporter import (
+    _latex_escape,
     _latex_itemize,
     _export_test,
     _export_test_latex,
@@ -1471,6 +1472,15 @@ class ResourceGenerationTests(unittest.TestCase):
             r"\textquotedbl{}seguro\textquotedbl{}",
             document,
         )
+
+    def test_latex_escape_normalizes_decomposed_unicode_accents(self) -> None:
+        decomposed = "discriminac\u0327a\u0303o"
+
+        escaped = _latex_escape(decomposed)
+
+        self.assertEqual(escaped, "discriminação")
+        self.assertNotIn("\u0327", escaped)
+        self.assertNotIn("\u0303", escaped)
 
     def test_latex_pdf_compiler_is_invoked_without_shell_escape(self) -> None:
         with TemporaryDirectory() as temporary_directory:

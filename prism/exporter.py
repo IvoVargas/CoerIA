@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import unicodedata
 import zipfile
 from copy import deepcopy
 from pathlib import Path
@@ -420,7 +421,8 @@ _LATEX_REPLACEMENTS = {
 def _latex_escape(value: Any) -> str:
     """Escapa texto livre para que não altere a estrutura do documento LaTeX."""
 
-    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = unicodedata.normalize("NFC", str(value or ""))
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     escaped = "".join(_LATEX_REPLACEMENTS.get(character, character) for character in text)
     return escaped.replace("\n", r"\newline{}" + "\n")
 
