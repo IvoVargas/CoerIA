@@ -1575,9 +1575,11 @@ def update_manual_resource_settings(
     resources = apply_deterministic_resources(updated, resources)
     updated["resources"] = attach_quality_report(updated, resources)
     statuses = dict(updated.get("stage_statuses", {}))
-    statuses["resources"] = (
-        "needs_review" if artifact_has_content(resources) else "empty"
-    )
+    # Guardar explicitamente a seleção confirma que o docente reviu esta etapa.
+    # O relatório de qualidade acabou de ser recalculado sobre os recursos atuais,
+    # pelo que manter ``needs_review`` produziria um estado visual contraditório,
+    # inclusive depois de uma validação final aprovada.
+    statuses["resources"] = "draft" if artifact_has_content(resources) else "empty"
     statuses["final_validation"] = "pending"
     updated["stage_statuses"] = statuses
     updated.pop("final_validation", None)

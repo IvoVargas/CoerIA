@@ -8,7 +8,7 @@ import pytest
 from prism.ai_modes import AI_MODE_OFF, AI_MODE_ON
 from prism.agents import CritiqueResult, GenerationResult
 from prism.application_service import ApplicationService
-from prism.models import CourseInput, RESOURCE_TEST
+from prism.models import CourseInput, RESOURCE_PRESENTATION, RESOURCE_TEST
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import render_current_artifact
 from prism.source_reduction import SourceReductionResult, reduce_source_text
@@ -698,6 +698,23 @@ def test_resource_selection_can_change_without_generation() -> None:
     assert updated["resource_types"] == [RESOURCE_TEST]
     assert updated["resources"]["selected_types"] == [RESOURCE_TEST]
     assert updated["resources"]["tests"] == []
+
+
+def test_saving_reviewed_resource_selection_clears_residual_review_status() -> None:
+    state = navigate_to_stage(create_session(_course()), "resources")
+    state["resource_types"] = [RESOURCE_PRESENTATION]
+    state["resources"]["selected_types"] = [RESOURCE_PRESENTATION]
+    state["resources"]["presentation_outline"] = [
+        {
+            "title": "Apresentação da unidade curricular",
+            "bullets": ["Conteúdo revisto pelo docente."],
+        }
+    ]
+    state["stage_statuses"]["resources"] = "needs_review"
+
+    updated = update_manual_resource_settings(state, [RESOURCE_PRESENTATION])
+
+    assert updated["stage_statuses"]["resources"] == "draft"
 
 
 def test_resource_selection_is_restricted_to_the_resources_stage() -> None:

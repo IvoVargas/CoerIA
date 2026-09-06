@@ -484,6 +484,10 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
 - Registar a versão ativa de cada etapa e as versões dos artefactos usados como
   dependências de cada nova geração.
 - Identificar na interface versões ativas e artefactos desatualizados.
+- Quando o docente abre uma etapa assinalada para revisão e guarda explicitamente
+  o respetivo conteúdo ou seleção, recalcular os controlos aplicáveis e retirar o
+  estado residual de revisão; qualquer problema real permanece visível na
+  validação determinística.
 - Manter o card de versões e rastreabilidade recolhido por defeito, sem remover o
   acesso ao histórico, ao restauro ou às decisões registadas.
 - Guardar uma fotografia coerente dos artefactos e versões ativas antes de cada
@@ -568,13 +572,17 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   `IAEDU_API_KEY`, consoante o fornecedor selecionado.
 - Chaves, prompts completos e conteúdo dos ficheiros não são escritos em logs.
 - A interface identifica o processamento externo dos dados.
-- O servidor é local por predefinição e não ativa partilha pública.
+- A instalação do estudo é alojada numa VPS e disponibilizada apenas por HTTPS
+  com autenticação obrigatória. A execução local destina-se a desenvolvimento e
+  exige configuração explícita; não ativa exposição pública automaticamente.
 
 ### RNF02 — Reprodutibilidade
 
 - As dependências suportadas são declaradas e limitadas por versões maiores.
 - Os testes funcionam sem rede e sem consumo da API.
 - O modelo, o esquema e os metadados de cada geração ficam registados.
+- A versão apresentada sem configuração externa e os exemplos de ambiente
+  correspondem à versão candidata publicada.
 
 ### RNF03 — Usabilidade e acessibilidade
 
@@ -595,7 +603,8 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   página, com uma ação final para iniciar o desenho curricular alinhado.
 - A autoria apresenta o artefacto e a decisão docente em áreas distintas.
 - O ecrã adapta-se a computador, tablet e dispositivo móvel.
-- A aplicação disponibiliza uma ação explícita para terminar o servidor local.
+- A aplicação disponibiliza uma ação explícita para terminar apenas a sessão
+  autenticada, sem desligar o serviço partilhado na VPS.
 
 ### RNF04 — Desempenho e observabilidade
 

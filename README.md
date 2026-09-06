@@ -533,6 +533,9 @@ consomem APIs. A interface NiceGUI organiza o trabalho em dados iniciais,
 autoria por etapa, validação final, histórico e rastreabilidade. O botão do
 cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado.
 
+A campanha manual da versão candidata e a matriz que relaciona requisitos,
+módulos, testes e evidências encontram-se em `docs/validation/`.
+
 ## Estrutura
 
 - `app.py`: interface NiceGUI e interações do utilizador;
@@ -558,6 +561,16 @@ cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado
 - A validação automática verifica estrutura, cobertura e consistência; não
   certifica a verdade de todo o conteúdo gerado.
 - A crítica por LLM é uma segunda opinião pedagógica, não uma certificação.
+- As validações determinísticas confirmam a existência e a validade das ligações,
+  mas a pertinência semântica de associações propostas por IA exige revisão humana.
+- No planeamento das aulas, as referências a atividades e tarefas são opcionais;
+  a duração total tem de coincidir com as horas de contacto, enquanto o alinhamento
+  estrutural é verificado nas relações RA–AE e TA–AE/RA.
+- A redução inicial de fontes documentais muito extensas pode consumir um volume
+  elevado de tokens; os limites são configuráveis e o custo deve ser considerado
+  antes da utilização no estudo.
+- Em tabelas muito largas, o programa Word pode quebrar termos entre linhas
+  visuais, sem perda de texto nem divisão das linhas de dados entre páginas.
 - Não existe publicação automática em LMS nem colaboração simultânea.
 - O protótipo não executa OCR, áudio ou vídeo.
 - A entrada direta de ficheiros de imagem isolados não faz parte do âmbito do
