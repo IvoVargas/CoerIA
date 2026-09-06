@@ -207,16 +207,26 @@ def _serve_download_payload(token: str) -> Response:
 def _replace_error_notification(current: Any | None, message: str) -> Any:
     """Mostra um único erro descartável, removendo a notificação anterior."""
 
-    if current is not None:
-        for method_name in ("dismiss", "delete"):
-            try:
-                getattr(current, method_name)()
-            except Exception:  # A notificação pode já ter sido fechada pelo utilizador.
-                LOGGER.debug(
-                    "Não foi possível executar %s na notificação anterior.",
-                    method_name,
-                    exc_info=True,
-                )
+    if current is not None and not bool(getattr(current, "_deleted", False)):
+        try:
+            # O NiceGUI elimina o elemento quando recebe o evento de dismiss.
+            # Chamar delete logo a seguir, ou voltar a chamar dismiss depois do
+            # timeout, tenta reutilizar um elemento destruído e pode impedir a
+            # apresentação do erro seguinte.
+            current.dismiss()
+        except Exception:  # A notificação pode já ter sido fechada pelo utilizador.
+            LOGGER.debug(
+                "Não foi possível fechar a notificação anterior.",
+                exc_info=True,
+            )
+            if not bool(getattr(current, "_deleted", False)):
+                try:
+                    current.delete()
+                except Exception:
+                    LOGGER.debug(
+                        "Não foi possível eliminar a notificação anterior.",
+                        exc_info=True,
+                    )
     return ui.notification(
         message,
         type="negative",

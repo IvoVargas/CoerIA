@@ -171,7 +171,7 @@ def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> Non
         result = app._replace_error_notification(previous, "Erro de validação")
 
     assert previous.dismissed
-    assert previous.deleted
+    assert not previous.deleted
     assert result is replacement
     create.assert_called_once_with(
         "Erro de validação",
@@ -185,20 +185,49 @@ def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> Non
 
 def test_error_notification_is_replaced_after_the_previous_one_was_closed() -> None:
     class ClosedNotification:
+        _deleted = True
+
+        def __init__(self) -> None:
+            self.used = False
+
         def dismiss(self) -> None:
-            raise RuntimeError("already dismissed")
+            self.used = True
 
         def delete(self) -> None:
-            raise RuntimeError("already deleted")
+            self.used = True
 
+    closed = ClosedNotification()
     replacement = object()
     with patch.object(app.ui, "notification", return_value=replacement) as create:
         result = app._replace_error_notification(
-            ClosedNotification(), "Novo erro de validação"
+            closed, "Novo erro de validação"
         )
 
+    assert not closed.used
     assert result is replacement
     create.assert_called_once()
+
+
+def test_error_notification_deletes_the_previous_one_if_dismiss_fails() -> None:
+    class BrokenNotification:
+        _deleted = False
+
+        def __init__(self) -> None:
+            self.deleted = False
+
+        def dismiss(self) -> None:
+            raise RuntimeError("cannot dismiss")
+
+        def delete(self) -> None:
+            self.deleted = True
+
+    previous = BrokenNotification()
+    replacement = object()
+    with patch.object(app.ui, "notification", return_value=replacement):
+        result = app._replace_error_notification(previous, "Novo erro")
+
+    assert previous.deleted
+    assert result is replacement
 
 
 @pytest.mark.asyncio
