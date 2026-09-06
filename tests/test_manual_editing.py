@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from prism.manual_editing import (
     FieldSpec,
     apply_editor_field_value,
@@ -345,6 +347,60 @@ def test_proposal_review_preserves_ids_and_applies_only_accepted_cells() -> None
     assert result[0]["id"] == "RA1"
     assert result[0]["theme"] == "Algoritmos"
     assert result[0]["statement"] == "Analisar algoritmos com casos reais."
+
+
+def test_resource_test_proposal_review_uses_the_scoped_instance_layout() -> None:
+    current_test = {
+        "title": "Teste TA1",
+        "instructions": "Responda a todas as questões.",
+        "total_points": 10,
+        "questions": [
+            {
+                "id": "Q1",
+                "outcome_id": "RA1",
+                "prompt": "Qual é um princípio de ética da IA?",
+                "question_type": "Escolha múltipla",
+                "options": [],
+                "points": 10,
+                "answer_key": "A",
+            }
+        ],
+    }
+    artifact = {
+        "tests": [
+            {
+                "assessment_task_id": "TA1",
+                "outcome_ids": ["RA1"],
+                "test": current_test,
+            }
+        ]
+    }
+    proposed_test = deepcopy(current_test)
+    proposed_test["questions"][0]["options"] = [
+        "Justiça",
+        "Opacidade",
+        "Arbitrariedade",
+    ]
+    proposed_test["questions"][0]["answer_key"] = "Justiça"
+
+    changes = proposal_review_changes(
+        "resources",
+        artifact,
+        ["tests", 0, "test"],
+        proposed_test,
+    )
+
+    assert [change["field_key"] for change in changes] == [
+        "options",
+        "answer_key",
+    ]
+    assert all(change["path"][:3] == ["tests", 0, "test"] for change in changes)
+    result = apply_proposal_review_changes(
+        artifact,
+        changes,
+        [{"key": change["key"], "accept": True} for change in changes],
+    )
+    assert result["tests"][0]["test"] == proposed_test
 
 
 def test_proposal_review_accepts_an_edited_new_row_as_one_decision() -> None:

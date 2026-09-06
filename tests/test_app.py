@@ -1659,6 +1659,97 @@ async def test_stale_ai_proposal_review_closes_when_decision_is_already_saved(
 
 
 @pytest.mark.asyncio
+async def test_localized_test_proposal_renders_the_test_and_can_be_rejected(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    agent = create_test_agent()
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        ),
+        resource_types=[RESOURCE_TEST],
+        agent=agent,
+    )
+    for _ in range(5):
+        state = review_current_stage(state, "approve", agent=agent)
+    state["orchestration"]["mode"] = "manual-first"
+    current_test = {
+        "title": "Teste TA1",
+        "instructions": "Responda a todas as questões.",
+        "total_points": 10,
+        "questions": [
+            {
+                "id": "Q1",
+                "outcome_id": "RA1",
+                "prompt": "Qual é um princípio de ética da IA?",
+                "question_type": "Escolha múltipla",
+                "options": [],
+                "points": 10,
+                "answer_key": "A",
+            }
+        ],
+    }
+    proposed_test = deepcopy(current_test)
+    proposed_test["questions"][0]["options"] = [
+        "Justiça",
+        "Opacidade",
+        "Arbitrariedade",
+    ]
+    proposed_test["questions"][0]["answer_key"] = "Justiça"
+    state["resources"]["selected_types"] = [RESOURCE_TEST]
+    state["resources"]["tests"] = [
+        {
+            "assessment_task_id": "TA1",
+            "outcome_ids": ["RA1"],
+            "test": current_test,
+        }
+    ]
+    state["resource_scopes"] = {
+        "lesson_presentations": [],
+        "tests": ["TA1"],
+    }
+    state["ai_proposals"] = [
+        {
+            "id": "P1",
+            "stage": "resources",
+            "scope_path": ["tests", 0, "test"],
+            "scope_label": "Teste TA1",
+            "instruction": "Acrescentar opções válidas.",
+            "before": deepcopy(current_test),
+            "after": proposed_test,
+            "status": "pending",
+            "metadata": {"provider": "Teste"},
+        }
+    ]
+
+    interfaces: list[app.AGIRSoloInterface] = []
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "test-proposal.db"))
+
+    @ui.page("/_test_localized_test_proposal")
+    def localized_test_proposal_page():
+        interface = app.AGIRSoloInterface(service=service)
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_localized_test_proposal")
+
+    await user.should_see("Teste — título")
+    await user.should_see("Questões do teste")
+    await user.should_see("Justiça")
+    await user.should_not_see("Ficha — título")
+    await user.should_see("Aplicar alterações aceites")
+    await user.should_see("Rejeitar todas as alterações")
+
+    user.find("Rejeitar todas as alterações").click()
+    await user.should_not_see("PROPOSTA PENDENTE")
+    assert interfaces[-1].state["ai_proposals"][-1]["status"] == "rejected"
+    assert interfaces[-1].state["resources"]["tests"][0]["test"] == current_test
+
+
+@pytest.mark.asyncio
 async def test_complete_resource_proposal_reuses_editor_and_hides_unselected_resources(
     user: User,
     tmp_path: Path,

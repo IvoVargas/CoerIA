@@ -67,6 +67,7 @@ from prism.manual_editing import (
     editor_taxonomy_level_options,
     editor_taxonomy_verb_options,
     editor_layout,
+    editor_layout_for_scope,
     move_table_row,
     new_table_row,
     presentation_image_label,
@@ -3541,7 +3542,10 @@ class AGIRSoloInterface:
             list(proposal.get("scope_path", [])),
             proposal.get("after"),
         )
-        layout = editor_layout(stage)
+        layout = editor_layout_for_scope(
+            stage,
+            list(proposal.get("scope_path", [])),
+        )
         decisions: dict[str, str] = {}
         drafts: dict[str, dict[str, Any]] = {}
         value_changes = {

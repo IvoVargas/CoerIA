@@ -33,7 +33,7 @@ class FieldSpec:
 
 @dataclass(frozen=True)
 class ScalarSpec:
-    path: tuple[str, ...]
+    path: tuple[str | int, ...]
     label: str
     kind: str = "text"
 
@@ -41,7 +41,7 @@ class ScalarSpec:
 @dataclass(frozen=True)
 class TableSpec:
     title: str
-    path: tuple[str, ...]
+    path: tuple[str | int, ...]
     fields: tuple[FieldSpec, ...]
     template: dict[str, Any]
     reorderable: bool = False
@@ -314,6 +314,70 @@ def editor_layout(stage: str) -> EditorLayout:
         raise ValueError("Esta etapa ainda não suporta edição manual.") from error
 
 
+def editor_layout_for_scope(
+    stage: str,
+    scope_path: list[str | int] | tuple[str | int, ...],
+) -> EditorLayout:
+    """Limita e remapeia o editor para um recurso localizado.
+
+    O editor agregado de recursos conserva os nomes históricos ``test`` e
+    ``presentation_outline``. As instâncias atuais vivem, respetivamente, em
+    ``tests[n].test`` e ``lesson_presentations[n].presentation_outline``. Ao
+    rever uma proposta localizada, os caminhos do layout têm de apontar para a
+    instância real para que a comparação, a edição e a decisão usem o mesmo
+    fragmento.
+    """
+
+    layout = editor_layout(stage)
+    if stage != "resources" or not scope_path:
+        return layout
+
+    actual_prefix = tuple(scope_path)
+    first = str(actual_prefix[0])
+    if first == "tests" and actual_prefix[-1] == "test":
+        layout_prefix: tuple[str | int, ...] = ("test",)
+    elif (
+        first == "lesson_presentations"
+        and actual_prefix[-1] == "presentation_outline"
+    ):
+        layout_prefix = ("presentation_outline",)
+    elif first in {
+        "presentation_outline",
+        "lesson_worksheet",
+        "practical_activity",
+    }:
+        layout_prefix = (first,)
+    else:
+        return layout
+
+    def remap(path: tuple[str | int, ...]) -> tuple[str | int, ...] | None:
+        if path[: len(layout_prefix)] != layout_prefix:
+            return None
+        return (*actual_prefix, *path[len(layout_prefix) :])
+
+    scoped_fields: list[ScalarSpec] = []
+    for field in layout.fields:
+        mapped_path = remap(field.path)
+        if mapped_path is not None:
+            scoped_fields.append(ScalarSpec(mapped_path, field.label, field.kind))
+
+    scoped_tables: list[TableSpec] = []
+    for table in layout.tables:
+        mapped_path = remap(table.path)
+        if mapped_path is not None:
+            scoped_tables.append(
+                TableSpec(
+                    table.title,
+                    mapped_path,
+                    table.fields,
+                    deepcopy(table.template),
+                    reorderable=table.reorderable,
+                )
+            )
+
+    return EditorLayout(fields=tuple(scoped_fields), tables=tuple(scoped_tables))
+
+
 def value_at_path(artifact: Any, path: tuple[str | int, ...] | list[str | int]) -> Any:
     value = artifact
     for key in path:
@@ -418,7 +482,7 @@ def proposal_review_changes(
         list(scope_path),
         proposed_fragment,
     )
-    layout = editor_layout(stage)
+    layout = editor_layout_for_scope(stage, scope_path)
     changes: list[dict[str, Any]] = []
 
     def add_change(kind: str, path: list[str | int], **values: Any) -> None:
