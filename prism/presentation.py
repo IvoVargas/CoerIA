@@ -15,6 +15,7 @@ from .models import (
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
 )
+from .quality import displayed_test_option
 from .resource_catalog import slide_outcome_ids
 from .workflow import STAGE_LABELS, STAGE_ORDER
 
@@ -333,7 +334,8 @@ def render_resource_detail_sections(
                     item.get("outcome_id", "—"),
                     item.get("question_type", ""),
                     "\n".join(
-                        f"{chr(65 + option_index)}. {option}"
+                        f"{chr(65 + option_index)}. "
+                        f"{displayed_test_option(option, option_index)}"
                         for option_index, option in enumerate(item.get("options", []))
                     ),
                     item.get("points", 0),

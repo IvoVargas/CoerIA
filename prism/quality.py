@@ -82,6 +82,21 @@ _LESSON_TOKEN_STOPWORDS = {
 }
 
 
+def displayed_test_option(option: Any, option_index: int) -> str:
+    """Remove um rótulo A)/B. redundante antes de apresentar uma opção."""
+
+    text = str(option or "").strip()
+    expected_label = chr(65 + option_index)
+    cleaned = re.sub(
+        rf"^{expected_label}\s*[.):-]\s*",
+        "",
+        text,
+        count=1,
+        flags=re.IGNORECASE,
+    ).strip()
+    return cleaned or text
+
+
 def test_question_issues(question: dict[str, Any]) -> list[str]:
     """Valida a estrutura pedagógica mínima de uma questão de teste."""
 

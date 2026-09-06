@@ -42,7 +42,7 @@ from .models import (
     RESOURCE_TEST,
     RESOURCE_WORKSHEET,
 )
-from .quality import attach_quality_report
+from .quality import attach_quality_report, displayed_test_option
 from .relationships import derive_alignment_rows
 from .resource_catalog import slide_outcome_ids, source_image_available_to_llm
 
@@ -1598,7 +1598,8 @@ def _export_test(
         document.add_paragraph(question["prompt"])
         for option_index, option in enumerate(question.get("options", [])):
             document.add_paragraph(
-                f"{chr(65 + option_index)}. {option}",
+                f"{chr(65 + option_index)}. "
+                f"{displayed_test_option(option, option_index)}",
                 style="List Bullet",
             )
         document.add_paragraph(
@@ -1685,7 +1686,8 @@ def _export_test_latex(
     questions = data.get("questions", [])
     for question in questions:
         option_lines = [
-            rf"\textbf{{{chr(65 + option_index)}.}} {_latex_escape(option)}\par"
+            rf"\textbf{{{chr(65 + option_index)}.}} "
+            rf"{_latex_escape(displayed_test_option(option, option_index))}\par"
             for option_index, option in enumerate(question.get("options", []))
         ]
         body.extend(

@@ -335,6 +335,47 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertIn(r"\textbf{A.} Opção um", latex_text)
         self.assertIn(r"\textbf{B.} Opção dois", latex_text)
 
+    def test_test_exports_do_not_repeat_existing_option_labels(self) -> None:
+        state = self._resource_state()
+        data = deepcopy(state["resources"]["tests"][0]["test"])
+        question = data["questions"][0]
+        question["question_type"] = QUESTION_TYPE_MULTIPLE_CHOICE
+        question["options"] = ["A) Opção um", "B. Opção dois", "C: Opção três"]
+        question["answer_key"] = "B"
+
+        with TemporaryDirectory() as temporary_directory:
+            word_path = Path(temporary_directory) / "teste.docx"
+            latex_path = Path(temporary_directory) / "teste.tex"
+            _export_test(state, word_path, data)
+            _export_test_latex(state, latex_path, data)
+
+            document = Document(word_path)
+            word_text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+            latex_text = latex_path.read_text(encoding="utf-8")
+
+        self.assertIn("A. Opção um", word_text)
+        self.assertIn("B. Opção dois", word_text)
+        self.assertNotIn("A. A)", word_text)
+        self.assertNotIn("B. B.", word_text)
+        self.assertIn(r"\textbf{A.} Opção um", latex_text)
+        self.assertNotIn(r"\textbf{A.} A)", latex_text)
+
+    def test_test_preview_does_not_repeat_existing_option_labels(self) -> None:
+        state = self._resource_state()
+        resources = deepcopy(state["resources"])
+        resources["selected_types"] = [RESOURCE_TEST]
+        question = resources["tests"][0]["test"]["questions"][0]
+        question["question_type"] = QUESTION_TYPE_MULTIPLE_CHOICE
+        question["options"] = ["A) Opção um", "B. Opção dois", "C: Opção três"]
+        question["answer_key"] = "B"
+
+        content = render_resource_detail_sections(resources)[0]["content"]
+
+        self.assertIn("A. Opção um", content)
+        self.assertIn("B. Opção dois", content)
+        self.assertNotIn("A. A)", content)
+        self.assertNotIn("B. B.", content)
+
     def test_lesson_presentations_are_specific_and_not_repeated(self) -> None:
         state = self._resource_state()
         presentations = state["resources"]["lesson_presentations"]
