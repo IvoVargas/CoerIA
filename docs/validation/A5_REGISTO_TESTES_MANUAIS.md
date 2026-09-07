@@ -2,11 +2,11 @@
 
 ## Campanha de validação da versão candidata final
 
-**Estado da campanha:** CONCLUÍDA — E2E-01 APROVADO; E2E-02, E2E-03 E
+**Estado da campanha:** CONCLUÍDA E ENCERRADA PARA `v0.3.95` — E2E-01 APROVADO; E2E-02, E2E-03 E
 E2E-04 APROVADOS COM OBSERVAÇÕES; E2E-05, E2E-06 E E2E-07 APROVADOS APÓS
 CORREÇÕES; E2E-08 APROVADO  
-**Versão de referência corrigida:** `v0.3.94`  
-**Commit de referência:** `1608ec68843f1e99053338817ab34a62cb24f389`  
+**Versão de referência corrigida:** `v0.3.95`  
+**Commit de referência:** `df747046619f52740e9887b1a6817ee67d7cbe76`  
 **Ambiente de referência:** `https://coeria.ivovargas.pt/`  
 **Regra de validade:** toda a evidência manual obtida antes de `v0.3.83`
 permanece apenas histórica. Os oito cenários devem ser executados novamente,
@@ -21,17 +21,17 @@ imagens, da validação final e da exportação.
 
 ### Pré-condição automatizada
 
-**Estado:** APROVADO PARA `v0.3.94`
+**Estado:** APROVADO PARA `v0.3.95`
 
-- Data inicial: 02-09-2026; repetição mais recente após correções: 06-09-2026.
+- Data inicial: 02-09-2026; repetição mais recente após correções: 07-09-2026.
 - Ambiente local: Windows; Python 3.13.11.
 - Dependências principais: NiceGUI 3.16.0; LangGraph 1.2.11; OpenAI 2.54.0;
   python-docx 1.2.0; python-pptx 1.0.2; pytest 9.1.1.
 - Comando local: `python -m pytest -q --basetemp=.pytest-final`.
-- Resultado local em `v0.3.94`: **333 testes e 7 subtestes aprovados em 28,17 s**,
+- Resultado local em `v0.3.95`: **334 testes e 7 subtestes aprovados em 32,83 s**,
   incluindo compilação real LaTeX/PDF e sem consumo de APIs.
-- Resultado na VPS durante o deploy de `v0.3.94`: **333 testes e 7 subtestes
-  aprovados em 57,75 s**, usando uma base de dados temporária e sem alterar a
+- Resultado na VPS durante o deploy de `v0.3.95`: **334 testes e 7 subtestes
+  aprovados em 56,56 s**, usando uma base de dados temporária e sem alterar a
   base de produção.
 - A cobertura automatizada inclui a rejeição de bases, estados e backups de
   versões anteriores e a aceitação exclusiva do esquema de sessão 33 e do
@@ -39,16 +39,41 @@ imagens, da validação final e da exportação.
 
 ### Pré-condição da VPS
 
-**Estado:** APROVADO EM 06-09-2026
+**Estado:** APROVADO EM 07-09-2026
 
-- commit instalado: `1608ec68843f1e99053338817ab34a62cb24f389`;
-- tag apresentada pelo Git: `v0.3.94`;
-- configuração: `COERIA_APP_VERSION=0.3.94`;
+- commit instalado: `df747046619f52740e9887b1a6817ee67d7cbe76`;
+- tag apresentada pelo Git: `v0.3.95`;
+- configuração: `COERIA_APP_VERSION=0.3.95`;
 - Python da VPS: 3.14.4;
-- base de produção no início da campanha: **0 sessões**;
+- base de produção após o encerramento: **0 sessões, 0 eventos de auditoria e
+  0 anexos de sessão**;
 - serviços `coeria`, `nginx` e `coeria-backup.timer`: `active`;
 - `http://127.0.0.1:7860/login`: HTTP 200;
 - `https://coeria.ivovargas.pt/login`: HTTP 200.
+
+### Encerramento da candidata v0.3.95
+
+- `E2E03-OBS-01`: **RESOLVIDA E RETESTADA** — guardar explicitamente a
+  seleção de recursos recalcula a qualidade e muda o estado residual
+  `needs_review` para `draft`; o reteste dirigido passou localmente e sobre o
+  código instalado na VPS.
+- Metadados de versão: **RESOLVIDOS** — o valor predefinido, os exemplos de
+  ambiente, a interface e a configuração da VPS apresentam `0.3.95`.
+- `E2E02-OBS-01`: **ACEITE COMO LIMITAÇÃO** — a validade formal das relações é
+  determinística, mas a pertinência semântica continua sujeita a revisão humana.
+- `E2E02-OBS-02`: **ENCERRADA COMO DECISÃO DE REQUISITO** — os identificadores
+  AE/TA são opcionais no planeamento; exige-se a duração total exata e o
+  alinhamento é validado diretamente nas relações RA–AE e TA–AE/RA.
+- `E2E04-OBS-02` e `DOC-03`: **ACEITES COMO LIMITAÇÕES NÃO BLOQUEANTES**,
+  respetivamente custo variável da redução de fontes extensas e quebras visuais
+  de palavras em tabelas Word largas sem perda de conteúdo.
+- O GitHub contém a tag imutável `v0.3.95`, a suíte passou localmente e na VPS,
+  o deploy terminou com HTTPS 200 e os serviços `coeria`, `nginx` e
+  `coeria-backup.timer` ativos.
+- Antes da limpeza final foi criada a cópia
+  `/var/backups/coeria/prism-20260906T235734Z.db.gz`. Foram depois eliminadas
+  12 sessões de teste, 265 eventos e 7 anexos; o ficheiro de credenciais foi
+  preservado.
 
 ### Regras de execução manual
 
