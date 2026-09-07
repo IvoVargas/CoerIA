@@ -77,7 +77,7 @@ from .session_schema import SESSION_SCHEMA_VERSION
 from .validation_targets import resolve_validation_target
 
 
-class PrismState(TypedDict, total=False):
+class CoerIAState(TypedDict, total=False):
     schema_version: int
     orchestration: dict[str, Any]
     session_id: str
@@ -228,12 +228,12 @@ REVISION_TARGETS = {
 }
 
 
-def _feedback(state: PrismState, stage: str) -> str:
+def _feedback(state: CoerIAState, stage: str) -> str:
     return (state.get("feedback", {}).get(stage, "") or "").strip()
 
 
 def _audit_update(
-    state: PrismState, stage: str, message: str, feedback: str = ""
+    state: CoerIAState, stage: str, message: str, feedback: str = ""
 ) -> dict[str, list[dict[str, str]]]:
     entry = {
         "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -286,7 +286,7 @@ def _content_scope_description(title: str) -> str:
     )
 
 
-def analyse_curriculum(state: PrismState) -> dict[str, Any]:
+def analyse_curriculum(state: CoerIAState) -> dict[str, Any]:
     course = state["course"]
     outcomes = state.get("learning_outcomes", [])
     topics = [
@@ -333,7 +333,7 @@ def analyse_curriculum(state: PrismState) -> dict[str, Any]:
     }
 
 
-def formulate_learning_outcomes(state: PrismState) -> dict[str, Any]:
+def formulate_learning_outcomes(state: CoerIAState) -> dict[str, Any]:
     feedback = _feedback(state, "learning_outcomes")
     taxonomy_type = validate_taxonomy_choice(state["course"].get("taxonomy_type", "SOLO"))
     levels = TAXONOMY_LEVELS[taxonomy_type]
@@ -365,7 +365,7 @@ def formulate_learning_outcomes(state: PrismState) -> dict[str, Any]:
     }
 
 
-def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
+def propose_assessment_activities(state: CoerIAState) -> dict[str, Any]:
     feedback = _feedback(state, "assessment_activities")
     taxonomy_type = validate_taxonomy_choice(
         state["course"].get("taxonomy_type", "SOLO")
@@ -421,7 +421,7 @@ def propose_assessment_activities(state: PrismState) -> dict[str, Any]:
     }
 
 
-def create_pedagogical_design(state: PrismState) -> dict[str, Any]:
+def create_pedagogical_design(state: CoerIAState) -> dict[str, Any]:
     course = state["course"]
     outcomes = state.get("learning_outcomes", [])
     contact_minutes = max(
@@ -465,7 +465,7 @@ def create_pedagogical_design(state: PrismState) -> dict[str, Any]:
     }
 
 
-def propose_teaching_activities(state: PrismState) -> dict[str, Any]:
+def propose_teaching_activities(state: CoerIAState) -> dict[str, Any]:
     feedback = _feedback(state, "teaching_activities")
     activities = [
         {
@@ -492,7 +492,7 @@ def propose_teaching_activities(state: PrismState) -> dict[str, Any]:
     }
 
 
-def generate_resources(state: PrismState) -> dict[str, Any]:
+def generate_resources(state: CoerIAState) -> dict[str, Any]:
     feedback = _feedback(state, "resources")
     course = state["course"]
     selected_types = state.get("resource_types", [RESOURCE_PRESENTATION])
@@ -839,13 +839,13 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
     }
 
 
-def is_manual_first(state: PrismState) -> bool:
+def is_manual_first(state: CoerIAState) -> bool:
     """Indica se a sessão usa autoria manual com IA facultativa."""
 
     return state.get("orchestration", {}).get("mode") == MANUAL_FIRST_MODE
 
 
-def blank_artifact(stage: str, state: PrismState) -> Any:
+def blank_artifact(stage: str, state: CoerIAState) -> Any:
     """Cria apenas a estrutura editável de uma etapa, sem conteúdo pedagógico de IA."""
 
     if stage == "learning_outcomes":
@@ -875,7 +875,7 @@ def blank_artifact(stage: str, state: PrismState) -> Any:
     raise ValueError("A etapa selecionada não possui um artefacto editável.")
 
 
-def ensure_manual_artifacts(state: PrismState) -> PrismState:
+def ensure_manual_artifacts(state: CoerIAState) -> CoerIAState:
     """Completa estruturas ausentes numa sessão manual sem substituir dados existentes."""
 
     for stage in AUTHORING_STAGES:
@@ -894,7 +894,7 @@ def ensure_manual_artifacts(state: PrismState) -> PrismState:
 
 
 def update_initial_context(
-    state: PrismState,
+    state: CoerIAState,
     course: CourseInput,
     *,
     ai_provider: str,
@@ -902,7 +902,7 @@ def update_initial_context(
     source_original_text: str,
     source_reduction: dict[str, Any],
     source_images: list[dict[str, Any]],
-) -> PrismState:
+) -> CoerIAState:
     """Atualiza a configuração inicial sem eliminar artefactos já produzidos."""
 
     if state.get("status") == "completed":
@@ -1015,7 +1015,7 @@ def _clean_learning_outcome_assumptions(value: Any) -> list[str]:
 
 
 def _version_metadata(
-    state: PrismState,
+    state: CoerIAState,
     stage: str,
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
@@ -1030,7 +1030,7 @@ def _version_metadata(
 
 
 def _append_version(
-    state: PrismState,
+    state: CoerIAState,
     stage: str,
     artifact: Any,
     metadata: dict[str, Any],
@@ -1060,7 +1060,7 @@ def _append_version(
 
 
 def _snapshot_without_invalidation(
-    state: PrismState,
+    state: CoerIAState,
     target_stage: str,
     reason: str,
 ) -> None:
@@ -1164,14 +1164,14 @@ def _remap_list_references(
 
 
 def save_manual_draft(
-    state: PrismState,
+    state: CoerIAState,
     target_stage: str,
     artifact: Any,
     reason: str = "",
     *,
     metadata: dict[str, Any] | None = None,
     stage_context: dict[str, Any] | None = None,
-) -> PrismState:
+) -> CoerIAState:
     """Guarda um rascunho incompleto e preserva sempre os artefactos posteriores."""
 
     if target_stage not in AUTHORING_STAGES:
@@ -1319,7 +1319,7 @@ def _parse_history_selection(selected_version: str) -> tuple[str, int]:
 
 
 def version_restore_impact(
-    state: PrismState,
+    state: CoerIAState,
     selected_version: str,
 ) -> dict[str, Any]:
     """Descreve o impacto de restaurar uma versão sem modificar a sessão."""
@@ -1353,9 +1353,9 @@ def version_restore_impact(
 
 
 def restore_stage_version(
-    state: PrismState,
+    state: CoerIAState,
     selected_version: str,
-) -> PrismState:
+) -> CoerIAState:
     """Volta a tornar ativa uma versão histórica, sem criar uma nova versão."""
 
     impact = version_restore_impact(state, selected_version)
@@ -1429,7 +1429,7 @@ def restore_stage_version(
     return restored
 
 
-def navigate_to_stage(state: PrismState, target_stage: str) -> PrismState:
+def navigate_to_stage(state: CoerIAState, target_stage: str) -> CoerIAState:
     """Muda de etapa sem gerar, validar ou apagar conteúdo."""
 
     if target_stage not in STAGE_ORDER:
@@ -1481,10 +1481,10 @@ def navigate_to_stage(state: PrismState, target_stage: str) -> PrismState:
 
 
 def reopen_completed_manual_session(
-    state: PrismState,
+    state: CoerIAState,
     target_stage: str,
     reason: str,
-) -> PrismState:
+) -> CoerIAState:
     """Reabre explicitamente uma sessão concluída sem alterar os artefactos."""
 
     if not is_manual_first(state) or state.get("status") != "completed":
@@ -1516,10 +1516,10 @@ def reopen_completed_manual_session(
 
 
 def update_manual_resource_settings(
-    state: PrismState,
+    state: CoerIAState,
     resource_types: list[str],
     resource_scopes: dict[str, Any] | None = None,
-) -> PrismState:
+) -> CoerIAState:
     """Atualiza escolhas de recursos sem gerar conteúdo nem avançar a sessão."""
 
     updated = ensure_manual_artifacts(deepcopy(state))
@@ -1605,13 +1605,13 @@ def _replace_at_scope(value: Any, path: list[str | int], replacement: Any) -> An
 
 
 def request_ai_assistance(
-    state: PrismState,
+    state: CoerIAState,
     target_stage: str,
     scope_path: list[str | int],
     scope_label: str,
     instruction: str,
     agent: PedagogicalAgent | LocalizedAssistanceAgent | None = None,
-) -> PrismState:
+) -> CoerIAState:
     """Produz uma proposta localizada; nunca altera o artefacto ativo."""
 
     if target_stage not in AUTHORING_STAGES:
@@ -1722,13 +1722,13 @@ def request_ai_assistance(
 
 
 def decide_ai_proposal(
-    state: PrismState,
+    state: CoerIAState,
     proposal_id: str,
     accept: bool,
     selections: list[dict[str, Any]] | None = None,
     *,
     edited_after: Any = None,
-) -> PrismState:
+) -> CoerIAState:
     """Aceita ou rejeita explicitamente uma proposta previamente guardada."""
 
     working = deepcopy(state)
@@ -1847,10 +1847,10 @@ def decide_ai_proposal(
 
 
 def verify_stage_with_ai(
-    state: PrismState,
+    state: CoerIAState,
     target_stage: str,
     critic: PedagogicalCritic | None = None,
-) -> PrismState:
+) -> CoerIAState:
     """Regista uma crítica facultativa e não bloqueante, sem modificar conteúdo."""
 
     if target_stage not in AUTHORING_STAGES:
@@ -1911,7 +1911,7 @@ def verify_stage_with_ai(
     return updated
 
 
-def ai_review_context_signature(state: PrismState, target_stage: str) -> str:
+def ai_review_context_signature(state: CoerIAState, target_stage: str) -> str:
     """Identifica o conteúdo e as dependências usados numa verificação facultativa."""
 
     if target_stage not in AUTHORING_STAGES:
@@ -1939,7 +1939,7 @@ def ai_review_context_signature(state: PrismState, target_stage: str) -> str:
 
 
 def ai_review_is_current(
-    state: PrismState,
+    state: CoerIAState,
     target_stage: str,
     review: dict[str, Any],
 ) -> bool:
@@ -1951,7 +1951,7 @@ def ai_review_is_current(
     )
 
 
-def build_final_validation(state: PrismState) -> dict[str, Any]:
+def build_final_validation(state: CoerIAState) -> dict[str, Any]:
     """Prepara o ecrã final sem delegar a decisão a um modelo."""
 
     structural_checks: list[dict[str, Any]] = []
@@ -2096,7 +2096,7 @@ def build_final_validation(state: PrismState) -> dict[str, Any]:
     }
 
 
-def _route_current_stage(state: PrismState) -> str:
+def _route_current_stage(state: CoerIAState) -> str:
     return state["current_stage"]
 
 
@@ -2131,10 +2131,10 @@ def create_test_agent() -> RuleBasedPedagogicalAgent:
 
 
 def _resource_generation_scope(
-    state: PrismState,
+    state: CoerIAState,
     resource_type: str,
     item_scope: dict[str, Any] | None = None,
-) -> PrismState:
+) -> CoerIAState:
     scoped = deepcopy(state)
     scoped["resource_types"] = [resource_type]
     scoped["resource_generation_scope"] = resource_type
@@ -2162,7 +2162,7 @@ def _resource_generation_scope(
 
 
 def _resource_draft_fingerprint(
-    state: PrismState,
+    state: CoerIAState,
     selected_types: list[str],
 ) -> str:
     relevant_state = {
@@ -2198,7 +2198,7 @@ def _resource_draft_payload(
 
 
 def _matching_resource_drafts(
-    state: PrismState,
+    state: CoerIAState,
     fingerprint: str,
     selected_types: list[str],
 ) -> dict[str, Any]:
@@ -2355,7 +2355,7 @@ def _aggregate_resource_metadata(
 
 
 def _resource_generation_jobs(
-    state: PrismState,
+    state: CoerIAState,
     selected_types: list[str],
 ) -> list[dict[str, Any]]:
     """Expande tipos compostos em gerações independentes e rastreáveis."""
@@ -2696,7 +2696,7 @@ class _SeparateResourceAgent:
 
 
 def _stage_node(stage: str, agent: PedagogicalAgent):
-    def execute(state: PrismState) -> dict[str, Any]:
+    def execute(state: CoerIAState) -> dict[str, Any]:
         generation: GenerationResult = agent.generate(stage, state)
         artifact = deepcopy(generation.artifact)
         state_updates: dict[str, Any] = {}
@@ -2763,7 +2763,7 @@ def build_stage_executor(agent: PedagogicalAgent):
     decisão humana definido no diagrama de fluxo.
     """
 
-    graph = StateGraph(PrismState)
+    graph = StateGraph(CoerIAState)
     node_by_stage = {
         "curriculum_analysis": "analyse_curriculum",
         "learning_outcomes": "formulate_learning_outcomes",
@@ -2781,7 +2781,7 @@ def build_stage_executor(agent: PedagogicalAgent):
 
 
 def _record_decision(
-    state: PrismState, stage: str, decision: str, feedback: str = ""
+    state: CoerIAState, stage: str, decision: str, feedback: str = ""
 ) -> None:
     state.setdefault("audit", []).append(
         {
@@ -2793,7 +2793,7 @@ def _record_decision(
     )
 
 
-def revision_targets_for_state(state: PrismState) -> tuple[str, ...]:
+def revision_targets_for_state(state: CoerIAState) -> tuple[str, ...]:
     """Devolve as etapas de autoria já alcançadas que podem ser reabertas."""
 
     if is_manual_first(state):
@@ -2815,7 +2815,7 @@ def revision_targets_for_state(state: PrismState) -> tuple[str, ...]:
     )
 
 
-def revision_impact(state: PrismState, target_stage: str) -> dict[str, Any]:
+def revision_impact(state: CoerIAState, target_stage: str) -> dict[str, Any]:
     """Calcula o impacto antes de qualquer mutação ou chamada ao fornecedor."""
 
     targets = revision_targets_for_state(state)
@@ -2838,7 +2838,7 @@ def revision_impact(state: PrismState, target_stage: str) -> dict[str, Any]:
 
 
 def _archive_and_invalidate_revision(
-    state: PrismState,
+    state: CoerIAState,
     target_stage: str,
     feedback: str,
 ) -> None:
@@ -2883,12 +2883,12 @@ def _archive_and_invalidate_revision(
 
 
 def reopen_stage(
-    state: PrismState,
+    state: CoerIAState,
     target_stage: str,
     feedback: str,
     agent: PedagogicalAgent | None = None,
     progress_callback: ProgressCallback | None = None,
-) -> PrismState:
+) -> CoerIAState:
     """Cria uma nova versão de uma etapa e preserva a versão coerente anterior."""
 
     if is_manual_first(state):
@@ -2930,13 +2930,13 @@ def reopen_stage(
 
 
 def apply_manual_edit(
-    state: PrismState,
+    state: CoerIAState,
     target_stage: str,
     artifact: Any,
     reason: str = "",
     *,
     stage_context: dict[str, Any] | None = None,
-) -> PrismState:
+) -> CoerIAState:
     """Guarda uma edição humana como nova versão, sem chamar um fornecedor de IA."""
 
     if is_manual_first(state):
@@ -3031,10 +3031,10 @@ def apply_manual_edit(
 
 
 def run_current_stage(
-    state: PrismState,
+    state: CoerIAState,
     agent: PedagogicalAgent | None = None,
     progress_callback: ProgressCallback | None = None,
-) -> PrismState:
+) -> CoerIAState:
     """Executa o agente da etapa ativa e pára para validação do docente."""
 
     stage = state["current_stage"]
@@ -3120,12 +3120,12 @@ def create_session(
     source_reduction: dict[str, Any] | None = None,
     progress_callback: ProgressCallback | None = None,
     manual_first: bool | None = None,
-) -> PrismState:
+) -> CoerIAState:
     """Inicia uma sessão no primeiro ponto de validação humana."""
 
     selected_resource_types = validate_resource_types(resource_types)
     use_manual_first = agent is None if manual_first is None else bool(manual_first)
-    state: PrismState = {
+    state: CoerIAState = {
         "schema_version": SCHEMA_VERSION,
         "orchestration": {
             "mode": MANUAL_FIRST_MODE if use_manual_first else "bounded-generator-critic",
@@ -3188,7 +3188,7 @@ def create_session(
     )
 
 
-def _mark_selected_images_approved(state: PrismState) -> None:
+def _mark_selected_images_approved(state: CoerIAState) -> None:
     """Regista as imagens documentais ou geradas aceites pelo docente."""
 
     all_slides = list(
@@ -3214,13 +3214,13 @@ def _mark_selected_images_approved(state: PrismState) -> None:
 
 
 def review_current_stage(
-    state: PrismState,
+    state: CoerIAState,
     decision: str,
     feedback: str = "",
     revision_stage: str | None = None,
     agent: PedagogicalAgent | None = None,
     progress_callback: ProgressCallback | None = None,
-) -> PrismState:
+) -> CoerIAState:
     """Aplica a decisão do docente e executa a próxima etapa apropriada."""
 
     # Não alteramos o estado persistido até a nova proposta ser produzida com êxito.

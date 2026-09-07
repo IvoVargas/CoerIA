@@ -10,6 +10,19 @@ CORREÇÕES; E2E-08 APROVADO
 **Commit de referência:** `1060a6a4574c44fe9ad398d3a779fa4493aea4cd`
 
 **Ambiente de referência:** `https://coeria.ivovargas.pt/`  
+
+### Manutenção nominal v0.3.97
+
+A `v0.3.97` substitui o identificador interno `PrismState` por `CoerIAState` e
+atualiza os metadados de versão. Não altera o esquema de sessão 33, o formato de
+backup 3, o fluxo, os artefactos, a interface ou os resultados exportados. A
+suíte integral local voltou a concluir **337 testes e 7 subtestes**, sem chamadas
+a fornecedores de IA; o teste dirigido da versão apresentada na interface
+também passou. Por não existir alteração comportamental, a campanha manual
+encerrada na `v0.3.96` mantém-se como evidência de referência. A correspondência
+da manutenção está registada em
+`docs/validation/MATRIZ_RASTREABILIDADE_V0.3.97.md`.
+
 **Regra de validade:** toda a evidência manual obtida antes de `v0.3.83`
 permanece apenas histórica. Os oito cenários devem ser executados novamente,
 desde o início, em sessões novas criadas na versão congelada. Não são aceites
