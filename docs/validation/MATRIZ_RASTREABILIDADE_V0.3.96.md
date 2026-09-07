@@ -1,4 +1,4 @@
-# Matriz de rastreabilidade da versão v0.3.95
+# Matriz de rastreabilidade da versão v0.3.96
 
 Este documento relaciona os requisitos consolidados do CoerIA com os módulos
 implementados, os testes automatizados e os cenários manuais que constituem
@@ -6,16 +6,20 @@ evidência da versão candidata final.
 
 ## Evidência de referência
 
-- versão candidata: `v0.3.95`;
+- versão candidata: `v0.3.96`;
 - esquema de sessão: 33;
 - formato de cópia de segurança: 3;
-- suíte local: 334 testes e 7 subtestes aprovados em 07-09-2026, sem chamadas
+- suíte local: 337 testes e 7 subtestes aprovados em 07-09-2026, sem chamadas
   a fornecedores de IA;
 - campanha manual: E2E-01 a E2E-08 concluídos na VPS entre `v0.3.83` e
   `v0.3.94`, com as correções encontradas incorporadas cumulativamente;
 - reteste dirigido da `v0.3.95`: guardar uma seleção de recursos já revista
   retira o estado residual `needs_review`; a versão apresentada sem
   configuração externa é `0.3.95`.
+- correção e reteste dirigido da `v0.3.96`: o exportador incorpora uma imagem
+  selecionada na capa ou no último slide e aceita a decisão explícita de não
+  usar um elemento visual. No código instalado na VPS, os dois testes dirigidos
+  passaram em 1,38 s; a suíte integral passou com 337 testes e 7 subtestes.
 
 O procedimento de deploy volta a executar a suíte integral numa base SQLite
 temporária antes de reiniciar o serviço. O commit e os resultados efetivos da

@@ -2,11 +2,13 @@
 
 ## Campanha de validação da versão candidata final
 
-**Estado da campanha:** CONCLUÍDA E ENCERRADA PARA `v0.3.95` — E2E-01 APROVADO; E2E-02, E2E-03 E
+**Estado da campanha:** CONCLUÍDA E ENCERRADA PARA `v0.3.96` — E2E-01 APROVADO; E2E-02, E2E-03 E
 E2E-04 APROVADOS COM OBSERVAÇÕES; E2E-05, E2E-06 E E2E-07 APROVADOS APÓS
 CORREÇÕES; E2E-08 APROVADO  
-**Versão de referência corrigida:** `v0.3.95`  
-**Commit de referência:** `df747046619f52740e9887b1a6817ee67d7cbe76`  
+**Versão de referência corrigida:** `v0.3.96`
+
+**Commit de referência:** `1060a6a4574c44fe9ad398d3a779fa4493aea4cd`
+
 **Ambiente de referência:** `https://coeria.ivovargas.pt/`  
 **Regra de validade:** toda a evidência manual obtida antes de `v0.3.83`
 permanece apenas histórica. Os oito cenários devem ser executados novamente,
@@ -21,17 +23,17 @@ imagens, da validação final e da exportação.
 
 ### Pré-condição automatizada
 
-**Estado:** APROVADO PARA `v0.3.95`
+**Estado:** APROVADO PARA `v0.3.96`
 
 - Data inicial: 02-09-2026; repetição mais recente após correções: 07-09-2026.
 - Ambiente local: Windows; Python 3.13.11.
 - Dependências principais: NiceGUI 3.16.0; LangGraph 1.2.11; OpenAI 2.54.0;
   python-docx 1.2.0; python-pptx 1.0.2; pytest 9.1.1.
 - Comando local: `python -m pytest -q --basetemp=.pytest-final`.
-- Resultado local em `v0.3.95`: **334 testes e 7 subtestes aprovados em 32,83 s**,
+- Resultado local em `v0.3.96`: **337 testes e 7 subtestes aprovados em 32,14 s**,
   incluindo compilação real LaTeX/PDF e sem consumo de APIs.
-- Resultado na VPS durante o deploy de `v0.3.95`: **334 testes e 7 subtestes
-  aprovados em 56,56 s**, usando uma base de dados temporária e sem alterar a
+- Resultado na VPS durante o deploy de `v0.3.96`: **337 testes e 7 subtestes
+  aprovados em 58,13 s**, usando uma base de dados temporária e sem alterar a
   base de produção.
 - A cobertura automatizada inclui a rejeição de bases, estados e backups de
   versões anteriores e a aceitação exclusiva do esquema de sessão 33 e do
@@ -41,9 +43,9 @@ imagens, da validação final e da exportação.
 
 **Estado:** APROVADO EM 07-09-2026
 
-- commit instalado: `df747046619f52740e9887b1a6817ee67d7cbe76`;
-- tag apresentada pelo Git: `v0.3.95`;
-- configuração: `COERIA_APP_VERSION=0.3.95`;
+- commit instalado: `1060a6a4574c44fe9ad398d3a779fa4493aea4cd`;
+- tag apresentada pelo Git: `v0.3.96`;
+- configuração: `COERIA_APP_VERSION=0.3.96`;
 - Python da VPS: 3.14.4;
 - base de produção após o encerramento: **0 sessões, 0 eventos de auditoria e
   0 anexos de sessão**;
@@ -51,14 +53,23 @@ imagens, da validação final e da exportação.
 - `http://127.0.0.1:7860/login`: HTTP 200;
 - `https://coeria.ivovargas.pt/login`: HTTP 200.
 
-### Encerramento da candidata v0.3.95
+### Encerramento da candidata v0.3.96
 
 - `E2E03-OBS-01`: **RESOLVIDA E RETESTADA** — guardar explicitamente a
   seleção de recursos recalcula a qualidade e muda o estado residual
   `needs_review` para `draft`; o reteste dirigido passou localmente e sobre o
   código instalado na VPS.
+- `E2E05-OBS-02`: **RESOLVIDA E RETESTADA** — o exportador deixou de tratar
+  incondicionalmente o último slide como um encerramento sem imagem. Uma imagem
+  documental ou gerada por IA escolhida para a capa ou para o último slide é
+  agora incorporada; a ausência de visual passou a ser uma opção explícita e é
+  aplicada por defeito à capa e à síntese final.
+- O reteste dirigido da exportação foi executado no código instalado na VPS:
+  criou um PPTX com imagem no último slide e confirmou a presença do objeto
+  `PICTURE`; validou também a opção sem elemento visual. Resultado: **2 testes
+  aprovados em 1,38 s**.
 - Metadados de versão: **RESOLVIDOS** — o valor predefinido, os exemplos de
-  ambiente, a interface e a configuração da VPS apresentam `0.3.95`.
+  ambiente, a interface e a configuração da VPS apresentam `0.3.96`.
 - `E2E02-OBS-01`: **ACEITE COMO LIMITAÇÃO** — a validade formal das relações é
   determinística, mas a pertinência semântica continua sujeita a revisão humana.
 - `E2E02-OBS-02`: **ENCERRADA COMO DECISÃO DE REQUISITO** — os identificadores
@@ -67,7 +78,7 @@ imagens, da validação final e da exportação.
 - `E2E04-OBS-02` e `DOC-03`: **ACEITES COMO LIMITAÇÕES NÃO BLOQUEANTES**,
   respetivamente custo variável da redução de fontes extensas e quebras visuais
   de palavras em tabelas Word largas sem perda de conteúdo.
-- O GitHub contém a tag imutável `v0.3.95`, a suíte passou localmente e na VPS,
+- O GitHub contém a tag imutável `v0.3.96`, a suíte passou localmente e na VPS,
   o deploy terminou com HTTPS 200 e os serviços `coeria`, `nginx` e
   `coeria-backup.timer` ativos.
 - Antes da limpeza final foi criada a cópia
@@ -675,7 +686,7 @@ observações `E2E04-OBS-03` e `E2E04-OBS-04` foram encerradas tecnicamente; man
 
 ## E2E-05 — Edição da apresentação e origens das imagens
 
-**Estado:** APROVADO APÓS CORREÇÃO
+**Estado:** APROVADO APÓS CORREÇÕES — RETESTE DIRIGIDO EM `v0.3.96`
 
 **Execução:** 05-09-2026, VPS, utilizador D12, sessão
 `51257160-7e7e-4bfb-9518-95ac7dc233f5`. O percurso funcional foi executado em
@@ -701,6 +712,8 @@ suportadas durante a edição.
 - confirmar que a vista não repõe colunas técnicas, avisos visuais redundantes ou
   uma galeria separada de imagens selecionadas;
 - abrir o PPTX final no PowerPoint sem reparação e inspecionar todos os slides.
+- associar uma imagem ao último slide, exportar o PPTX e confirmar que o objeto
+  visual não é substituído pelo layout de encerramento.
 
 ### Resultado
 
@@ -737,6 +750,10 @@ suportadas durante a edição.
   leitura com 21 slides e sem pedido de reparação. A renderização integral, a
   inspeção visual, `slides_test.py` e a verificação estrutural confirmaram zero
   overflow e zero anomalias de pacote.
+- Em 07-09-2026, o reteste dirigido no código `v0.3.96` instalado na VPS
+  exportou novamente um PPTX com uma imagem documental no último slide e
+  confirmou estruturalmente um objeto `PICTURE`. O teste complementar confirmou
+  que um slide com a opção explícita **Sem elemento visual** é válido.
 
 ### Defeito encontrado e correção
 
@@ -745,10 +762,16 @@ suportadas durante a edição.
   do slide. A `v0.3.89` limpa `visual_warning` em qualquer escolha explícita de
   imagem ou de diagrama. O teste de regressão foi acrescentado; a suíte passou
   com 323 testes e 7 subtestes, localmente e na VPS.
+- **E2E05-OBS-02 — imagem ignorada no último slide:** o exportador aplicava
+  sempre o layout navy ao último slide e terminava o processamento antes de
+  incorporar a imagem selecionada. A `v0.3.96` reserva esse layout para
+  `diagrama` ou `sem_visual`; os modos `documento` e `ia` seguem o percurso que
+  incorpora a imagem. Foi acrescentado um teste de regressão que exporta o PPTX
+  e verifica o último slide.
 
 ### Conclusão
 
-O E2E-05 fica **APROVADO após a correção da `v0.3.89`**. Foram demonstrados em
+O E2E-05 fica **APROVADO após as correções das versões `v0.3.89` e `v0.3.96`**. Foram demonstrados em
 produção o controlo humano das três origens visuais, o limite de custo, o
 fallback recuperável, a rastreabilidade, a validação determinística e a
 utilização do PowerPoint final sem truncagem nem reparação.
