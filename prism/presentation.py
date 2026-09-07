@@ -231,7 +231,9 @@ def render_resource_detail_sections(
         for index, slide in enumerate(artifact.get("presentation_outline", []), start=1):
             mode = str(slide.get("visual_mode", "diagrama"))
             mode_label = (
-                "Imagem documental"
+                "Sem elemento visual"
+                if mode == "sem_visual"
+                else "Imagem documental"
                 if mode == "documento"
                 else "Imagem gerada por IA"
                 if mode == "ia"

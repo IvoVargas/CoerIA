@@ -150,7 +150,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.95 · SQLite")
+    await user.should_see("CoerIA v0.3.96 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -1464,8 +1464,8 @@ async def test_resources_are_separated_into_tabs_in_view_and_edit_modes(
     await user.should_see("Slides da apresentação")
     await user.should_see("Slide 1 —")
     await user.should_see("Resultados de aprendizagem")
-    await user.should_see("Elementos do diagrama — 2 a 4, um por linha")
-    await user.should_see("introduza entre 2 e 4 elementos não vazios")
+    await user.should_see("Sem elemento visual")
+    assert len(user.find(marker="use-slide-diagram-1").elements) == 1
     await user.should_not_see("Origem visual")
     await user.should_not_see("Modo visual")
     fifth_expansion = next(

@@ -4,6 +4,7 @@ from prism.manual_editing import (
     FieldSpec,
     apply_editor_field_value,
     apply_presentation_image_choice,
+    apply_presentation_no_visual_choice,
     assistance_scope_for_validation_target,
     assistance_scope_options,
     available_presentation_images,
@@ -259,6 +260,41 @@ def test_presentation_image_choice_derives_visual_provenance() -> None:
     assert slide["visual_asset_id"] == ""
     assert slide["visual_warning"] == ""
     assert slide["visual_source"].startswith("Diagrama nativo gerado pelo CoerIA")
+
+
+def test_presentation_can_explicitly_have_no_visual_element() -> None:
+    slide = {
+        "visual_mode": "documento",
+        "visual_asset_id": "document-1",
+        "visual_prompt": "",
+        "visual_kind": "conceito",
+        "visual_title": "Visual existente",
+        "visual_items": ["Conceito", "Aplicação"],
+        "visual_source": "apoio.pdf",
+        "alt_text": "Descrição existente.",
+        "visual_warning": "Aviso antigo.",
+    }
+
+    apply_presentation_no_visual_choice(slide)
+
+    assert slide["visual_mode"] == "sem_visual"
+    assert slide["visual_asset_id"] == ""
+    assert slide["visual_prompt"] == ""
+    assert slide["visual_title"] == ""
+    assert slide["visual_items"] == []
+    assert slide["visual_source"] == ""
+    assert slide["alt_text"] == ""
+    assert slide["visual_warning"] == ""
+    options = editor_reference_options({}, FieldSpec("visual_mode", "Modo visual"))
+    assert options is not None
+    assert options["sem_visual"] == "Sem elemento visual"
+
+    apply_presentation_image_choice(slide, None)
+    assert slide["visual_mode"] == "diagrama"
+    assert slide["visual_title"]
+    assert 2 <= len(slide["visual_items"]) <= 4
+    assert slide["visual_source"]
+    assert slide["alt_text"]
 
 
 def test_available_presentation_images_include_all_documents_uploads_and_ai() -> None:

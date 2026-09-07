@@ -768,6 +768,38 @@ def presentation_image_label(asset: dict[str, Any]) -> str:
     return source + (f" — {location}" if location else "")
 
 
+def _ensure_presentation_visual_fallback(slide: dict[str, Any]) -> None:
+    """Reconstrói metadados editáveis ao sair do modo sem elemento visual."""
+
+    allowed_kinds = {"capa", "conceito", "processo", "comparacao", "sintese"}
+    if str(slide.get("visual_kind", "")).strip() not in allowed_kinds:
+        slide["visual_kind"] = "conceito"
+    title = str(slide.get("visual_title", "")).strip()
+    if not title:
+        title = str(slide.get("title", "")).strip() or "Elemento visual"
+        slide["visual_title"] = title
+    raw_items = slide.get("visual_items", [])
+    items = (
+        [str(item).strip() for item in raw_items if str(item).strip()]
+        if isinstance(raw_items, list)
+        else []
+    )
+    if not 2 <= len(items) <= 4:
+        raw_bullets = slide.get("bullets", [])
+        if not isinstance(raw_bullets, list):
+            raw_bullets = []
+        candidates = [
+            str(item).strip()
+            for item in raw_bullets
+            if str(item).strip()
+        ]
+        candidates.extend([title, "Aplicação pedagógica"])
+        items = list(dict.fromkeys(candidates))[:4]
+        if len(items) == 1:
+            items.append("Aplicação pedagógica")
+        slide["visual_items"] = items
+
+
 def apply_presentation_image_choice(
     slide: dict[str, Any],
     asset: dict[str, Any] | None,
@@ -782,6 +814,13 @@ def apply_presentation_image_choice(
         slide["visual_source"] = (
             "Diagrama nativo gerado pelo CoerIA a partir dos artefactos aprovados."
         )
+        _ensure_presentation_visual_fallback(slide)
+        if not str(slide.get("alt_text", "")).strip():
+            slide["alt_text"] = (
+                f"Diagrama «{slide['visual_title']}» com os elementos "
+                + ", ".join(slide["visual_items"])
+                + "."
+            )
         return
 
     identifier = str(asset.get("id", "")).strip()
@@ -812,8 +851,24 @@ def apply_presentation_image_choice(
         slide["visual_source"] += "."
 
     asset_alt_text = str(asset.get("alt_text", "")).strip()
+    _ensure_presentation_visual_fallback(slide)
     if asset_alt_text:
         slide["alt_text"] = asset_alt_text
+    elif not str(slide.get("alt_text", "")).strip():
+        slide["alt_text"] = f"Imagem associada ao slide «{slide['visual_title']}»."
+
+
+def apply_presentation_no_visual_choice(slide: dict[str, Any]) -> None:
+    """Regista a decisão explícita de apresentar o slide apenas com texto."""
+
+    slide["visual_mode"] = "sem_visual"
+    slide["visual_asset_id"] = ""
+    slide["visual_prompt"] = ""
+    slide["visual_title"] = ""
+    slide["visual_items"] = []
+    slide["visual_source"] = ""
+    slide["alt_text"] = ""
+    slide["visual_warning"] = ""
 
 
 def editor_reference_options(
@@ -832,6 +887,7 @@ def editor_reference_options(
         }
     if field.key == "visual_mode":
         return {
+            "sem_visual": "Sem elemento visual",
             "diagrama": "Diagrama nativo editável",
             "documento": "Imagem extraída de documento",
             "ia": "Imagem gerada por IA",
@@ -1245,6 +1301,12 @@ def apply_editor_field_value(
         return
     if field.key == "visual_mode":
         mode = str(value or "diagrama").strip() or "diagrama"
+        if mode == "sem_visual":
+            apply_presentation_no_visual_choice(target)
+            return
+        if mode == "diagrama":
+            apply_presentation_image_choice(target, None)
+            return
         target[field.key] = mode
         if mode not in {"documento", "ia"}:
             target["visual_asset_id"] = ""

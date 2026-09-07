@@ -1375,10 +1375,16 @@ def export_presentation(state: dict[str, Any], output_path: Path | str | None = 
         ][:4]
         source = str(slide_data.get("visual_source", ""))
         alt_text = str(slide_data.get("alt_text", ""))
+        visual_mode = str(slide_data.get("visual_mode", "diagrama"))
+        visual_asset_id = str(slide_data.get("visual_asset_id", "")).strip()
         is_title = index == 0
         is_closing = index == len(slides) - 1
+        uses_special_layout = (is_title or is_closing) and visual_mode in {
+            "diagrama",
+            "sem_visual",
+        }
 
-        if is_title or is_closing:
+        if uses_special_layout:
             background = slide.background.fill
             background.solid()
             background.fore_color.rgb = PPT_NAVY
@@ -1417,51 +1423,57 @@ def export_presentation(state: dict[str, Any], output_path: Path | str | None = 
                     color=PptxRGBColor(216, 228, 238),
                     align=PP_ALIGN.CENTER,
                 )
-            items = visual_items or bullets[1:4] or [
-                "Taxonomia",
-                "Programa da UC",
-                "Recursos alinhados",
-            ]
-            items = items[:4]
-            item_width = 2.65
-            total_width = len(items) * item_width + (len(items) - 1) * 0.35
-            start_x = (13.333 - total_width) / 2
-            for item_index, item in enumerate(items):
-                x = start_x + item_index * (item_width + 0.35)
-                card = slide.shapes.add_shape(
-                    MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE,
-                    Inches(x),
-                    Inches(4.15),
-                    Inches(item_width),
-                    Inches(1.15),
+            if visual_mode != "sem_visual":
+                items = visual_items or bullets[1:4] or [
+                    "Taxonomia",
+                    "Programa da UC",
+                    "Recursos alinhados",
+                ]
+                items = items[:4]
+                item_width = 2.65
+                total_width = len(items) * item_width + (len(items) - 1) * 0.35
+                start_x = (13.333 - total_width) / 2
+                for item_index, item in enumerate(items):
+                    x = start_x + item_index * (item_width + 0.35)
+                    card = slide.shapes.add_shape(
+                        MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE,
+                        Inches(x),
+                        Inches(4.15),
+                        Inches(item_width),
+                        Inches(1.15),
+                    )
+                    card.fill.solid()
+                    card.fill.fore_color.rgb = (
+                        PPT_BLUE,
+                        PPT_TEAL,
+                        PPT_GOLD,
+                        PPT_BLUE,
+                    )[item_index]
+                    card.line.color.rgb = card.fill.fore_color.rgb
+                    card.text_frame.clear()
+                    card.text_frame.word_wrap = True
+                    card.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+                    paragraph = card.text_frame.paragraphs[0]
+                    paragraph.text = item
+                    paragraph.alignment = PP_ALIGN.CENTER
+                    paragraph.font.name = "Aptos"
+                    paragraph.font.size = Pt(17)
+                    paragraph.font.bold = True
+                    paragraph.font.color.rgb = PPT_WHITE
+                    _set_shape_alt_text(card, alt_text or str(item))
+                _add_ppt_textbox(
+                    slide,
+                    str(slide_data.get("visual_title", "Percurso pedagógico")),
+                    4.25,
+                    5.58,
+                    4.8,
+                    0.35,
+                    size=13,
+                    color=PptxRGBColor(205, 219, 230),
+                    bold=True,
+                    align=PP_ALIGN.CENTER,
                 )
-                card.fill.solid()
-                card.fill.fore_color.rgb = (PPT_BLUE, PPT_TEAL, PPT_GOLD, PPT_BLUE)[item_index]
-                card.line.color.rgb = card.fill.fore_color.rgb
-                card.text_frame.clear()
-                card.text_frame.word_wrap = True
-                card.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-                paragraph = card.text_frame.paragraphs[0]
-                paragraph.text = item
-                paragraph.alignment = PP_ALIGN.CENTER
-                paragraph.font.name = "Aptos"
-                paragraph.font.size = Pt(17)
-                paragraph.font.bold = True
-                paragraph.font.color.rgb = PPT_WHITE
-                _set_shape_alt_text(card, alt_text or str(item))
-            _add_ppt_textbox(
-                slide,
-                str(slide_data.get("visual_title", "Percurso pedagógico")),
-                4.25,
-                5.58,
-                4.8,
-                0.35,
-                size=13,
-                color=PptxRGBColor(205, 219, 230),
-                bold=True,
-                align=PP_ALIGN.CENTER,
-            )
-            _add_slide_source(slide, source, light=True)
+                _add_slide_source(slide, source, light=True)
             continue
 
         top_bar = slide.shapes.add_shape(
@@ -1507,8 +1519,9 @@ def export_presentation(state: dict[str, Any], output_path: Path | str | None = 
             paragraph.font.bold = True
             paragraph.font.color.rgb = PPT_WHITE
 
+        bullet_width = 11.8 if visual_mode == "sem_visual" else 5.25
         bullet_box = slide.shapes.add_textbox(
-            Inches(0.75), Inches(1.95), Inches(5.25), Inches(4.45)
+            Inches(0.75), Inches(1.95), Inches(bullet_width), Inches(4.45)
         )
         bullet_frame = bullet_box.text_frame
         bullet_frame.clear()
@@ -1528,28 +1541,27 @@ def export_presentation(state: dict[str, Any], output_path: Path | str | None = 
             paragraph.font.size = Pt(18 if len(bullets) <= 4 else 16)
             paragraph.font.color.rgb = PPT_INK
             paragraph.space_after = Pt(13)
-        visual_mode = str(slide_data.get("visual_mode", "diagrama"))
-        visual_asset_id = str(slide_data.get("visual_asset_id", "")).strip()
-        used_raster_image = False
-        if visual_mode in {"documento", "ia"} and visual_asset_id:
-            asset = visual_assets.get(visual_asset_id)
-            if asset is not None:
-                used_raster_image = _add_raster_image_panel(
-                    slide, slide_data, asset
-                )
-        if not used_raster_image:
-            _add_visual_panel(slide, slide_data)
-            if visual_mode == "documento":
-                source = (
-                    f"Diagrama nativo gerado pelo {APP_NAME}; a imagem documental "
-                    "selecionada não estava disponível no momento da exportação."
-                )
-            elif visual_mode == "ia":
-                source = (
-                    f"Diagrama nativo gerado pelo {APP_NAME}; a imagem gerada por IA "
-                    "não estava aprovada ou disponível no momento da exportação."
-                )
-        _add_slide_source(slide, source)
+        if visual_mode != "sem_visual":
+            used_raster_image = False
+            if visual_mode in {"documento", "ia"} and visual_asset_id:
+                asset = visual_assets.get(visual_asset_id)
+                if asset is not None:
+                    used_raster_image = _add_raster_image_panel(
+                        slide, slide_data, asset
+                    )
+            if not used_raster_image:
+                _add_visual_panel(slide, slide_data)
+                if visual_mode == "documento":
+                    source = (
+                        f"Diagrama nativo gerado pelo {APP_NAME}; a imagem documental "
+                        "selecionada não estava disponível no momento da exportação."
+                    )
+                elif visual_mode == "ia":
+                    source = (
+                        f"Diagrama nativo gerado pelo {APP_NAME}; a imagem gerada por IA "
+                        "não estava aprovada ou disponível no momento da exportação."
+                    )
+            _add_slide_source(slide, source)
 
     if output_path is None:
         with NamedTemporaryFile(prefix="coeria_", suffix=".pptx", delete=False) as temp_file:

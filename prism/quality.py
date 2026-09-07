@@ -691,6 +691,16 @@ def presentation_visual_issues(
     visual_asset_id = str(slide.get("visual_asset_id", "")).strip()
     visual_prompt = str(slide.get("visual_prompt", "")).strip()
 
+    allowed_visual_modes = {"sem_visual", "diagrama", "documento", "ia"}
+    if visual_mode not in allowed_visual_modes:
+        issues.append("modo visual ausente ou inválido")
+    if visual_mode == "sem_visual":
+        if visual_asset_id:
+            issues.append("um slide sem elemento visual não pode ter uma imagem associada")
+        if visual_prompt:
+            issues.append("um slide sem elemento visual não pode pedir uma imagem à IA")
+        return issues
+
     if visual_kind not in allowed_visual_kinds:
         issues.append("tipo visual ausente ou inválido")
     if not visual_title:
@@ -728,9 +738,7 @@ def presentation_visual_issues(
         state.get("resource_generation_scope")
         and state.get("ai_image_generation_enabled")
     )
-    if visual_mode not in {"diagrama", "documento", "ia"}:
-        issues.append("modo visual ausente ou inválido")
-    elif visual_mode == "diagrama" and visual_asset_id:
+    if visual_mode == "diagrama" and visual_asset_id:
         issues.append("um diagrama editável não pode ter uma imagem associada")
     elif visual_mode == "documento" and visual_asset_id not in source_asset_ids:
         issues.append("imagem documental ausente ou desconhecida")
@@ -1067,9 +1075,9 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 "Elementos visuais da apresentação",
                 "pass" if presentation_slides and not invalid_visual_slides else "error",
                 (
-                    "Todos os slides incluem um elemento visual válido (diagrama "
-                    "editável, imagem documental ou imagem gerada por IA), com fonte "
-                    "e texto alternativo."
+                    "Todos os slides usam uma opção visual válida: sem elemento visual, "
+                    "diagrama editável, imagem documental ou imagem gerada por IA. "
+                    "Os elementos existentes incluem fonte e texto alternativo."
                     if presentation_slides and not invalid_visual_slides
                     else "Especificação visual incompleta — "
                     + (" | ".join(invalid_visual_slides) or "não existem slides")

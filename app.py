@@ -59,6 +59,7 @@ from prism.manual_editing import (
     assistance_scope_options,
     apply_editor_field_value,
     apply_presentation_image_choice,
+    apply_presentation_no_visual_choice,
     available_presentation_images,
     editor_field_value,
     editor_reference_options,
@@ -2332,6 +2333,13 @@ class AGIRSoloInterface:
                                         if asset.get("origin_type") == "user_uploaded"
                                         else "Imagem documental"
                                     ).classes("text-xs font-semibold")
+                                elif mode == "sem_visual":
+                                    ui.icon("hide_image", size="1.6rem").classes(
+                                        "muted"
+                                    )
+                                    ui.label("Sem elemento visual").classes(
+                                        "text-xs font-semibold"
+                                    )
                                 else:
                                     ui.icon("account_tree", size="1.6rem").classes(
                                         "muted"
@@ -2807,6 +2815,8 @@ class AGIRSoloInterface:
                     ui.badge(label, color="primary")
                 elif mode == "ia":
                     ui.badge("Imagem por gerar", color="warning")
+                elif mode == "sem_visual":
+                    ui.badge("Sem elemento visual", color="secondary")
                 else:
                     ui.badge("Diagrama editável", color="secondary")
 
@@ -2819,6 +2829,10 @@ class AGIRSoloInterface:
                 ui.label(
                     "A imagem ainda não foi gerada. A instrução abaixo será usada "
                     "numa nova geração da etapa com IA."
+                ).classes("text-sm muted")
+            elif mode == "sem_visual":
+                ui.label(
+                    "O slide será exportado apenas com o título e o conteúdo textual."
                 ).classes("text-sm muted")
             else:
                 ui.label(
@@ -2835,7 +2849,7 @@ class AGIRSoloInterface:
                 ).props("outline no-caps").classes("secondary-action").mark(
                     f"choose-slide-image-{slide_number}"
                 )
-                if asset is not None or mode == "ia":
+                if asset is not None or mode in {"ia", "sem_visual"}:
 
                     def use_diagram() -> None:
                         apply_presentation_image_choice(slide, None)
@@ -2845,33 +2859,57 @@ class AGIRSoloInterface:
                         "Usar diagrama editável",
                         icon="account_tree",
                         on_click=use_diagram,
-                    ).props("flat no-caps").classes("secondary-action")
+                    ).props("flat no-caps").classes("secondary-action").mark(
+                        f"use-slide-diagram-{slide_number}"
+                    )
+                if mode != "sem_visual":
 
-            self._render_manual_field(
-                slide,
-                FieldSpec("visual_title", "Título do elemento visual"),
-            )
-            if mode == "ia" and asset is None:
+                    def use_no_visual() -> None:
+                        apply_presentation_no_visual_choice(slide)
+                        refresh_editor()
+
+                    ui.button(
+                        "Sem elemento visual",
+                        icon="hide_image",
+                        on_click=use_no_visual,
+                    ).props("flat no-caps").classes("secondary-action").mark(
+                        f"use-no-visual-slide-{slide_number}"
+                    )
+
+            if mode != "sem_visual":
                 self._render_manual_field(
                     slide,
-                    FieldSpec("visual_prompt", "Instrução para gerar a imagem", "long"),
+                    FieldSpec("visual_title", "Título do elemento visual"),
                 )
-            elif asset is None:
+                if mode == "ia" and asset is None:
+                    self._render_manual_field(
+                        slide,
+                        FieldSpec(
+                            "visual_prompt",
+                            "Instrução para gerar a imagem",
+                            "long",
+                        ),
+                    )
+                elif asset is None:
+                    self._render_manual_field(
+                        slide,
+                        FieldSpec(
+                            "visual_items",
+                            "Elementos do diagrama — 2 a 4, um por linha",
+                            "lines",
+                        ),
+                    )
+                    ui.label(
+                        "Obrigatório para o diagrama: introduza entre 2 e 4 elementos não vazios."
+                    ).classes("text-xs muted")
                 self._render_manual_field(
                     slide,
                     FieldSpec(
-                        "visual_items",
-                        "Elementos do diagrama — 2 a 4, um por linha",
-                        "lines",
+                        "alt_text",
+                        "Descrição acessível da imagem ou diagrama",
+                        "long",
                     ),
                 )
-                ui.label(
-                    "Obrigatório para o diagrama: introduza entre 2 e 4 elementos não vazios."
-                ).classes("text-xs muted")
-            self._render_manual_field(
-                slide,
-                FieldSpec("alt_text", "Descrição acessível da imagem ou diagrama", "long"),
-            )
 
     def _render_presentation_editor(
         self,

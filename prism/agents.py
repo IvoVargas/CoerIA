@@ -194,13 +194,14 @@ STAGE_REQUIREMENTS = {
         "grelha de avaliação são derivados deterministicamente dos artefactos aprovados. "
         "Cada elemento deve indicar os resultados de aprendizagem associados ao seu âmbito. "
         "Cada slide da apresentação inclui visual_mode, visual_asset_id, visual_prompt, visual_kind, "
-        "visual_title, visual_items, visual_source e alt_text. visual_mode é diagrama, "
-        "documento ou ia. visual_asset_id fica vazio em diagrama, contém um ID válido "
+        "visual_title, visual_items, visual_source e alt_text. visual_mode é sem_visual, "
+        "diagrama, documento ou ia. visual_asset_id fica vazio em sem_visual e diagrama, contém um ID válido "
         "do catálogo source_image_catalogue em documento e é preenchido pela aplicação "
         "após gerar uma imagem quando visual_mode é ia. visual_prompt contém a instrução "
-        "específica para a imagem IA e fica vazio nos restantes modos. visual_items contém entre "
-        "2 e 4 textos não vazios; visual_title, visual_source e alt_text também nunca "
-        "podem estar vazios. Os "
+        "específica para a imagem IA e fica vazio nos restantes modos. Em sem_visual, "
+        "visual_title, visual_items, visual_source e alt_text ficam vazios. Nos outros "
+        "modos, visual_items contém entre 2 e 4 textos não vazios e visual_title, "
+        "visual_source e alt_text nunca podem estar vazios. Os "
         "elementos visuais devem apoiar o conteúdo e não servir apenas de decoração. "
         "Cada recurso pedido deve cobrir exatamente todos os IDs dos resultados de "
         "aprendizagem do respetivo âmbito, sem usar IDs desconhecidos. No teste, a soma dos pontos das "
@@ -407,7 +408,7 @@ def _schema_for(
                             "outcome_ids": {"type": "array", "items": string},
                             "visual_mode": {
                                 "type": "string",
-                                "enum": ["diagrama", "documento", "ia"],
+                                "enum": ["sem_visual", "diagrama", "documento", "ia"],
                             },
                             "visual_asset_id": string,
                             "visual_prompt": string,
@@ -419,7 +420,7 @@ def _schema_for(
                             "visual_items": {
                                 "type": "array",
                                 "items": string,
-                                "minItems": 2,
+                                "minItems": 0,
                                 "maxItems": 4,
                             },
                             "visual_source": string,
@@ -1804,8 +1805,8 @@ def _canonicalize_resource_visuals(
 
     Os diagramas nativos continuam sempre disponíveis como fallback editável. Uma
     imagem documental só usa IDs existentes no catálogo extraído; as imagens são
-    candidatas e não são impostas aos slides. A capa e o slide final permanecem com
-    diagrama nativo para preservar a composição institucional da apresentação.
+    candidatas e não são impostas aos slides. A capa e o slide final ficam sem
+    elemento visual por defeito, preservando uma composição institucional simples.
     """
 
     if not isinstance(artifact, dict):
@@ -1829,6 +1830,10 @@ def _canonicalize_resource_visuals(
         "gerada": "ia",
         "imagem gerada": "ia",
         "imagem_ia": "ia",
+        "sem_visual": "sem_visual",
+        "sem visual": "sem_visual",
+        "nenhum": "sem_visual",
+        "none": "sem_visual",
     }
     outcomes = {
         str(item.get("id", "")): item
@@ -1945,11 +1950,17 @@ def _canonicalize_resource_visuals(
         is_boundary_slide = offset == 0 or offset == slide_count - 1
         visual_prompt = clean_text(slide.get("visual_prompt"))
         ai_enabled = bool(state.get("ai_image_generation_enabled"))
-        if (
-            not is_boundary_slide
-            and raw_mode == "documento"
-            and raw_asset_id in source_assets
-        ):
+        if is_boundary_slide:
+            visual_mode = "sem_visual"
+            visual_asset_id = ""
+            visual_prompt = ""
+            visual_source = ""
+        elif raw_mode == "sem_visual":
+            visual_mode = "sem_visual"
+            visual_asset_id = ""
+            visual_prompt = ""
+            visual_source = ""
+        elif raw_mode == "documento" and raw_asset_id in source_assets:
             visual_mode = "documento"
             visual_asset_id = raw_asset_id
             visual_prompt = ""
@@ -1961,8 +1972,7 @@ def _canonicalize_resource_visuals(
                 visual_source += f", {source_location}"
             visual_source += "."
         elif (
-            not is_boundary_slide
-            and raw_mode == "ia"
+            raw_mode == "ia"
             and ai_enabled
             and visual_prompt
         ):
@@ -1977,8 +1987,14 @@ def _canonicalize_resource_visuals(
                 "Diagrama nativo gerado pelo CoerIA a partir dos artefactos aprovados."
             )
 
-        alt_text = clean_text(slide.get("alt_text"))
-        if not alt_text:
+        if visual_mode == "sem_visual":
+            visual_title = ""
+            visual_items = []
+            visual_source = ""
+            alt_text = ""
+        else:
+            alt_text = clean_text(slide.get("alt_text"))
+        if visual_mode != "sem_visual" and not alt_text:
             if visual_mode == "documento":
                 alt_text = f"Imagem documental associada a {visual_title}."
             elif visual_mode == "ia":
@@ -2890,8 +2906,9 @@ class OpenAIPedagogicalAgent:
                 )
             if scoped_resource_type in {None, RESOURCE_PRESENTATION}:
                 instructions += (
-                    " Para cada slide, visual_mode pode ser diagrama, documento ou ia. "
-                    "Capa e síntese final devem usar diagrama. "
+                    " Para cada slide, visual_mode pode ser sem_visual, diagrama, documento ou ia. "
+                    "Capa e síntese final devem usar sem_visual, com visual_title, "
+                    "visual_items, visual_source e alt_text vazios. "
                     "Não cries uma síntese global das tarefas de avaliação: depois da "
                     "resposta, a aplicação insere antes da síntese final uma secção "
                     f'«{PRESENTATION_ASSESSMENT_TITLE}», construída diretamente a partir '
@@ -2933,8 +2950,9 @@ class OpenAIPedagogicalAgent:
                         "visual_prompt vazio. "
                     )
                 instructions += (
-                    "Quando houver dúvida usa diagrama. Os campos visual_kind, visual_title e "
-                    "visual_items continuam obrigatórios como fallback editável."
+                    "Quando houver dúvida usa diagrama nos slides de conteúdo. Os campos "
+                    "visual_kind, visual_title e visual_items continuam obrigatórios como "
+                    "fallback editável, exceto quando visual_mode é sem_visual."
                 )
             if scoped_resource_type:
                 instructions += (

@@ -442,6 +442,13 @@ As imagens raster tratadas pelo protótipo podem ter uma das seguintes origens:
 - imagem gerada por IA para o slide, possibilidade ativa por defeito nas novas
   sessões e sempre sujeita à revisão e aprovação do docente.
 
+O docente deve também poder escolher explicitamente **Sem elemento visual** em
+qualquer slide. Esta opção não exige imagem, diagrama, origem nem texto
+alternativo. Na geração inicial, deve ser aplicada por defeito à capa e à
+síntese final, sem impedir que o docente associe posteriormente um visual. Nos
+restantes slides, a geração deve continuar a propor um elemento apenas quando
+este contribua para o conteúdo pedagógico.
+
 Para cada imagem, o estado deve guardar o tipo de origem, o identificador da
 fonte e o texto alternativo. Uma imagem extraída deve conservar o nome do
 documento e, quando tecnicamente disponível, a página ou o slide; uma imagem

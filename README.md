@@ -140,6 +140,13 @@ sem uma galeria duplicada no cartão da etapa. Os recursos são produzidos com
 base nas relações já registadas entre resultados, conteúdos, atividades de
 ensino-aprendizagem e tarefas de avaliação.
 
+Cada slide pode usar um diagrama editável, uma imagem documental, uma imagem
+gerada por IA ou a opção explícita **Sem elemento visual**. A capa e a síntese
+final usam esta última por defeito; os slides de conteúdo continuam a receber
+um visual quando este acrescenta valor pedagógico. O docente pode alterar a
+opção em qualquer slide e a validação não exige metadados visuais quando a
+ausência do elemento foi escolhida explicitamente.
+
 O docente pode selecionar o plano de aulas, a grelha de avaliação, uma
 apresentação geral da UC, apresentações PowerPoint para aulas concretas, ficha de
 aula, testes associados a tarefas de avaliação concretas e atividade prática. O

@@ -134,17 +134,25 @@ class ResourceGenerationTests(unittest.TestCase):
         state = self._resource_state()
         resources = state["resources"]
         self.assertTrue(resources["presentation_outline"])
+        boundary_indexes = {0, len(resources["presentation_outline"]) - 1}
         self.assertTrue(
             all(
-                slide.get("visual_mode") == "diagrama"
+                (
+                    slide.get("visual_mode") == "sem_visual"
+                    and slide.get("visual_items") == []
+                    and slide.get("visual_title") == ""
+                    and slide.get("visual_source") == ""
+                    and slide.get("alt_text") == ""
+                    if index in boundary_indexes
+                    else slide.get("visual_mode") == "diagrama"
+                    and 2 <= len(slide.get("visual_items", [])) <= 4
+                    and slide.get("visual_source")
+                    and slide.get("alt_text")
+                )
                 and slide.get("visual_asset_id") == ""
                 and slide.get("visual_prompt") == ""
                 and slide.get("visual_kind")
-                and slide.get("visual_title")
-                and 2 <= len(slide.get("visual_items", [])) <= 4
-                and slide.get("visual_source")
-                and slide.get("alt_text")
-                for slide in resources["presentation_outline"]
+                for index, slide in enumerate(resources["presentation_outline"])
             )
         )
         assessment_slides = [
@@ -641,6 +649,46 @@ class ResourceGenerationTests(unittest.TestCase):
         finally:
             presentation_path.unlink(missing_ok=True)
 
+    def test_last_slide_image_is_not_hidden_by_the_closing_layout(self) -> None:
+        state = self._resource_state()
+        image_buffer = BytesIO()
+        Image.new("RGB", (320, 180), (30, 110, 170)).save(
+            image_buffer, format="PNG"
+        )
+        asset_id = "closing-slide-image"
+        state["source_images"] = [
+            {
+                "id": asset_id,
+                "origin_type": "document",
+                "source_file": "apoio.pdf",
+                "source_location": "Página 4",
+                "filename": "sintese.png",
+                "media_type": "image/png",
+                "data_base64": base64.b64encode(image_buffer.getvalue()).decode(
+                    "ascii"
+                ),
+                "alt_text": "Imagem de síntese da apresentação.",
+                "approved": True,
+            }
+        ]
+        closing_slide = state["resources"]["presentation_outline"][-1]
+        closing_slide["visual_mode"] = "documento"
+        closing_slide["visual_asset_id"] = asset_id
+        closing_slide["visual_source"] = "Imagem extraída de apoio.pdf, Página 4."
+        closing_slide["alt_text"] = "Imagem de síntese da apresentação."
+
+        presentation_path = Path(export_presentation(state))
+        try:
+            presentation = Presentation(presentation_path)
+            pictures = [
+                shape
+                for shape in presentation.slides[-1].shapes
+                if shape.shape_type == MSO_SHAPE_TYPE.PICTURE
+            ]
+            self.assertEqual(len(pictures), 1)
+        finally:
+            presentation_path.unlink(missing_ok=True)
+
     def test_uploaded_image_is_valid_without_document_selection(self) -> None:
         state = self._resource_state()
         image_buffer = BytesIO()
@@ -860,10 +908,16 @@ class ResourceGenerationTests(unittest.TestCase):
         ]["properties"]["presentation_outline"]["items"]["properties"][
             "visual_items"
         ]
-        self.assertEqual(visual_items_schema["minItems"], 2)
+        self.assertEqual(visual_items_schema["minItems"], 0)
         self.assertEqual(visual_items_schema["maxItems"], 4)
+        visual_mode_schema = _schema_for("resources", state)["properties"][
+            "artifact"
+        ]["properties"]["presentation_outline"]["items"]["properties"][
+            "visual_mode"
+        ]
+        self.assertIn("sem_visual", visual_mode_schema["enum"])
         tampered = deepcopy(state)
-        slide = tampered["resources"]["presentation_outline"][0]
+        slide = tampered["resources"]["presentation_outline"][1]
         slide["visual_items"] = ["A", "B", "C", "D", "E"]
         report = evaluate_quality(tampered, tampered["resources"])
         visual_check = next(
@@ -871,9 +925,9 @@ class ResourceGenerationTests(unittest.TestCase):
         )
 
         self.assertEqual(visual_check["status"], "error")
-        self.assertIn("slide 1", visual_check["detail"])
+        self.assertIn("slide 2", visual_check["detail"])
         self.assertEqual(visual_check["target_stage"], "resources")
-        self.assertEqual(visual_check["target_key"], "SLIDE:1")
+        self.assertEqual(visual_check["target_key"], "SLIDE:2")
         self.assertIn(
             "5 elementos; o diagrama admite 2 a 4",
             visual_check["detail"],
@@ -883,6 +937,39 @@ class ResourceGenerationTests(unittest.TestCase):
             "5 elementos; o diagrama admite 2 a 4",
         ):
             validate_artifact("resources", tampered["resources"], tampered)
+
+    def test_quality_accepts_an_explicit_slide_without_a_visual_element(self) -> None:
+        state = self._resource_state()
+        slide = state["resources"]["presentation_outline"][1]
+        slide.update(
+            {
+                "visual_mode": "sem_visual",
+                "visual_asset_id": "",
+                "visual_prompt": "",
+                "visual_title": "",
+                "visual_items": [],
+                "visual_source": "",
+                "alt_text": "",
+            }
+        )
+
+        report = evaluate_quality(state, state["resources"])
+
+        visual_check = next(
+            item for item in report["checks"] if item["id"] == "presentation_visuals"
+        )
+        self.assertEqual(visual_check["status"], "pass")
+
+        slide["visual_asset_id"] = "imagem-incompatível"
+        report = evaluate_quality(state, state["resources"])
+        visual_check = next(
+            item for item in report["checks"] if item["id"] == "presentation_visuals"
+        )
+        self.assertEqual(visual_check["status"], "error")
+        self.assertIn(
+            "sem elemento visual não pode ter uma imagem associada",
+            visual_check["detail"],
+        )
 
     def test_empty_artifacts_never_produce_misleading_green_checks(self) -> None:
         state = self._resource_state()
@@ -1256,11 +1343,16 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertNotIn("Recursos", alignment_header)
                 presentation = Presentation(BytesIO(package.read(presentation_name)))
                 self.assertGreaterEqual(len(presentation.slides), 3)
-                for slide in presentation.slides:
-                    self.assertGreaterEqual(len(slide.shapes), 5)
+                last_slide_index = len(presentation.slides) - 1
+                for index, slide in enumerate(presentation.slides):
+                    minimum_shapes = 3 if index in {0, last_slide_index} else 5
+                    self.assertGreaterEqual(len(slide.shapes), minimum_shapes)
                     slide_text = "\n".join(
                         shape.text for shape in slide.shapes if hasattr(shape, "text_frame")
                     )
+                    if index in {0, last_slide_index}:
+                        self.assertNotIn("Fonte visual:", slide_text)
+                        continue
                     self.assertIn("Fonte visual:", slide_text)
                     descriptions = [
                         properties.get("descr", "")

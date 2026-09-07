@@ -561,21 +561,14 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 ]
             ),
             "outcome_ids": [],
-            "visual_mode": "diagrama",
+            "visual_mode": "sem_visual",
             "visual_asset_id": "",
             "visual_prompt": "",
             "visual_kind": "capa",
-            "visual_title": "Percurso da unidade curricular",
-            "visual_items": [
-                f"Taxonomia {taxonomy_type}",
-                "Programa da UC",
-                "Recursos alinhados",
-            ],
-            "visual_source": "Diagrama nativo gerado pelo CoerIA a partir da estrutura aprovada.",
-            "alt_text": (
-                "Percurso entre a taxonomia selecionada, o programa da unidade "
-                "curricular e os recursos educativos alinhados."
-            ),
+            "visual_title": "",
+            "visual_items": [],
+            "visual_source": "",
+            "alt_text": "",
         }
     ]
     if item_scope.get("kind") == "lesson":
@@ -700,14 +693,14 @@ def generate_resources(state: PrismState) -> dict[str, Any]:
                 "Registar feedback para uma futura reformulação.",
             ],
             "outcome_ids": [],
-            "visual_mode": "diagrama",
+            "visual_mode": "sem_visual",
             "visual_asset_id": "",
             "visual_prompt": "",
             "visual_kind": "sintese",
-            "visual_title": "Ciclo de melhoria docente",
-            "visual_items": ["Rever", "Adaptar", "Registar feedback"],
-            "visual_source": "Diagrama nativo gerado pelo CoerIA.",
-            "alt_text": "Ciclo final de revisão, adaptação e registo de feedback.",
+            "visual_title": "",
+            "visual_items": [],
+            "visual_source": "",
+            "alt_text": "",
         }
     )
     worksheet = {
