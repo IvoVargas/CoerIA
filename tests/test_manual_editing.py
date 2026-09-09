@@ -26,7 +26,7 @@ from prism.manual_editing import (
 )
 from prism.ai_modes import AI_MODE_OFF, AI_MODE_ON
 from prism.models import CourseInput, QUESTION_TYPE_MULTIPLE_CHOICE
-from prism.curriculum import taxonomy_level_label
+from prism.curriculum import OUTCOME_TYPES, taxonomy_level_label
 from prism.presentation import active_stage_artifact, render_stage_artifact
 from prism.workflow import (
     STAGE_ORDER,
@@ -112,6 +112,19 @@ def test_ai_mode_defaults_on_outcomes_and_is_inherited_by_linked_rows() -> None:
 
     row["outcome_ids"] = ["RA1", "RA2"]
     assert synchronize_inherited_ai_mode(state, row) == ""
+
+
+def test_learning_outcome_type_uses_the_three_qnq_domains() -> None:
+    table = editor_layout("learning_outcomes").tables[0]
+    outcome_type_field = next(
+        field for field in table.fields if field.key == "outcome_type"
+    )
+
+    assert outcome_type_field.kind == "outcome_type"
+    assert editor_reference_options({}, outcome_type_field) == {
+        value: value for value in OUTCOME_TYPES
+    }
+    assert new_table_row(table)["outcome_type"] == "Conhecimentos"
 
 
 def test_lesson_rows_can_move_without_losing_content() -> None:
@@ -346,7 +359,7 @@ def test_proposal_review_preserves_ids_and_applies_only_accepted_cells() -> None
     artifact = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Relacional",
             "action_verb": "Analisar",
@@ -444,7 +457,7 @@ def test_proposal_review_accepts_an_edited_new_row_as_one_decision() -> None:
     proposed = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",

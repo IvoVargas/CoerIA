@@ -157,6 +157,8 @@ STAGE_REQUIREMENTS = {
     "learning_outcomes": (
         "Lista de 4 a 10 objetos {id, theme, statement, action_verb, taxonomy_level, "
         "outcome_type, ai_mode}. Os IDs são obrigatoriamente RA1, RA2, ... pela ordem das linhas. "
+        "outcome_type é exclusivamente Conhecimentos, Aptidões ou Atitudes, segundo os "
+        "três domínios adotados pelo Quadro Nacional de Qualificações. "
         "Cada resultado contém exatamente um verbo de ação principal observável e começa "
         "por esse verbo. taxonomy_level pertence à taxonomia selecionada e é compatível "
         "com action_verb. ai_mode é AI-off, AI-on ou on-AI e é AI-off por defeito. "
@@ -2173,6 +2175,19 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             raise AgentGenerationError(
                 "Cada resultado deve indicar AI-off, AI-on ou on-AI. Corrigir: "
                 + ", ".join(invalid_ai_modes)
+                + "."
+            )
+
+        invalid_outcome_types = [
+            item["id"]
+            for item in artifact
+            if str(item.get("outcome_type", "")).strip() not in OUTCOME_TYPES
+        ]
+        if invalid_outcome_types:
+            raise AgentGenerationError(
+                "Cada resultado deve indicar Conhecimentos, Aptidões ou Atitudes. "
+                "Corrigir: "
+                + ", ".join(invalid_outcome_types)
                 + "."
             )
 

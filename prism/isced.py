@@ -267,11 +267,11 @@ def canonicalize_isced_f(code: str | None, name: str | None = "") -> tuple[str, 
     supplied_name = str(name or "").strip()
     if not normalized_code:
         if supplied_name:
-            raise ValueError("Selecione um código CITE-F/2013 para definir a respetiva área.")
+            raise ValueError("Selecione um código CITE-F para definir a respetiva área.")
         return "", ""
     if not re.fullmatch(r"\d{4}", normalized_code):
-        raise ValueError("O código CITE-F/2013 deve ter exatamente 4 dígitos.")
+        raise ValueError("O código CITE-F deve ter exatamente 4 dígitos.")
     canonical_name = ISCED_F_CATALOG.get(normalized_code)
     if canonical_name is None:
-        raise ValueError("Selecione um código existente no catálogo oficial CITE-F/2013.")
+        raise ValueError("Selecione um código existente no catálogo oficial CITE-F.")
     return normalized_code, canonical_name

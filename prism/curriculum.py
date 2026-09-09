@@ -307,10 +307,33 @@ COMMON_OBJECTIVE_OPENING_VERBS = (
 )
 
 OUTCOME_TYPES = (
-    "Conhecimento teórico",
-    "Aptidão prática ou técnica",
-    "Competência social",
+    "Conhecimentos",
+    "Aptidões",
+    "Atitudes",
 )
+
+OUTCOME_TYPE_ALIASES = {
+    "Conhecimentos": "Conhecimentos",
+    "Conhecimento": "Conhecimentos",
+    "Conhecimento teórico": "Conhecimentos",
+    "Conhecimento prático": "Aptidões",
+    "Aptidões": "Aptidões",
+    "Aptidão prática ou técnica": "Aptidões",
+    "Atitudes": "Atitudes",
+    "Competência social": "Atitudes",
+}
+
+
+def canonical_outcome_type(value: object) -> str:
+    """Converte designações anteriores nos três domínios oficiais do QNQ."""
+
+    raw_value = str(value or "").strip()
+    try:
+        return OUTCOME_TYPE_ALIASES[raw_value]
+    except KeyError as exc:
+        raise ValueError(
+            "O tipo do resultado deve ser Conhecimentos, Aptidões ou Atitudes."
+        ) from exc
 
 ASSESSMENT_PURPOSES = ("Formativa", "Sumativa")
 

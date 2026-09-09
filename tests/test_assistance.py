@@ -135,7 +135,7 @@ class InitialAssistanceTests(unittest.TestCase):
             "Pescas",
         )
         self.assertIn("CNAEF 624 — Pescas", result["explanation"])
-        self.assertIn("CITE-F/2013 0831 — Pescas", result["explanation"])
+        self.assertIn("CITE-F 0831 — Pescas", result["explanation"])
         self.assertNotIn(proposal["explanation"], result["explanation"])
 
     def test_requested_proposal_preserves_the_exclusive_taxonomy(self) -> None:

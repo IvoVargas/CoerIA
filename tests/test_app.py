@@ -150,7 +150,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.98 · SQLite")
+    await user.should_see("CoerIA v0.3.99 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -297,8 +297,8 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     assert cnaef_name._props.get("readonly") is True
     cnaef_code.set_value("481")
     await user.should_see("Ciências informáticas")
-    await user.should_see("Código CITE-F/2013")
-    await user.should_see("Área CITE-F/2013")
+    await user.should_see("Código CITE-F")
+    await user.should_see("Área CITE-F")
     isced_code = interfaces[-1].fields["isced_f_code"]
     isced_name = interfaces[-1].fields["isced_f_name"]
     assert isced_code.options["0613"].startswith("0613 — ")
@@ -840,7 +840,7 @@ async def test_outcome_reference_select_shows_descriptions_only_in_options(
     state["learning_outcomes"] = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",
@@ -848,7 +848,7 @@ async def test_outcome_reference_select_shows_descriptions_only_in_options(
         },
         {
             "id": "RA2",
-            "outcome_type": "Conhecimento prático",
+            "outcome_type": "Aptidões",
             "theme": "Testes",
             "taxonomy_level": "Relacional",
             "action_verb": "Analisar",
@@ -922,7 +922,7 @@ async def test_ai_review_findings_focus_the_related_artifact(
     state["learning_outcomes"] = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",
@@ -1000,7 +1000,7 @@ async def test_existing_ai_review_hides_deterministic_findings_and_localizes_cod
     state["learning_outcomes"] = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",
@@ -1171,7 +1171,7 @@ async def test_manual_history_offers_explicit_version_restore(
     first = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",
@@ -1220,7 +1220,7 @@ async def test_ai_version_action_remains_available_after_content_exists(
     state["learning_outcomes"] = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",
@@ -1562,7 +1562,7 @@ async def test_manual_first_workspace_renders_a_pending_ai_proposal(
     state["learning_outcomes"] = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Relacional",
             "action_verb": "Analisar",
@@ -1642,7 +1642,7 @@ async def test_stale_ai_proposal_review_closes_when_decision_is_already_saved(
     state["learning_outcomes"] = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Relacional",
             "action_verb": "Analisar",

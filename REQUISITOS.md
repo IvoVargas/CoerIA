@@ -93,8 +93,9 @@ etapas navegáveis e editáveis:
 
 1. recolha e revisão dos dados iniciais, fontes, caracterização e objetivos
    gerais opcionais;
-2. formulação de resultados de aprendizagem com nível SOLO ou Bloom, um único
-   verbo de ação principal, modo de IA e pressupostos contextuais opcionais;
+2. formulação de resultados de aprendizagem com nível SOLO ou Bloom, tipo
+   `Conhecimentos`, `Aptidões` ou `Atitudes`, um único verbo de ação principal,
+   modo de IA e pressupostos contextuais opcionais;
 3. estruturação de conteúdos associados aos resultados formulados;
 4. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
 5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou
@@ -169,7 +170,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   estruturadas com os resultados de aprendizagem.
 - Não recolher uma síntese curricular global nem uma lista de temas separada,
   porque ambas duplicariam a identificação e a descrição existentes na tabela.
-- Classificar o tipo de cada resultado de aprendizagem.
+- Classificar o tipo de cada resultado de aprendizagem através de um seletor
+  fechado com os três domínios adotados pelo Quadro Nacional de Qualificações:
+  `Conhecimentos`, `Aptidões` e `Atitudes`. Aplicar a mesma enumeração às
+  propostas de IA e à validação determinística.
 - Associar a cada resultado um modo controlado `AI-off`, `AI-on` ou `on-AI`,
   apresentando `AI-off` por defeito.
 - Herdar e apresentar o modo nas atividades de ensino-aprendizagem e tarefas de

@@ -118,7 +118,7 @@ def _merge_initial_proposal(
     merged["isced_f_name"] = isced_name
     classifications = [
         f"CNAEF {cnaef_code} — {cnaef_name}",
-        f"CITE-F/2013 {isced_code} — {isced_name}",
+        f"CITE-F {isced_code} — {isced_name}",
     ]
     estimated_fields = [
         field

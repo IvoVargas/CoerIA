@@ -981,7 +981,7 @@ class AGIRSoloInterface:
 
             self.fields["isced_f_code"] = ui.select(
                 isced_f_options(),
-                label="Código CITE-F/2013",
+                label="Código CITE-F",
                 with_input=True,
                 clearable=True,
                 on_change=update_isced_name,
@@ -1001,7 +1001,7 @@ class AGIRSoloInterface:
                 "de quatro dígitos."
             )
             self.fields["isced_f_name"] = ui.input(
-                "Área CITE-F/2013"
+                "Área CITE-F"
             ).props("readonly").classes("full-control")
             self.fields["ects_credits"] = ui.number(
                 "ECTS", value=0, min=0, precision=1

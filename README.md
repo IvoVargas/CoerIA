@@ -119,6 +119,10 @@ divergência. Na edição manual, o seletor de verbos mostra exclusivamente os
 verbos do nível escolhido na mesma linha. Os resultados usam sempre IDs no
 formato `RA1`, `RA2`, …; a geração normaliza-os pela ordem das linhas e o editor
 atribui automaticamente o próximo ID, sem permitir edição livre desse campo.
+A coluna **Tipo** usa um seletor fechado com os três domínios adotados pelo
+[Quadro Nacional de Qualificações](https://www.dgert.gov.pt/quadro-nacional-de-qualificacoes):
+`Conhecimentos`, `Aptidões` e `Atitudes`. A mesma enumeração é exigida na geração
+por IA e na validação determinística.
 O campo **Modo de IA** é editável na mesma tabela através de uma lista controlada
 e começa em `AI-off`. Nas tabelas de atividades e tarefas, o modo é apresentado
 como valor informativo herdado dos resultados selecionados, evitando repetir a

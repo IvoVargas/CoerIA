@@ -227,7 +227,7 @@ class WorkflowTests(unittest.TestCase):
                     "statement": "Analisar algoritmos.",
                     "action_verb": "Analisar",
                     "taxonomy_level": "Relacional",
-                    "outcome_type": "Conhecimento teórico",
+                    "outcome_type": "Conhecimentos",
                 }
             ],
             "feedback": {},
@@ -1188,11 +1188,23 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(AgentGenerationError, "IDs RA1, RA2"):
             _validate_artifact("learning_outcomes", invalid_ids, state)
 
+        invalid_type = deepcopy(state["learning_outcomes"])
+        invalid_type[0]["outcome_type"] = "Competência"
+        with self.assertRaisesRegex(
+            AgentGenerationError,
+            "Conhecimentos, Aptidões ou Atitudes",
+        ):
+            _validate_artifact("learning_outcomes", invalid_type, state)
+
         schema = _schema_for("learning_outcomes", state)
         item_properties = schema["properties"]["artifact"]["items"]["properties"]
         self.assertEqual(
             item_properties["taxonomy_level"]["enum"],
             ["Uni-estrutural", "Multi-estrutural", "Relacional", "Abstrato expandido"],
+        )
+        self.assertEqual(
+            item_properties["outcome_type"]["enum"],
+            ["Conhecimentos", "Aptidões", "Atitudes"],
         )
 
     def test_learning_outcome_generation_canonicalizes_level_from_verb(self) -> None:

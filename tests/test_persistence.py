@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 
 from prism.persistence import SQLiteSessionStore
-from prism.session_schema import SESSION_SCHEMA_VERSION
+from prism.session_schema import SESSION_SCHEMA_VERSION, require_current_session_schema
 
 
 def test_default_database_path_can_be_configured_from_environment(
@@ -114,6 +114,36 @@ def test_session_state_from_an_older_schema_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="já não é suportada"):
         store.save(state, owner_id="D01")
+
+
+def test_current_session_normalizes_previous_learning_outcome_types() -> None:
+    state = _minimal_state("UC atual")
+    state["learning_outcomes"] = [
+        {"id": "RA1", "outcome_type": "Conhecimento teórico"},
+        {"id": "RA2", "outcome_type": "Aptidão prática ou técnica"},
+        {"id": "RA3", "outcome_type": "Competência social"},
+    ]
+    state["versions"] = {
+        "learning_outcomes": [
+            {
+                "artifact": [
+                    {"id": "RA1", "outcome_type": "Conhecimento teórico"}
+                ]
+            }
+        ]
+    }
+
+    normalized = require_current_session_schema(state)
+
+    assert [
+        item["outcome_type"] for item in normalized["learning_outcomes"]
+    ] == ["Conhecimentos", "Aptidões", "Atitudes"]
+    assert (
+        normalized["versions"]["learning_outcomes"][0]["artifact"][0][
+            "outcome_type"
+        ]
+        == "Conhecimentos"
+    )
 
 
 @pytest.mark.parametrize("invalid_version", [None, "33", 33.0, True])

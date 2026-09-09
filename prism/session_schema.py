@@ -4,8 +4,29 @@ from __future__ import annotations
 
 from typing import Any
 
+from .curriculum import canonical_outcome_type
+
 
 SESSION_SCHEMA_VERSION = 33
+
+
+def _normalize_outcome_types(value: Any) -> None:
+    """Atualiza designações conhecidas sem reintroduzir migrações de esquema."""
+
+    if isinstance(value, dict):
+        if "outcome_type" in value:
+            try:
+                value["outcome_type"] = canonical_outcome_type(
+                    value.get("outcome_type")
+                )
+            except ValueError:
+                # Um valor desconhecido permanece visível para a validação o rejeitar.
+                pass
+        for child in value.values():
+            _normalize_outcome_types(child)
+    elif isinstance(value, list):
+        for child in value:
+            _normalize_outcome_types(child)
 
 
 def require_current_session_schema(state: dict[str, Any]) -> dict[str, Any]:
@@ -20,4 +41,5 @@ def require_current_session_schema(state: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(
             "A sessão pertence a uma versão do CoerIA que já não é suportada."
         )
+    _normalize_outcome_types(state)
     return state

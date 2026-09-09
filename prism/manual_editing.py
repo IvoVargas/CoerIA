@@ -14,6 +14,7 @@ from .ai_modes import (
 )
 from .curriculum import (
     LESSON_TYPES,
+    OUTCOME_TYPES,
     TAXONOMY_VERBS,
     next_learning_outcome_id,
     next_structured_activity_id,
@@ -97,7 +98,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (),
                 (
                     _field("id", "ID", "learning_outcome_id"),
-                    _field("outcome_type", "Tipo"),
+                    _field("outcome_type", "Tipo", "outcome_type"),
                     _field("theme", "Tema ou objeto"),
                     _field("taxonomy_level", "Nível", "taxonomy_level"),
                     _field("action_verb", "Verbo", "taxonomy_verb"),
@@ -110,7 +111,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                     "statement": "",
                     "action_verb": "",
                     "taxonomy_level": "",
-                    "outcome_type": "Conhecimento",
+                    "outcome_type": "Conhecimentos",
                     "ai_mode": AI_MODE_OFF,
                 },
             ),
@@ -879,6 +880,8 @@ def editor_reference_options(
 
     if field.kind in {"ai_mode", "inherited_ai_mode"}:
         return dict(AI_MODE_LABELS)
+    if field.kind == "outcome_type":
+        return {value: value for value in OUTCOME_TYPES}
     if field.kind == "source_reference":
         return {
             source: source

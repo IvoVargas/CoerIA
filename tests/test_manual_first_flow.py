@@ -46,7 +46,7 @@ class OutcomeProposalAgent:
             artifact=[
                 {
                     "id": "1",
-                    "outcome_type": "Conhecimento teórico",
+                    "outcome_type": "Conhecimentos",
                     "theme": "Algoritmos",
                     "taxonomy_level": "Uni-estrutural",
                     "action_verb": "Identificar",
@@ -154,7 +154,7 @@ def test_changing_an_outcome_mode_refreshes_existing_activities_and_tasks() -> N
     outcomes = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",
@@ -188,7 +188,7 @@ def test_historical_version_becomes_active_without_creating_a_new_version() -> N
     version_one = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",
@@ -376,7 +376,7 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
     outcomes = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",
@@ -384,7 +384,7 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
         },
         {
             "id": "RA3",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Testes",
             "taxonomy_level": "Relacional",
             "action_verb": "Analisar",
@@ -468,7 +468,7 @@ def test_localized_assistance_generates_only_the_selected_fragment() -> None:
     state["learning_outcomes"] = [
         {
             "id": "RA1",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Variáveis",
             "taxonomy_level": "Uni-estrutural",
             "action_verb": "Identificar",
@@ -476,7 +476,7 @@ def test_localized_assistance_generates_only_the_selected_fragment() -> None:
         },
         {
             "id": "RA2",
-            "outcome_type": "Conhecimento teórico",
+            "outcome_type": "Conhecimentos",
             "theme": "Algoritmos",
             "taxonomy_level": "Relacional",
             "action_verb": "Analisar",
@@ -508,7 +508,7 @@ def test_ai_proposal_applies_selected_cells_in_a_single_version() -> None:
     state = create_session(_course())
     current = {
         "id": "RA1",
-        "outcome_type": "Conhecimento teórico",
+        "outcome_type": "Conhecimentos",
         "theme": "Algoritmos",
         "taxonomy_level": "Relacional",
         "action_verb": "Analisar",

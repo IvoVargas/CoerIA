@@ -26,7 +26,7 @@ def test_catalog_accepts_only_detailed_four_digit_codes(
     ["6", "06", "061", "06134", "06A", "613", "a confirmar"],
 )
 def test_catalog_rejects_invalid_or_unknown_codes(code: str) -> None:
-    with pytest.raises(ValueError, match="CITE-F/2013"):
+    with pytest.raises(ValueError, match="CITE-F"):
         canonicalize_isced_f(code)
 
 
