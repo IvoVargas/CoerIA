@@ -257,8 +257,8 @@ def test_backup_contains_readable_json_and_real_attachment_files(
         assert readable["unidade_curricular"]["nome_unidade_curricular"] == (
             "Introdução à Psicologia"
         )
-        assert readable["unidade_curricular"]["codigo_isced_f"] == "0313"
-        assert readable["unidade_curricular"]["area_isced_f"] == "Psicologia"
+        assert readable["unidade_curricular"]["codigo_cite_f"] == "0313"
+        assert readable["unidade_curricular"]["area_cite_f"] == "Psicologia"
         assert readable["unidade_curricular"]["objetivos_gerais"] == (
             "Compreender a Psicologia e os seus campos de aplicação."
         )

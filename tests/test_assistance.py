@@ -90,7 +90,7 @@ class InitialAssistanceTests(unittest.TestCase):
             "contact_hours": 45,
             "autonomous_hours": 117,
             "explanation": (
-                "CNAEF 624 corresponde a Design e ISCED-F 0831 corresponde a "
+                "CNAEF 624 corresponde a Design e CITE-F/2013 0831 corresponde a "
                 "Contabilidade."
             ),
         }
@@ -127,14 +127,15 @@ class InitialAssistanceTests(unittest.TestCase):
         self.assertIn("isced_f_code", proposal_schema["required"])
         self.assertNotIn("isced_f_name", proposal_schema["required"])
         self.assertIn("0613", proposal_schema["properties"]["isced_f_code"]["enum"])
+        self.assertNotIn("061", proposal_schema["properties"]["isced_f_code"]["enum"])
         request_context = json.loads(calls[0]["input"])
         self.assertEqual(request_context["classification_catalogs"]["CNAEF"]["624"], "Pescas")
         self.assertEqual(
-            request_context["classification_catalogs"]["ISCED-F 2013"]["0831"],
+            request_context["classification_catalogs"]["CITE-F/2013"]["0831"],
             "Pescas",
         )
         self.assertIn("CNAEF 624 — Pescas", result["explanation"])
-        self.assertIn("ISCED-F 0831 — Pescas", result["explanation"])
+        self.assertIn("CITE-F/2013 0831 — Pescas", result["explanation"])
         self.assertNotIn(proposal["explanation"], result["explanation"])
 
     def test_requested_proposal_preserves_the_exclusive_taxonomy(self) -> None:

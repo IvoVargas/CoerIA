@@ -27,18 +27,16 @@ materiais produzidos.
 ### RF01 — Dados iniciais e fontes
 
 - Recolher o nome da unidade curricular e o tipo de formação.
-- Recolher curso, ano, CNAEF, ISCED-F 2013, ECTS, horas de contacto, trabalho
+- Recolher curso, ano, CNAEF, CITE-F/2013, ECTS, horas de contacto, trabalho
   autónomo e bibliografia a validar pelo docente.
-- Registar CNAEF e ISCED-F como classificações independentes, em pares de código
+- Registar CNAEF e CITE-F/2013 como classificações independentes, em pares de código
   e designação, sem inferir nem exigir correspondência entre ambas.
 - Disponibilizar o catálogo oficial CNAEF aprovado pela Portaria n.º 256/2005,
   aceitar apenas códigos existentes com 3 dígitos e preencher automaticamente a
   designação canónica.
-- Disponibilizar o catálogo oficial ISCED-F 2013 em português, aceitar apenas
-  códigos existentes com 2, 3 ou 4 dígitos e preencher automaticamente a
-  designação canónica. Recomendar o nível detalhado de quatro dígitos sem impedir
-  o uso dos níveis geral ou específico quando sejam os únicos dados
-  institucionais disponíveis.
+- Disponibilizar o catálogo oficial CITE-F/2013 em português, correspondente à
+  versão portuguesa da ISCED-F 2013, aceitar apenas códigos existentes do nível
+  detalhado com 4 dígitos e preencher automaticamente a designação canónica.
 - Apresentar código e designação durante a pesquisa nos dois catálogos, mas
   mostrar apenas o código depois da seleção, mantendo a área visível no campo de
   designação adjacente.
@@ -67,7 +65,7 @@ materiais produzidos.
   os campos vazios, incluindo a informação de referência, sem substituir valores
   já introduzidos pelo docente.
 - Fornecer à IA as correspondências canónicas `código — designação` dos catálogos
-  CNAEF e ISCED-F, exigir que a classificação seja escolhida pelo conteúdo
+  CNAEF e CITE-F/2013, exigir que a classificação seja escolhida pelo conteúdo
   principal e apresentar ao docente apenas designações obtidas localmente dos
   catálogos, sem confiar em descrições livres geradas pelo modelo.
 - Recolher os objetivos gerais nos dados iniciais, num único campo opcional de
@@ -525,7 +523,7 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   bytes para a resposta de download.
 - Incluir uma versão editável, exclusivamente em português, do programa da UC,
   construída a partir dos artefactos aprovados e sem nova geração por IA.
-- Incluir no programa identificação — incluindo CNAEF e ISCED-F 2013 —, carga de
+- Incluir no programa identificação — incluindo CNAEF e CITE-F/2013 —, carga de
   trabalho e ECTS, objetivos gerais, conteúdos, resultados de aprendizagem e
   classificação taxonómica, política de utilização da IA, atividades de
   ensino-aprendizagem, avaliação,

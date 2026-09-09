@@ -8,12 +8,12 @@ from prism.models import CourseInput
 @pytest.mark.parametrize(
     ("code", "expected_name"),
     [
-        ("06", "Tecnologias da informação e comunicação (TICs)"),
-        ("061", "Tecnologias da informação e comunicação (TICs)"),
         ("0613", "Desenvolvimento e análise de software e aplicações informáticas"),
+        ("0313", "Psicologia"),
+        ("0831", "Pescas"),
     ],
 )
-def test_catalog_accepts_the_three_official_hierarchy_levels(
+def test_catalog_accepts_only_detailed_four_digit_codes(
     code: str,
     expected_name: str,
 ) -> None:
@@ -21,14 +21,17 @@ def test_catalog_accepts_the_three_official_hierarchy_levels(
     assert isced_f_options()[code] == f"{code} — {expected_name}"
 
 
-@pytest.mark.parametrize("code", ["6", "06134", "06A", "613", "a confirmar"])
+@pytest.mark.parametrize(
+    "code",
+    ["6", "06", "061", "06134", "06A", "613", "a confirmar"],
+)
 def test_catalog_rejects_invalid_or_unknown_codes(code: str) -> None:
-    with pytest.raises(ValueError, match="ISCED-F"):
+    with pytest.raises(ValueError, match="CITE-F/2013"):
         canonicalize_isced_f(code)
 
 
-def test_catalog_contains_all_three_levels_and_canonicalizes_the_name() -> None:
-    assert {len(code) for code in ISCED_F_CATALOG} == {2, 3, 4}
+def test_catalog_contains_only_detailed_level_and_canonicalizes_the_name() -> None:
+    assert {len(code) for code in ISCED_F_CATALOG} == {4}
     assert canonicalize_isced_f("0313", "Texto inventado") == (
         "0313",
         "Psicologia",

@@ -1,12 +1,18 @@
-"""Catálogo oficial português CITE-F/ISCED-F 2013."""
+"""Catálogo da CITE-F/2013, designação portuguesa da ISCED-F 2013.
+
+Os identificadores internos ``isced_f_*`` são preservados para manter estável o
+estado técnico das sessões; a interface e os documentos usam a designação
+portuguesa oficial CITE-F/2013.
+"""
 
 from __future__ import annotations
 
 import re
 
 
-# Versão portuguesa adotada pela 51.ª Deliberação do CSE. A lista inclui os
-# três níveis oficiais: área geral (2 dígitos), específica (3) e detalhada (4).
+# Versão portuguesa adotada pela 51.ª Deliberação do CSE. A fonte conserva os
+# três níveis oficiais; o catálogo público da aplicação expõe apenas o nível
+# detalhado de quatro dígitos, conforme a decisão funcional do projeto.
 _ISCED_F_DATA = """
 00|Programas e qualificações genéricos
 000|Programas e qualificações genéricos sem definição precisa
@@ -229,13 +235,19 @@ _ISCED_F_DATA = """
 9999|Área desconhecida
 """
 
-ISCED_F_CATALOG = {
+_ISCED_F_FULL_CATALOG = {
     code: name
     for code, name in (
         line.split("|", 1)
         for line in _ISCED_F_DATA.strip().splitlines()
         if line.strip()
     )
+}
+
+ISCED_F_CATALOG = {
+    code: name
+    for code, name in _ISCED_F_FULL_CATALOG.items()
+    if len(code) == 4
 }
 
 
@@ -255,11 +267,11 @@ def canonicalize_isced_f(code: str | None, name: str | None = "") -> tuple[str, 
     supplied_name = str(name or "").strip()
     if not normalized_code:
         if supplied_name:
-            raise ValueError("Selecione um código ISCED-F para definir a respetiva área.")
+            raise ValueError("Selecione um código CITE-F/2013 para definir a respetiva área.")
         return "", ""
-    if not re.fullmatch(r"\d{2,4}", normalized_code):
-        raise ValueError("O código ISCED-F deve ter 2, 3 ou 4 dígitos.")
+    if not re.fullmatch(r"\d{4}", normalized_code):
+        raise ValueError("O código CITE-F/2013 deve ter exatamente 4 dígitos.")
     canonical_name = ISCED_F_CATALOG.get(normalized_code)
     if canonical_name is None:
-        raise ValueError("Selecione um código existente no catálogo oficial ISCED-F 2013.")
+        raise ValueError("Selecione um código existente no catálogo oficial CITE-F/2013.")
     return normalized_code, canonical_name

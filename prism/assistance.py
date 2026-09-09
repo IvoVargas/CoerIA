@@ -118,7 +118,7 @@ def _merge_initial_proposal(
     merged["isced_f_name"] = isced_name
     classifications = [
         f"CNAEF {cnaef_code} — {cnaef_name}",
-        f"ISCED-F {isced_code} — {isced_name}",
+        f"CITE-F/2013 {isced_code} — {isced_name}",
     ]
     estimated_fields = [
         field
@@ -325,14 +325,14 @@ class OpenAIInitialFormAssistant:
             "global específica para esta unidade curricular, sem a transformar numa lista "
             "de resultados de aprendizagem nem usar frases genéricas aplicáveis a qualquer curso. "
             "ECTS e horas podem ser estimativas provisórias, mas a explanation deve "
-            "identificá-los claramente como dados a confirmar. Para CNAEF e ISCED-F "
-            "2013, consulta obrigatoriamente classification_catalogs, que contém a "
+            "identificá-los claramente como dados a confirmar. Para CNAEF e CITE-F/2013, "
+            "consulta obrigatoriamente classification_catalogs, que contém a "
             "correspondência exata entre cada código permitido e a sua designação. "
             "Escolhe a designação que melhor corresponda ao conteúdo principal da "
             "unidade curricular e ao curso; não adivinhes o significado de um código "
-            "nem estabeleças uma correspondência automática entre CNAEF e ISCED-F. "
-            "No ISCED-F, prefere uma área detalhada de quatro dígitos quando o contexto "
-            "o permitir. A aplicação obtém e apresenta as designações canónicas. "
+            "nem estabeleças uma correspondência automática entre CNAEF e CITE-F/2013. "
+            "Na CITE-F/2013, escolhe obrigatoriamente uma área detalhada de quatro "
+            "dígitos. A aplicação obtém e apresenta as designações canónicas. "
             "Para semester, usa exatamente '1.º semestre' ou '2.º semestre'. "
             "A proposta será revista e aprovada pelo docente antes de ser usada. "
             f"A taxonomia escolhida é exclusivamente {taxonomy_type} e não deve ser "
@@ -357,7 +357,7 @@ class OpenAIInitialFormAssistant:
         if "cnaef_code" in empty_fields:
             classification_catalogs["CNAEF"] = CNAEF_CATALOG
         if "isced_f_code" in empty_fields:
-            classification_catalogs["ISCED-F 2013"] = ISCED_F_CATALOG
+            classification_catalogs["CITE-F/2013"] = ISCED_F_CATALOG
         request_context: dict[str, Any] = {
             "current_fields": data,
             "fields_to_complete": empty_fields,

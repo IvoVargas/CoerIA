@@ -150,7 +150,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.97 · SQLite")
+    await user.should_see("CoerIA v0.3.98 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -297,11 +297,12 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     assert cnaef_name._props.get("readonly") is True
     cnaef_code.set_value("481")
     await user.should_see("Ciências informáticas")
-    await user.should_see("Código ISCED-F")
-    await user.should_see("Área ISCED-F")
+    await user.should_see("Código CITE-F/2013")
+    await user.should_see("Área CITE-F/2013")
     isced_code = interfaces[-1].fields["isced_f_code"]
     isced_name = interfaces[-1].fields["isced_f_name"]
     assert isced_code.options["0613"].startswith("0613 — ")
+    assert "061" not in isced_code.options
     assert "selected-item" in isced_code.slots
     assert "split(' — ')[0]" in str(isced_code.slots["selected-item"].template)
     assert isced_code._props.get("use-input") is True

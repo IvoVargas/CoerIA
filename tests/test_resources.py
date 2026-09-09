@@ -1396,7 +1396,7 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("Tema", word_text)
             self.assertIn("Descrição do tema", word_text)
             self.assertIn(self.course.general_aims, word_text)
-            self.assertIn("ISCED-F 2013", word_text)
+            self.assertIn("CITE-F/2013", word_text)
             self.assertIn("0613", word_text)
             self.assertIn(
                 "Desenvolvimento e análise de software e aplicações",
@@ -1442,7 +1442,7 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("Tema", latex)
             self.assertIn("Descrição do tema", latex)
             self.assertIn(self.course.general_aims, latex)
-            self.assertIn("ISCED-F 2013", latex)
+            self.assertIn("CITE-F/2013", latex)
             self.assertIn("0613", latex)
             self.assertIn(
                 "Desenvolvimento e análise de software e aplicações",

@@ -317,7 +317,7 @@ def _add_program_metadata(document: Document, course: dict[str, Any]) -> None:
             or "A confirmar pelo docente",
         ),
         (
-            "ISCED-F 2013",
+            "CITE-F/2013",
             " — ".join(
                 item
                 for item in (
@@ -829,7 +829,7 @@ def export_program_latex(
             or "A confirmar pelo docente",
         ],
         [
-            "ISCED-F 2013",
+            "CITE-F/2013",
             " --- ".join(
                 item
                 for item in (

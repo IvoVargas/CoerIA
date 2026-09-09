@@ -981,7 +981,7 @@ class AGIRSoloInterface:
 
             self.fields["isced_f_code"] = ui.select(
                 isced_f_options(),
-                label="Código ISCED-F",
+                label="Código CITE-F/2013",
                 with_input=True,
                 clearable=True,
                 on_change=update_isced_name,
@@ -995,8 +995,13 @@ class AGIRSoloInterface:
                 <span>{{ String(props.opt.label).split(' — ')[0] }}</span>
                 """,
             )
+            self.fields["isced_f_code"].tooltip(
+                "CITE-F/2013 é a designação portuguesa da classificação "
+                "internacional ISCED-F 2013. Selecione uma área detalhada "
+                "de quatro dígitos."
+            )
             self.fields["isced_f_name"] = ui.input(
-                "Área ISCED-F"
+                "Área CITE-F/2013"
             ).props("readonly").classes("full-control")
             self.fields["ects_credits"] = ui.number(
                 "ECTS", value=0, min=0, precision=1

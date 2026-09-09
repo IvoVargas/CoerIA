@@ -73,15 +73,24 @@ referência oficial do alinhamento ou do fluxo; permanece apenas como documento
 histórico ou institucional.
 
 Nos dados iniciais, o CoerIA regista separadamente a classificação nacional
-CNAEF e a classificação internacional **ISCED-F 2013**, ambas através de código
-e designação, sem exigir correspondência entre ambas. Cada classificação é
-escolhida no respetivo catálogo oficial em português e a designação é preenchida
-automaticamente. A CNAEF aceita os códigos nacionais de três dígitos aprovados
-pela Portaria n.º 256/2005. O ISCED-F aceita códigos existentes nos níveis geral
-(dois dígitos), específico (três dígitos) e detalhado (quatro dígitos), sendo o
-nível detalhado recomendado quando estiver disponível. Em ambos os seletores, a
+CNAEF e a **CITE-F/2013**, designação portuguesa da classificação internacional
+ISCED-F 2013, ambas através de código e designação, sem exigir correspondência
+entre ambas. Cada classificação é escolhida no respetivo catálogo oficial em
+português e a designação é preenchida automaticamente. A CNAEF aceita os códigos
+nacionais de três dígitos aprovados pela [Portaria n.º 256/2005](https://diariodarepublica.pt/dr/detalhe/portaria/256-2005-572672).
+A CITE-F/2013, adotada pela [Deliberação n.º 328/2017](https://diariodarepublica.pt/dr/detalhe/deliberacao/328-2017-106927002)
+do Conselho Superior de Estatística, aceita
+códigos existentes apenas no nível detalhado de quatro dígitos. Assim, os dois
+seletores apresentam exclusivamente o nível mais detalhado adotado pelo CoerIA:
+três dígitos na CNAEF e quatro dígitos na CITE-F/2013. Em ambos, a
 lista apresenta o código e a designação para facilitar a pesquisa, enquanto o
 valor selecionado mostra apenas o código.
+
+A Deliberação n.º 328/2017 adotou a CITE-F/2013 para o Sistema Estatístico
+Nacional em substituição da CNAEF 2003 nas operações estatísticas. O CoerIA
+mantém ambos os campos porque diferentes documentos institucionais podem pedir
+uma ou outra classificação; não presume nem calcula uma correspondência entre
+os dois catálogos.
 
 O docente escolhe SOLO ou Bloom no início da sessão; as duas taxonomias nunca
 são combinadas. Cada avaliação é exclusivamente formativa ou sumativa, podendo
