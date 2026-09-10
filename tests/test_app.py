@@ -150,7 +150,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.101 · SQLite")
+    await user.should_see("CoerIA v0.3.102 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -686,6 +686,7 @@ async def test_teacher_decision_is_above_the_current_artifact_in_light_theme(
         in app.APP_CSS
     )
     assert "repeat(var(--stage-count), minmax(126px, 1fr))" in app.APP_CSS
+    assert ".stage-toolbar-controls-separated {\n  margin-left: auto;" in app.APP_CSS
 
     with user:
         interfaces[-1].state = final_state

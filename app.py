@@ -372,7 +372,7 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .stage-toolbar-context { min-width: 190px; flex: 0 1 320px; }
 .stage-toolbar-controls { flex: 0 1 auto; justify-content: flex-end; }
 .stage-toolbar-controls-separated {
-  margin-left: 12px; padding-left: 14px;
+  margin-left: auto; padding-left: 14px;
   border-left: 1px solid var(--agir-border);
 }
 .stage-toolbar-actions {
