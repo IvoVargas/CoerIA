@@ -262,7 +262,8 @@ revisão antes de uma nova validação final.
 
 A barra de etapas permite abrir qualquer ponto de autoria desde a criação da
 sessão. A navegação não chama a IA, não exige completude e não apaga dados. Em
-qualquer etapa, **Editar campos e tabelas** ativa a edição no próprio artefacto;
+qualquer etapa, **Preencher etapa** ou **Editar campos e tabelas** ativa a edição
+no próprio artefacto, conforme ainda não exista ou já exista conteúdo;
 podem ser alterados textos, adicionadas linhas e removidas linhas. Guardar cria
 uma nova versão mesmo que o rascunho ainda esteja incompleto. Se a alteração
 ocorrer antes de artefactos já preenchidos, esses artefactos são preservados e
@@ -272,8 +273,12 @@ ou descer uma posição, permitindo reorganizar a sequência sem voltar a introd
 os dados da aula.
 Uma barra de ferramentas superior permanece visível durante a deslocação da
 página e reúne o contexto da etapa, **Etapa anterior**, **Etapa seguinte**,
-**Editar campos e tabelas** e as ações facultativas de IA. A edição manual fica
-no grupo geral da etapa, visualmente separada da área **Assistência com IA**. No modo de edição,
+**Preencher/Editar etapa** e as ações facultativas de IA. A identificação e a
+numeração da etapa permanecem entre os dois botões de navegação. A barra destaca
+uma única ação recomendada: preencher ou editar enquanto a etapa está vazia ou
+por rever, rever uma proposta quando esta está pendente, guardar durante a edição
+e avançar depois de existir uma versão guardada. A ação de autoria fica separada
+por espaço e divisor visual da navegação e da área **Assistência com IA**. No modo de edição,
 a mesma barra substitui essas ações por **Cancelar edição** e **Guardar
 rascunho**, evitando que os comandos necessários fiquem fora do ecrã. Ao
 criar ou rever **Dados iniciais**, a mesma barra apresenta **Validar dados** como

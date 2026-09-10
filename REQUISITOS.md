@@ -217,9 +217,15 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   linha e preservando integralmente os dados da aula movida.
 - Disponibilizar uma barra de ferramentas superior, persistente durante a
   deslocação da página, que apresente o contexto da etapa e reúna **Etapa
-  anterior**, **Etapa seguinte**, **Editar campos e tabelas** e as ações de IA.
-- Separar visualmente **Editar campos e tabelas** e outras ações determinísticas
-  da área identificada como **Assistência com IA**.
+  anterior**, **Etapa seguinte**, **Preencher/Editar etapa** e as ações de IA.
+- Manter a identificação e a numeração da etapa entre **Etapa anterior** e
+  **Etapa seguinte**, colocando a navegação à esquerda e separando-a por espaço
+  e divisor visual da ação de autoria.
+- Destacar uma única ação recomendada de acordo com o estado da interface:
+  preencher ou editar a etapa vazia ou por rever, rever uma proposta de IA
+  pendente, guardar a edição em curso ou avançar após guardar uma versão.
+- Separar visualmente as ações determinísticas da área identificada como
+  **Assistência com IA**.
 - No modo de edição, manter a barra visível, desativar a navegação e substituir
   as ações de autoria por **Cancelar edição** e **Guardar rascunho**.
 - Na criação e na revisão de **Dados iniciais**, substituir o bloco antigo de

@@ -150,7 +150,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.100 · SQLite")
+    await user.should_see("CoerIA v0.3.101 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -744,13 +744,20 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     proposal_button = next(iter(user.find(marker="open-ai-assistance").elements))
     verify_button = next(iter(user.find(marker="verify-stage-with-ai").elements))
     edit_button = next(iter(user.find(marker="edit-artifact-content").elements))
+    previous_button = next(iter(user.find(marker="toolbar-previous-stage").elements))
+    stage_context = next(iter(user.find(marker="toolbar-stage-context").elements))
+    next_button = next(iter(user.find(marker="toolbar-next-stage").elements))
     toolbar = next(iter(user.find(marker="stage-toolbar").elements))
     assert toolbar.id < create_button.id
+    assert previous_button.id < stage_context.id < next_button.id < edit_button.id
+    assert "primary-action" in edit_button._classes
+    assert "secondary-action" in next_button._classes
+    await user.should_see("Preencher etapa")
     assert edit_button.id < assistance_heading.id
     assert assistance_heading.id < create_button.id < proposal_button.id < verify_button.id
     user.find(marker="stage-toolbar-help-authoring").click()
     await user.should_see("Autoria da etapa")
-    await user.should_see("Esta ação não pertence à assistência com IA")
+    await user.should_see("Não usa IA nem tem custo de API")
     user.find(marker="close-toolbar-help").click()
     user.find(marker="open-ai-assistance").click()
     await user.should_see("Pedir uma proposta localizada")
@@ -791,6 +798,43 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.should_not_see("Objetivos gerais")
     await user.should_see("Criar etapa completa com IA")
     assert interfaces[-1].state["current_stage"] == "curriculum_analysis"
+
+
+@pytest.mark.asyncio
+async def test_stage_toolbar_emphasizes_next_only_after_a_version_is_saved(
+    user: User,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, estruturas de dados, funções, testes e controlo de fluxo.",
+        )
+    )
+    state["learning_outcomes"] = [
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimentos",
+            "theme": "Algoritmos",
+            "taxonomy_level": "Uni-estrutural",
+            "action_verb": "Identificar",
+            "statement": "Identificar os elementos de um algoritmo.",
+        }
+    ]
+    state["stage_statuses"]["learning_outcomes"] = "awaiting_review"
+
+    @ui.page("/_test_contextual_stage_toolbar")
+    def contextual_stage_toolbar_page():
+        interface = app.AGIRSoloInterface()
+        interface.state = state
+        interface.show_workspace()
+
+    await user.open("/_test_contextual_stage_toolbar")
+
+    next_button = next(iter(user.find(marker="toolbar-next-stage").elements))
+    edit_button = next(iter(user.find(marker="edit-artifact-content").elements))
+    assert "primary-action" in next_button._classes
+    assert "secondary-action" in edit_button._classes
+    await user.should_see("Editar campos e tabelas")
 
 
 @pytest.mark.asyncio
@@ -1610,6 +1654,10 @@ async def test_manual_first_workspace_renders_a_pending_ai_proposal(
     await user.should_see("Aplicar alterações aceites")
     await user.should_see("Rejeitar todas as alterações")
     assert user.find(marker="inline-ai-proposal").elements
+    review_button = next(iter(user.find(marker="review-ai-proposal").elements))
+    next_button = next(iter(user.find(marker="toolbar-next-stage").elements))
+    assert "primary-action" in review_button._classes
+    assert "secondary-action" in next_button._classes
 
     next(iter(user.find(marker="ai-decision-change-1").elements)).set_value(
         "Rejeitar"

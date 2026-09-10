@@ -106,6 +106,7 @@ from prism.workflow import (
     ai_review_criterion_label,
     ai_review_finding_is_deterministic,
     ai_review_is_current,
+    artifact_has_content,
     is_manual_first,
     revision_targets_for_state,
 )
@@ -368,8 +369,12 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   background: rgba(255, 255, 255, .97); backdrop-filter: blur(14px);
 }
 .stage-toolbar-main { min-width: 0; }
-.stage-toolbar-context { min-width: 170px; flex: 1 1 220px; }
+.stage-toolbar-context { min-width: 190px; flex: 0 1 320px; }
 .stage-toolbar-controls { flex: 0 1 auto; justify-content: flex-end; }
+.stage-toolbar-controls-separated {
+  margin-left: 12px; padding-left: 14px;
+  border-left: 1px solid var(--agir-border);
+}
 .stage-toolbar-actions {
   width: 100%; justify-content: flex-end; padding-top: 8px; margin-top: 2px;
   border-top: 1px solid var(--agir-border);
@@ -495,6 +500,10 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   .stage-toolbar { top: 64px; }
   .stage-toolbar-controls,
   .stage-toolbar-actions { justify-content: flex-start; flex-basis: 100%; }
+  .stage-toolbar-controls-separated {
+    margin-left: 0; margin-top: 6px; padding-left: 0; padding-top: 9px;
+    border-left: 0; border-top: 1px solid var(--agir-border);
+  }
 }
 @media (max-width: 640px) {
   .hero-title { font-size: 2.15rem; }
@@ -3946,13 +3955,21 @@ class AGIRSoloInterface:
                     (
                         "arrow_back",
                         "Etapa anterior / Etapa seguinte",
-                        "Navega sem executar IA e sem exigir que o conteúdo esteja completo.",
+                        "Navega sem executar IA. A identificação e a numeração da etapa "
+                        "permanecem entre os dois botões; Etapa seguinte só ganha destaque "
+                        "depois de guardar uma versão da etapa.",
                     ),
                     (
                         "edit",
-                        "Editar campos e tabelas",
-                        "Abre a edição manual do artefacto. Esta ação não pertence à "
-                        "assistência com IA e não tem custo de API.",
+                        "Preencher / Editar etapa",
+                        "Abre a edição manual do artefacto e é a ação destacada enquanto a "
+                        "etapa está vazia ou por rever. Não usa IA nem tem custo de API.",
+                    ),
+                    (
+                        "rate_review",
+                        "Rever proposta da IA",
+                        "Quando existe uma proposta pendente, desloca a página até à revisão "
+                        "em que cada alteração pode ser aceite, rejeitada ou editada.",
                     ),
                     (
                         "auto_fix_high",
@@ -3973,7 +3990,8 @@ class AGIRSoloInterface:
                         "navegação. Cada observação localiza e realça o conteúdo relacionado.",
                     ),
                 ],
-                "As propostas de IA só se tornam versões depois da decisão do docente.",
+                "A barra destaca apenas a ação recomendada para o estado atual. As propostas "
+                "de IA só se tornam versões depois da decisão do docente.",
             ),
             "editing": (
                 "Edição manual",
@@ -4208,6 +4226,14 @@ class AGIRSoloInterface:
         proposal: dict[str, Any] | None,
     ) -> None:
         current_index = STAGE_ORDER.index(stage)
+        stage_status = str(state.get("stage_statuses", {}).get(stage, "empty"))
+        stage_has_content = artifact_has_content(state.get(stage))
+        next_is_recommended = bool(
+            not editing
+            and proposal is None
+            and stage_has_content
+            and stage_status in {"awaiting_review", "checked", "approved"}
+        )
         with ui.card().classes("stage-toolbar surface w-full").mark("stage-toolbar"):
             with ui.row().classes(
                 "stage-toolbar-main w-full items-center gap-2 flex-wrap"
@@ -4223,8 +4249,12 @@ class AGIRSoloInterface:
                     "Etapa anterior",
                     icon="arrow_back",
                     on_click=previous_action,
-                ).props("outline no-caps").classes("secondary-action")
-                with ui.column().classes("stage-toolbar-context gap-0 px-1"):
+                ).props("outline no-caps").classes("secondary-action").mark(
+                    "toolbar-previous-stage"
+                )
+                with ui.column().classes("stage-toolbar-context gap-0 px-1").mark(
+                    "toolbar-stage-context"
+                ):
                     ui.label(f"ETAPA {current_index + 2:02d} DE {DISPLAY_STAGE_COUNT:02d}").classes(
                         "eyebrow"
                     )
@@ -4235,11 +4265,18 @@ class AGIRSoloInterface:
                         STAGE_ORDER[current_index + 1]
                     ),
                 ).props(
-                    "unelevated no-caps icon-right=arrow_forward"
-                ).classes("primary-action")
+                    (
+                        "unelevated no-caps icon-right=arrow_forward"
+                        if next_is_recommended
+                        else "outline no-caps icon-right=arrow_forward"
+                    )
+                ).classes(
+                    "primary-action" if next_is_recommended else "secondary-action"
+                ).mark("toolbar-next-stage")
 
                 with ui.row().classes(
-                    "stage-toolbar-controls items-center gap-2 flex-wrap"
+                    "stage-toolbar-controls stage-toolbar-controls-separated "
+                    "items-center gap-2 flex-wrap"
                 ):
                     if editing:
                         previous_button.disable()
@@ -4263,13 +4300,34 @@ class AGIRSoloInterface:
                         ).props("unelevated no-caps").classes("primary-action")
                         self._render_toolbar_help_button("editing")
                     else:
-                        edit_button = ui.button(
-                            "Editar campos e tabelas",
-                            icon="edit",
-                            on_click=lambda: self._start_manual_edit(stage),
-                        ).props("outline no-caps").classes(
-                            "secondary-action"
-                        ).mark("edit-artifact-content")
+                        if proposal is not None:
+                            ui.button(
+                                "Rever proposta da IA",
+                                icon="rate_review",
+                                on_click=lambda: self._scroll_and_highlight(
+                                    ".stage-artifact-focus"
+                                ),
+                            ).props("unelevated no-caps").classes(
+                                "primary-action"
+                            ).mark("review-ai-proposal")
+                        else:
+                            edit_button = ui.button(
+                                (
+                                    "Editar campos e tabelas"
+                                    if stage_has_content
+                                    else "Preencher etapa"
+                                ),
+                                icon="edit",
+                                on_click=lambda: self._start_manual_edit(stage),
+                            ).props(
+                                "outline no-caps"
+                                if next_is_recommended
+                                else "unelevated no-caps"
+                            ).classes(
+                                "secondary-action"
+                                if next_is_recommended
+                                else "primary-action"
+                            ).mark("edit-artifact-content")
                         self._render_toolbar_help_button("authoring")
 
             if editing:
@@ -4306,7 +4364,6 @@ class AGIRSoloInterface:
                     create_button.disable()
                     proposal_button.disable()
                     verify_button.disable()
-                    edit_button.disable()
 
     def _render_authoring_view(self, state: dict[str, Any]) -> None:
         stage = state["current_stage"]
@@ -4918,8 +4975,8 @@ class AGIRSoloInterface:
                             "toolbar-stage-title"
                         )
                     ui.button("Etapa seguinte").props(
-                        "unelevated no-caps icon-right=arrow_forward disable"
-                    ).classes("primary-action")
+                        "outline no-caps icon-right=arrow_forward disable"
+                    ).classes("secondary-action")
                     with ui.row().classes(
                         "stage-toolbar-controls items-center gap-2"
                     ):
