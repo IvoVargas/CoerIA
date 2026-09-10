@@ -282,8 +282,11 @@ por espaço e divisor visual da navegação e da área **Assistência com IA**. 
 a mesma barra substitui essas ações por **Cancelar edição** e **Guardar
 rascunho**, evitando que os comandos necessários fiquem fora do ecrã. Ao
 criar ou rever **Dados iniciais**, a mesma barra apresenta **Validar dados** como
-ação local e separa **Gerar proposta inicial por IA**; o antigo bloco de ações
-deixou de ser apresentado. Na validação final, conserva o regresso à etapa
+ação contextual destacada, alinhada à direita com **?**, porque o formulário já
+está diretamente em edição. **Etapa seguinte** conserva o estilo neutro de
+navegação e **Gerar proposta inicial por IA** permanece separado na área de IA;
+o botão no fim da caracterização inicia o percurso ou guarda as alterações
+iniciais. Na validação final, conserva o regresso à etapa
 anterior e identifica a verificação global obrigatória. O botão **?** abre uma
 ajuda contextual que explica cada ação visível e indica quando existe utilização
 de IA ou custo de API.

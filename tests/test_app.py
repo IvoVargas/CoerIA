@@ -150,7 +150,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.102 · SQLite")
+    await user.should_see("CoerIA v0.3.103 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -323,9 +323,25 @@ async def test_application_opens_on_home_before_starting_a_new_session(
     create_button = next(
         iter(user.find(marker="create-pedagogical-session").elements)
     )
+    previous_button = next(
+        iter(user.find(marker="initial-toolbar-previous-stage").elements)
+    )
+    stage_context = next(
+        iter(user.find(marker="initial-toolbar-stage-context").elements)
+    )
+    next_button = next(
+        iter(user.find(marker="initial-toolbar-next-stage").elements)
+    )
+    controls = next(iter(user.find(marker="initial-toolbar-controls").elements))
+    validate_button = next(iter(user.find(marker="validate-initial-data").elements))
     form = next(iter(user.find(marker="new-session-form").elements))
     assert toolbar.id < provider.id < form.id
     assert form.id < create_button.id
+    assert previous_button.id < stage_context.id < next_button.id < controls.id
+    assert "stage-toolbar-controls-separated" in controls._classes
+    assert "secondary-action" in next_button._classes
+    assert "primary-action" in validate_button._classes
+    assert create_button._props.get("icon-right") == "play_arrow"
     user.find(marker="stage-toolbar-help-initial").click()
     await user.should_see("AJUDA DA BARRA DE FERRAMENTAS")
     await user.should_see("Não usa IA nem tem custo de API")
@@ -460,6 +476,10 @@ async def test_existing_session_can_return_to_and_update_initial_data(
     assert interfaces[-1].initial_view.visible
     assert interfaces[-1].state is not None
     assert interfaces[-1]._form_data()["unit_name"] == "Introdução às Pescas"
+    create_button = next(
+        iter(user.find(marker="create-pedagogical-session").elements)
+    )
+    assert create_button._props.get("icon-right") == "save"
 
     interfaces[-1].fields["unit_name"].set_value("Introdução às Pescas Costeiras")
     user.find(marker="toggle-existing-source").click()

@@ -773,8 +773,10 @@ class AGIRSoloInterface:
             ):
                 ui.button("Etapa anterior", icon="arrow_back").props(
                     "outline no-caps disable"
-                ).classes("secondary-action")
-                with ui.column().classes("stage-toolbar-context gap-0 px-1"):
+                ).classes("secondary-action").mark("initial-toolbar-previous-stage")
+                with ui.column().classes("stage-toolbar-context gap-0 px-1").mark(
+                    "initial-toolbar-stage-context"
+                ):
                     ui.label(f"ETAPA 01 DE {DISPLAY_STAGE_COUNT:02d}").classes(
                         "eyebrow"
                     )
@@ -783,16 +785,17 @@ class AGIRSoloInterface:
                     "Etapa seguinte",
                     on_click=self._handle_initial_toolbar_next,
                 ).props(
-                    "unelevated no-caps icon-right=arrow_forward"
-                ).classes("primary-action")
+                    "outline no-caps icon-right=arrow_forward"
+                ).classes("secondary-action").mark("initial-toolbar-next-stage")
                 with ui.row().classes(
-                    "stage-toolbar-controls items-center gap-2 flex-wrap"
-                ):
+                    "stage-toolbar-controls stage-toolbar-controls-separated "
+                    "items-center gap-2 flex-wrap"
+                ).mark("initial-toolbar-controls"):
                     ui.button(
                         "Validar dados",
                         icon="fact_check",
                         on_click=self.handle_validate_initial,
-                    ).props("outline no-caps").classes("secondary-action").mark(
+                    ).props("unelevated no-caps").classes("primary-action").mark(
                         "validate-initial-data"
                     )
                     self._render_toolbar_help_button("initial")
@@ -1505,6 +1508,9 @@ class AGIRSoloInterface:
             "Guardar alterações iniciais"
             if editing
             else "Iniciar desenho curricular alinhado"
+        )
+        self.create_session_button.props(
+            "icon-right=save" if editing else "icon-right=play_arrow"
         )
         self.initial_stage_toolbar.set_visibility(True)
         self.cancel_initial_edit_button.set_visibility(editing)
@@ -3925,14 +3931,16 @@ class AGIRSoloInterface:
                         "arrow_forward",
                         "Etapa seguinte",
                         "Cria a sessão ou, durante uma revisão, abre a formulação dos "
-                        "resultados. Se existirem alterações por guardar, pede uma decisão.",
+                        "resultados. Mantém o estilo neutro de navegação e, se existirem "
+                        "alterações por guardar, pede uma decisão.",
                     ),
                     (
                         "fact_check",
                         "Validar dados",
                         "Verifica localmente os campos obrigatórios e apresenta sugestões. "
                         "Cada observação pode ser selecionada para localizar o campo. "
-                        "Não usa IA nem tem custo de API.",
+                        "É a ação contextual destacada porque este formulário já está "
+                        "diretamente em edição. Não usa IA nem tem custo de API.",
                     ),
                     (
                         "auto_awesome",
@@ -3941,10 +3949,10 @@ class AGIRSoloInterface:
                         "iniciais. O docente deve rever os campos antes de avançar.",
                     ),
                     (
-                        "play_arrow",
-                        "Iniciar desenho curricular alinhado",
-                        "Guarda o formulário no fim da página e inicia o percurso sem gerar "
-                        "automaticamente as etapas seguintes.",
+                        "save",
+                        "Iniciar / guardar dados iniciais",
+                        "O botão no fim da página guarda o formulário e inicia o percurso ou, "
+                        "durante uma revisão, guarda as alterações iniciais.",
                     ),
                 ],
                 "O fornecedor só recebe conteúdo quando é acionada a proposta por IA.",

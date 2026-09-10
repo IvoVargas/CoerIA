@@ -229,8 +229,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - No modo de edição, manter a barra visível, desativar a navegação e substituir
   as ações de autoria por **Cancelar edição** e **Guardar rascunho**.
 - Na criação e na revisão de **Dados iniciais**, substituir o bloco antigo de
-  assistência pela mesma barra, apresentando **Validar dados** como ação local e
-  **Gerar proposta inicial por IA** na área de IA; na validação final, manter o
+  assistência pela mesma barra, mantendo **Etapa seguinte** como navegação
+  secundária e apresentando **Validar dados** como ação contextual destacada,
+  alinhada à direita com **?**, e **Gerar proposta inicial por IA** na área de
+  IA; na validação final, manter o
   regresso à etapa anterior e identificar a verificação global obrigatória.
 - Disponibilizar na barra um botão **?** que abra uma ajuda contextual com a
   finalidade de cada ação, os respetivos efeitos e a indicação de utilização de
