@@ -369,6 +369,39 @@ def normalise_text(value: str) -> str:
     ).casefold().strip()
 
 
+def resolved_learning_outcome_theme(
+    outcome: dict[str, Any],
+    fallback: str = "",
+    *,
+    maximum_length: int = 80,
+) -> str:
+    """Obtém um tema curto, derivando-o do enunciado quando ficou em branco."""
+
+    explicit_theme = str(outcome.get("theme", "")).strip()
+    if explicit_theme:
+        return explicit_theme
+
+    statement = str(outcome.get("statement", "")).strip()
+    action_verb = str(outcome.get("action_verb", "")).strip()
+    candidate = statement
+    if statement and action_verb:
+        candidate = re.sub(
+            rf"^\s*{re.escape(action_verb)}\b",
+            "",
+            statement,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip()
+    candidate = candidate.strip(" \t\r\n.;:—–-")
+    if not candidate:
+        return fallback
+    candidate = candidate[0].upper() + candidate[1:]
+    if maximum_length > 1 and len(candidate) > maximum_length:
+        shortened = candidate[: maximum_length - 1].rsplit(" ", 1)[0].rstrip()
+        candidate = (shortened or candidate[: maximum_length - 1]).rstrip() + "…"
+    return candidate
+
+
 def starts_with_objective_action_verb(value: str) -> bool:
     """Deteta descrições de conteúdo redigidas como objetivos/resultados."""
 

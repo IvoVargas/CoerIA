@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from .curriculum import taxonomy_level_label
+from .curriculum import resolved_learning_outcome_theme, taxonomy_level_label
 from .models import (
     RESOURCE_ASSESSMENT_GRID,
     RESOURCE_LESSON_PLAN,
@@ -493,7 +493,7 @@ def render_artifact(
             [
                 item["id"],
                 item.get("outcome_type", "—"),
-                item.get("theme", "—"),
+                resolved_learning_outcome_theme(item, "—"),
                 taxonomy_level_label(
                     state.get("course", {}).get("taxonomy_type", "SOLO"),
                     item.get("taxonomy_level", "—"),

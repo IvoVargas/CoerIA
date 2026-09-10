@@ -26,7 +26,11 @@ from prism.manual_editing import (
 )
 from prism.ai_modes import AI_MODE_OFF, AI_MODE_ON
 from prism.models import CourseInput, QUESTION_TYPE_MULTIPLE_CHOICE
-from prism.curriculum import OUTCOME_TYPES, taxonomy_level_label
+from prism.curriculum import (
+    OUTCOME_TYPES,
+    resolved_learning_outcome_theme,
+    taxonomy_level_label,
+)
 from prism.presentation import active_stage_artifact, render_stage_artifact
 from prism.workflow import (
     STAGE_ORDER,
@@ -125,6 +129,24 @@ def test_learning_outcome_type_uses_the_three_qnq_domains() -> None:
         value: value for value in OUTCOME_TYPES
     }
     assert new_table_row(table)["outcome_type"] == "Conhecimentos"
+
+    theme_field = next(field for field in table.fields if field.key == "theme")
+    assert theme_field.label == "Tema ou objeto (opcional)"
+
+
+def test_learning_outcome_theme_is_derived_from_the_statement_when_empty() -> None:
+    outcome = {
+        "id": "RA1",
+        "theme": "",
+        "action_verb": "Identificar",
+        "statement": "Identificar os elementos fundamentais de um algoritmo.",
+    }
+
+    assert resolved_learning_outcome_theme(outcome) == (
+        "Os elementos fundamentais de um algoritmo"
+    )
+    outcome["theme"] = "Fundamentos algorítmicos"
+    assert resolved_learning_outcome_theme(outcome) == "Fundamentos algorítmicos"
 
 
 def test_lesson_rows_can_move_without_losing_content() -> None:
@@ -522,7 +544,7 @@ def test_learning_outcome_editor_matches_the_visible_table() -> None:
     assert [field.label for field in table.fields] == [
         "ID",
         "Tipo",
-        "Tema ou objeto",
+        "Tema ou objeto (opcional)",
         "Nível",
         "Verbo",
         "Modo de IA",
@@ -672,7 +694,7 @@ def test_learning_outcome_editor_omits_taxonomy_and_numbers_levels() -> None:
     assert [field.label for field in table.fields] == [
         "ID",
         "Tipo",
-        "Tema ou objeto",
+        "Tema ou objeto (opcional)",
         "Nível",
         "Verbo",
         "Modo de IA",

@@ -43,6 +43,7 @@ from .curriculum import (
     TAXONOMY_VERBS,
     normalize_structured_activity_ids,
     normalize_learning_outcome_ids,
+    resolved_learning_outcome_theme,
     starts_with_objective_action_verb,
     taxonomy_verb_allowed,
     validate_taxonomy_choice,
@@ -291,7 +292,7 @@ def analyse_curriculum(state: CoerIAState) -> dict[str, Any]:
     outcomes = state.get("learning_outcomes", [])
     topics = [
         _nominal_content_title(
-            str(outcome.get("theme", "")).strip()
+            resolved_learning_outcome_theme(outcome)
             or str(outcome.get("statement", "")).strip()
         )
         for outcome in outcomes
@@ -606,7 +607,10 @@ def generate_resources(state: CoerIAState) -> dict[str, Any]:
             }
         )
     for index, outcome in enumerate(state["learning_outcomes"]):
-        theme = outcome["theme"]
+        theme = resolved_learning_outcome_theme(
+            outcome,
+            str(outcome.get("id", "Resultado de aprendizagem")),
+        )
         slides.append(
             {
                 "title": f"{outcome['id']} — {theme}",
@@ -712,7 +716,10 @@ def generate_resources(state: CoerIAState) -> dict[str, Any]:
         "instructions": "Realize as atividades pela ordem apresentada e fundamente as respostas.",
         "sections": [
             {
-                "heading": f"{outcome['id']} — {outcome['theme']}",
+                "heading": (
+                    f"{outcome['id']} — "
+                    f"{resolved_learning_outcome_theme(outcome, outcome['id'])}"
+                ),
                 "content": outcome["statement"],
                 "outcome_ids": [outcome["id"]],
                 "activity": (

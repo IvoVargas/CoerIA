@@ -99,7 +99,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (
                     _field("id", "ID", "learning_outcome_id"),
                     _field("outcome_type", "Tipo", "outcome_type"),
-                    _field("theme", "Tema ou objeto"),
+                    _field("theme", "Tema ou objeto (opcional)"),
                     _field("taxonomy_level", "Nível", "taxonomy_level"),
                     _field("action_verb", "Verbo", "taxonomy_verb"),
                     _field("ai_mode", "Modo de IA", "ai_mode"),

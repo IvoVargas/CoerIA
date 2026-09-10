@@ -44,6 +44,7 @@ from .curriculum import (
     is_learning_outcome_id,
     normalize_learning_outcome_ids,
     normalize_structured_activity_ids,
+    resolved_learning_outcome_theme,
     is_structured_activity_id,
     starts_with_objective_action_verb,
     validate_taxonomy_choice,
@@ -159,6 +160,8 @@ STAGE_REQUIREMENTS = {
         "outcome_type, ai_mode}. Os IDs são obrigatoriamente RA1, RA2, ... pela ordem das linhas. "
         "outcome_type é exclusivamente Conhecimentos, Aptidões ou Atitudes, segundo os "
         "três domínios adotados pelo Quadro Nacional de Qualificações. "
+        "theme é uma designação curta opcional; quando vier vazio, o sistema deriva-a "
+        "deterministicamente de statement. "
         "Cada resultado contém exatamente um verbo de ação principal observável e começa "
         "por esse verbo. taxonomy_level pertence à taxonomia selecionada e é compatível "
         "com action_verb. ai_mode é AI-off, AI-on ou on-AI e é AI-off por defeito. "
@@ -1215,6 +1218,13 @@ def _canonicalize_teaching_activities(
                 "received": received.get("id"),
                 "used": item.get("id"),
             }
+        if not str(received.get("theme", "")).strip() and str(
+            item.get("theme", "")
+        ).strip():
+            changes["theme"] = {
+                "received": received.get("theme", ""),
+                "used": item.get("theme", ""),
+            }
         outcome_ids = item.get("outcome_ids", [])
         inherited_mode = linked_ai_mode(
             outcome_ids,
@@ -1910,7 +1920,7 @@ def _canonicalize_resource_visuals(
             if outcome:
                 candidates.extend(
                     [
-                        outcome.get("theme"),
+                        resolved_learning_outcome_theme(outcome),
                         linked_value(
                             state.get("teaching_activities", []), outcome_id, "method"
                         ),

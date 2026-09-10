@@ -8,6 +8,7 @@ import pytest
 from prism.ai_modes import AI_MODE_OFF, AI_MODE_ON
 from prism.agents import CritiqueResult, GenerationResult
 from prism.application_service import ApplicationService
+from prism.curriculum import resolved_learning_outcome_theme
 from prism.models import CourseInput, RESOURCE_PRESENTATION, RESOURCE_TEST
 from prism.persistence import SQLiteSessionStore
 from prism.presentation import render_current_artifact
@@ -55,6 +56,21 @@ class OutcomeProposalAgent:
             ],
             metadata={"provider": "Teste", "model": "fake", "total_tokens": 3},
         )
+
+
+def test_blank_outcome_theme_remains_optional_in_a_manual_draft() -> None:
+    state = create_session(_course())
+    outcomes = OutcomeProposalAgent().generate(
+        "learning_outcomes", state
+    ).artifact
+    outcomes[0]["theme"] = ""
+
+    updated = save_manual_draft(state, "learning_outcomes", outcomes)
+
+    assert updated["learning_outcomes"][0]["theme"] == ""
+    assert resolved_learning_outcome_theme(updated["learning_outcomes"][0]) == (
+        "Os elementos fundamentais de um algoritmo"
+    )
 
 
 class LocalizedOutcomeAgent:

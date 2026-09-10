@@ -119,6 +119,9 @@ divergência. Na edição manual, o seletor de verbos mostra exclusivamente os
 verbos do nível escolhido na mesma linha. Os resultados usam sempre IDs no
 formato `RA1`, `RA2`, …; a geração normaliza-os pela ordem das linhas e o editor
 atribui automaticamente o próximo ID, sem permitir edição livre desse campo.
+A coluna **Tema ou objeto** é opcional. Quando fica vazia, o CoerIA deriva uma
+designação curta a partir do enunciado aprovado e utiliza-a nos conteúdos,
+apresentações e restantes recursos que necessitam de um título breve.
 A coluna **Tipo** usa um seletor fechado com os três domínios adotados pelo
 [Quadro Nacional de Qualificações](https://www.dgert.gov.pt/quadro-nacional-de-qualificacoes):
 `Conhecimentos`, `Aptidões` e `Atitudes`. A mesma enumeração é exigida na geração

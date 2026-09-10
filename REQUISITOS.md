@@ -132,6 +132,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   completa, derivar estes IDs deterministicamente pela ordem das linhas. Na
   edição manual, apresentar o ID como campo não editável e atribuir o próximo
   número automaticamente às linhas novas.
+- Tratar **Tema ou objeto** como uma designação curta opcional. Quando o docente
+  a deixar vazia, derivá-la deterministicamente do enunciado do resultado antes
+  de produzir conteúdos, apresentações ou outros recursos que necessitem desse
+  título, sem transformar a designação derivada numa nova relação de alinhamento.
 - Identificar as atividades de ensino-aprendizagem como `AE1`, `AE2`, … e as
   tarefas de avaliação como `TA1`, `TA2`, …, localizando para português a
   distinção entre *Teaching/Learning Activities* e *Assessment Tasks* usada por

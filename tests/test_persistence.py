@@ -119,7 +119,13 @@ def test_session_state_from_an_older_schema_is_rejected(tmp_path: Path) -> None:
 def test_current_session_normalizes_previous_learning_outcome_types() -> None:
     state = _minimal_state("UC atual")
     state["learning_outcomes"] = [
-        {"id": "RA1", "outcome_type": "Conhecimento teórico"},
+        {
+            "id": "RA1",
+            "outcome_type": "Conhecimento teórico",
+            "theme": "",
+            "action_verb": "Identificar",
+            "statement": "Identificar estruturas algorítmicas.",
+        },
         {"id": "RA2", "outcome_type": "Aptidão prática ou técnica"},
         {"id": "RA3", "outcome_type": "Competência social"},
     ]
@@ -138,6 +144,7 @@ def test_current_session_normalizes_previous_learning_outcome_types() -> None:
     assert [
         item["outcome_type"] for item in normalized["learning_outcomes"]
     ] == ["Conhecimentos", "Aptidões", "Atitudes"]
+    assert normalized["learning_outcomes"][0]["theme"] == ""
     assert (
         normalized["versions"]["learning_outcomes"][0]["artifact"][0][
             "outcome_type"
