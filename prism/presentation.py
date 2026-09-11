@@ -22,8 +22,18 @@ from .workflow import STAGE_LABELS, STAGE_ORDER
 
 def _table(headers: list[str], rows: list[list[Any]]) -> str:
     divider = ["---"] * len(headers)
+
+    def format_cell(value: Any) -> str:
+        return (
+            str(value)
+            .replace("|", "\\|")
+            .replace("\r\n", "<br>")
+            .replace("\r", "<br>")
+            .replace("\n", "<br>")
+        )
+
     body = "\n".join(
-        "| " + " | ".join(str(item).replace("|", "\\|") for item in row) + " |"
+        "| " + " | ".join(format_cell(item) for item in row) + " |"
         for row in rows
     )
     return (

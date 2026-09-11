@@ -604,6 +604,18 @@ class ResourceGenerationTests(unittest.TestCase):
         self.assertIn("Chave de correção", sections[0]["content"])
         self.assertNotIn("Atividade prática", sections[0]["content"])
 
+    def test_resource_test_options_do_not_break_the_markdown_table(self) -> None:
+        state = self._resource_state()
+        resources = deepcopy(state["resources"])
+        resources["selected_types"] = [RESOURCE_TEST]
+        question = resources["tests"][0]["test"]["questions"][0]
+        question["options"] = ["Primeira opção", "Segunda opção"]
+
+        content = render_resource_detail_sections(resources)[0]["content"]
+
+        self.assertIn("A. Primeira opção<br>B. Segunda opção", content)
+        self.assertNotIn("A. Primeira opção\nB. Segunda opção", content)
+
     def test_presentation_detail_omits_the_redundant_source_column(self) -> None:
         state = self._resource_state()
         resources = deepcopy(state["resources"])
