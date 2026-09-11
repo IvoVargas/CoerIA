@@ -21,6 +21,7 @@ from prism.manual_editing import (
     parse_editor_value,
     apply_proposal_review_changes,
     proposal_review_changes,
+    synchronize_derived_teaching_fields,
     synchronize_inherited_ai_mode,
     value_at_path,
 )
@@ -167,7 +168,7 @@ def test_lesson_rows_can_move_without_losing_content() -> None:
     assert move_table_row(rows, 2, 1) is False
 
 
-def test_only_assessment_tasks_expose_three_identifier_types() -> None:
+def test_backward_design_tables_expose_direct_and_derived_identifiers() -> None:
     identifier_fields = {
         "id",
         "outcome_id",
@@ -184,12 +185,14 @@ def test_only_assessment_tasks_expose_three_identifier_types() -> None:
             visible_identifiers = {
                 field.key for field in table.fields if field.key in identifier_fields
             }
-            if stage == "assessment_activities":
+            if stage == "teaching_activities":
                 assert visible_identifiers == {
                     "id",
-                    "teaching_activity_ids",
                     "outcome_ids",
+                    "assessment_ids",
                 }
+            elif stage == "assessment_activities":
+                assert visible_identifiers == {"id", "outcome_ids"}
             else:
                 assert len(visible_identifiers) <= 2, (
                     stage,
@@ -799,11 +802,11 @@ def test_new_teaching_and_assessment_rows_use_localized_identifiers() -> None:
     ).kind == "assessment_task_id"
 
 
-def test_assessment_editor_selects_existing_teaching_activities_and_outcomes() -> None:
+def test_backward_design_editors_select_direct_links_and_derive_outcomes() -> None:
     state = _completed_state()
-    table = editor_layout("assessment_activities").tables[0]
+    table = editor_layout("teaching_activities").tables[0]
     field = next(
-        item for item in table.fields if item.key == "teaching_activity_ids"
+        item for item in table.fields if item.key == "assessment_ids"
     )
 
     options = editor_reference_options(state, field)
@@ -811,21 +814,38 @@ def test_assessment_editor_selects_existing_teaching_activities_and_outcomes() -
     assert field.kind == "csv"
     assert options is not None
     assert set(options) == {
-        item["id"] for item in state["teaching_activities"]
+        item["id"] for item in state["assessment_activities"]
     }
     assert all(
         label.startswith(f"{identifier} — ")
         for identifier, label in options.items()
     )
     outcome_field = next(item for item in table.fields if item.key == "outcome_ids")
+    assert outcome_field.kind == "derived_outcomes"
     outcome_options = editor_reference_options(state, outcome_field)
     assert outcome_options is not None
-    assert set(outcome_options) == {
-        item["id"] for item in state["learning_outcomes"]
-    }
+    assert set(outcome_options) == {item["id"] for item in state["learning_outcomes"]}
     new_row = new_table_row(table, state, [])
-    assert new_row["teaching_activity_ids"] == []
+    assert new_row["assessment_ids"] == []
     assert new_row["outcome_ids"] == []
+
+    assessment_table = editor_layout("assessment_activities").tables[0]
+    assessment_outcomes = next(
+        item for item in assessment_table.fields if item.key == "outcome_ids"
+    )
+    assert assessment_outcomes.kind == "linked_outcomes"
+
+
+def test_changing_an_assessment_selection_refreshes_derived_teaching_fields() -> None:
+    state = _completed_state()
+    activity = deepcopy(state["teaching_activities"][0])
+    selected_task = state["assessment_activities"][-1]
+    activity["assessment_ids"] = [selected_task["id"]]
+
+    synchronize_derived_teaching_fields(state, activity)
+
+    assert activity["outcome_ids"] == selected_task["outcome_ids"]
+    assert activity["ai_mode"] == selected_task["ai_mode"]
 
 
 def test_assessment_presentation_shows_the_direct_results_column() -> None:
@@ -834,7 +854,7 @@ def test_assessment_presentation_shows_the_direct_results_column() -> None:
         "assessment_activities",
     )
 
-    assert "Atividades de ensino-aprendizagem" in rendered
+    assert "Atividades de ensino-aprendizagem" not in rendered
     assert "| Resultados |" in rendered
 
 

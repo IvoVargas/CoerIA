@@ -1325,7 +1325,7 @@ class ResourceGenerationTests(unittest.TestCase):
                 self.assertIn("Síntese automática do alinhamento", program_text)
                 self.assertIn("Tarefas e critérios de avaliação", program_text)
                 self.assertIn(
-                    state["assessment_activities"][0]["teaching_activity_ids"][0],
+                    state["teaching_activities"][0]["assessment_ids"][0],
                     program_text,
                 )
                 self.assertIn("Teaching for Quality Learning", program_text)
@@ -1410,15 +1410,22 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn(lesson["notes"], word_text)
             self.assertIn(lesson["component_ids"][0], word_text)
             self.assertIn(
-                state["assessment_activities"][0]["teaching_activity_ids"][0],
+                state["teaching_activities"][0]["assessment_ids"][0],
                 word_text,
             )
-            assessment_headers = [
-                cell.text for cell in program.tables[4].rows[0].cells
+            table_headers = [
+                [cell.text for cell in table.rows[0].cells]
+                for table in program.tables
             ]
-            self.assertIn("Atividades de ensino-aprendizagem", assessment_headers)
+            assessment_headers = next(
+                headers for headers in table_headers if "Tarefa de avaliação" in headers
+            )
             self.assertIn("Resultados", assessment_headers)
             self.assertIn("Modo de IA", assessment_headers)
+            teaching_headers = next(
+                headers for headers in table_headers if "Tarefas" in headers
+            )
+            self.assertIn("Resultados derivados", teaching_headers)
 
             latex_text = latex_path.read_text(encoding="utf-8")
             self.assertIn(r"\section{Política de utilização da IA}", latex_text)
@@ -1456,7 +1463,7 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn(lesson["notes"], latex)
             self.assertIn(lesson["component_ids"][0], latex)
             self.assertIn(
-                state["assessment_activities"][0]["teaching_activity_ids"][0],
+                state["teaching_activities"][0]["assessment_ids"][0],
                 latex,
             )
 

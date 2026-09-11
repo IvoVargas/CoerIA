@@ -378,11 +378,11 @@ def _human_readable_state(
             "conteudos_curriculares": _humanize_keys(
                 state.get("curriculum_analysis", {})
             ),
-            "atividades_de_ensino_aprendizagem": _humanize_keys(
-                state.get("teaching_activities", [])
-            ),
             "tarefas_e_criterios_de_avaliacao": _humanize_keys(
                 state.get("assessment_activities", [])
+            ),
+            "atividades_de_ensino_aprendizagem": _humanize_keys(
+                state.get("teaching_activities", [])
             ),
             "organizacao_da_sequencia_pedagogica": _humanize_keys(
                 state.get("pedagogical_design", {})

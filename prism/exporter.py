@@ -688,45 +688,16 @@ def export_program_document(
     for entry in _ai_policy_entries(state):
         document.add_paragraph(entry, style="List Bullet")
 
-    document.add_heading("6. Atividades de ensino-aprendizagem", level=1)
-    table = document.add_table(rows=1, cols=8)
-    for activity in state.get("teaching_activities", []):
-        cells = table.add_row().cells
-        cells[0].text = str(activity.get("id", ""))
-        cells[1].text = str(activity.get("learning_context", ""))
-        cells[2].text = str(activity.get("activity", ""))
-        cells[3].text = str(
-            activity.get("practice") or activity.get("method", "")
-        )
-        cells[4].text = str(activity.get("support", ""))
-        cells[5].text = str(activity.get("feedback_strategy", ""))
-        cells[6].text = ", ".join(activity.get("outcome_ids", []))
-        cells[7].text = str(activity.get("ai_mode", "AI-off"))
-    _format_table(
-        table,
-        [
-            "ID",
-            "Contexto",
-            "Atividade",
-            "Prática",
-            "Acompanhamento",
-            "Feedback",
-            "Resultados",
-            "Modo de IA",
-        ],
-        [450, 1050, 1650, 1350, 1600, 1300, 1150, 1410],
-    )
-
-    document.add_heading("7. Tarefas e critérios de avaliação", level=1)
+    document.add_heading("6. Tarefas e critérios de avaliação", level=1)
     table = document.add_table(rows=1, cols=8)
     for assessment in state.get("assessment_activities", []):
         cells = table.add_row().cells
         cells[0].text = str(assessment.get("id", ""))
         cells[1].text = str(assessment.get("assessment_purpose", ""))
         cells[2].text = str(assessment.get("work_type", ""))
-        cells[3].text = ", ".join(assessment.get("teaching_activity_ids", []))
-        cells[4].text = ", ".join(assessment.get("outcome_ids", []))
-        cells[5].text = str(assessment.get("activity", ""))
+        cells[3].text = ", ".join(assessment.get("outcome_ids", []))
+        cells[4].text = str(assessment.get("activity", ""))
+        cells[5].text = str(assessment.get("evidence", ""))
         cells[6].text = str(assessment.get("criterion", ""))
         cells[7].text = str(assessment.get("ai_mode", "AI-off"))
     _format_table(
@@ -735,13 +706,42 @@ def export_program_document(
             "ID",
             "Finalidade",
             "Modalidade",
-            "Atividades de ensino-aprendizagem",
             "Resultados",
             "Tarefa de avaliação",
+            "Evidência",
             "Critério",
             "Modo de IA",
         ],
-        [450, 750, 750, 1200, 750, 2200, 2300, 1560],
+        [450, 750, 750, 850, 1900, 1800, 1900, 1560],
+    )
+
+    document.add_heading("7. Atividades de ensino-aprendizagem", level=1)
+    table = document.add_table(rows=1, cols=9)
+    for activity in state.get("teaching_activities", []):
+        cells = table.add_row().cells
+        cells[0].text = str(activity.get("id", ""))
+        cells[1].text = ", ".join(activity.get("assessment_ids", []))
+        cells[2].text = ", ".join(activity.get("outcome_ids", []))
+        cells[3].text = str(activity.get("learning_context", ""))
+        cells[4].text = str(activity.get("activity", ""))
+        cells[5].text = str(activity.get("practice") or activity.get("method", ""))
+        cells[6].text = str(activity.get("support", ""))
+        cells[7].text = str(activity.get("feedback_strategy", ""))
+        cells[8].text = str(activity.get("ai_mode", "AI-off"))
+    _format_table(
+        table,
+        [
+            "ID",
+            "Tarefas",
+            "Resultados derivados",
+            "Contexto",
+            "Atividade",
+            "Prática",
+            "Acompanhamento",
+            "Feedback",
+            "Modo de IA",
+        ],
+        [400, 850, 800, 800, 1500, 1200, 1300, 1300, 1810],
     )
 
     document.add_heading("8. Planeamento das aulas", level=1)
@@ -892,11 +892,48 @@ def export_program_latex(
             r"\section{Política de utilização da IA}",
             _latex_itemize(_ai_policy_entries(state)),
             r"\begin{landscape}",
+            r"\section{Tarefas e critérios de avaliação}",
+            _latex_table(
+                [
+                    "ID",
+                    "Enquadramento",
+                    "Resultados",
+                    "Tarefa e evidência",
+                    "Critério",
+                ],
+                [
+                    [
+                        assessment.get("id", ""),
+                        "\n".join(
+                            (
+                                "Finalidade: "
+                                + str(assessment.get("assessment_purpose", "")),
+                                "Modalidade: "
+                                + str(assessment.get("work_type", "")),
+                                "Modo de IA: "
+                                + str(assessment.get("ai_mode", "AI-off")),
+                            )
+                        ),
+                        ", ".join(assessment.get("outcome_ids", [])),
+                        "\n".join(
+                            (
+                                "Tarefa: " + str(assessment.get("activity", "")),
+                                "Evidência: " + str(assessment.get("evidence", "")),
+                            )
+                        ),
+                        assessment.get("criterion", ""),
+                    ]
+                    for assessment in state.get("assessment_activities", [])
+                ],
+                [0.04, 0.18, 0.10, 0.31, 0.20],
+            ),
+            r"\end{landscape}",
+            r"\begin{landscape}",
             r"\section{Atividades de ensino-aprendizagem}",
             _latex_table(
                 [
                     "ID",
-                    "Contexto / RA",
+                    "Contexto / ligações",
                     "Atividade",
                     "Prática / acompanhamento",
                     "Feedback / IA",
@@ -907,7 +944,9 @@ def export_program_latex(
                         "\n".join(
                             (
                                 f"Contexto: {activity.get('learning_context', '')}",
-                                "Resultados: "
+                                "Tarefas: "
+                                + ", ".join(activity.get("assessment_ids", [])),
+                                "Resultados derivados: "
                                 + ", ".join(activity.get("outcome_ids", [])),
                             )
                         ),
@@ -934,53 +973,7 @@ def export_program_latex(
                     ]
                     for activity in state.get("teaching_activities", [])
                 ],
-                [0.04, 0.15, 0.21, 0.25, 0.18],
-            ),
-            r"\end{landscape}",
-            r"\begin{landscape}",
-            r"\section{Tarefas e critérios de avaliação}",
-            _latex_table(
-                [
-                    "ID",
-                    "Enquadramento",
-                    "Ligações",
-                    "Tarefa e evidência",
-                    "Critério",
-                ],
-                [
-                    [
-                        assessment.get("id", ""),
-                        "\n".join(
-                            (
-                                "Finalidade: "
-                                + str(assessment.get("assessment_purpose", "")),
-                                "Modalidade: "
-                                + str(assessment.get("work_type", "")),
-                                "Modo de IA: "
-                                + str(assessment.get("ai_mode", "AI-off")),
-                            )
-                        ),
-                        "\n".join(
-                            (
-                                "AE: "
-                                + ", ".join(
-                                    assessment.get("teaching_activity_ids", [])
-                                ),
-                                "RA: "
-                                + ", ".join(assessment.get("outcome_ids", [])),
-                            )
-                        ),
-                        "\n".join(
-                            (
-                                "Tarefa: " + str(assessment.get("activity", "")),
-                                "Evidência: " + str(assessment.get("evidence", "")),
-                            )
-                        ),
-                        assessment.get("criterion", ""),
-                    ]
-                    for assessment in state.get("assessment_activities", [])
-                ],
-                [0.04, 0.17, 0.12, 0.28, 0.22],
+                [0.04, 0.19, 0.20, 0.23, 0.17],
             ),
             r"\end{landscape}",
             r"\section{Planeamento das aulas}",

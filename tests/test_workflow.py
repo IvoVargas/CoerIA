@@ -42,7 +42,7 @@ from prism.models import (
     SUPPORTED_RESOURCE_TYPES,
 )
 from prism.persistence import SQLiteSessionStore
-from prism.relationships import derive_alignment_rows
+from prism.relationships import derive_alignment_rows, outcome_ids_for_assessments
 from prism.workflow import (
     STAGE_ORDER,
     STAGE_LABELS,
@@ -256,8 +256,8 @@ class WorkflowTests(unittest.TestCase):
             (
                 "learning_outcomes",
                 "curriculum_analysis",
-                "teaching_activities",
                 "assessment_activities",
+                "teaching_activities",
                 "pedagogical_design",
             ),
         )
@@ -267,8 +267,8 @@ class WorkflowTests(unittest.TestCase):
 
         for expected_stage in (
             "curriculum_analysis",
-            "teaching_activities",
             "assessment_activities",
+            "teaching_activities",
             "pedagogical_design",
             "resources",
             "final_validation",
@@ -281,7 +281,7 @@ class WorkflowTests(unittest.TestCase):
             all(row["status"] == "Coerente" for row in derive_alignment_rows(state))
         )
         self.assertTrue(
-            all("assessment_ids" not in item for item in state["teaching_activities"])
+            all(item["assessment_ids"] for item in state["teaching_activities"])
         )
         self.assertEqual(state["resources"]["quality"]["status"], "OK")
         self.assertTrue(state["final_validation"]["passed"])
@@ -317,8 +317,8 @@ class WorkflowTests(unittest.TestCase):
 
     def test_ai_mode_mismatch_is_blocked_and_identifies_the_activity(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        state = review_current_stage(state, "approve", agent=self.agent)
-        state = review_current_stage(state, "approve", agent=self.agent)
+        for _ in range(3):
+            state = review_current_stage(state, "approve", agent=self.agent)
         state["learning_outcomes"][0]["ai_mode"] = AI_MODE_ON
 
         with self.assertRaisesRegex(AgentGenerationError, "mesmo AI-mode"):
@@ -340,7 +340,6 @@ class WorkflowTests(unittest.TestCase):
             {
                 "id": "TA9",
                 "outcome_ids": ["RA1", "RA2"],
-                "teaching_activity_ids": [],
                 "ai_mode": AI_MODE_ON,
                 "assessment_purpose": "Sumativa",
             }
@@ -360,15 +359,24 @@ class WorkflowTests(unittest.TestCase):
                 {"id": "RA1", "ai_mode": AI_MODE_OFF},
                 {"id": "RA2", "ai_mode": AI_MODE_ON},
             ],
-            "teaching_activities": [
-                {"id": "AE1", "outcome_ids": ["RA1"], "ai_mode": AI_MODE_OFF}
-            ],
             "assessment_activities": [
                 {
                     "id": "TA1",
+                    "outcome_ids": ["RA1"],
+                    "ai_mode": AI_MODE_OFF,
+                },
+                {
+                    "id": "TA2",
                     "outcome_ids": ["RA2"],
-                    "teaching_activity_ids": [],
                     "ai_mode": AI_MODE_ON,
+                }
+            ],
+            "teaching_activities": [
+                {
+                    "id": "AE1",
+                    "assessment_ids": ["TA1"],
+                    "outcome_ids": ["RA1"],
+                    "ai_mode": AI_MODE_OFF,
                 }
             ],
         }
@@ -377,7 +385,7 @@ class WorkflowTests(unittest.TestCase):
                 {
                     "duration_minutes": 120,
                     "session_type": "Teórico-prática",
-                    "component_ids": ["AE1", "TA1"],
+                    "component_ids": ["AE1", "TA2"],
                     "notes": "",
                 }
             ]
@@ -1260,7 +1268,7 @@ class WorkflowTests(unittest.TestCase):
             {"received": "Uni-estrutural", "used": "Relacional"},
         )
 
-    def test_assessment_guardrail_keeps_valid_teaching_and_outcome_links(self) -> None:
+    def test_assessment_guardrail_keeps_valid_direct_outcome_links(self) -> None:
         state = create_session(self.course, agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)
         state = review_current_stage(state, "approve", agent=self.agent)
@@ -1277,16 +1285,6 @@ class WorkflowTests(unittest.TestCase):
                         if index == 0
                         else [next_outcome, outcome["id"]]
                     ),
-                    "teaching_activity_ids": [
-                        activity["id"]
-                        for activity in state["teaching_activities"]
-                        if set(activity.get("outcome_ids", []))
-                        & (
-                            {outcome["id"]}
-                            if index == 0
-                            else {next_outcome, outcome["id"]}
-                        )
-                    ],
                     "work_type": "Trabalho individual",
                     "assessment_purpose": "formativa",
                     "activity": "Resolver uma tarefa aplicada.",
@@ -1319,7 +1317,7 @@ class WorkflowTests(unittest.TestCase):
 
         for index, item in enumerate(result.artifact, start=1):
             self.assertEqual(item["id"], f"TA{index}")
-            self.assertTrue(item["teaching_activity_ids"])
+            self.assertNotIn("teaching_activity_ids", item)
             self.assertNotIn("outcome_id", item)
             self.assertTrue(item["outcome_ids"])
             self.assertEqual(item["assessment_purpose"], "Formativa")
@@ -1327,11 +1325,12 @@ class WorkflowTests(unittest.TestCase):
 
     def test_teaching_guardrail_uses_biggs_identifiers(self) -> None:
         state = create_session(self.course, agent=self.agent)
-        state = review_current_stage(state, "approve", agent=self.agent)
-        state = review_current_stage(state, "approve", agent=self.agent)
+        for _ in range(3):
+            state = review_current_stage(state, "approve", agent=self.agent)
         generated = deepcopy(state["teaching_activities"])
         for index, item in enumerate(generated, start=1):
             item["id"] = f"A{index}"
+            item.pop("outcome_ids", None)
 
         class FakeResponses:
             def create(self, **_kwargs):
@@ -1391,22 +1390,60 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(row["status"], "Requer revisão")
         self.assertIn("ligação direta", row["rationale"])
 
-    def test_assessment_rejects_a_result_without_a_shared_teaching_activity(self) -> None:
+    def test_final_alignment_check_points_to_the_relation_that_must_be_fixed(self) -> None:
         state = create_session(self.course, agent=self.agent)
         for _ in range(5):
             state = review_current_stage(state, "approve", agent=self.agent)
 
-        assessments = deepcopy(state["assessment_activities"])
-        teaching_activity = state["teaching_activities"][0]
-        unsupported_outcome = next(
-            item["id"]
-            for item in state["learning_outcomes"]
-            if item["id"] not in teaching_activity["outcome_ids"]
+        missing_assessment = deepcopy(state)
+        outcome_id = missing_assessment["learning_outcomes"][0]["id"]
+        for task in missing_assessment["assessment_activities"]:
+            task["outcome_ids"] = [
+                identifier
+                for identifier in task["outcome_ids"]
+                if identifier != outcome_id
+            ]
+        assessment_check = next(
+            item
+            for item in build_final_validation(missing_assessment)["checks"]
+            if item["id"] == "alignment"
         )
-        assessments[0]["teaching_activity_ids"] = [teaching_activity["id"]]
-        assessments[0]["outcome_ids"] = [unsupported_outcome]
-        with self.assertRaisesRegex(AgentGenerationError, "não é desenvolvido"):
-            _validate_artifact("assessment_activities", assessments, state)
+        self.assertEqual(assessment_check["target_stage"], "assessment_activities")
+
+        missing_teaching = deepcopy(state)
+        task_id = missing_teaching["assessment_activities"][0]["id"]
+        for activity in missing_teaching["teaching_activities"]:
+            activity["assessment_ids"] = [
+                identifier
+                for identifier in activity["assessment_ids"]
+                if identifier != task_id
+            ]
+        teaching_check = next(
+            item
+            for item in build_final_validation(missing_teaching)["checks"]
+            if item["id"] == "alignment"
+        )
+        self.assertEqual(teaching_check["target_stage"], "teaching_activities")
+
+    def test_teaching_rejects_a_task_without_a_preparation_activity(self) -> None:
+        state = create_session(self.course, agent=self.agent)
+        for _ in range(5):
+            state = review_current_stage(state, "approve", agent=self.agent)
+
+        activities = deepcopy(state["teaching_activities"])
+        missing_task = activities[0]["assessment_ids"][0]
+        for activity in activities:
+            activity["assessment_ids"] = [
+                identifier
+                for identifier in activity["assessment_ids"]
+                if identifier != missing_task
+            ]
+            activity["outcome_ids"] = outcome_ids_for_assessments(
+                state,
+                activity["assessment_ids"],
+            )
+        with self.assertRaisesRegex(AgentGenerationError, "todas e apenas"):
+            _validate_artifact("teaching_activities", activities, state)
 
     def test_at_least_one_resource_type_is_required(self) -> None:
         with self.assertRaises(ValueError):
@@ -1517,8 +1554,8 @@ class WorkflowTests(unittest.TestCase):
             AgenticPedagogicalTeam.DEFAULT_CRITIC_STAGES[:3],
             (
                 "learning_outcomes",
-                "teaching_activities",
                 "assessment_activities",
+                "teaching_activities",
             ),
         )
 
@@ -1540,17 +1577,16 @@ class WorkflowTests(unittest.TestCase):
             )
         )
         self.assertTrue(
-            any(
-                len(item["teaching_activity_ids"]) > 1
-                for item in state["assessment_activities"]
-            )
+            any(len(item["outcome_ids"]) > 1 for item in state["assessment_activities"])
         )
-        teaching_ids = {item["id"] for item in state["teaching_activities"]}
+        assessment_ids = {item["id"] for item in state["assessment_activities"]}
         self.assertTrue(
             all(
-                item["teaching_activity_ids"]
-                and set(item["teaching_activity_ids"]) <= teaching_ids
-                for item in state["assessment_activities"]
+                item["assessment_ids"]
+                and set(item["assessment_ids"]) <= assessment_ids
+                and item["outcome_ids"]
+                == outcome_ids_for_assessments(state, item["assessment_ids"])
+                for item in state["teaching_activities"]
             )
         )
         alignment_rows = derive_alignment_rows(state)
@@ -1575,7 +1611,7 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertTrue(set(teaching_ids).isdisjoint(assessment_ids))
         self.assertTrue(
-            all(item["teaching_activity_ids"] for item in state["assessment_activities"])
+            all(item["assessment_ids"] for item in state["teaching_activities"])
         )
         self.assertTrue(
             all(
@@ -1594,13 +1630,14 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(AgentGenerationError, "IDs TA1"):
             _validate_artifact("assessment_activities", invalid_assessment, state)
 
-        unlinked_assessment = deepcopy(state["assessment_activities"])
-        unlinked_assessment[0]["teaching_activity_ids"] = []
+        unlinked_teaching = deepcopy(state["teaching_activities"])
+        unlinked_teaching[0]["assessment_ids"] = []
+        unlinked_teaching[0]["outcome_ids"] = []
         with self.assertRaisesRegex(
             AgentGenerationError,
-            "atividades de ensino-aprendizagem",
+            "tarefas de avaliação",
         ):
-            _validate_artifact("assessment_activities", unlinked_assessment, state)
+            _validate_artifact("teaching_activities", unlinked_teaching, state)
 
     def test_bloom_is_exclusive_and_assessments_are_never_mixed(self) -> None:
         course = CourseInput.create(
@@ -1726,16 +1763,6 @@ class WorkflowTests(unittest.TestCase):
         )
 
         state = review_current_stage(state, "approve", agent=self.agent)
-        teaching_schema = _schema_for("teaching_activities", state)
-        teaching_properties = teaching_schema["properties"]["artifact"]["items"][
-            "properties"
-        ]
-        self.assertEqual(
-            teaching_properties["id"]["pattern"],
-            "^AE[1-9][0-9]*$",
-        )
-
-        state = review_current_stage(state, "approve", agent=self.agent)
         assessment_schema = _schema_for("assessment_activities", state)
         assessment_properties = assessment_schema["properties"]["artifact"]["items"][
             "properties"
@@ -1744,15 +1771,27 @@ class WorkflowTests(unittest.TestCase):
             assessment_properties["id"]["pattern"],
             "^TA[1-9][0-9]*$",
         )
-        self.assertEqual(
-            set(assessment_properties["teaching_activity_ids"]["items"]["enum"]),
-            {item["id"] for item in state["teaching_activities"]},
-        )
+        self.assertNotIn("teaching_activity_ids", assessment_properties)
         self.assertNotIn("outcome_id", assessment_properties)
         self.assertEqual(
             set(assessment_properties["outcome_ids"]["items"]["enum"]),
             {item["id"] for item in state["learning_outcomes"]},
         )
+
+        state = review_current_stage(state, "approve", agent=self.agent)
+        teaching_schema = _schema_for("teaching_activities", state)
+        teaching_properties = teaching_schema["properties"]["artifact"]["items"][
+            "properties"
+        ]
+        self.assertEqual(
+            teaching_properties["id"]["pattern"],
+            "^AE[1-9][0-9]*$",
+        )
+        self.assertEqual(
+            set(teaching_properties["assessment_ids"]["items"]["enum"]),
+            {item["id"] for item in state["assessment_activities"]},
+        )
+        self.assertNotIn("outcome_ids", teaching_properties)
 
         for _ in range(1):
             state = review_current_stage(state, "approve", agent=self.agent)

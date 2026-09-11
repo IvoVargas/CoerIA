@@ -150,7 +150,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.103 · SQLite")
+    await user.should_see("CoerIA v0.3.104 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -893,7 +893,7 @@ async def test_curriculum_content_ids_are_readonly_in_the_editor(user: User) -> 
 
 
 @pytest.mark.asyncio
-async def test_outcome_reference_select_shows_descriptions_only_in_options(
+async def test_assessment_reference_select_shows_descriptions_only_in_options(
     user: User,
 ) -> None:
     state = create_session(
@@ -923,12 +923,20 @@ async def test_outcome_reference_select_shows_descriptions_only_in_options(
     state["teaching_activities"] = [
         {
             "id": "AE1",
+            "assessment_ids": ["TA1"],
             "outcome_ids": ["RA1"],
             "learning_context": "Presencial",
             "activity": "Exploração orientada.",
             "practice": "Resolver exemplos.",
             "support": "Acompanhamento do docente.",
             "feedback_strategy": "Feedback formativo.",
+        }
+    ]
+    state["assessment_activities"] = [
+        {
+            "id": "TA1",
+            "outcome_ids": ["RA1"],
+            "activity": "Resolver um problema algorítmico.",
         }
     ]
     state = navigate_to_stage(state, "teaching_activities")
@@ -945,10 +953,8 @@ async def test_outcome_reference_select_shows_descriptions_only_in_options(
     controls = user.find(marker="learning-outcome-reference").elements
     assert len(controls) == 1
     control = next(iter(controls))
-    assert control.options["RA1"] == (
-        "RA1 — Identificar os elementos fundamentais de um algoritmo."
-    )
-    assert control.value == ["RA1"]
+    assert control.options["TA1"] == "TA1 — Resolver um problema algorítmico."
+    assert control.value == ["TA1"]
     assert "selected-item" in control.slots
     selected_template = str(control.slots["selected-item"].template)
     assert "props.opt.label" in selected_template

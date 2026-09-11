@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from .relationships import synchronize_teaching_outcomes
+
 
 AI_MODE_OFF = "AI-off"
 AI_MODE_ON = "AI-on"
@@ -101,7 +103,8 @@ def synchronize_state_ai_modes(state: dict[str, Any]) -> dict[str, Any]:
         for item in state.get("learning_outcomes", [])
         if isinstance(item, dict)
     ]
-    for stage in ("teaching_activities", "assessment_activities"):
+    synchronize_teaching_outcomes(state)
+    for stage in ("assessment_activities", "teaching_activities"):
         rows = state.get(stage, [])
         if not isinstance(rows, list):
             continue
@@ -120,7 +123,7 @@ def lesson_ai_mode_issues(state: dict[str, Any]) -> list[str]:
         if isinstance(item, dict)
     ]
     component_modes: dict[str, str] = {}
-    for stage in ("teaching_activities", "assessment_activities"):
+    for stage in ("assessment_activities", "teaching_activities"):
         rows = state.get(stage, [])
         if not isinstance(rows, list):
             continue
@@ -157,7 +160,7 @@ def lesson_ai_mode_issues(state: dict[str, Any]) -> list[str]:
 
 
 def ai_mode_alignment_issues(state: dict[str, Any]) -> list[str]:
-    """Deteta desalinhamentos AI-mode nas relações RA–AE–TA."""
+    """Deteta desalinhamentos AI-mode nas relações RA–TA–AE."""
 
     outcomes = [
         item
@@ -172,12 +175,15 @@ def ai_mode_alignment_issues(state: dict[str, Any]) -> list[str]:
         if str(outcome.get("ai_mode", "")).strip() not in AI_MODES:
             issues.append(f"{identifier}: modo de IA inválido")
 
-    teaching_by_id: dict[str, dict[str, Any]] = {}
+    assessment_by_id = {
+        str(item.get("id", "")).strip(): item
+        for item in state.get("assessment_activities", [])
+        if isinstance(item, dict) and str(item.get("id", "")).strip()
+    }
     for activity in state.get("teaching_activities", []):
         if not isinstance(activity, dict):
             continue
         identifier = str(activity.get("id", "?")).strip() or "?"
-        teaching_by_id[identifier] = activity
         outcome_ids = [
             str(value).strip()
             for value in activity.get("outcome_ids", [])
@@ -199,6 +205,15 @@ def ai_mode_alignment_issues(state: dict[str, Any]) -> list[str]:
             )
         elif received not in AI_MODES:
             issues.append(f"{identifier}: modo de IA inválido")
+        assessment_modes = {
+            str(assessment_by_id[value].get("ai_mode", "")).strip()
+            for value in activity.get("assessment_ids", [])
+            if value in assessment_by_id
+        }
+        if any(mode and mode != received for mode in assessment_modes):
+            issues.append(
+                f"{identifier}: modo de IA diferente das tarefas de avaliação associadas"
+            )
 
     for assessment in state.get("assessment_activities", []):
         if not isinstance(assessment, dict):
@@ -225,16 +240,6 @@ def ai_mode_alignment_issues(state: dict[str, Any]) -> list[str]:
             )
         elif received not in AI_MODES:
             issues.append(f"{identifier}: modo de IA inválido")
-
-        teaching_modes = {
-            str(teaching_by_id[value].get("ai_mode", "")).strip()
-            for value in assessment.get("teaching_activity_ids", [])
-            if value in teaching_by_id
-        }
-        if any(mode and mode != received for mode in teaching_modes):
-            issues.append(
-                f"{identifier}: modo de IA diferente das atividades de ensino associadas"
-            )
 
     issues.extend(lesson_ai_mode_issues(state))
     return list(dict.fromkeys(issues))

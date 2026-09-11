@@ -26,25 +26,34 @@ expressas, e os critérios devem permitir julgar o desempenho alcançado. A
 `minutaProgramasUCs.xls` não é uma referência oficial do alinhamento nem do
 fluxo do CoerIA.
 
+A ordem de autoria operacionaliza também o *backward design* de Wiggins e
+McTighe: formular os resultados pretendidos, determinar a evidência aceitável
+nas tarefas de avaliação e planear, depois, as atividades que preparam o
+estudante para demonstrar essa aprendizagem. Por isso, a etapa de avaliação
+antecede a etapa de ensino-aprendizagem, sem alterar o princípio de alinhamento
+construtivo de Biggs e Tang.
+
 A nomenclatura técnica preserva a distinção conceptual da mesma referência e
 localiza-a para a interface portuguesa: `RA<n>` para resultados de aprendizagem,
 `AE<n>` para atividades de ensino-aprendizagem e `TA<n>` para tarefas de
 avaliação. A separação entre `AE` e `TA` evita ambiguidades nas relações de
 alinhamento e mantém estes identificadores estáveis ao longo da autoria e das
-versões.
+versões. `TA` seleciona diretamente `RA`; `AE` seleciona diretamente `TA`; os
+`RA` mostrados na atividade são derivados desta cadeia e não constituem uma
+terceira decisão.
 
 O enquadramento de Brabrand e Denny em *Constructive Alignment in the Age of
 AI* é implementado como uma dimensão adicional e independente da taxonomia. O
 campo `ai_mode` pertence a cada `RA<n>` e aceita `AI-off`, `AI-on` ou `on-AI`,
-com `AI-off` por defeito. As linhas `AE<n>` e `TA<n>` guardam o modo herdado dos
-resultados associados; os esquemas, a canonicalização e os validadores impedem
+com `AI-off` por defeito. As linhas `TA<n>` e `AE<n>` guardam o modo herdado dos
+resultados associados direta ou indiretamente; os esquemas, a canonicalização e os validadores impedem
 que uma única linha combine resultados com modos diferentes. Como se trata de
 um campo derivado, qualquer alteração nos modos dos RA recalcula imediatamente
 as AE e TA já guardadas; uma combinação incompatível fica sem modo até as
 relações serem corrigidas. O planeamento rejeita também uma aula que combine
 AE/TA de modos diferentes. O módulo
 `prism/ai_modes.py` concentra o vocabulário e as regras, enquanto a validação
-final confirma a coerência do modo em toda a cadeia `RA ↔ AE ↔ TA` e nas aulas.
+final confirma a coerência do modo em toda a cadeia `RA ↔ TA ↔ AE` e nas aulas.
 
 Na etapa de conteúdos, o contrato estruturado separa também a função linguística
 dos campos. `title` é uma designação temática nominal e `description` delimita
@@ -188,8 +197,8 @@ autoria requer uma ação separada, etapa, motivo e confirmação explícita.
 
 Os tipos de recurso são selecionados no início da etapa **Geração de recursos
 educativos**. As imagens documentais ficam disponíveis no seletor visual de cada
-slide. A geração recebe diretamente os resultados, conteúdos, atividades de
-ensino-aprendizagem e tarefas de avaliação como contexto de alinhamento.
+slide. A geração recebe diretamente os resultados, conteúdos, tarefas de
+avaliação e atividades de ensino-aprendizagem como contexto de alinhamento.
 
 Quando a assistência abrange toda a etapa de recursos, cada recurso global e
 cada instância selecionada por aula ou tarefa de avaliação é gerada e validada

@@ -179,14 +179,18 @@ def test_changing_an_outcome_mode_refreshes_existing_activities_and_tasks() -> N
         }
     ]
     state = save_manual_draft(state, "learning_outcomes", outcomes)
-    state["teaching_activities"] = [
-        {"id": "AE1", "outcome_ids": ["RA1"], "ai_mode": AI_MODE_OFF}
-    ]
     state["assessment_activities"] = [
         {
             "id": "TA1",
             "outcome_ids": ["RA1"],
-            "teaching_activity_ids": ["AE1"],
+            "ai_mode": AI_MODE_OFF,
+        }
+    ]
+    state["teaching_activities"] = [
+        {
+            "id": "AE1",
+            "assessment_ids": ["TA1"],
+            "outcome_ids": ["RA1"],
             "ai_mode": AI_MODE_OFF,
         }
     ]
@@ -412,12 +416,16 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
         {"id": "C1", "title": "Testes", "description": "Testes", "outcome_ids": ["RA3"]}
     ]
     state["teaching_activities"] = [
-        {"id": "AE1", "outcome_ids": ["RA3"], "activity": "Analisar casos."}
+        {
+            "id": "AE1",
+            "assessment_ids": ["TA1"],
+            "outcome_ids": ["RA3"],
+            "activity": "Analisar casos.",
+        }
     ]
     state["assessment_activities"] = [
         {
             "id": "TA1",
-            "teaching_activity_ids": ["AE1"],
             "outcome_ids": ["RA3"],
             "task": "Resolver um caso.",
         }
@@ -471,7 +479,7 @@ def test_full_outcome_proposal_remaps_downstream_references_after_compaction() -
     assert [item["id"] for item in accepted["learning_outcomes"]] == ["RA1", "RA2"]
     assert accepted["curriculum_analysis"]["contents"][0]["outcome_ids"] == ["RA2"]
     assert accepted["teaching_activities"][0]["outcome_ids"] == ["RA2"]
-    assert accepted["assessment_activities"][0]["teaching_activity_ids"] == ["AE1"]
+    assert accepted["teaching_activities"][0]["assessment_ids"] == ["TA1"]
     assert accepted["assessment_activities"][0]["outcome_ids"] == ["RA2"]
     assert accepted["pedagogical_design"] == state["pedagogical_design"]
     assert accepted["resources"]["tests"][0]["test"]["questions"][0][

@@ -20,11 +20,62 @@ def content_ids_for_outcome(state: dict[str, Any], outcome_id: str) -> list[str]
     return list(dict.fromkeys(identifiers))
 
 
+def outcome_ids_for_assessments(
+    state: dict[str, Any],
+    assessment_ids: list[Any] | tuple[Any, ...] | None,
+) -> list[str]:
+    """Deriva os RA das tarefas selecionadas, preservando a ordem curricular."""
+
+    selected = {
+        str(identifier).strip()
+        for identifier in (assessment_ids or [])
+        if str(identifier).strip()
+    }
+    linked = {
+        str(outcome_id).strip()
+        for assessment in state.get("assessment_activities", [])
+        if isinstance(assessment, dict)
+        and str(assessment.get("id", "")).strip() in selected
+        for outcome_id in assessment.get("outcome_ids", [])
+        if str(outcome_id).strip()
+    }
+    ordered = [
+        str(outcome.get("id", "")).strip()
+        for outcome in state.get("learning_outcomes", [])
+        if isinstance(outcome, dict)
+        and str(outcome.get("id", "")).strip() in linked
+    ]
+    return list(dict.fromkeys(ordered))
+
+
+def synchronize_teaching_outcomes(
+    state: dict[str, Any],
+    activities: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Mantém ``outcome_ids`` como projeção informativa de ``assessment_ids``.
+
+    A relação editável da atividade é AE→TA. Os resultados associados não são
+    uma segunda decisão do docente: são sempre recalculados a partir das tarefas.
+    """
+
+    rows = activities if activities is not None else state.get("teaching_activities", [])
+    if not isinstance(rows, list):
+        return []
+    for activity in rows:
+        if isinstance(activity, dict):
+            activity["outcome_ids"] = outcome_ids_for_assessments(
+                state,
+                activity.get("assessment_ids", []),
+            )
+    return rows
+
+
 def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
     """Produz uma síntese de alinhamento sem criar uma etapa editável.
 
-    O triângulo é explícito na tabela de avaliação: cada tarefa indica as
-    atividades que a preparam e os resultados que avalia diretamente.
+    A cadeia segue o backward design: cada tarefa indica os resultados que
+    avalia e cada atividade indica as tarefas para as quais prepara o estudante.
+    A relação AE→RA é derivada, nunca uma segunda fonte de verdade.
     """
 
     taxonomy = str(state.get("course", {}).get("taxonomy_type", "SOLO") or "SOLO")
@@ -38,20 +89,7 @@ def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(outcome, dict):
             continue
         outcome_id = str(outcome.get("id", ""))
-        teaching = [
-            item
-            for item in state.get("teaching_activities", [])
-            if isinstance(item, dict)
-            and outcome_id in item.get("outcome_ids", [])
-        ]
         content_ids = content_ids_for_outcome(state, outcome_id)
-        teaching_ids = sorted(
-            {
-                str(item.get("id", "")).strip()
-                for item in teaching
-                if str(item.get("id", "")).strip()
-            }
-        )
         assessment_ids = list(
             dict.fromkeys(
                 str(item.get("id", "")).strip()
@@ -69,17 +107,30 @@ def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
         unknown_assessment_ids = [
             identifier for identifier in assessment_ids if identifier not in assessment_by_id
         ]
-        incompatible_assessment_ids = [
-            str(item.get("id", ""))
-            for item in assessments
-            if not set(item.get("teaching_activity_ids", [])) & set(teaching_ids)
+        teaching = [
+            item
+            for item in state.get("teaching_activities", [])
+            if isinstance(item, dict)
+            and set(item.get("assessment_ids", [])) & set(assessment_ids)
+        ]
+        teaching_ids = sorted(
+            {
+                str(item.get("id", "")).strip()
+                for item in teaching
+                if str(item.get("id", "")).strip()
+            }
+        )
+        unsupported_assessment_ids = [
+            identifier
+            for identifier in assessment_ids
+            if not any(identifier in item.get("assessment_ids", []) for item in teaching)
         ]
         coherent = bool(content_ids and assessment_ids and teaching_ids)
-        coherent = coherent and not unknown_assessment_ids and not incompatible_assessment_ids
+        coherent = coherent and not unknown_assessment_ids and not unsupported_assessment_ids
         if coherent:
             rationale = (
-                "O resultado está ligado diretamente à avaliação e essa tarefa partilha "
-                "uma atividade de ensino-aprendizagem que desenvolve o resultado."
+                "O resultado está ligado diretamente à avaliação e essa tarefa está "
+                "ligada a uma atividade de ensino-aprendizagem que prepara a evidência."
             )
         else:
             issues: list[str] = []
@@ -93,10 +144,10 @@ def derive_alignment_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
                 issues.append(
                     "tarefas desconhecidas: " + ", ".join(unknown_assessment_ids)
                 )
-            if incompatible_assessment_ids:
+            if unsupported_assessment_ids:
                 issues.append(
-                    "tarefas sem atividade comum ao resultado: "
-                    + ", ".join(incompatible_assessment_ids)
+                    "tarefas sem atividade de preparação: "
+                    + ", ".join(unsupported_assessment_ids)
                 )
             rationale = "; ".join(issues) + "."
         rows.append(

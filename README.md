@@ -24,10 +24,10 @@ determinística, não de uma decisão declarada pelo modelo.
 2. resultados de aprendizagem com nível SOLO ou Bloom, um único verbo de ação
    principal, modo de IA e pressupostos contextuais opcionais;
 3. conteúdos com IDs associados aos resultados formulados;
-4. atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
-5. tarefas e critérios de avaliação, com finalidade formativa ou sumativa e
-   associação explícita tanto às atividades de ensino-aprendizagem que as
-   preparam como aos resultados cuja evidência avaliam;
+4. tarefas e critérios de avaliação, com finalidade formativa ou sumativa e
+   associação direta aos resultados cuja evidência avaliam;
+5. atividades de ensino-aprendizagem com prática, acompanhamento e feedback,
+   associadas às tarefas de avaliação que preparam;
 6. planeamento das aulas, com duração, tipo de sessão, atividades ou tarefas de
    avaliação opcionais e um campo de texto opcional; a soma das durações deve
    corresponder exatamente às horas de contacto;
@@ -35,18 +35,18 @@ determinística, não de uma decisão declarada pelo modelo.
 8. validação final da estrutura e do alinhamento.
 
 Seguindo o alinhamento construtivo de Biggs e Tang em *Teaching for Quality
-Learning at University*, os resultados de aprendizagem
-constituem a primeira decisão pedagógica formal. Os conteúdos, documentos e
-objetivos introduzidos pelo docente continuam a delimitar o contexto inicial.
-Depois de os resultados serem formulados, os conteúdos podem ser estruturados e
-associados a esses resultados; os objetivos gerais permanecem como texto livre.
-As atividades de ensino-aprendizagem são então definidas antes das tarefas de
-avaliação. Cada tarefa identifica as atividades que preparam o desempenho a
-avaliar e os resultados avaliados diretamente, recolhe as evidências e aplica
-os critérios correspondentes. O planeamento das aulas organiza depois as sessões
-concretas. Pode associar-lhes atividades e tarefas quando seja útil, sem repetir
-obrigatoriamente todos os componentes; a duração total deve corresponder
-exatamente às horas de contacto.
+Learning at University*, os resultados de aprendizagem constituem a primeira
+decisão pedagógica formal. Os conteúdos, documentos e objetivos introduzidos
+pelo docente continuam a delimitar o contexto inicial. Depois de os resultados
+serem formulados, os conteúdos podem ser estruturados e associados a esses
+resultados; os objetivos gerais permanecem como texto livre. Aplicando o
+*backward design* de Wiggins e McTighe, definem-se então as tarefas que tornam a
+aprendizagem observável e, depois, as atividades que preparam essas evidências.
+Cada tarefa liga diretamente os resultados avaliados, recolhe as evidências e
+aplica os critérios correspondentes; cada atividade liga as tarefas que prepara.
+O planeamento das aulas organiza depois as sessões concretas. Pode associar-lhes
+atividades e tarefas quando seja útil, sem repetir obrigatoriamente todos os
+componentes; a duração total deve corresponder exatamente às horas de contacto.
 Esta sequência é uma orientação pedagógica, não uma barreira técnica: todas as
 etapas permanecem navegáveis e editáveis desde o início.
 
@@ -56,8 +56,9 @@ avaliação. Os verbos dos resultados funcionam como marcadores dessa coerência
 O enquadramento de Brabrand e Denny em *Constructive Alignment in the Age of AI*
 acrescenta uma dimensão ortogonal: cada resultado indica `AI-off` (aprendizagem
 sem IA), `AI-on` (aprendizagem com IA como meio) ou `on-AI` (aprendizagem sobre
-a utilização da IA). `AI-off` é o valor por defeito. As atividades e tarefas
-herdam dinamicamente o modo dos resultados associados; alterar um RA recalcula
+a utilização da IA). `AI-off` é o valor por defeito. As tarefas e atividades
+herdam dinamicamente o modo dos resultados associados direta ou indiretamente;
+alterar um RA recalcula
 as linhas já guardadas. Uma linha que junte resultados com modos diferentes deve
 ser dividida, e uma aula não pode combinar AE/TA de modos diferentes. Esta
 classificação refere-se ao trabalho do
@@ -140,15 +141,19 @@ Biggs e Tang distinguem *Teaching/Learning Activities* e *Assessment Tasks*. Na
 interface portuguesa, o CoerIA representa estes conceitos como `AE1`, `AE2`, …
 (atividades de ensino-aprendizagem) e `TA1`, `TA2`, … (tarefas de avaliação).
 Os prefixos são atribuídos automaticamente e tornam inequívocas as referências
-usadas na verificação automática do alinhamento. Em cada tarefa `TA<n>`, o
-docente seleciona uma ou mais atividades `AE<n>`; a aplicação confirma que elas
-existem e seleciona diretamente os `RA<n>` cuja evidência a tarefa avalia. O triângulo
-`RA ↔ AE`, `AE ↔ TA` e `RA ↔ TA` evita considerar um resultado avaliado apenas
-porque partilha uma atividade com outro. A tabela das tarefas de avaliação é a
-única que apresenta três tipos de identificador (`TA`, `AE` e `RA`), pois reúne
-as duas relações necessárias no mesmo local. As restantes tabelas apresentam no
-máximo dois tipos. No planeamento das aulas, cada sessão pode referenciar apenas
-os componentes `AE` e `TA` que nela decorrem, mas essa associação é opcional.
+usadas na verificação automática do alinhamento. A ordem de autoria aplica o
+*backward design* de Wiggins e McTighe: depois dos resultados e conteúdos, o
+docente define primeiro as evidências aceitáveis nas tarefas de avaliação e só
+depois planeia as experiências de ensino-aprendizagem que as preparam.
+
+Em cada tarefa `TA<n>`, o docente seleciona diretamente os `RA<n>` cuja evidência
+será avaliada. Em cada atividade `AE<n>`, seleciona as tarefas `TA<n>` para as
+quais prepara os estudantes; os resultados da atividade são derivados dessas
+tarefas e apresentados apenas para confirmação. Assim, `RA ↔ TA` e `TA ↔ AE`
+são as duas relações explícitas, enquanto `RA ↔ AE` é uma consequência
+rastreável e não uma terceira fonte de verdade. No planeamento das aulas, cada
+sessão pode referenciar os componentes `AE` e `TA` que nela decorrem, mas essa
+associação é opcional.
 
 A seleção dos recursos é feita no início da etapa **Geração de recursos educativos**. As
 imagens extraídas dos documentos ficam reunidas no seletor visual de cada slide,
@@ -315,7 +320,7 @@ imagens da apresentação. A proposta resultante reutiliza os mesmos separadores
 o mesmo editor da edição manual, mostra apenas os recursos selecionados e permite
 ajustar o conteúdo antes de aplicar a proposta editada como uma única versão.
 No **Planeamento das aulas**, o pedido inclui ainda um resumo explícito dos
-conteúdos e das cadeias `RA → AE → TA`, o catálogo descritivo das atividades e
+conteúdos e das cadeias `RA → TA → AE`, o catálogo descritivo das atividades e
 tarefas e as horas de contacto. A proposta distribui todos esses componentes,
 usa em conjunto o rascunho existente e os artefactos anteriores, e torna o foco
 curricular de cada aula visível no texto opcional.
@@ -596,7 +601,8 @@ módulos, testes e evidências encontram-se em `docs/validation/`.
   mas a pertinência semântica de associações propostas por IA exige revisão humana.
 - No planeamento das aulas, as referências a atividades e tarefas são opcionais;
   a duração total tem de coincidir com as horas de contacto, enquanto o alinhamento
-  estrutural é verificado nas relações RA–AE e TA–AE/RA.
+  estrutural é verificado nas relações diretas RA–TA e TA–AE; a relação RA–AE é
+  derivada dessas duas ligações.
 - A redução inicial de fontes documentais muito extensas pode consumir um volume
   elevado de tokens; os limites são configuráveis e o custo deve ser considerado
   antes da utilização no estudo.

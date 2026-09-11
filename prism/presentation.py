@@ -40,7 +40,7 @@ def _lesson_component_text(
         str(item.get("id", "")): " ".join(
             str(item.get("activity", "")).split()
         )
-        for stage in ("teaching_activities", "assessment_activities")
+        for stage in ("assessment_activities", "teaching_activities")
         for item in state.get(stage, [])
         if isinstance(item, dict) and str(item.get("id", "")).strip()
     }
@@ -536,7 +536,6 @@ def render_artifact(
         rows = [
             [
                 item.get("id", "—"),
-                ", ".join(item.get("teaching_activity_ids", [])),
                 ", ".join(item.get("outcome_ids", [])),
                 item.get("ai_mode", "AI-off"),
                 item.get("work_type", "—"),
@@ -550,7 +549,6 @@ def render_artifact(
         return header + _table(
             [
                 "ID",
-                "Atividades de ensino-aprendizagem",
                 "Resultados",
                 "Modo de IA",
                 "Modalidade",
@@ -592,6 +590,7 @@ def render_artifact(
         rows = [
             [
                 item.get("id", "—"),
+                ", ".join(item.get("assessment_ids", [])),
                 ", ".join(item.get("outcome_ids", [])),
                 item.get("ai_mode", "AI-off"),
                 item.get("learning_context", "—"),
@@ -603,7 +602,7 @@ def render_artifact(
             for item in artifact
         ]
         return header + _table(
-            ["ID", "Resultados", "Modo de IA", "Contexto", "Atividade", "Prática", "Acompanhamento", "Feedback"],
+            ["ID", "Tarefas de avaliação", "Resultados derivados", "Modo de IA", "Contexto", "Atividade", "Prática", "Acompanhamento", "Feedback"],
             rows,
         )
 

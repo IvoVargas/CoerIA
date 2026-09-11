@@ -35,7 +35,7 @@ from .resource_catalog import (
     lesson_scope,
     slide_outcome_ids,
 )
-from .relationships import derive_alignment_rows
+from .relationships import derive_alignment_rows, outcome_ids_for_assessments
 
 
 PRESENTATION_ASSESSMENT_TITLE = "Avaliação da unidade curricular"
@@ -630,25 +630,25 @@ def _many_to_many_coverage_check(
 
 def assessment_teaching_alignment_issues(
     state: dict[str, Any],
-    assessments: list[dict[str, Any]] | None = None,
+    activities: list[dict[str, Any]] | None = None,
 ) -> list[str]:
-    """Deteta ligações TA→AE ausentes ou desconhecidas."""
+    """Deteta ligações AE→TA ausentes, desconhecidas ou incoerentes."""
 
-    teaching_by_id = {
+    assessment_by_id = {
         str(item.get("id", "")): item
-        for item in state.get("teaching_activities", [])
+        for item in state.get("assessment_activities", [])
         if isinstance(item, dict) and str(item.get("id", "")).strip()
     }
-    rows = assessments if assessments is not None else state.get(
-        "assessment_activities", []
+    rows = activities if activities is not None else state.get(
+        "teaching_activities", []
     )
     issues: list[str] = []
     for item in rows:
         if not isinstance(item, dict):
-            issues.append("Tarefa de avaliação com estrutura inválida")
+            issues.append("Atividade de ensino-aprendizagem com estrutura inválida")
             continue
-        task_id = str(item.get("id", "?")) or "?"
-        raw_links = item.get("teaching_activity_ids", [])
+        activity_id = str(item.get("id", "?")) or "?"
+        raw_links = item.get("assessment_ids", [])
         linked_ids = list(
             dict.fromkeys(
                 str(identifier)
@@ -658,14 +658,31 @@ def assessment_teaching_alignment_issues(
         ) if isinstance(raw_links, list) else []
         if not linked_ids:
             issues.append(
-                f"{task_id}: sem atividades de ensino-aprendizagem associadas"
+                f"{activity_id}: sem tarefas de avaliação associadas"
             )
             continue
-        unknown = [identifier for identifier in linked_ids if identifier not in teaching_by_id]
+        unknown = [identifier for identifier in linked_ids if identifier not in assessment_by_id]
         if unknown:
             issues.append(
-                f"{task_id}: atividades desconhecidas: {', '.join(unknown)}"
+                f"{activity_id}: tarefas desconhecidas: {', '.join(unknown)}"
             )
+        expected_outcomes = outcome_ids_for_assessments(state, linked_ids)
+        if item.get("outcome_ids", []) != expected_outcomes:
+            issues.append(
+                f"{activity_id}: resultados derivados desatualizados"
+            )
+    referenced_assessments = {
+        str(identifier)
+        for item in rows
+        if isinstance(item, dict)
+        for identifier in item.get("assessment_ids", [])
+        if str(identifier).strip()
+    }
+    missing = sorted(set(assessment_by_id) - referenced_assessments)
+    if missing:
+        issues.append(
+            "Tarefas sem atividade de preparação: " + ", ".join(missing)
+        )
     return issues
 
 
@@ -840,7 +857,7 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 else "pass"
             ),
             (
-                "A cadeia RA–AE–TA está incompleta; os modos de IA não podem ser avaliados."
+                "A cadeia RA–TA–AE está incompleta; os modos de IA não podem ser avaliados."
                 if not ai_mode_chain_complete
                 else "; ".join(ai_mode_issues)
                 if ai_mode_issues
@@ -906,28 +923,28 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             ),
         )
     )
-    assessment_rows = state.get("assessment_activities", [])
+    teaching_rows = state.get("teaching_activities", [])
     assessment_teaching_issues = assessment_teaching_alignment_issues(state)
     checks.append(
         _check(
             "assessment_teaching_alignment",
-            "Ligação entre ensino-aprendizagem e avaliação",
+            "Ligação entre avaliação e ensino-aprendizagem",
             (
                 "warning"
-                if not assessment_rows
+                if not teaching_rows
                 else "error"
                 if assessment_teaching_issues
                 else "pass"
             ),
             (
-                "Não existem tarefas de avaliação; a ligação às atividades de "
-                "ensino-aprendizagem não pode ser avaliada."
-                if not assessment_rows
+                "Não existem atividades de ensino-aprendizagem; a preparação para as "
+                "tarefas de avaliação não pode ser avaliada."
+                if not teaching_rows
                 else "; ".join(assessment_teaching_issues)
                 if assessment_teaching_issues
                 else (
-                    "Cada tarefa de avaliação está associada às atividades de "
-                    "ensino-aprendizagem que preparam os respetivos resultados."
+                    "Cada tarefa de avaliação é preparada por pelo menos uma atividade "
+                    "de ensino-aprendizagem; os resultados são derivados dessa cadeia."
                 )
             ),
         )
@@ -1002,8 +1019,8 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
                 else "Ligações em falta — " + "; ".join(incomplete_alignment)
                 if incomplete_alignment
                 else (
-                    "Todos os resultados estão ligados a conteúdo e atividades; a ligação "
-                    "direta à avaliação é coerente com as atividades de ensino-aprendizagem."
+                    "Todos os resultados estão ligados a conteúdos e tarefas de avaliação; "
+                    "cada tarefa é preparada por uma atividade de ensino-aprendizagem."
                 )
             ),
         )

@@ -74,6 +74,7 @@ from .resource_catalog import (
     source_image_available_to_llm,
     source_image_semantic_description,
 )
+from .relationships import outcome_ids_for_assessments
 from .validation_targets import available_validation_targets
 
 
@@ -170,13 +171,12 @@ STAGE_REQUIREMENTS = {
         "principais coordenadas."
     ),
     "assessment_activities": (
-        "Lista de objetos {id, teaching_activity_ids, outcome_ids, ai_mode, work_type, assessment_purpose, "
+        "Lista de objetos {id, outcome_ids, ai_mode, work_type, assessment_purpose, "
         "activity, evidence, criterion}. Os IDs são obrigatoriamente TA1, TA2, ... "
         "pela ordem das linhas. assessment_purpose é exclusivamente Formativa ou "
-        "Sumativa. Cada tarefa liga-se a uma ou mais atividades de ensino-aprendizagem "
-        "existentes e a evidência permite observar os verbos dos resultados trabalhados "
-        "por essas atividades. ai_mode corresponde ao modo dos resultados e das atividades "
-        "associadas. É válido o conjunto conter apenas avaliações sumativas."
+        "Sumativa. Cada tarefa liga-se diretamente a um ou mais resultados e a evidência "
+        "permite observar os respetivos verbos. ai_mode corresponde ao modo comum dos "
+        "resultados associados. É válido o conjunto conter apenas avaliações sumativas."
     ),
     "pedagogical_design": (
         "Objeto com lessons. lessons é uma lista de aulas com "
@@ -186,11 +186,12 @@ STAGE_REQUIREMENTS = {
         "A soma das durações corresponde exatamente às horas de contacto."
     ),
     "teaching_activities": (
-        "Lista de objetos {id, outcome_ids, learning_context, "
+        "Lista de objetos {id, assessment_ids, learning_context, "
         "ai_mode, activity, method, practice, support, feedback_strategy}. Os IDs são "
-        "obrigatoriamente AE1, AE2, ... pela ordem das linhas; o conjunto deve "
-        "cobrir todos os resultados, herdar o respetivo ai_mode e explicitar prática, "
-        "acompanhamento e feedback."
+        "obrigatoriamente AE1, AE2, ... pela ordem das linhas. Cada atividade liga-se a "
+        "uma ou mais tarefas de avaliação e prepara os estudantes para produzirem as "
+        "evidências pedidas. Os resultados e o ai_mode são derivados dessas tarefas. O "
+        "conjunto cobre todas as tarefas e explicita prática, acompanhamento e feedback."
     ),
     "resources": (
         "Conjunto de recursos selecionados pelo docente. A aplicação gera cada recurso "
@@ -332,7 +333,6 @@ def _schema_for(
                 "additionalProperties": False,
                 "properties": {
                     "id": {"type": "string", "pattern": "^TA[1-9][0-9]*$"},
-                    "teaching_activity_ids": {"type": "array", "items": string},
                     "outcome_ids": {"type": "array", "items": string},
                     "ai_mode": {"type": "string", "enum": list(AI_MODES)},
                     "work_type": string,
@@ -345,7 +345,7 @@ def _schema_for(
                     "criterion": string,
                 },
                 "required": [
-                    "id", "teaching_activity_ids", "outcome_ids", "ai_mode", "work_type",
+                    "id", "outcome_ids", "ai_mode", "work_type",
                     "assessment_purpose",
                     "activity", "evidence", "criterion"
                 ],
@@ -381,7 +381,7 @@ def _schema_for(
                 "additionalProperties": False,
                 "properties": {
                     "id": {"type": "string", "pattern": "^AE[1-9][0-9]*$"},
-                    "outcome_ids": {"type": "array", "items": string},
+                    "assessment_ids": {"type": "array", "items": string},
                     "ai_mode": {"type": "string", "enum": list(AI_MODES)},
                     "learning_context": {"type": "string", "enum": list(LEARNING_CONTEXTS)},
                     "activity": string,
@@ -391,7 +391,7 @@ def _schema_for(
                     "feedback_strategy": string,
                 },
                 "required": [
-                    "id", "outcome_ids", "ai_mode",
+                    "id", "assessment_ids", "ai_mode",
                     "learning_context", "activity", "method", "practice",
                     "support", "feedback_strategy"
                 ],
@@ -713,16 +713,7 @@ def _schema_for(
         }
     if stage == "assessment_activities" and state:
         artifact_schema = deepcopy(artifact_schema)
-        teaching_activity_ids = [
-            str(item.get("id", ""))
-            for item in state.get("teaching_activities", [])
-            if str(item.get("id", "")).strip()
-        ]
         item_schema = artifact_schema["items"]["properties"]
-        item_schema["teaching_activity_ids"]["items"] = {
-            "type": "string",
-            "enum": teaching_activity_ids,
-        }
         outcome_ids = [
             str(item.get("id", ""))
             for item in state.get("learning_outcomes", [])
@@ -731,6 +722,17 @@ def _schema_for(
         item_schema["outcome_ids"]["items"] = {
             "type": "string",
             "enum": outcome_ids,
+        }
+    if stage == "teaching_activities" and state:
+        artifact_schema = deepcopy(artifact_schema)
+        assessment_ids = [
+            str(item.get("id", ""))
+            for item in state.get("assessment_activities", [])
+            if str(item.get("id", "")).strip()
+        ]
+        artifact_schema["items"]["properties"]["assessment_ids"]["items"] = {
+            "type": "string",
+            "enum": assessment_ids,
         }
     if stage == "pedagogical_design" and state:
         artifact_schema = deepcopy(artifact_schema)
@@ -845,8 +847,8 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     stage_order = (
         "learning_outcomes",
         "curriculum_analysis",
-        "teaching_activities",
         "assessment_activities",
+        "teaching_activities",
         "pedagogical_design",
         "resources",
     )
@@ -936,21 +938,10 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
     if stage == "assessment_activities":
         context["assessment_link_rules"] = {
             "rule": (
-                "Cada teaching_activity_ids contém uma ou mais atividades de "
-                "ensino-aprendizagem existentes. Cada outcome_ids contém um ou mais "
-                "resultados avaliados diretamente. Para cada ligação TA→RA deve existir "
-                "pelo menos uma atividade selecionada que desenvolva esse resultado."
+                "Cada outcome_ids contém um ou mais resultados avaliados diretamente. "
+                "A tarefa e os critérios tornam observáveis os verbos desses resultados."
             ),
             "allowed_purposes": list(ASSESSMENT_PURPOSES),
-            "allowed_teaching_activities": [
-                {
-                    "id": activity.get("id", ""),
-                    "outcome_ids": activity.get("outcome_ids", []),
-                    "ai_mode": activity.get("ai_mode", AI_MODE_OFF),
-                    "activity": activity.get("activity", ""),
-                }
-                for activity in state.get("teaching_activities", [])
-            ],
             "allowed_outcomes": [
                 {
                     "id": outcome.get("id", ""),
@@ -961,6 +952,25 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                 for outcome in state.get("learning_outcomes", [])
             ],
             "mixed_purpose_forbidden": True,
+        }
+    if stage == "teaching_activities":
+        context["teaching_link_rules"] = {
+            "rule": (
+                "Cada assessment_ids contém uma ou mais tarefas existentes. A atividade "
+                "deve preparar o estudante para produzir as evidências pedidas pelas tarefas. "
+                "Os resultados e o modo de IA são derivados das tarefas selecionadas."
+            ),
+            "allowed_assessments": [
+                {
+                    "id": assessment.get("id", ""),
+                    "outcome_ids": assessment.get("outcome_ids", []),
+                    "ai_mode": assessment.get("ai_mode", AI_MODE_OFF),
+                    "activity": assessment.get("activity", ""),
+                    "evidence": assessment.get("evidence", ""),
+                    "criterion": assessment.get("criterion", ""),
+                }
+                for assessment in state.get("assessment_activities", [])
+            ],
         }
     if stage == "pedagogical_design":
         outcomes = [
@@ -993,10 +1003,15 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
         alignment_chains = []
         for outcome in outcomes:
             outcome_id = str(outcome["id"])
+            linked_assessment_ids = [
+                str(item["id"])
+                for item in assessment_tasks
+                if outcome_id in item.get("outcome_ids", [])
+            ]
             linked_teaching_ids = [
                 str(item["id"])
                 for item in teaching_activities
-                if outcome_id in item.get("outcome_ids", [])
+                if set(item.get("assessment_ids", [])) & set(linked_assessment_ids)
             ]
             alignment_chains.append(
                 {
@@ -1009,13 +1024,7 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                         if outcome_id in item.get("outcome_ids", [])
                     ],
                     "teaching_activity_ids": linked_teaching_ids,
-                    "assessment_task_ids": [
-                        str(item["id"])
-                        for item in assessment_tasks
-                        if outcome_id in item.get("outcome_ids", [])
-                        and set(linked_teaching_ids)
-                        & set(item.get("teaching_activity_ids", []))
-                    ],
+                    "assessment_task_ids": linked_assessment_ids,
                 }
             )
         context["lesson_planning_brief"] = {
@@ -1038,6 +1047,7 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                     "kind": "atividade_de_ensino_aprendizagem",
                     "description": str(item.get("activity", "")),
                     "outcome_ids": list(item.get("outcome_ids", [])),
+                    "assessment_ids": list(item.get("assessment_ids", [])),
                     "learning_context": str(item.get("learning_context", "")),
                     "practice": str(item.get("practice", "")),
                 }
@@ -1049,9 +1059,6 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                     "kind": "tarefa_de_avaliacao",
                     "description": str(item.get("activity", "")),
                     "outcome_ids": list(item.get("outcome_ids", []) or []),
-                    "teaching_activity_ids": list(
-                        item.get("teaching_activity_ids", []) or []
-                    ),
                     "assessment_purpose": str(
                         item.get("assessment_purpose", "")
                     ),
@@ -1075,7 +1082,7 @@ def _upstream_context(state: dict[str, Any], stage: str) -> dict[str, Any]:
                 "Planeia aulas ordenadas a partir de lesson_planning_brief. Cada aula tem "
                 "duração positiva. component_ids é opcional: pode ficar vazio ou incluir "
                 "atividades AE e/ou tarefas TA existentes quando forem relevantes nessa aula. "
-                "Quando associa componentes, preserva as cadeias RA→AE→TA e agenda cada TA "
+                "Quando associa componentes, preserva as cadeias RA→TA→AE e agenda cada TA "
                 "depois ou na mesma aula das AE que a preparam. Não é obrigatório distribuir "
                 "todos os componentes pelo planeamento. Quando "
                 "contact_minutes_for_lessons for positivo, a soma das durações deve ser "
@@ -1123,11 +1130,6 @@ def _canonicalize_assessment_activities(
 
     if not isinstance(artifact, list):
         return artifact, []
-    allowed_teaching = {
-        str(item.get("id", ""))
-        for item in state.get("teaching_activities", [])
-        if str(item.get("id", "")).strip()
-    }
     allowed_outcomes = {
         str(item.get("id", ""))
         for item in state.get("learning_outcomes", [])
@@ -1148,16 +1150,6 @@ def _canonicalize_assessment_activities(
             ),
             purpose,
         )
-        raw_teaching_links = item.get("teaching_activity_ids", [])
-        teaching_links = list(
-            dict.fromkeys(
-                str(identifier)
-                for identifier in (
-                    raw_teaching_links if isinstance(raw_teaching_links, list) else []
-                )
-                if str(identifier) in allowed_teaching
-            )
-        )
         raw_outcome_links = item.get("outcome_ids", [])
         outcome_links = list(
             dict.fromkeys(
@@ -1174,7 +1166,6 @@ def _canonicalize_assessment_activities(
         )
         canonical = {
             "id": f"TA{index}",
-            "teaching_activity_ids": teaching_links,
             "outcome_ids": outcome_links,
             "ai_mode": inherited_mode or "",
             "assessment_purpose": canonical_purpose,
@@ -1184,9 +1175,11 @@ def _canonicalize_assessment_activities(
             for field, value in canonical.items()
             if item.get(field) != value
         }
-        normalized.append(
-            {key: value for key, value in {**item, **canonical}.items() if key != "outcome_id"}
-        )
+        normalized.append({
+            key: value
+            for key, value in {**item, **canonical}.items()
+            if key not in {"outcome_id", "teaching_activity_ids"}
+        })
         if changes:
             corrections.append(
                 {"assessment_id": item.get("id", ""), "changes": changes}
@@ -1198,7 +1191,7 @@ def _canonicalize_teaching_activities(
     artifact: Any,
     state: dict[str, Any],
 ) -> tuple[Any, list[dict[str, Any]]]:
-    """Aplica IDs AE<n> e herda o AI-mode dos resultados associados."""
+    """Aplica IDs AE<n> e deriva RA/AI-mode das tarefas associadas."""
 
     if not isinstance(artifact, list):
         return artifact, []
@@ -1208,6 +1201,11 @@ def _canonicalize_teaching_activities(
         sequential=True,
     )
     corrections: list[dict[str, Any]] = []
+    allowed_assessments = {
+        str(item.get("id", ""))
+        for item in state.get("assessment_activities", [])
+        if str(item.get("id", "")).strip()
+    }
     for received, item in zip(artifact, normalized):
         if not isinstance(received, dict) or not isinstance(item, dict):
             continue
@@ -1225,7 +1223,29 @@ def _canonicalize_teaching_activities(
                 "received": received.get("theme", ""),
                 "used": item.get("theme", ""),
             }
-        outcome_ids = item.get("outcome_ids", [])
+        raw_assessment_ids = item.get("assessment_ids", [])
+        assessment_ids = list(
+            dict.fromkeys(
+                str(identifier)
+                for identifier in (
+                    raw_assessment_ids if isinstance(raw_assessment_ids, list) else []
+                )
+                if str(identifier) in allowed_assessments
+            )
+        )
+        if item.get("assessment_ids") != assessment_ids:
+            changes["assessment_ids"] = {
+                "received": item.get("assessment_ids"),
+                "used": assessment_ids,
+            }
+        item["assessment_ids"] = assessment_ids
+        outcome_ids = outcome_ids_for_assessments(state, assessment_ids)
+        if item.get("outcome_ids") != outcome_ids:
+            changes["outcome_ids"] = {
+                "received": item.get("outcome_ids"),
+                "used": outcome_ids,
+            }
+        item["outcome_ids"] = outcome_ids
         inherited_mode = linked_ai_mode(
             outcome_ids,
             state.get("learning_outcomes", []),
@@ -2251,17 +2271,28 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
             )
 
     if stage == "teaching_activities":
-        expected = {item["id"] for item in state["learning_outcomes"]}
-        covered = set(_flattened_ids(artifact, "outcome_ids"))
-        if covered != expected:
+        expected_assessments = {
+            str(item.get("id", ""))
+            for item in state.get("assessment_activities", [])
+            if str(item.get("id", "")).strip()
+        }
+        covered_assessments = set(_flattened_ids(artifact, "assessment_ids"))
+        if covered_assessments != expected_assessments:
             raise AgentGenerationError(
-                "As atividades de ensino-aprendizagem devem cobrir todos e apenas "
-                "os resultados definidos."
+                "As atividades de ensino-aprendizagem devem preparar todas e apenas "
+                "as tarefas de avaliação definidas."
             )
         invalid_ai_mode_rows = []
         for item in artifact:
+            expected_outcomes = outcome_ids_for_assessments(
+                state,
+                item.get("assessment_ids", []),
+            )
+            if item.get("outcome_ids", []) != expected_outcomes:
+                invalid_ai_mode_rows.append(str(item.get("id", "?")))
+                continue
             inherited_mode = linked_ai_mode(
-                item.get("outcome_ids", []),
+                expected_outcomes,
                 state.get("learning_outcomes", []),
             )
             if (
@@ -2272,18 +2303,13 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         if invalid_ai_mode_rows:
             raise AgentGenerationError(
                 "Cada atividade de ensino-aprendizagem deve ter o mesmo AI-mode "
-                "de todos os resultados associados. Separe atividades que liguem "
-                "resultados com modos diferentes. Corrigir: "
+                "dos resultados derivados das tarefas associadas. Separe atividades "
+                "que preparem tarefas com modos diferentes. Corrigir: "
                 + ", ".join(invalid_ai_mode_rows)
                 + "."
             )
 
     if stage == "assessment_activities":
-        teaching_by_id = {
-            str(item.get("id", "")): item
-            for item in state.get("teaching_activities", [])
-        }
-        allowed_teaching = set(teaching_by_id)
         expected_outcomes = {
             str(item.get("id", ""))
             for item in state.get("learning_outcomes", [])
@@ -2292,28 +2318,11 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
         invalid_assessments = []
         for item in artifact:
             problems = []
-            teaching_links = item.get("teaching_activity_ids", [])
             outcome_links = item.get("outcome_ids", [])
-            if not teaching_links:
-                problems.append("sem atividades de ensino-aprendizagem")
-            elif set(teaching_links) - allowed_teaching:
-                problems.append("contém atividades de ensino-aprendizagem desconhecidas")
             if not outcome_links:
                 problems.append("sem resultados avaliados diretamente")
             elif set(outcome_links) - expected_outcomes:
                 problems.append("contém resultados desconhecidos")
-            for outcome_id in outcome_links:
-                if not any(
-                    outcome_id
-                    in (
-                        teaching_by_id[teaching_id].get("outcome_ids", [])
-                    )
-                    for teaching_id in teaching_links
-                    if teaching_id in teaching_by_id
-                ):
-                    problems.append(
-                        f"{outcome_id} não é desenvolvido pelas atividades selecionadas"
-                    )
             inherited_mode = linked_ai_mode(
                 outcome_links,
                 state.get("learning_outcomes", []),
@@ -2323,15 +2332,6 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 problems.append("associa resultados com modos de IA diferentes")
             elif received_mode != inherited_mode:
                 problems.append("modo de IA diferente dos resultados associados")
-            if any(
-                str(teaching_by_id[teaching_id].get("ai_mode", "")).strip()
-                != received_mode
-                for teaching_id in teaching_links
-                if teaching_id in teaching_by_id
-            ):
-                problems.append(
-                    "modo de IA diferente das atividades de ensino-aprendizagem"
-                )
             if item.get("assessment_purpose") not in ASSESSMENT_PURPOSES:
                 problems.append("finalidade diferente de Formativa ou Sumativa")
             if problems:
@@ -2340,8 +2340,8 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 )
         if invalid_assessments:
             raise AgentGenerationError(
-                "Cada avaliação deve ligar diretamente resultados às atividades que os "
-                "desenvolvem e ser Formativa ou Sumativa. "
+                "Cada avaliação deve ligar diretamente os resultados que avalia e ter "
+                "finalidade Formativa ou Sumativa. "
                 + "; ".join(invalid_assessments)
             )
         covered_outcomes = {
@@ -2858,23 +2858,23 @@ class OpenAIPedagogicalAgent:
         if stage == "assessment_activities":
             instructions += (
                 " Em cada avaliação, assessment_purpose tem exatamente um valor: "
-                "Formativa ou Sumativa, nunca Mista. teaching_activity_ids nunca pode "
-                "estar vazio e usa apenas os IDs indicados em assessment_link_rules. "
-                "outcome_ids também nunca pode estar vazio e liga diretamente cada tarefa "
-                "aos resultados avaliados. Cada resultado ligado deve ser desenvolvido por "
-                "pelo menos uma das atividades selecionadas. O conjunto das tarefas deve "
+                "Formativa ou Sumativa, nunca Mista. outcome_ids nunca pode estar vazio e "
+                "liga diretamente cada tarefa aos resultados avaliados. O conjunto deve "
                 "cobrir diretamente todos os resultados. Em evidence e "
                 "criterion torna observável o desempenho expresso pelos verbos dos "
-                "resultados associados às atividades selecionadas. ai_mode deve ser "
-                "exatamente o modo comum dos resultados e atividades associados. Em "
+                "resultados associados. ai_mode deve ser exatamente o modo comum desses "
+                "resultados. Em "
                 "AI-off exige desempenho autónomo; em AI-on mantém o estudante responsável "
                 "pelo produto; em on-AI avalia o processo e o julgamento sobre a IA."
             )
         if stage == "teaching_activities":
             instructions += (
-                " Em activity e practice torna explícitas ações através das quais o "
-                "estudante pratica os verbos dos resultados indicados em outcome_ids. "
-                "ai_mode deve ser exatamente o modo comum desses resultados. Em AI-off "
+                " assessment_ids nunca pode estar vazio e usa apenas os IDs indicados em "
+                "teaching_link_rules. O conjunto das atividades deve cobrir todas as tarefas. "
+                "Em activity e practice torna explícitas ações através das quais o estudante "
+                "se prepara para produzir as evidências e praticar os verbos dos resultados "
+                "associados às tarefas. Não devolvas outcome_ids: o sistema deriva-os de "
+                "assessment_ids. ai_mode deve ser exatamente o modo comum desses resultados. Em AI-off "
                 "preserva prática autónoma; em AI-on promove colaboração significativa "
                 "com IA; em on-AI trabalha prompting, orquestração, revisão crítica ou "
                 "decisão fundamentada sobre a utilização da IA."
@@ -3526,8 +3526,8 @@ class AgenticPedagogicalTeam:
 
     DEFAULT_CRITIC_STAGES = (
         "learning_outcomes",
-        "teaching_activities",
         "assessment_activities",
+        "teaching_activities",
     )
 
     def __init__(

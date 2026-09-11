@@ -73,6 +73,7 @@ from prism.manual_editing import (
     new_table_row,
     presentation_image_label,
     proposal_review_changes,
+    synchronize_derived_teaching_fields,
     synchronize_inherited_ai_mode,
     value_at_path,
 )
@@ -3265,6 +3266,8 @@ class AGIRSoloInterface:
         def update_value(event: Any) -> None:
             try:
                 apply_editor_field_value(target, field, event.value)
+                if field.key == "assessment_ids" and "outcome_ids" in target:
+                    synchronize_derived_teaching_fields(self.state or {}, target)
                 if field.kind == "linked_outcomes" and "ai_mode" in target:
                     synchronize_inherited_ai_mode(self.state or {}, target)
                 if field.key == "taxonomy_level" and "action_verb" in target:
@@ -3294,11 +3297,14 @@ class AGIRSoloInterface:
                 self.state or {}, target, field
             )
         if selection_options is not None:
-            multiple = field.kind in {"csv", "content_ids", "linked_outcomes"}
+            multiple = field.kind in {
+                "csv", "content_ids", "linked_outcomes", "derived_outcomes"
+            }
             is_compact_reference = field.key in {
                 "outcome_id",
                 "outcome_ids",
                 "component_ids",
+                "assessment_ids",
             }
             selection_value = editor_reference_value(target, field)
             allowed_values = set(selection_options)
@@ -3331,7 +3337,7 @@ class AGIRSoloInterface:
                 )
             if not selection_options:
                 control.props("disable")
-            if field.kind == "inherited_ai_mode":
+            if field.kind in {"inherited_ai_mode", "derived_outcomes"}:
                 control.props("disable").mark("inherited-ai-mode")
         elif field.kind == "integer":
             control = ui.number(label, value=value, precision=0)

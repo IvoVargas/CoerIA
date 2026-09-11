@@ -97,10 +97,10 @@ etapas navegáveis e editáveis:
    `Conhecimentos`, `Aptidões` ou `Atitudes`, um único verbo de ação principal,
    modo de IA e pressupostos contextuais opcionais;
 3. estruturação de conteúdos associados aos resultados formulados;
-4. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e feedback;
-5. autoria de tarefas e critérios de avaliação, com finalidade formativa ou
-   sumativa e associação explícita às atividades de ensino-aprendizagem e aos
-   resultados avaliados diretamente;
+4. autoria de tarefas e critérios de avaliação, com finalidade formativa ou
+   sumativa e associação direta aos resultados avaliados;
+5. autoria de atividades de ensino-aprendizagem com prática, acompanhamento e
+   feedback, associadas às tarefas de avaliação que preparam;
 6. planeamento das aulas, registando duração, tipo de sessão, atividades de
    ensino-aprendizagem ou tarefas de avaliação opcionais e um texto opcional;
 7. geração dos recursos educativos selecionados;
@@ -109,7 +109,10 @@ etapas navegáveis e editáveis:
 O alinhamento segue Biggs e Tang: os resultados de aprendizagem são o elemento
 central; as atividades de ensino-aprendizagem e as tarefas de avaliação devem
 mobilizar as ações expressas nesses resultados, e os critérios de avaliação
-devem permitir julgar em que medida o desempenho esperado foi atingido. O
+devem permitir julgar em que medida o desempenho esperado foi atingido. A ordem
+de autoria segue o *backward design* de Wiggins e McTighe: resultados pretendidos,
+evidências aceitáveis nas tarefas de avaliação e, depois, experiências de
+ensino-aprendizagem que preparam essas evidências. O
 enquadramento de Brabrand e Denny acrescenta o **AI-mode** como dimensão
 ortogonal à taxonomia: `AI-off` representa aprendizagem sem IA, `AI-on` usa a IA
 como meio para uma tarefa disciplinar e `on-AI` torna a utilização, supervisão ou
@@ -141,13 +144,14 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   distinção entre *Teaching/Learning Activities* e *Assessment Tasks* usada por
   Biggs e Tang. Atribuir estes IDs automaticamente, apresentá-los como campos não
   editáveis e conservar as respetivas referências nas relações estruturadas.
-  Em cada tarefa `TA<n>`, permitir selecionar uma ou mais atividades `AE<n>` e
-  um ou mais resultados `RA<n>`, guardando explicitamente as relações `TA ↔ AE`
-  e `TA ↔ RA` na mesma linha.
-- Permitir três tipos de identificador apenas na tabela das tarefas de avaliação
-  (`TA`, `AE` e `RA`), por ser o local onde se explicita o triângulo de
-  alinhamento. Limitar as restantes tabelas de autoria a dois tipos: `AE ↔ RA`
-  nas atividades de ensino-aprendizagem e `AE/TA` no planeamento das aulas.
+  Em cada tarefa `TA<n>`, permitir selecionar um ou mais resultados `RA<n>`,
+  guardando explicitamente a relação `TA ↔ RA`. Em cada atividade `AE<n>`,
+  permitir selecionar uma ou mais tarefas `TA<n>`, guardando explicitamente a
+  relação `AE ↔ TA` e derivando os `RA<n>` abrangidos sem os tornar editáveis.
+- Apresentar na tabela das atividades o respetivo `AE`, as tarefas `TA`
+  selecionadas e os `RA` derivados, deixando claro quais relações são decisões
+  do docente e quais são apenas uma projeção informativa da cadeia. No
+  planeamento das aulas, limitar a seleção aos componentes `AE/TA`.
 - No planeamento das aulas, permitir uma ou mais sessões com duração em minutos,
   tipo de sessão, seleção opcional de componentes `AE<n>` ou `TA<n>` e texto
   opcional. Não exigir que todas as aulas tenham componentes nem que o conjunto
@@ -158,7 +162,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Usar a informação de referência, as fontes e os objetivos gerais opcionais
   fornecidos pelo docente como contexto de entrada para formular os resultados,
   sem tratar o texto de base como uma versão formal dos conteúdos curriculares.
-- Na segunda etapa, associar cada conteúdo a um ou mais resultados formulados; o
+- Na terceira etapa, associar cada conteúdo a um ou mais resultados formulados; o
   conjunto das associações deve cobrir exatamente todos os resultados, sem linhas
   desligadas nem IDs desconhecidos.
 - Registar os objetivos gerais nos dados iniciais, num único campo opcional de
@@ -180,9 +184,9 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   propostas de IA e à validação determinística.
 - Associar a cada resultado um modo controlado `AI-off`, `AI-on` ou `on-AI`,
   apresentando `AI-off` por defeito.
-- Herdar e apresentar o modo nas atividades de ensino-aprendizagem e tarefas de
-  avaliação, recalculando os valores já guardados sempre que mudar o modo de um
-  resultado ou a respetiva relação. Se uma linha associar resultados com modos
+- Herdar e apresentar o modo nas tarefas de avaliação e atividades de
+  ensino-aprendizagem, recalculando os valores já guardados sempre que mudar o
+  modo de um resultado ou uma relação `RA ↔ TA`/`TA ↔ AE`. Se uma linha associar resultados com modos
   diferentes, exigir a sua divisão em linhas pedagogicamente inequívocas. Não
   permitir que uma aula combine componentes `AE`/`TA` de modos diferentes.
 - Usar um único verbo de ação principal pertencente ao vocabulário controlado do nível declarado; infinitivos subordinados podem ser usados em complementos, mas não como ações principais coordenadas.
@@ -195,9 +199,10 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
 - Não estabelecer uma equivalência rígida entre níveis SOLO e Bloom.
 - Permitir relações muitos-para-muitos entre conteúdos, resultados, avaliações
   e atividades de ensino-aprendizagem.
-- Confirmar que cada tarefa `TA<n>` referencia atividades `AE<n>` existentes,
-  que cada resultado tem uma ligação direta a pelo menos uma tarefa e que cada
-  `RA ↔ TA` partilha uma atividade no percurso `RA ↔ AE ↔ TA`.
+- Confirmar que cada resultado tem uma ligação direta a pelo menos uma tarefa
+  `TA<n>`, que cada atividade `AE<n>` referencia tarefas existentes e que todas
+  as tarefas são preparadas por pelo menos uma atividade. Derivar `RA ↔ AE`
+  exclusivamente do percurso explícito `RA ↔ TA ↔ AE`.
 - Classificar cada avaliação exclusivamente como `Formativa` ou `Sumativa`;
   é válido existir apenas avaliação sumativa.
 
@@ -265,7 +270,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   artefactos anteriores. A proposta só se torna uma nova versão depois da
   revisão e aplicação explícitas pelo docente.
 - No planeamento das aulas, fornecer à IA um contexto explícito com conteúdos,
-  cadeias `RA → AE → TA`, descrições dos componentes, horas de contacto e
+  cadeias `RA → TA → AE`, descrições dos componentes, horas de contacto e
   rascunho atual. Exigir que a proposta completa distribua todos os componentes,
   totalize as horas de contacto e explicite em cada aula o foco curricular; o
   texto permanece opcional na edição manual.
@@ -316,7 +321,7 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   controlos bloqueantes de completude e alinhamento para a verificação global.
 - Confirmar cobertura exata e sem duplicados dos resultados de aprendizagem.
 - Confirmar coerência entre a taxonomia escolhida, nível, verbo, atividades e avaliação.
-- Confirmar deterministicamente a coerência do AI-mode na cadeia `RA ↔ AE ↔ TA`,
+- Confirmar deterministicamente a coerência do AI-mode na cadeia `RA ↔ TA ↔ AE`,
   sem impedir a navegação ou a gravação de rascunhos antes da verificação global.
 - Detetar resultados com mais de um verbo de ação.
 - Confirmar deterministicamente a compatibilidade entre o nível e o verbo
@@ -402,7 +407,7 @@ Gerar efetivamente cada tipo selecionado pelo docente:
 
 - plano de aulas, derivado deterministicamente do planeamento aprovado;
 - grelha de avaliação, derivada deterministicamente das tarefas e ligações
-  `RA ↔ AE ↔ TA` aprovadas;
+  `RA ↔ TA ↔ AE` aprovadas;
 - apresentação PowerPoint geral da unidade curricular;
 - apresentações PowerPoint das aulas explicitamente selecionadas;
 - ficha de aula;

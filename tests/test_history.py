@@ -21,6 +21,7 @@ class HistoryViewTests(unittest.TestCase):
         state = create_session(course, agent=agent)
         state = review_current_stage(state, "approve", agent=agent)
         state = review_current_stage(state, "approve", agent=agent)
+        state = review_current_stage(state, "approve", agent=agent)
         approved_state = deepcopy(state)
         state = review_current_stage(
             state,

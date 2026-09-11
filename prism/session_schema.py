@@ -7,7 +7,7 @@ from typing import Any
 from .curriculum import canonical_outcome_type
 
 
-SESSION_SCHEMA_VERSION = 33
+SESSION_SCHEMA_VERSION = 34
 
 
 def _normalize_outcome_types(value: Any) -> None:

@@ -73,7 +73,7 @@ from .manual_editing import (
     apply_proposal_review_changes,
     proposal_review_changes,
 )
-from .relationships import derive_alignment_rows
+from .relationships import derive_alignment_rows, synchronize_teaching_outcomes
 from .session_schema import SESSION_SCHEMA_VERSION
 from .validation_targets import resolve_validation_target
 
@@ -190,8 +190,8 @@ def ai_review_finding_is_deterministic(finding: dict[str, Any]) -> bool:
 STAGE_ORDER = (
     "learning_outcomes",
     "curriculum_analysis",
-    "teaching_activities",
     "assessment_activities",
+    "teaching_activities",
     "pedagogical_design",
     "resources",
     "final_validation",
@@ -388,15 +388,8 @@ def propose_assessment_activities(state: CoerIAState) -> dict[str, Any]:
                 else []
             ),
         ]
-        teaching_activity_ids = [
-            str(activity.get("id", ""))
-            for activity in state.get("teaching_activities", [])
-            if str(activity.get("id", "")).strip()
-            and set(activity.get("outcome_ids", [])) & set(outcome_ids)
-        ]
         assessments.append({
             "id": f"TA{index + 1}",
-            "teaching_activity_ids": teaching_activity_ids,
             "outcome_ids": outcome_ids,
             "work_type": "Trabalho individual" if index % 2 == 0 else "Trabalho de grupo",
             "assessment_purpose": ASSESSMENT_PURPOSES[index % len(ASSESSMENT_PURPOSES)],
@@ -471,16 +464,17 @@ def propose_teaching_activities(state: CoerIAState) -> dict[str, Any]:
     activities = [
         {
             "id": f"AE{index + 1}",
-            "outcome_ids": [outcome["id"]],
+            "assessment_ids": [assessment["id"]],
+            "outcome_ids": list(assessment.get("outcome_ids", [])),
             "learning_context": LEARNING_CONTEXTS[index % len(LEARNING_CONTEXTS)],
-            "ai_mode": outcome.get("ai_mode", AI_MODE_OFF),
-            "activity": f"Exploração orientada e discussão sobre {outcome['statement'].split(' de ', 1)[-1]}",
+            "ai_mode": assessment.get("ai_mode", AI_MODE_OFF),
+            "activity": f"Exploração orientada e preparação para {assessment['activity']}",
             "method": "Aprendizagem ativa com feedback formativo.",
-            "practice": "Aplicação orientada do resultado em tarefa progressiva.",
+            "practice": "Aplicação orientada dos resultados avaliados em tarefa progressiva.",
             "support": "Acompanhamento do docente com questões orientadoras.",
             "feedback_strategy": "Feedback formativo específico antes da avaliação sumativa.",
         }
-        for index, outcome in enumerate(state["learning_outcomes"])
+        for index, assessment in enumerate(state["assessment_activities"])
     ]
     return {
         "teaching_activities": activities,
@@ -894,6 +888,7 @@ def ensure_manual_artifacts(state: CoerIAState) -> CoerIAState:
     state["learning_outcome_assumptions"] = _clean_learning_outcome_assumptions(
         state.get("learning_outcome_assumptions", [])
     )
+    synchronize_teaching_outcomes(state)
     synchronize_state_ai_modes(state)
     state.setdefault("ai_proposals", [])
     state.setdefault("ai_reviews", {})
@@ -1227,11 +1222,6 @@ def save_manual_draft(
         if target_stage == "teaching_activities" and any(
             before != after for before, after in id_mapping.items()
         ):
-            updated["assessment_activities"] = _remap_list_references(
-                updated.get("assessment_activities", []),
-                "teaching_activity_ids",
-                id_mapping,
-            )
             updated["pedagogical_design"] = _remap_list_references(
                 updated.get("pedagogical_design", {}),
                 "component_ids",
@@ -1240,6 +1230,11 @@ def save_manual_draft(
         elif target_stage == "assessment_activities" and any(
             before != after for before, after in id_mapping.items()
         ):
+            updated["teaching_activities"] = _remap_list_references(
+                updated.get("teaching_activities", []),
+                "assessment_ids",
+                id_mapping,
+            )
             updated["pedagogical_design"] = _remap_list_references(
                 updated.get("pedagogical_design", {}),
                 "component_ids",
@@ -1267,6 +1262,7 @@ def save_manual_draft(
     if target_stage == "learning_outcomes":
         updated["learning_outcome_assumptions"] = edited_assumptions
     updated[target_stage] = edited_artifact
+    synchronize_teaching_outcomes(updated)
     synchronize_state_ai_modes(updated)
     edited_artifact = deepcopy(updated[target_stage])
     updated.setdefault("feedback", {})[target_stage] = clean_reason
@@ -1996,11 +1992,17 @@ def build_final_validation(state: CoerIAState) -> dict[str, Any]:
     )
     first_alignment_problem = next(
         (
-            str(row.get("outcome_id", "")).strip()
+            row
             for row in alignment_rows
             if row.get("status") != "Coerente"
         ),
-        "",
+        None,
+    )
+    alignment_target_stage = (
+        "assessment_activities"
+        if first_alignment_problem
+        and not first_alignment_problem.get("assessment_ids")
+        else "teaching_activities"
     )
     selected_taxonomy = validate_taxonomy_choice(
         state.get("course", {}).get("taxonomy_type", "SOLO")
@@ -2055,12 +2057,12 @@ def build_final_validation(state: CoerIAState) -> dict[str, Any]:
             "label": "Estrutura e alinhamento pedagógico",
             "passed": alignment_ok,
             "detail": (
-                "Cada resultado deve estar ligado a conteúdo, atividade de "
-                "ensino-aprendizagem e tarefa de avaliação; a tarefa deve indicar "
-                "diretamente o resultado e uma atividade que o desenvolva."
+                "Cada resultado deve estar ligado a conteúdo e diretamente a uma tarefa "
+                "de avaliação; cada tarefa deve ser preparada por pelo menos uma atividade "
+                "de ensino-aprendizagem."
             ),
-            "target_stage": "assessment_activities",
-            "target_key": first_alignment_problem or "__stage__",
+            "target_stage": alignment_target_stage,
+            "target_key": "__stage__",
         },
         {
             "id": "taxonomy",
@@ -2078,7 +2080,7 @@ def build_final_validation(state: CoerIAState) -> dict[str, Any]:
                 "; ".join(ai_mode_issues)
                 if ai_mode_issues
                 else (
-                    "A cadeia RA–AE–TA está incompleta; os modos de IA não podem "
+                    "A cadeia RA–TA–AE está incompleta; os modos de IA não podem "
                     "ser avaliados."
                 )
                 if not ai_mode_chain_complete
@@ -2973,6 +2975,11 @@ def apply_manual_edit(
         raise ValueError("Não foram detetadas alterações para guardar.")
 
     updated = deepcopy(state)
+    if target_stage == "teaching_activities":
+        synchronize_teaching_outcomes(updated, edited_artifact)
+        updated[target_stage] = deepcopy(edited_artifact)
+        synchronize_state_ai_modes(updated)
+        edited_artifact = deepcopy(updated[target_stage])
     if target_stage == "resources":
         validate_artifact(target_stage, edited_artifact, updated)
         edited_artifact = attach_quality_report(updated, edited_artifact)

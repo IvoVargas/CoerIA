@@ -80,11 +80,14 @@ def lesson_scope(state: dict[str, Any], lesson_number: int) -> dict[str, Any]:
         component_id for component_id in component_ids if component_id in teaching
     ]
     for component_id in component_ids:
-        task = assessments.get(component_id, {})
-        for activity_id in task.get("teaching_activity_ids", []):
-            clean_id = str(activity_id).strip()
-            if clean_id in teaching and clean_id not in teaching_ids:
-                teaching_ids.append(clean_id)
+        if component_id not in assessments:
+            continue
+        for activity_id, activity in teaching.items():
+            if (
+                component_id in activity.get("assessment_ids", [])
+                and activity_id not in teaching_ids
+            ):
+                teaching_ids.append(activity_id)
     outcome_ids: list[str] = []
     for component_id in [*teaching_ids, *component_ids]:
         component = teaching.get(component_id) or assessments.get(component_id) or {}
@@ -164,9 +167,9 @@ def assessment_scope(state: dict[str, Any], task_id: str) -> dict[str, Any]:
             if outcome_id in outcomes
         ],
         "teaching_activities": [
-            deepcopy(teaching[activity_id])
-            for activity_id in task.get("teaching_activity_ids", [])
-            if activity_id in teaching
+            deepcopy(activity)
+            for activity in teaching.values()
+            if clean_id in activity.get("assessment_ids", [])
         ],
     }
 
@@ -243,14 +246,21 @@ def build_lesson_plan(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_assessment_grid(state: dict[str, Any]) -> dict[str, Any]:
-    """Materializa a relação RA↔AE↔TA num documento de apoio ao docente."""
+    """Materializa a relação RA↔TA↔AE num documento de apoio ao docente."""
 
     return {
         "rows": [
             {
                 "assessment_task_id": str(item.get("id", "")),
                 "teaching_activity_ids": list(
-                    item.get("teaching_activity_ids", []) or []
+                    dict.fromkeys(
+                        str(activity.get("id", "")).strip()
+                        for activity in state.get("teaching_activities", [])
+                        if isinstance(activity, dict)
+                        and str(item.get("id", "")).strip()
+                        in activity.get("assessment_ids", [])
+                        and str(activity.get("id", "")).strip()
+                    )
                 ),
                 "outcome_ids": list(item.get("outcome_ids", []) or []),
                 "assessment_purpose": str(item.get("assessment_purpose", "")),

@@ -22,6 +22,7 @@ from .curriculum import (
     validate_taxonomy_choice,
 )
 from .models import QUESTION_TYPES
+from .relationships import synchronize_teaching_outcomes
 from .validation_targets import STAGE_ROOT_TARGET
 
 
@@ -124,11 +125,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (),
                 (
                     _field("id", "ID", "assessment_task_id"),
-                    _field(
-                        "teaching_activity_ids",
-                        "Atividades de ensino-aprendizagem",
-                        "csv",
-                    ),
                     _field("outcome_ids", "Resultados", "linked_outcomes"),
                     _field("ai_mode", "Modo de IA", "inherited_ai_mode"),
                     _field("work_type", "Modalidade"),
@@ -139,7 +135,6 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 ),
                 {
                     "id": "",
-                    "teaching_activity_ids": [],
                     "outcome_ids": [],
                     "ai_mode": AI_MODE_OFF,
                     "work_type": "",
@@ -179,7 +174,8 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 (),
                 (
                     _field("id", "ID", "teaching_activity_id"),
-                    _field("outcome_ids", "Resultados", "linked_outcomes"),
+                    _field("assessment_ids", "Tarefas de avaliação", "csv"),
+                    _field("outcome_ids", "Resultados derivados", "derived_outcomes"),
                     _field("ai_mode", "Modo de IA", "inherited_ai_mode"),
                     _field("learning_context", "Contexto"),
                     _field("activity", "Atividade", "long"),
@@ -189,6 +185,7 @@ EDITOR_LAYOUTS: dict[str, EditorLayout] = {
                 ),
                 {
                     "id": "",
+                    "assessment_ids": [],
                     "outcome_ids": [],
                     "ai_mode": AI_MODE_OFF,
                     "learning_context": "Presencial",
@@ -539,7 +536,10 @@ def proposal_review_changes(
                 or before_index + 1
             )
             for field in table.fields:
-                if field.key == "id":
+                if field.key == "id" or field.kind in {
+                    "inherited_ai_mode",
+                    "derived_outcomes",
+                }:
                     continue
                 before = deepcopy(before_row.get(field.key))
                 after = deepcopy(after_row.get(field.key))
@@ -716,7 +716,7 @@ def editor_field_value(target: dict[str, Any], field: FieldSpec) -> Any:
             for item in target.get(field.key, [])
             if item.get("content_id")
         )
-    if field.kind == "linked_outcomes":
+    if field.kind in {"linked_outcomes", "derived_outcomes"}:
         identifiers = target.get(field.key, [])
         return ", ".join(str(item) for item in identifiers if item)
     return format_editor_value(target.get(field.key), field.kind)
@@ -728,7 +728,6 @@ REFERENCE_FIELDS = {
     "outcome_id": ("learning_outcomes", None, "statement"),
     "outcome_ids": ("learning_outcomes", None, "statement"),
     "assessment_ids": ("assessment_activities", None, "activity"),
-    "teaching_activity_ids": ("teaching_activities", None, "activity"),
 }
 
 
@@ -1052,7 +1051,7 @@ def assistance_scope_options(
                     if (
                         field.key in row
                         and field.key != "id"
-                        and field.kind != "inherited_ai_mode"
+                        and field.kind not in {"inherited_ai_mode", "derived_outcomes"}
                         and field.key not in PRESENTATION_INTERNAL_FIELDS
                     ):
                         options.append(
@@ -1214,6 +1213,16 @@ def synchronize_inherited_ai_mode(
     )
 
 
+def synchronize_derived_teaching_fields(
+    state: dict[str, Any],
+    target: dict[str, Any],
+) -> None:
+    """Atualiza os RA e o modo informativo após alterar as tarefas de uma AE."""
+
+    synchronize_teaching_outcomes(state, [target])
+    synchronize_inherited_ai_mode(state, target)
+
+
 def editor_taxonomy_level_options(
     state: dict[str, Any],
     field: FieldSpec,
@@ -1256,7 +1265,7 @@ def editor_reference_value(target: dict[str, Any], field: FieldSpec) -> Any:
             for item in target.get(field.key, [])
             if item.get("content_id")
         ]
-    if field.kind == "linked_outcomes":
+    if field.kind in {"linked_outcomes", "derived_outcomes"}:
         return list(target.get(field.key, []))
     if field.kind == "csv":
         return list(target.get(field.key) or [])
