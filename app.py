@@ -4717,17 +4717,64 @@ class AGIRSoloInterface:
                             value=resource_type in selected_resources,
                         )
 
-                ui.label("Recursos por aula").classes("font-semibold mt-3")
-                resource_checks[RESOURCE_LESSON_PRESENTATIONS] = ui.checkbox(
-                    "Apresentações PowerPoint das aulas",
-                    value=RESOURCE_LESSON_PRESENTATIONS in selected_resources,
+                ui.label("Apresentações PowerPoint das aulas").classes(
+                    "font-semibold mt-3"
                 )
                 ui.label(
                     "Selecione as aulas para as quais pretende produzir uma apresentação."
                 ).classes("text-xs muted")
                 lesson_scope_checks: dict[int, Any] = {}
+                lessons = state.get("pedagogical_design", {}).get("lessons", [])
+                lesson_numbers = list(range(1, len(lessons) + 1))
+                selected_lesson_count = len(
+                    set(lesson_numbers).intersection(selected_lesson_numbers)
+                )
+                initial_lesson_master_value: bool | None = (
+                    True
+                    if lesson_numbers and selected_lesson_count == len(lesson_numbers)
+                    else None
+                    if selected_lesson_count
+                    else False
+                )
+                lesson_master_sync = {"active": False}
+
+                def select_all_lessons(event: Any) -> None:
+                    if lesson_master_sync["active"]:
+                        return
+                    lesson_master_sync["active"] = True
+                    try:
+                        select = event.value is not False
+                        for checkbox in lesson_scope_checks.values():
+                            checkbox.set_value(select)
+                    finally:
+                        lesson_master_sync["active"] = False
+
+                lesson_master = ui.checkbox(
+                    "Selecionar todas as aulas",
+                    value=initial_lesson_master_value,
+                    on_change=select_all_lessons,
+                ).mark("select-all-lesson-presentations")
+                if not lessons:
+                    lesson_master.disable()
+
+                def sync_lesson_master(_event: Any) -> None:
+                    if lesson_master_sync["active"]:
+                        return
+                    values = [bool(item.value) for item in lesson_scope_checks.values()]
+                    aggregate: bool | None = (
+                        True
+                        if values and all(values)
+                        else None
+                        if any(values)
+                        else False
+                    )
+                    lesson_master_sync["active"] = True
+                    try:
+                        lesson_master.set_value(aggregate)
+                    finally:
+                        lesson_master_sync["active"] = False
+
                 with ui.column().classes("soft-surface w-full gap-1 p-3"):
-                    lessons = state.get("pedagogical_design", {}).get("lessons", [])
                     if not lessons:
                         ui.label("Ainda não existem aulas planeadas.").classes(
                             "text-sm muted"
@@ -4742,19 +4789,69 @@ class AGIRSoloInterface:
                         lesson_scope_checks[lesson_number] = ui.checkbox(
                             f"Aula {lesson_number} — {detail}",
                             value=lesson_number in selected_lesson_numbers,
-                        )
+                            on_change=sync_lesson_master,
+                        ).mark(f"resource-lesson-{lesson_number}")
 
-                ui.label("Recursos de avaliação").classes("font-semibold mt-3")
-                resource_checks[RESOURCE_TEST] = ui.checkbox(
-                    "Testes por tarefa de avaliação",
-                    value=RESOURCE_TEST in selected_resources,
+                ui.label("Testes por tarefa de avaliação").classes(
+                    "font-semibold mt-3"
                 )
                 ui.label(
                     "Cada tarefa selecionada origina um teste independente, limitado aos seus resultados."
                 ).classes("text-xs muted")
                 test_scope_checks: dict[str, Any] = {}
+                tasks = state.get("assessment_activities", [])
+                task_ids = [
+                    str(task.get("id", "")).strip()
+                    for task in tasks
+                    if str(task.get("id", "")).strip()
+                ]
+                selected_test_count = len(set(task_ids).intersection(selected_test_tasks))
+                initial_test_master_value: bool | None = (
+                    True
+                    if task_ids and selected_test_count == len(task_ids)
+                    else None
+                    if selected_test_count
+                    else False
+                )
+                test_master_sync = {"active": False}
+
+                def select_all_tests(event: Any) -> None:
+                    if test_master_sync["active"]:
+                        return
+                    test_master_sync["active"] = True
+                    try:
+                        select = event.value is not False
+                        for checkbox in test_scope_checks.values():
+                            checkbox.set_value(select)
+                    finally:
+                        test_master_sync["active"] = False
+
+                test_master = ui.checkbox(
+                    "Selecionar todas as tarefas",
+                    value=initial_test_master_value,
+                    on_change=select_all_tests,
+                ).mark("select-all-tests")
+                if not task_ids:
+                    test_master.disable()
+
+                def sync_test_master(_event: Any) -> None:
+                    if test_master_sync["active"]:
+                        return
+                    values = [bool(item.value) for item in test_scope_checks.values()]
+                    aggregate: bool | None = (
+                        True
+                        if values and all(values)
+                        else None
+                        if any(values)
+                        else False
+                    )
+                    test_master_sync["active"] = True
+                    try:
+                        test_master.set_value(aggregate)
+                    finally:
+                        test_master_sync["active"] = False
+
                 with ui.column().classes("soft-surface w-full gap-1 p-3"):
-                    tasks = state.get("assessment_activities", [])
                     if not tasks:
                         ui.label("Ainda não existem tarefas de avaliação.").classes(
                             "text-sm muted"
@@ -4770,7 +4867,8 @@ class AGIRSoloInterface:
                             f"{task_id} — {purpose} · {outcomes}"
                             + (f" — {activity[:90]}" if activity else ""),
                             value=task_id in selected_test_tasks,
-                        )
+                            on_change=sync_test_master,
+                        ).mark(f"resource-test-{task_id}")
 
                 async def save_resource_settings() -> None:
                     selected = [
@@ -4778,6 +4876,10 @@ class AGIRSoloInterface:
                         for name, checkbox in resource_checks.items()
                         if checkbox.value
                     ]
+                    if any(checkbox.value for checkbox in lesson_scope_checks.values()):
+                        selected.append(RESOURCE_LESSON_PRESENTATIONS)
+                    if any(checkbox.value for checkbox in test_scope_checks.values()):
+                        selected.append(RESOURCE_TEST)
                     scopes = {
                         "lesson_presentations": [
                             number

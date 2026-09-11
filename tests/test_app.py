@@ -11,6 +11,7 @@ import app
 from prism.application_service import ApplicationService
 from prism.models import (
     CourseInput,
+    RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
     RESOURCE_TEST,
@@ -150,7 +151,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.106 · SQLite")
+    await user.should_see("CoerIA v0.3.107 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -1718,6 +1719,94 @@ async def test_manual_first_workspace_renders_a_pending_ai_proposal(
     )
     assert interfaces[-1].state["ai_proposals"][-1]["status"] == "partially_accepted"
     assert len(interfaces[-1].state["versions"]["learning_outcomes"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_resource_scope_masters_select_all_and_derive_resource_types(
+    user: User,
+    tmp_path: Path,
+) -> None:
+    state = create_session(
+        CourseInput.create(
+            "Programação",
+            "Algoritmos, variáveis, estruturas de controlo, funções e testes.",
+        )
+    )
+    state["pedagogical_design"] = {
+        "strategy": "Duas aulas articuladas.",
+        "lessons": [
+            {
+                "duration_minutes": 60,
+                "session_type": "Teórica",
+                "activity_ids": [],
+                "assessment_ids": [],
+                "notes": "Introdução.",
+            },
+            {
+                "duration_minutes": 60,
+                "session_type": "Prática ou laboratorial",
+                "activity_ids": [],
+                "assessment_ids": [],
+                "notes": "Aplicação.",
+            },
+        ],
+    }
+    state["assessment_activities"] = [
+        {
+            "id": "TA1",
+            "assessment_purpose": "Formativa",
+            "outcome_ids": ["RA1"],
+            "activity": "Exercício curto.",
+        },
+        {
+            "id": "TA2",
+            "assessment_purpose": "Sumativa",
+            "outcome_ids": ["RA2"],
+            "activity": "Projeto final.",
+        },
+    ]
+    state = navigate_to_stage(state, "resources")
+    interfaces: list[app.AGIRSoloInterface] = []
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "resource-scopes.db"))
+
+    @ui.page("/_test_resource_scope_masters")
+    def resource_scope_masters_page():
+        interface = app.AGIRSoloInterface(service=service)
+        interface.state = state
+        interface.show_workspace()
+        interfaces.append(interface)
+
+    await user.open("/_test_resource_scope_masters")
+
+    lesson_master = next(
+        iter(user.find(marker="select-all-lesson-presentations").elements)
+    )
+    lesson_one = next(iter(user.find(marker="resource-lesson-1").elements))
+    lesson_two = next(iter(user.find(marker="resource-lesson-2").elements))
+    test_master = next(iter(user.find(marker="select-all-tests").elements))
+    test_one = next(iter(user.find(marker="resource-test-TA1").elements))
+    test_two = next(iter(user.find(marker="resource-test-TA2").elements))
+
+    lesson_master.set_value(True)
+    assert lesson_one.value is True
+    assert lesson_two.value is True
+    lesson_two.set_value(False)
+    assert lesson_master.value is None
+
+    test_master.set_value(True)
+    assert test_one.value is True
+    assert test_two.value is True
+
+    user.find("Guardar seleção de recursos").click()
+    await user.should_see("Seleção de recursos guardada sem executar a IA.")
+
+    saved = interfaces[-1].state
+    assert saved["resource_scopes"] == {
+        "lesson_presentations": [1],
+        "tests": ["TA1", "TA2"],
+    }
+    assert RESOURCE_LESSON_PRESENTATIONS in saved["resource_types"]
+    assert RESOURCE_TEST in saved["resource_types"]
 
 
 @pytest.mark.asyncio
