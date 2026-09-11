@@ -50,6 +50,7 @@ from .curriculum import (
     validate_taxonomy_choice,
 )
 from .models import (
+    QUESTION_TYPE_MULTIPLE_CHOICE,
     QUESTION_TYPES,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
@@ -64,6 +65,7 @@ from .providers import (
 )
 from .quality import (
     PRESENTATION_ASSESSMENT_TITLE,
+    displayed_test_option,
     evaluate_quality,
     presentation_assessment_overview_issues,
     presentation_visual_issues,
@@ -245,8 +247,9 @@ RESOURCE_REQUIREMENTS = {
         "Cada questão contém id, outcome_id, prompt, question_type, options, points e "
         "answer_key. question_type usa exclusivamente Escolha múltipla, Resposta curta, "
         "Resposta aberta ou Resposta estruturada. Numa questão de Escolha múltipla, "
-        "options contém 3 a 5 respostas não vazias e answer_key identifica a opção "
-        "ou as opções corretas; nos restantes tipos, options é uma lista vazia. O conjunto cobre "
+        "options contém 3 a 5 respostas não vazias e answer_key contém apenas a letra "
+        "ou as letras das opções corretas (por exemplo, B ou A, C), sem explicação; "
+        "nos restantes tipos, options é uma lista vazia. O conjunto cobre "
         "todos os resultados e total_points é a soma exata dos pontos."
     ),
     RESOURCE_PRACTICAL: (
@@ -1425,6 +1428,52 @@ def _expand_scoped_resource_payload(
     return artifact
 
 
+def _canonical_multiple_choice_answer_key(
+    value: Any,
+    options: list[str],
+) -> str:
+    """Converte formas textuais inequívocas da chave para letras das opções."""
+
+    raw = str(value or "").strip()
+    if not raw or not options:
+        return raw
+    last_letter = chr(ord("A") + len(options) - 1)
+    without_label = re.sub(
+        r"^(?:opç(?:ão|ões)|respostas?(?: corretas?)?)\s*[:\-]?\s*",
+        "",
+        raw,
+        count=1,
+        flags=re.IGNORECASE,
+    ).strip()
+    letter_tokens = [
+        token.strip().strip(".):- ").upper()
+        for token in re.split(r"[,;/]+|\be\b", without_label, flags=re.IGNORECASE)
+        if token.strip()
+    ]
+    if letter_tokens and all(
+        len(token) == 1 and "A" <= token <= last_letter
+        for token in letter_tokens
+    ):
+        return ", ".join(dict.fromkeys(letter_tokens))
+
+    normalized_options = [option.casefold().strip() for option in options]
+    exact_value = without_label.casefold().strip().rstrip(".")
+    for index, option in enumerate(normalized_options):
+        if exact_value == option.rstrip("."):
+            return chr(ord("A") + index)
+
+    prefixed = re.fullmatch(r"([A-Z])[.):\-]\s*(.+)", without_label, re.IGNORECASE)
+    if prefixed:
+        index = ord(prefixed.group(1).upper()) - ord("A")
+        if (
+            0 <= index < len(normalized_options)
+            and prefixed.group(2).casefold().strip().rstrip(".")
+            == normalized_options[index].rstrip(".")
+        ):
+            return prefixed.group(1).upper()
+    return raw
+
+
 def _canonicalize_resource_test(
     artifact: Any,
     state: dict[str, Any],
@@ -1462,6 +1511,44 @@ def _canonicalize_resource_test(
                 }
             )
             normalized["id"] = canonical_id
+        if normalized.get("question_type") == QUESTION_TYPE_MULTIPLE_CHOICE:
+            received_options = normalized.get("options")
+            if isinstance(received_options, list):
+                canonical_options = [
+                    displayed_test_option(option, option_index)
+                    for option_index, option in enumerate(received_options)
+                ]
+                if canonical_options != received_options:
+                    corrections.append(
+                        {
+                            "question": index,
+                            "changes": {
+                                "options": {
+                                    "received": received_options,
+                                    "used": canonical_options,
+                                }
+                            },
+                        }
+                    )
+                    normalized["options"] = canonical_options
+                received_key = normalized.get("answer_key")
+                canonical_key = _canonical_multiple_choice_answer_key(
+                    received_key,
+                    canonical_options,
+                )
+                if canonical_key != received_key:
+                    corrections.append(
+                        {
+                            "question": index,
+                            "changes": {
+                                "answer_key": {
+                                    "received": received_key,
+                                    "used": canonical_key,
+                                }
+                            },
+                        }
+                    )
+                    normalized["answer_key"] = canonical_key
         points = normalized.get("points")
         if isinstance(points, int):
             total_points += points

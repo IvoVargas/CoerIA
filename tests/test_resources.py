@@ -18,6 +18,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from prism.agents import (
     AgentGenerationError,
     GenerationResult,
+    _canonicalize_resource_test,
     _schema_for,
     validate_artifact,
 )
@@ -55,6 +56,7 @@ from prism.quality import (
     lesson_presentation_repetition_issues,
     lesson_presentation_specificity_issues,
     lesson_presentation_specificity_warnings,
+    test_question_issues as _test_question_issues,
 )
 from prism.resource_catalog import (
     build_assessment_grid,
@@ -302,6 +304,73 @@ class ResourceGenerationTests(unittest.TestCase):
         report = evaluate_quality(state, state["resources"])
         check = next(item for item in report["checks"] if item["id"] == "test_points")
         self.assertEqual(check["status"], "pass")
+
+    def test_test_guardrail_normalizes_prefixed_options_and_answer_key(self) -> None:
+        state = self._resource_state()
+        state["resource_types"] = [RESOURCE_TEST]
+        artifact = {
+            "test": {
+                "title": "Teste TA1",
+                "instructions": "Selecione a resposta correta.",
+                "total_points": 5,
+                "questions": [
+                    {
+                        "id": "pergunta-1",
+                        "outcome_id": "RA1",
+                        "prompt": "Qual é a opção correta?",
+                        "question_type": QUESTION_TYPE_MULTIPLE_CHOICE,
+                        "options": [
+                            "A) Resposta incorreta",
+                            "B. Resposta correta",
+                            "C: Outra resposta",
+                        ],
+                        "points": 5,
+                        "answer_key": "Resposta correta: B",
+                    }
+                ],
+            }
+        }
+
+        normalized, corrections = _canonicalize_resource_test(artifact, state)
+        question = normalized["test"]["questions"][0]
+
+        self.assertEqual(question["id"], "Q1")
+        self.assertEqual(
+            question["options"],
+            ["Resposta incorreta", "Resposta correta", "Outra resposta"],
+        )
+        self.assertEqual(question["answer_key"], "B")
+        self.assertEqual(_test_question_issues(question), [])
+        self.assertTrue(corrections)
+
+    def test_test_guardrail_maps_the_exact_option_text_to_its_letter(self) -> None:
+        state = self._resource_state()
+        state["resource_types"] = [RESOURCE_TEST]
+        artifact = {
+            "test": {
+                "title": "Teste TA1",
+                "instructions": "Selecione a resposta correta.",
+                "total_points": 5,
+                "questions": [
+                    {
+                        "id": "Q1",
+                        "outcome_id": "RA1",
+                        "prompt": "Qual é a opção correta?",
+                        "question_type": QUESTION_TYPE_MULTIPLE_CHOICE,
+                        "options": ["Primeira", "Segunda", "Terceira"],
+                        "points": 5,
+                        "answer_key": "Segunda",
+                    }
+                ],
+            }
+        }
+
+        normalized, _corrections = _canonicalize_resource_test(artifact, state)
+
+        self.assertEqual(
+            normalized["test"]["questions"][0]["answer_key"],
+            "B",
+        )
 
     def test_test_schema_requires_options_and_supported_question_types(self) -> None:
         state = self._resource_state()

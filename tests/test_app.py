@@ -152,7 +152,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.108 · SQLite")
+    await user.should_see("CoerIA v0.3.109 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -1812,6 +1812,12 @@ async def test_resource_scope_masters_select_all_and_derive_resource_types(
     assert RESOURCE_LESSON_PRESENTATIONS in saved["resource_types"]
     assert RESOURCE_TEST in saved["resource_types"]
     assert RESOURCE_LESSON_PLAN in saved["resource_types"]
+    assert user.find(marker="resource-view-tab-lesson-plan").elements
+    assert user.find(marker="resource-view-tab-lesson-presentations").elements
+    assert user.find(marker="resource-view-tab-tests").elements
+    await user.should_not_see(
+        "Ainda não existem recursos selecionados para visualizar."
+    )
 
 
 @pytest.mark.asyncio

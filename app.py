@@ -573,6 +573,7 @@ class AGIRSoloInterface:
         self.busy_phase_started_at: float | None = None
         self.busy_phase_text = ""
         self.busy_updates: SimpleQueue[str] | None = None
+        self.resource_artifact_refresh: Any | None = None
         self._build()
 
     def _show_error(self, error: BaseException | str) -> None:
@@ -4451,6 +4452,24 @@ class AGIRSoloInterface:
                     proposal_button.disable()
                     verify_button.disable()
 
+    def _render_stage_artifact_content(
+        self,
+        state: dict[str, Any],
+        stage: str,
+    ) -> None:
+        artifact_markdown = render_current_artifact(state)
+        artifact_title, separator, artifact_body = artifact_markdown.partition("\n\n")
+        with ui.row().classes("w-full items-center gap-3 flex-wrap"):
+            ui.markdown(artifact_title).classes(
+                "artifact-markdown artifact-heading"
+            )
+        if separator and artifact_body:
+            ui.markdown(artifact_body, extras=["tables"]).classes(
+                "artifact-markdown"
+            )
+        if stage == "resources":
+            self._render_resource_detail_tabs(state, state[stage])
+
     def _render_authoring_view(self, state: dict[str, Any]) -> None:
         stage = state["current_stage"]
         proposal = self._pending_ai_proposal(state, stage)
@@ -4479,21 +4498,17 @@ class AGIRSoloInterface:
                     self._render_inline_manual_editor(stage)
                 elif proposal:
                     self._render_ai_proposal_review(state, stage, proposal)
+                elif stage == "resources":
+                    @ui.refreshable
+                    def render_resource_artifact() -> None:
+                        current_state = self.state or state
+                        self._render_stage_artifact_content(current_state, stage)
+
+                    self.resource_artifact_refresh = render_resource_artifact
+                    render_resource_artifact()
                 else:
-                    artifact_markdown = render_current_artifact(state)
-                    artifact_title, separator, artifact_body = artifact_markdown.partition(
-                        "\n\n"
-                    )
-                    with ui.row().classes("w-full items-center gap-3 flex-wrap"):
-                        ui.markdown(artifact_title).classes(
-                            "artifact-markdown artifact-heading"
-                        )
-                    if separator and artifact_body:
-                        ui.markdown(artifact_body, extras=["tables"]).classes(
-                            "artifact-markdown"
-                        )
-                    if stage == "resources":
-                        self._render_resource_detail_tabs(state, state[stage])
+                    self.resource_artifact_refresh = None
+                    self._render_stage_artifact_content(state, stage)
 
     @staticmethod
     def _structured_focus_plan(
@@ -4908,6 +4923,8 @@ class AGIRSoloInterface:
                             scopes,
                         )
                         autosave_status.set_text("Seleção guardada automaticamente.")
+                        if self.resource_artifact_refresh is not None:
+                            self.resource_artifact_refresh.refresh()
                         self.refresh_sessions()
                     except USER_ERRORS as error:
                         autosave_status.set_text(
