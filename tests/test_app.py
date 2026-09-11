@@ -11,6 +11,7 @@ import app
 from prism.application_service import ApplicationService
 from prism.models import (
     CourseInput,
+    RESOURCE_LESSON_PLAN,
     RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
@@ -151,7 +152,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.107 · SQLite")
+    await user.should_see("CoerIA v0.3.108 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -806,15 +807,15 @@ async def test_manual_first_workspace_allows_free_navigation_and_editing(
     await user.should_not_see("RECURSOS A PREPARAR")
     user.find(marker="manual-stage-resources").click()
     await user.should_see("RECURSOS A PREPARAR", retries=20)
-    await user.should_see("Guardar seleção de recursos", retries=20)
-    resource_settings_button = next(
-        iter(user.find("Guardar seleção de recursos").elements)
+    await user.should_see(
+        "As alterações à seleção são guardadas automaticamente.", retries=20
     )
+    await user.should_not_see("Guardar seleção de recursos")
     create_button = next(iter(user.find(marker="create-ai-version").elements))
     assistance_heading = next(
         iter(user.find(marker="ai-assistance-heading").elements)
     )
-    assert assistance_heading.id < create_button.id < resource_settings_button.id
+    assert assistance_heading.id < create_button.id
     user.find(marker="manual-stage-curriculum_analysis").click()
     await user.should_see("Conteúdos curriculares — versão 1", retries=20)
     await user.should_not_see("Objetivos gerais")
@@ -1765,6 +1766,8 @@ async def test_resource_scope_masters_select_all_and_derive_resource_types(
             "activity": "Projeto final.",
         },
     ]
+    state["resource_types"] = []
+    state["resource_scopes"] = {"lesson_presentations": [], "tests": []}
     state = navigate_to_stage(state, "resources")
     interfaces: list[app.AGIRSoloInterface] = []
     service = ApplicationService(SQLiteSessionStore(tmp_path / "resource-scopes.db"))
@@ -1786,7 +1789,9 @@ async def test_resource_scope_masters_select_all_and_derive_resource_types(
     test_master = next(iter(user.find(marker="select-all-tests").elements))
     test_one = next(iter(user.find(marker="resource-test-TA1").elements))
     test_two = next(iter(user.find(marker="resource-test-TA2").elements))
+    lesson_plan = next(iter(user.find("Plano de aulas").elements))
 
+    lesson_plan.set_value(True)
     lesson_master.set_value(True)
     assert lesson_one.value is True
     assert lesson_two.value is True
@@ -1797,8 +1802,7 @@ async def test_resource_scope_masters_select_all_and_derive_resource_types(
     assert test_one.value is True
     assert test_two.value is True
 
-    user.find("Guardar seleção de recursos").click()
-    await user.should_see("Seleção de recursos guardada sem executar a IA.")
+    await user.should_see("Seleção guardada automaticamente.")
 
     saved = interfaces[-1].state
     assert saved["resource_scopes"] == {
@@ -1807,6 +1811,7 @@ async def test_resource_scope_masters_select_all_and_derive_resource_types(
     }
     assert RESOURCE_LESSON_PRESENTATIONS in saved["resource_types"]
     assert RESOURCE_TEST in saved["resource_types"]
+    assert RESOURCE_LESSON_PLAN in saved["resource_types"]
 
 
 @pytest.mark.asyncio

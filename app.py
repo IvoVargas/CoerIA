@@ -4677,7 +4677,8 @@ class AGIRSoloInterface:
             if stage == "resources":
                 ui.label("RECURSOS A PREPARAR").classes("eyebrow")
                 ui.label(
-                    "Escolha os recursos desta etapa. Guardar a seleção não executa a IA."
+                    "Escolha os recursos desta etapa. A seleção é guardada "
+                    "automaticamente e não executa a IA."
                 ).classes("text-sm muted")
                 if state.get("source_images"):
                     ui.label(
@@ -4870,6 +4871,12 @@ class AGIRSoloInterface:
                             on_change=sync_test_master,
                         ).mark(f"resource-test-{task_id}")
 
+                autosave_status = ui.label(
+                    "As alterações à seleção são guardadas automaticamente."
+                ).classes("text-xs muted")
+                resource_autosave = {"revision": 0}
+                resource_autosave_lock = asyncio.Lock()
+
                 async def save_resource_settings() -> None:
                     selected = [
                         name
@@ -4893,22 +4900,41 @@ class AGIRSoloInterface:
                         ],
                     }
                     try:
-                        self.state, message = await run.io_bound(
+                        autosave_status.set_text("A guardar seleção…")
+                        self.state, _message = await run.io_bound(
                             self.service.update_resource_settings,
                             self.state,
                             selected,
                             scopes,
                         )
-                        self.show_workspace(message)
+                        autosave_status.set_text("Seleção guardada automaticamente.")
                         self.refresh_sessions()
                     except USER_ERRORS as error:
+                        autosave_status.set_text(
+                            "Não foi possível guardar automaticamente a seleção."
+                        )
                         self._show_error(error)
 
-                ui.button(
-                    "Guardar seleção de recursos",
-                    icon="save",
-                    on_click=save_resource_settings,
-                ).props("outline no-caps").classes("secondary-action w-full")
+                async def autosave_resource_settings(_event: Any) -> None:
+                    resource_autosave["revision"] += 1
+                    revision = resource_autosave["revision"]
+                    await asyncio.sleep(0.15)
+                    if revision != resource_autosave["revision"]:
+                        return
+                    async with resource_autosave_lock:
+                        if revision != resource_autosave["revision"]:
+                            return
+                        await save_resource_settings()
+
+                for checkbox in (
+                    *resource_checks.values(),
+                    lesson_master,
+                    *lesson_scope_checks.values(),
+                    test_master,
+                    *test_scope_checks.values(),
+                ):
+                    checkbox.on_value_change(autosave_resource_settings)
+
                 ui.separator().classes("my-2")
 
             if proposal is not None:
