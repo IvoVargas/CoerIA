@@ -1437,6 +1437,18 @@ def navigate_to_stage(state: CoerIAState, target_stage: str) -> CoerIAState:
 
     if target_stage not in STAGE_ORDER:
         raise ValueError("A etapa selecionada não está disponível.")
+    pending_proposals = [
+        item
+        for item in state.get("ai_proposals", [])
+        if isinstance(item, dict) and item.get("status") == "pending"
+    ]
+    if pending_proposals:
+        proposal_stage = str(pending_proposals[-1].get("stage", ""))
+        if target_stage != proposal_stage:
+            raise ValueError(
+                "Existe uma proposta da IA por decidir. Aplique as alterações aceites "
+                "ou rejeite toda a proposta antes de mudar de etapa."
+            )
     if state.get("status") == "completed" and target_stage != state.get("current_stage"):
         raise ValueError(
             "A sessão concluída está em modo de consulta. Inicie uma revisão explícita "

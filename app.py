@@ -439,6 +439,18 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table td.ai-proposal-changed-cell { background: #eef9f6; }
 .manual-table tr.ai-proposal-new-row td { background: #eef9f6; }
 .manual-table tr.ai-proposal-remove-row td { background: #fff3f0; }
+.inline-ai-proposal,
+.resource-ai-proposal-review { padding-bottom: 94px; }
+.ai-proposal-decision-bar {
+  position: fixed; left: 50%; bottom: 18px; z-index: 90;
+  width: min(760px, calc(100vw - 32px)); transform: translateX(-50%);
+  align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 12px 14px; color: var(--agir-ink); background: rgba(255, 255, 255, .98);
+  border: 2px solid var(--agir-accent); border-radius: 16px;
+  box-shadow: 0 14px 38px rgba(31, 71, 75, .24); backdrop-filter: blur(14px);
+}
+.ai-proposal-decision-copy { min-width: 190px; flex: 1 1 240px; }
+.ai-proposal-decision-actions { flex: 0 1 auto; justify-content: flex-end; }
 .decision-card { padding: 22px; }
 .teacher-control-card { padding: 16px 18px; gap: 8px; }
 .teacher-control-card .secondary-action { min-height: 38px; }
@@ -519,6 +531,9 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   .stage-toolbar-controls,
   .stage-toolbar-actions { gap: 6px; }
   .stage-toolbar .q-btn:not(.stage-toolbar-help) { flex: 1 1 auto; }
+  .ai-proposal-decision-bar { bottom: 10px; width: calc(100vw - 20px); }
+  .ai-proposal-decision-actions { width: 100%; }
+  .ai-proposal-decision-actions .q-btn { flex: 1 1 auto; }
 }
 """
 
@@ -1550,6 +1565,7 @@ class AGIRSoloInterface:
             return
         self.initial_stage_track.clear()
         state = self.state or {}
+        pending_proposal = self._latest_pending_ai_proposal(state)
         statuses = state.get("stage_statuses", {})
         status_labels = {
             "draft": "Rascunho",
@@ -1583,6 +1599,7 @@ class AGIRSoloInterface:
                         self.editing_initial_session
                         and state
                         and state.get("status") != "completed"
+                        and pending_proposal is None
                     )
                     if selectable and not is_manual_first(state):
                         current_stage = state.get("current_stage")
@@ -1611,6 +1628,14 @@ class AGIRSoloInterface:
 
     def show_initial_session_editor(self) -> None:
         if not self.state:
+            return
+        if self._latest_pending_ai_proposal(self.state) is not None:
+            self._show_error(
+                ValueError(
+                    "Existe uma proposta da IA por decidir. Aplique as alterações "
+                    "aceites ou rejeite toda a proposta antes de mudar de etapa."
+                )
+            )
             return
         if self.state.get("status") == "completed":
             self._show_error(
@@ -2025,6 +2050,7 @@ class AGIRSoloInterface:
         current_index = STAGE_ORDER.index(state["current_stage"])
         viewable_stages = set(revision_targets_for_state(state))
         stored_statuses = state.get("stage_statuses", {})
+        pending_proposal = self._latest_pending_ai_proposal(state)
         status_labels = {
             "approved": "Aprovado · selecionar para consultar",
             "awaiting_review": "Em validação",
@@ -2038,7 +2064,7 @@ class AGIRSoloInterface:
             completed = state.get("status") == "completed"
             self._render_initial_data_track_item(
                 current=False,
-                selectable=not completed,
+                selectable=not completed and pending_proposal is None,
                 status="approved",
                 status_label=(
                     "Sessão concluída · modo de consulta"
@@ -2061,8 +2087,9 @@ class AGIRSoloInterface:
                 returns_to_current = (
                     stage == state["current_stage"] and self.viewed_stage is not None
                 )
-                selectable = returns_to_current or (
-                    stage in viewable_stages and stage != state["current_stage"]
+                selectable = pending_proposal is None and (
+                    returns_to_current
+                    or (stage in viewable_stages and stage != state["current_stage"])
                 )
                 viewing = stage == self.viewed_stage
                 item = ui.element("button" if selectable else "div").classes(
@@ -2111,12 +2138,13 @@ class AGIRSoloInterface:
         }
         stored_statuses = state.get("stage_statuses", {})
         completed = state.get("status") == "completed"
+        pending_proposal = self._latest_pending_ai_proposal(state)
         with ui.element("div").classes("stage-track").style(
             f"--stage-count: {DISPLAY_STAGE_COUNT}"
         ):
             self._render_initial_data_track_item(
                 current=False,
-                selectable=not completed,
+                selectable=not completed and pending_proposal is None,
                 status="approved",
                 status_label=(
                     "Sessão concluída · modo de consulta"
@@ -2128,7 +2156,7 @@ class AGIRSoloInterface:
                 stored_status = stored_statuses.get(stage, "empty")
                 current = stage == state.get("current_stage")
                 status_class = _stage_status_css_class(stored_status)
-                selectable = not current and not completed
+                selectable = not current and not completed and pending_proposal is None
                 item = ui.element("button" if selectable else "div").classes(
                     f"stage-item {status_class}"
                     + (" current" if current else "")
@@ -2177,6 +2205,14 @@ class AGIRSoloInterface:
 
     def _view_stage(self, target_stage: str) -> None:
         if not self.state or target_stage not in revision_targets_for_state(self.state):
+            return
+        if self._latest_pending_ai_proposal(self.state) is not None:
+            self._show_error(
+                ValueError(
+                    "Existe uma proposta da IA por decidir. Aplique as alterações "
+                    "aceites ou rejeite toda a proposta antes de mudar de etapa."
+                )
+            )
             return
         self.manual_edit_stage = None
         self.manual_edit_artifact = None
@@ -3549,6 +3585,17 @@ class AGIRSoloInterface:
                 self._render_manual_table(artifact, table)
 
     @staticmethod
+    def _latest_pending_ai_proposal(
+        state: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        pending = [
+            item
+            for item in state.get("ai_proposals", [])
+            if isinstance(item, dict) and item.get("status") == "pending"
+        ]
+        return pending[-1] if pending else None
+
+    @staticmethod
     def _pending_ai_proposal(
         state: dict[str, Any],
         stage: str,
@@ -3597,6 +3644,46 @@ class AGIRSoloInterface:
             on_change=update_decision,
         ).props("dense no-caps").mark(f"ai-decision-{change_key}")
 
+    @staticmethod
+    def _render_ai_proposal_decision_bar(
+        *,
+        apply_label: str,
+        apply_action: Any,
+        reject_label: str,
+        reject_action: Any,
+        apply_enabled: bool = True,
+        apply_marker: str = "apply-ai-proposal",
+    ) -> None:
+        """Mantém a decisão sobre a proposta visível durante toda a revisão."""
+
+        with ui.row().classes("ai-proposal-decision-bar").mark(
+            "ai-proposal-decision-bar"
+        ):
+            with ui.column().classes("ai-proposal-decision-copy gap-0"):
+                ui.label("DECISÃO NECESSÁRIA").classes("eyebrow")
+                ui.label(
+                    "Aceite as alterações selecionadas ou rejeite a proposta para continuar."
+                ).classes("text-sm font-semibold")
+            with ui.row().classes(
+                "ai-proposal-decision-actions items-center gap-2 flex-wrap"
+            ):
+                apply_button = ui.button(
+                    apply_label,
+                    icon="check",
+                    on_click=apply_action,
+                ).props("unelevated no-caps").classes("primary-action").mark(
+                    "apply-ai-proposal", apply_marker
+                )
+                if not apply_enabled:
+                    apply_button.disable()
+                ui.button(
+                    reject_label,
+                    icon="close",
+                    on_click=reject_action,
+                ).props("outline no-caps").classes("secondary-action").mark(
+                    "reject-ai-proposal"
+                )
+
     def _render_ai_proposal_review(
         self,
         state: dict[str, Any],
@@ -3633,7 +3720,34 @@ class AGIRSoloInterface:
             if change["kind"] in {"add_row", "remove_row"}
         }
 
-        with ui.column().classes("w-full gap-4").mark("inline-ai-proposal"):
+        async def apply_selected_changes() -> None:
+            selections: list[dict[str, Any]] = []
+            for change in changes:
+                key = str(change["key"])
+                accepted = decisions.get(key, "Aceitar") == "Aceitar"
+                selection: dict[str, Any] = {"key": key, "accept": accepted}
+                if accepted and change["kind"] == "value":
+                    holder = drafts.get(key, {})
+                    selection["value"] = deepcopy(
+                        holder.get(
+                            str(change.get("field_key", "")),
+                            change.get("after"),
+                        )
+                    )
+                elif accepted and change["kind"] == "add_row":
+                    selection["value"] = deepcopy(
+                        drafts.get(key, change.get("after"))
+                    )
+                selections.append(selection)
+            await self._handle_ai_proposal(
+                str(proposal["id"]),
+                True,
+                selections,
+            )
+
+        with ui.column().classes("w-full gap-4 inline-ai-proposal").mark(
+            "inline-ai-proposal"
+        ):
             ui.label("REVISÃO DA PROPOSTA DA IA").classes("eyebrow")
             ui.label(str(proposal.get("scope_label", "Âmbito selecionado"))).classes(
                 "section-title"
@@ -3642,6 +3756,15 @@ class AGIRSoloInterface:
                 "As sugestões aparecem sob os valores atuais. Pode editá-las e "
                 "aceitar ou rejeitar cada alteração antes de criar uma única versão."
             ).classes("text-sm muted")
+            self._render_ai_proposal_decision_bar(
+                apply_label="Aplicar alterações aceites",
+                apply_action=apply_selected_changes,
+                reject_label="Rejeitar todas as alterações",
+                reject_action=lambda: self._handle_ai_proposal(
+                    str(proposal["id"]), False
+                ),
+                apply_enabled=bool(changes),
+            )
 
             if not changes:
                 ui.label(
@@ -3799,47 +3922,6 @@ class AGIRSoloInterface:
                                                     str(addition["key"]),
                                                 )
 
-            async def apply_selected_changes() -> None:
-                selections: list[dict[str, Any]] = []
-                for change in changes:
-                    key = str(change["key"])
-                    accepted = decisions.get(key, "Aceitar") == "Aceitar"
-                    selection: dict[str, Any] = {"key": key, "accept": accepted}
-                    if accepted and change["kind"] == "value":
-                        holder = drafts.get(key, {})
-                        selection["value"] = deepcopy(
-                            holder.get(
-                                str(change.get("field_key", "")),
-                                change.get("after"),
-                            )
-                        )
-                    elif accepted and change["kind"] == "add_row":
-                        selection["value"] = deepcopy(
-                            drafts.get(key, change.get("after"))
-                        )
-                    selections.append(selection)
-                await self._handle_ai_proposal(
-                    str(proposal["id"]),
-                    True,
-                    selections,
-                )
-
-            with ui.row().classes("w-full gap-2 flex-wrap mt-2"):
-                apply_button = ui.button(
-                    "Aplicar alterações aceites",
-                    icon="check",
-                    on_click=apply_selected_changes,
-                ).props("unelevated no-caps").classes("primary-action")
-                if not changes:
-                    apply_button.disable()
-                ui.button(
-                    "Rejeitar todas as alterações",
-                    icon="close",
-                    on_click=lambda: self._handle_ai_proposal(
-                        str(proposal["id"]), False
-                    ),
-                ).props("outline no-caps").classes("secondary-action")
-
     def _render_complete_resource_ai_proposal_review(
         self,
         state: dict[str, Any],
@@ -3870,7 +3952,7 @@ class AGIRSoloInterface:
         )
         preview_state["generated_images"] = preview_images
 
-        with ui.column().classes("w-full gap-4").mark(
+        with ui.column().classes("w-full gap-4 resource-ai-proposal-review").mark(
             "resource-ai-proposal-review"
         ):
             ui.label("REVISÃO DA PROPOSTA DA IA").classes("eyebrow")
@@ -3880,31 +3962,24 @@ class AGIRSoloInterface:
                 "os recursos selecionados antes de aplicar; os restantes não são "
                 "apresentados nem guardados."
             ).classes("text-sm muted")
+            self._render_ai_proposal_decision_bar(
+                apply_label="Aplicar proposta editada",
+                apply_action=lambda: self._handle_ai_proposal(
+                    str(proposal["id"]),
+                    True,
+                    edited_after=proposed_artifact,
+                ),
+                reject_label="Rejeitar toda a proposta",
+                reject_action=lambda: self._handle_ai_proposal(
+                    str(proposal["id"]), False
+                ),
+                apply_marker="apply-edited-resource-proposal",
+            )
             self._render_resource_editor_tabs(
                 preview_state,
                 proposed_artifact,
                 editor_layout("resources"),
             )
-
-            with ui.row().classes("w-full gap-2 flex-wrap mt-2"):
-                ui.button(
-                    "Aplicar proposta editada",
-                    icon="check",
-                    on_click=lambda: self._handle_ai_proposal(
-                        str(proposal["id"]),
-                        True,
-                        edited_after=proposed_artifact,
-                    ),
-                ).props("unelevated no-caps").classes("primary-action").mark(
-                    "apply-edited-resource-proposal"
-                )
-                ui.button(
-                    "Rejeitar toda a proposta",
-                    icon="close",
-                    on_click=lambda: self._handle_ai_proposal(
-                        str(proposal["id"]), False
-                    ),
-                ).props("outline no-caps").classes("secondary-action")
 
     async def _create_complete_stage_with_ai(self, stage: str) -> None:
         if stage == "resources":
@@ -3971,7 +4046,8 @@ class AGIRSoloInterface:
                         "Etapa anterior / Etapa seguinte",
                         "Navega sem executar IA. A identificação e a numeração da etapa "
                         "permanecem entre os dois botões; Etapa seguinte só ganha destaque "
-                        "depois de guardar uma versão da etapa.",
+                        "depois de guardar uma versão da etapa. Se existir uma proposta da "
+                        "IA pendente, a navegação fica bloqueada até à decisão do docente.",
                     ),
                     (
                         "edit",
@@ -4287,6 +4363,10 @@ class AGIRSoloInterface:
                 ).classes(
                     "primary-action" if next_is_recommended else "secondary-action"
                 ).mark("toolbar-next-stage")
+
+                if proposal is not None:
+                    previous_button.disable()
+                    next_button.disable()
 
                 with ui.row().classes(
                     "stage-toolbar-controls stage-toolbar-controls-separated "

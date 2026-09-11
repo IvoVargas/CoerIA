@@ -337,6 +337,30 @@ def test_ai_assistance_requires_an_explicit_acceptance() -> None:
     assert accepted["generation_metadata"]["learning_outcomes"][-1]["human_approved"]
 
 
+def test_pending_ai_proposal_blocks_stage_navigation_until_decided() -> None:
+    state = create_session(_course())
+    proposed = request_ai_assistance(
+        state,
+        "learning_outcomes",
+        [],
+        "Toda a etapa",
+        "Propor um resultado inicial.",
+        agent=OutcomeProposalAgent(),
+    )
+
+    with pytest.raises(ValueError, match="proposta da IA por decidir"):
+        navigate_to_stage(proposed, "curriculum_analysis")
+
+    rejected = decide_ai_proposal(
+        proposed,
+        proposed["ai_proposals"][-1]["id"],
+        False,
+    )
+    navigated = navigate_to_stage(rejected, "curriculum_analysis")
+
+    assert navigated["current_stage"] == "curriculum_analysis"
+
+
 def test_ai_assistance_id_advances_past_gaps_in_proposal_history() -> None:
     state = create_session(_course())
     state["ai_proposals"] = [

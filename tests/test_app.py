@@ -150,7 +150,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.104 · SQLite")
+    await user.should_see("CoerIA v0.3.105 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -1681,10 +1681,23 @@ async def test_manual_first_workspace_renders_a_pending_ai_proposal(
     await user.should_see("Aplicar alterações aceites")
     await user.should_see("Rejeitar todas as alterações")
     assert user.find(marker="inline-ai-proposal").elements
+    assert user.find(marker="ai-proposal-decision-bar").elements
+    assert "position: fixed" in app.APP_CSS
     review_button = next(iter(user.find(marker="review-ai-proposal").elements))
+    previous_button = next(
+        iter(user.find(marker="toolbar-previous-stage").elements)
+    )
     next_button = next(iter(user.find(marker="toolbar-next-stage").elements))
     assert "primary-action" in review_button._classes
     assert "secondary-action" in next_button._classes
+    assert "disable" in previous_button._props
+    assert "disable" in next_button._props
+    initial_item = next(iter(user.find(marker="manual-stage-initial_data").elements))
+    other_stage = next(
+        iter(user.find(marker="manual-stage-curriculum_analysis").elements)
+    )
+    assert initial_item.tag == "div"
+    assert other_stage.tag == "div"
 
     next(iter(user.find(marker="ai-decision-change-1").elements)).set_value(
         "Rejeitar"
