@@ -439,18 +439,6 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table td.ai-proposal-changed-cell { background: #eef9f6; }
 .manual-table tr.ai-proposal-new-row td { background: #eef9f6; }
 .manual-table tr.ai-proposal-remove-row td { background: #fff3f0; }
-.inline-ai-proposal,
-.resource-ai-proposal-review { padding-bottom: 94px; }
-.ai-proposal-decision-bar {
-  position: fixed; left: 50%; bottom: 18px; z-index: 90;
-  width: min(760px, calc(100vw - 32px)); transform: translateX(-50%);
-  align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
-  padding: 12px 14px; color: var(--agir-ink); background: rgba(255, 255, 255, .98);
-  border: 2px solid var(--agir-accent); border-radius: 16px;
-  box-shadow: 0 14px 38px rgba(31, 71, 75, .24); backdrop-filter: blur(14px);
-}
-.ai-proposal-decision-copy { min-width: 190px; flex: 1 1 240px; }
-.ai-proposal-decision-actions { flex: 0 1 auto; justify-content: flex-end; }
 .decision-card { padding: 22px; }
 .teacher-control-card { padding: 16px 18px; gap: 8px; }
 .teacher-control-card .secondary-action { min-height: 38px; }
@@ -531,9 +519,6 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
   .stage-toolbar-controls,
   .stage-toolbar-actions { gap: 6px; }
   .stage-toolbar .q-btn:not(.stage-toolbar-help) { flex: 1 1 auto; }
-  .ai-proposal-decision-bar { bottom: 10px; width: calc(100vw - 20px); }
-  .ai-proposal-decision-actions { width: 100%; }
-  .ai-proposal-decision-actions .q-btn { flex: 1 1 auto; }
 }
 """
 
@@ -575,6 +560,7 @@ class AGIRSoloInterface:
         self.manual_edit_stage: str | None = None
         self.manual_edit_artifact: Any = None
         self.manual_edit_stage_context: dict[str, Any] = {}
+        self.ai_proposal_toolbar_actions: Any | None = None
         self.uploaded_files: dict[str, bytes] = {}
         self.removed_source_files: set[str] = set()
         self.fields: dict[str, Any] = {}
@@ -3644,8 +3630,8 @@ class AGIRSoloInterface:
             on_change=update_decision,
         ).props("dense no-caps").mark(f"ai-decision-{change_key}")
 
-    @staticmethod
     def _render_ai_proposal_decision_bar(
+        self,
         *,
         apply_label: str,
         apply_action: Any,
@@ -3654,35 +3640,29 @@ class AGIRSoloInterface:
         apply_enabled: bool = True,
         apply_marker: str = "apply-ai-proposal",
     ) -> None:
-        """Mantém a decisão sobre a proposta visível durante toda a revisão."""
+        """Coloca a decisão na mesma barra usada pela edição manual."""
 
-        with ui.row().classes("ai-proposal-decision-bar").mark(
-            "ai-proposal-decision-bar"
-        ):
-            with ui.column().classes("ai-proposal-decision-copy gap-0"):
-                ui.label("DECISÃO NECESSÁRIA").classes("eyebrow")
-                ui.label(
-                    "Aceite as alterações selecionadas ou rejeite a proposta para continuar."
-                ).classes("text-sm font-semibold")
-            with ui.row().classes(
-                "ai-proposal-decision-actions items-center gap-2 flex-wrap"
-            ):
-                apply_button = ui.button(
-                    apply_label,
-                    icon="check",
-                    on_click=apply_action,
-                ).props("unelevated no-caps").classes("primary-action").mark(
-                    "apply-ai-proposal", apply_marker
-                )
-                if not apply_enabled:
-                    apply_button.disable()
-                ui.button(
-                    reject_label,
-                    icon="close",
-                    on_click=reject_action,
-                ).props("outline no-caps").classes("secondary-action").mark(
-                    "reject-ai-proposal"
-                )
+        target = self.ai_proposal_toolbar_actions
+        if target is None:
+            target = ui.row().classes("w-full items-center gap-2 flex-wrap")
+            target.mark("ai-proposal-decision-bar")
+        with target:
+            apply_button = ui.button(
+                apply_label,
+                icon="check",
+                on_click=apply_action,
+            ).props("unelevated no-caps").classes("primary-action").mark(
+                "apply-ai-proposal", apply_marker
+            )
+            if not apply_enabled:
+                apply_button.disable()
+            ui.button(
+                reject_label,
+                icon="close",
+                on_click=reject_action,
+            ).props("outline no-caps").classes("secondary-action").mark(
+                "reject-ai-proposal"
+            )
 
     def _render_ai_proposal_review(
         self,
@@ -4056,12 +4036,6 @@ class AGIRSoloInterface:
                         "etapa está vazia ou por rever. Não usa IA nem tem custo de API.",
                     ),
                     (
-                        "rate_review",
-                        "Rever proposta da IA",
-                        "Quando existe uma proposta pendente, desloca a página até à revisão "
-                        "em que cada alteração pode ser aceite, rejeitada ou editada.",
-                    ),
-                    (
                         "auto_fix_high",
                         "Criar etapa completa com IA",
                         "Pede uma proposta para todo o artefacto. Nada é aplicado sem revisão "
@@ -4099,6 +4073,24 @@ class AGIRSoloInterface:
                     ),
                 ],
                 "A navegação fica desativada enquanto a edição manual está aberta.",
+            ),
+            "proposal": (
+                "Revisão da proposta da IA",
+                [
+                    (
+                        "check",
+                        "Aplicar alterações aceites",
+                        "Aplica numa única versão as sugestões assinaladas para aceitar, "
+                        "incluindo os textos que tenham sido editados pelo docente.",
+                    ),
+                    (
+                        "close",
+                        "Rejeitar todas as alterações",
+                        "Descarta a proposta completa e mantém inalterada a versão atual.",
+                    ),
+                ],
+                "A navegação e os restantes comandos ficam indisponíveis até o docente "
+                "aplicar ou rejeitar a proposta.",
             ),
             "final": (
                 "Validação final",
@@ -4315,6 +4307,7 @@ class AGIRSoloInterface:
         editing: bool,
         proposal: dict[str, Any] | None,
     ) -> None:
+        self.ai_proposal_toolbar_actions = None
         current_index = STAGE_ORDER.index(stage)
         stage_status = str(state.get("stage_statuses", {}).get(stage, "empty"))
         stage_has_content = artifact_has_content(state.get(stage))
@@ -4395,15 +4388,12 @@ class AGIRSoloInterface:
                         self._render_toolbar_help_button("editing")
                     else:
                         if proposal is not None:
-                            ui.button(
-                                "Rever proposta da IA",
-                                icon="rate_review",
-                                on_click=lambda: self._scroll_and_highlight(
-                                    ".stage-artifact-focus"
-                                ),
-                            ).props("unelevated no-caps").classes(
-                                "primary-action"
-                            ).mark("review-ai-proposal")
+                            ui.label("REVISÃO DA IA").classes(
+                                "eyebrow stage-toolbar-ai-label"
+                            )
+                            self.ai_proposal_toolbar_actions = ui.row().classes(
+                                "items-center gap-2 flex-wrap"
+                            ).mark("ai-proposal-decision-bar")
                         else:
                             edit_button = ui.button(
                                 (
@@ -4422,9 +4412,11 @@ class AGIRSoloInterface:
                                 if next_is_recommended
                                 else "primary-action"
                             ).mark("edit-artifact-content")
-                        self._render_toolbar_help_button("authoring")
+                        self._render_toolbar_help_button(
+                            "proposal" if proposal is not None else "authoring"
+                        )
 
-            if editing:
+            if editing or proposal is not None:
                 return
 
             with ui.row().classes(

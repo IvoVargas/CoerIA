@@ -150,7 +150,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.105 · SQLite")
+    await user.should_see("CoerIA v0.3.106 · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
@@ -1681,14 +1681,18 @@ async def test_manual_first_workspace_renders_a_pending_ai_proposal(
     await user.should_see("Aplicar alterações aceites")
     await user.should_see("Rejeitar todas as alterações")
     assert user.find(marker="inline-ai-proposal").elements
-    assert user.find(marker="ai-proposal-decision-bar").elements
-    assert "position: fixed" in app.APP_CSS
-    review_button = next(iter(user.find(marker="review-ai-proposal").elements))
+    decision_bar = next(
+        iter(user.find(marker="ai-proposal-decision-bar").elements)
+    )
+    apply_button = next(iter(user.find(marker="apply-ai-proposal").elements))
+    assert apply_button.parent_slot.parent.id == decision_bar.id
+    assert "stage-toolbar-controls" in decision_bar.parent_slot.parent._classes
+    await user.should_see("REVISÃO DA IA")
+    await user.should_not_see("ASSISTÊNCIA COM IA")
     previous_button = next(
         iter(user.find(marker="toolbar-previous-stage").elements)
     )
     next_button = next(iter(user.find(marker="toolbar-next-stage").elements))
-    assert "primary-action" in review_button._classes
     assert "secondary-action" in next_button._classes
     assert "disable" in previous_button._props
     assert "disable" in next_button._props
