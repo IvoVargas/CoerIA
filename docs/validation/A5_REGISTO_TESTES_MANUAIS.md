@@ -1,6 +1,75 @@
 # A5 — Registo de testes manuais ponta a ponta
 
-## Campanha de validação da versão candidata final
+## Encerramento de manutenção da versão v0.3.109
+
+**Estado:** APROVADA PARA CONGELAMENTO EM `v0.3.109`
+
+**Código retestado:** `066aee1` (`v0.3.109-rc2`)
+
+**Ambiente:** `https://coeria.ivovargas.pt/`
+
+**Data:** 11–12-09-2026
+
+A campanha integral E2E-01–E2E-08 encerrada na `v0.3.96` permanece como
+evidência de referência. As alterações `v0.3.98`–`v0.3.109` foram encerradas
+por análise de impacto, suíte automatizada integral e um reteste dirigido do
+percurso afetado, sem reabrir funcionalidades fora desse âmbito.
+
+### Alterações abrangidas
+
+- adoção da designação portuguesa `CITE-F`, limitada aos códigos detalhados de
+  quatro dígitos, e do CNAEF limitado aos códigos de três dígitos;
+- tipos dos resultados segundo o QNQ (`Conhecimentos`, `Aptidões` e
+  `Atitudes`), com «Tema ou objeto» opcional;
+- barra de ações contextual e uniforme, incluindo decisão obrigatória sobre
+  propostas pendentes de IA;
+- operacionalização de *backward design* pela cadeia explícita
+  `RA → TA → AE`, mantendo os resultados derivados visíveis nas atividades;
+- seleção de recursos por instância, seleção global e gravação automática;
+- normalização das chaves das questões de escolha múltipla e apresentação
+  correta de conteúdo multilinha nas tabelas dos testes.
+
+### Evidência automatizada
+
+- suíte local: **351 testes e 7 subtestes aprovados em 32,67 s**, incluindo
+  compilação LaTeX/PDF real e sem chamadas a fornecedores de IA;
+- deploy de `v0.3.109-rc2`: **351 testes e 7 subtestes aprovados em 59,89 s**;
+- serviços `coeria`, `nginx` e `coeria-backup.timer`: ativos; HTTP local e HTTPS
+  público: 200.
+
+### Reteste dirigido na VPS
+
+Foi criada a sessão D12 «Reteste dirigido — congelamento v0.3.108» e retomada
+nas candidatas da `v0.3.109`. O percurso produziu quatro RA, quatro conteúdos,
+quatro tarefas de avaliação, quatro atividades de ensino-aprendizagem e quatro
+aulas de 30 minutos, perfazendo exatamente 120 minutos de contacto. Confirmou-se
+na interface a cadeia `RA → TA → AE`, a persistência da seleção automática e a
+seleção isolada do teste associado a `TA1`.
+
+Na `v0.3.109-rc1`, a primeira geração revelou uma chave de escolha múltipla não
+canónica. A correção passou a aceitar e normalizar variantes devolvidas pelo
+modelo para as letras das opções existentes. A proposta seguinte foi obtida à
+primeira tentativa, apresentou apenas o teste `TA1`, foi aceite pelo docente e
+passou todos os controlos finais. O reteste revelou ainda que opções em várias
+linhas quebravam a tabela Markdown; a `v0.3.109-rc2` converte essas quebras em
+separadores HTML e voltou a apresentar as três questões na tabela correta.
+
+A validação final determinística ficou integralmente verde. A exportação da
+mesma sessão persistida foi repetida pela camada de serviço instalada na VPS,
+com a configuração de produção do `pdflatex`: o ZIP de **197 303 bytes** incluiu
+**2 DOCX, 2 TEX e 2 PDF**, e o evento «Exportação» ficou registado na auditoria.
+A verificação pela camada de serviço foi usada porque o controlador do navegador
+de teste não expôs o evento de descarga do cliente; o caminho de exportação e a
+sessão foram os mesmos usados pela interface.
+
+### Decisão
+
+Não permanecem defeitos bloqueantes conhecidos no âmbito alterado. A tag
+`v0.3.109` identifica o congelamento documental e funcional desta versão. Novas
+alterações de comportamento exigem descongelamento, nova versão e testes
+proporcionais ao impacto.
+
+## Campanha integral de referência — v0.3.96
 
 **Estado da campanha:** CONCLUÍDA E ENCERRADA PARA `v0.3.96` — E2E-01 APROVADO; E2E-02, E2E-03 E
 E2E-04 APROVADOS COM OBSERVAÇÕES; E2E-05, E2E-06 E E2E-07 APROVADOS APÓS
@@ -23,10 +92,10 @@ encerrada na `v0.3.96` mantém-se como evidência de referência. A correspondê
 da manutenção está registada em
 `docs/validation/MATRIZ_RASTREABILIDADE_V0.3.97.md`.
 
-**Regra de validade:** toda a evidência manual obtida antes de `v0.3.83`
-permanece apenas histórica. Os oito cenários devem ser executados novamente,
-desde o início, em sessões novas criadas na versão congelada. Não são aceites
-sessões nem cópias de segurança de esquemas anteriores.
+**Regra de validade da campanha v0.3.96:** toda a evidência manual obtida antes
+de `v0.3.83` permanece apenas histórica. Os oito cenários foram executados
+novamente, desde o início, em sessões novas criadas na versão então congelada.
+Não foram aceites sessões nem cópias de segurança de esquemas anteriores.
 
 Os resultados registados anteriormente para as versões v0.2.11–v0.2.15 são
 preservados no fim deste documento como histórico de desenvolvimento. Deixaram

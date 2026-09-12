@@ -569,8 +569,9 @@ consomem APIs. A interface NiceGUI organiza o trabalho em dados iniciais,
 autoria por etapa, validação final, histórico e rastreabilidade. O botão do
 cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado.
 
-A campanha manual da versão candidata e a matriz que relaciona requisitos,
-módulos, testes e evidências encontram-se em `docs/validation/`.
+A campanha manual da versão candidata encontra-se em
+`docs/validation/A5_REGISTO_TESTES_MANUAIS.md`; a matriz da versão congelada é
+`docs/validation/MATRIZ_RASTREABILIDADE_V0.3.109.md`.
 
 ## Estrutura
 
