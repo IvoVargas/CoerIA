@@ -101,6 +101,7 @@ from prism.presentation import (
 from prism.resource_catalog import slide_outcome_ids
 from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
 from prism.session_backup import configured_session_backup_max_bytes
+from prism.theory_help import TOPICS, theory_description, theory_links_script, theory_topic_for
 from prism.workflow import (
     STAGE_LABELS,
     STAGE_ORDER,
@@ -427,6 +428,11 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .manual-table-scroll { width: 100%; overflow-x: auto; }
 .manual-table { min-width: 720px; width: 100%; border-collapse: collapse; }
 .manual-table th { background: #eaf3f1; color: #244a50; font-size: .78rem; text-align: left; padding: 9px; border: 1px solid #d9e6e3; }
+.theory-help-link { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; margin-left: 3px; color: #0b625d !important; font-weight: 700; text-decoration: none !important; white-space: nowrap; vertical-align: middle; }
+.theory-help-link:hover { background: #d3e8e2; border-radius: 4px; }
+.theory-help-link .material-icons { font-size: 18px; }
+.theory-help-link:focus-visible { outline: 2px solid #0b625d; outline-offset: 2px; border-radius: 4px; }
+.theory-table-heading { display: inline; }
 .manual-table td { min-width: 110px; padding: 4px; vertical-align: top; border: 1px solid #d9e6e3; background: white; }
 .manual-table td.manual-row-action { min-width: 54px; width: 54px; text-align: center; }
 .manual-table td.manual-row-actions { min-width: 126px; width: 126px; text-align: center; }
@@ -586,6 +592,7 @@ class AGIRSoloInterface:
         ui.page_title(f"{APP_NAME} — {APP_TAGLINE}")
         ui.colors(primary="#0d766e", secondary="#1f5966", accent="#e8a23a")
         ui.add_css(APP_CSS)
+        ui.add_body_html(theory_links_script())
 
         self._build_logout_dialog()
         self._build_busy_dialog()
@@ -2329,9 +2336,14 @@ class AGIRSoloInterface:
             with ui.element("table").classes("presentation-view-table"):
                 with ui.element("thead"):
                     with ui.element("tr"):
-                        for header in headers:
+                        for header, field_key in zip(headers, (
+                            "slide", "title", "outcome_ids", "bullets", "visual_mode",
+                            "visual_title", "alt_text",
+                        ), strict=True):
                             with ui.element("th"):
-                                ui.label(header)
+                                _render_theory_header(header, theory_topic_for(
+                                    "resources", ("presentation_outline",), field_key,
+                                ))
                 with ui.element("tbody"):
                     for index, slide in enumerate(slides, start=1):
                         identifier = str(slide.get("visual_asset_id", "")).strip()
@@ -3180,7 +3192,7 @@ class AGIRSoloInterface:
                                         for table in layout.tables:
                                             if table.path[0] == "test":
                                                 self._render_manual_table(
-                                                    temporary, table
+                                                    temporary, table, stage="resources"
                                                 )
                             continue
                         for scalar in layout.fields:
@@ -3204,7 +3216,7 @@ class AGIRSoloInterface:
                                         state,
                                     )
                                 else:
-                                    self._render_manual_table(artifact, table)
+                                    self._render_manual_table(artifact, table, stage="resources")
     def _render_stage_preview(self, state: dict[str, Any], stage: str) -> None:
         """Mostra uma etapa anterior sem a tornar corrente nem a invalidar."""
 
@@ -3400,7 +3412,11 @@ class AGIRSoloInterface:
         self,
         artifact: Any,
         table: TableSpec,
+        *,
+        stage: str | None = None,
     ) -> None:
+        state = self.state or {}
+        stage = stage or self.manual_edit_stage or state.get("current_stage", "")
         rows = value_at_path(artifact, table.path)
         if not isinstance(rows, list):
             raise ValueError(f"A tabela «{table.title}» não possui linhas editáveis.")
@@ -3418,7 +3434,10 @@ class AGIRSoloInterface:
                         with ui.element("tr"):
                             for field in table.fields:
                                 with ui.element("th"):
-                                    ui.label(field.label)
+                                    _render_theory_header(field.label, theory_topic_for(
+                                        stage, table.path, field.key,
+                                        state.get("course", {}).get("taxonomy_type", "SOLO"),
+                                    ))
                             with ui.element("th"):
                                 ui.label("Ações" if table.reorderable else "Remover")
                     with ui.element("tbody"):
@@ -3569,7 +3588,7 @@ class AGIRSoloInterface:
             for table in layout.tables:
                 if not editor_table_is_applicable(self.state or {}, table):
                     continue
-                self._render_manual_table(artifact, table)
+                self._render_manual_table(artifact, table, stage=stage)
 
     @staticmethod
     def _latest_pending_ai_proposal(
@@ -3804,7 +3823,10 @@ class AGIRSoloInterface:
                                 with ui.element("tr"):
                                     for field in table.fields:
                                         with ui.element("th"):
-                                            ui.label(field.label)
+                                            _render_theory_header(field.label, theory_topic_for(
+                                                stage, table.path, field.key,
+                                                state.get("course", {}).get("taxonomy_type", "SOLO"),
+                                            ))
                                     if has_row_decisions:
                                         with ui.element("th"):
                                             ui.label("Decisão da linha")
@@ -5741,6 +5763,23 @@ def build_interface(
     """Constrói a interface no contexto NiceGUI atual."""
 
     return AGIRSoloInterface(service, identity)
+
+
+def _render_theory_header(label: str, topic: str | None) -> None:
+    resource = TOPICS.get(topic)
+    if resource is None:
+        ui.label(label)
+        return
+    with ui.element("span").classes("theory-table-heading"):
+        ui.label(label).classes("inline")
+        with ui.link(target=resource.url, new_tab=True).classes("theory-help-link") as link:
+            ui.icon("help_outline").props('aria-hidden="true"').classes("text-lg")
+        link.props.update({
+            "rel": "noopener noreferrer",
+            "referrerpolicy": "no-referrer",
+            "aria-label": theory_description(label, topic),
+            "title": theory_description(label, topic),
+        })
 
 
 @ui.page("/login")

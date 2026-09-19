@@ -710,7 +710,13 @@ def test_learning_outcome_editor_omits_taxonomy_and_numbers_levels() -> None:
 
     rendered = render_stage_artifact(state, "learning_outcomes")
     assert "**Etapa 2 de 8**" in rendered
-    assert "| ID | Tipo | Tema ou objeto | Nível | Verbo |" in rendered
+    from prism.theory_help import theory_headers
+    headers = theory_headers(
+        ["ID", "Tipo", "Tema ou objeto", "Nível", "Verbo"],
+        "learning_outcomes", (),
+        ["id", "outcome_type", "theme", "taxonomy_level", "action_verb"],
+    )
+    assert "| " + " | ".join(headers) + " |" in rendered
     assert "| Taxonomia |" not in rendered
     assert "Uni-estrutural — SOLO 2" in rendered
 
@@ -855,7 +861,8 @@ def test_assessment_presentation_shows_the_direct_results_column() -> None:
     )
 
     assert "Atividades de ensino-aprendizagem" not in rendered
-    assert "| Resultados |" in rendered
+    from prism.theory_help import theory_header_html
+    assert "| " + theory_header_html("Resultados", "alinhamento") + " |" in rendered
 
 
 def test_lesson_planning_selects_existing_teaching_and_assessment_components() -> None:

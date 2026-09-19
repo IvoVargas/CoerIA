@@ -612,6 +612,17 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
 
 ### RNF03 — Usabilidade e acessibilidade
 
+- Disponibilizar um ícone de ajuda nos cabeçalhos com fundamentação teórica
+  pertinente, tanto na consulta como na edição manual e revisão de propostas
+  de IA. O ícone abre diretamente a fonte web original numa nova aba, sem
+  aplicar alterações ou executar IA.
+- Usar um catálogo editorial por etapa, tabela e campo, distinguindo SOLO de
+  Bloom e evitando associações automáticas por rótulo. Não acrescentar ajuda a
+  colunas meramente operacionais ou sem suporte no enquadramento da dissertação.
+- Identificar a fonte e a abertura numa nova aba por descrição acessível e
+  tooltip; permitir foco por teclado e não transmitir dados curriculares nem
+  o endereço da sessão à fonte externa.
+
 - A etapa, o progresso, a decisão pendente e os erros são sempre visíveis.
 - Na barra de etapas, atribuir uma cor de fundo consistente a cada estado e manter
   simultaneamente a designação textual; as cores devem distinguir-se do fundo

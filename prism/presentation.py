@@ -17,10 +17,17 @@ from .models import (
 )
 from .quality import displayed_test_option
 from .resource_catalog import slide_outcome_ids
+from .theory_help import theory_headers
 from .workflow import STAGE_LABELS, STAGE_ORDER
 
 
-def _table(headers: list[str], rows: list[list[Any]]) -> str:
+def _table(
+    headers: list[str], rows: list[list[Any]], *, stage: str = "",
+    path: tuple[str | int, ...] = (), fields: list[str] | None = None,
+    taxonomy: str = "SOLO",
+) -> str:
+    if fields is not None:
+        headers = theory_headers(headers, stage, path, fields, taxonomy)
     divider = ["---"] * len(headers)
 
     def format_cell(value: Any) -> str:
@@ -200,6 +207,8 @@ def render_resource_detail_sections(
                 "content": _table(
                     ["Aula", "Duração", "Tipo", "AE/TA", "Organização"],
                     lesson_rows,
+                    stage="resources", path=("lesson_plan", "lessons"),
+                    fields=["lesson_number", "duration_minutes", "session_type", "component_ids", "notes"],
                 ),
             }
         )
@@ -232,6 +241,8 @@ def render_resource_detail_sections(
                 "content": _table(
                     ["TA", "AE", "RA", "Finalidade / modalidade", "Tarefa", "Evidência", "Critério"],
                     grid_rows,
+                    stage="resources", path=("assessment_grid", "rows"),
+                    fields=["assessment_task_id", "teaching_activity_ids", "outcome_ids", "assessment_purpose", "activity", "evidence", "criterion"],
                 ),
             }
         )
@@ -278,6 +289,8 @@ def render_resource_detail_sections(
                             "Texto alternativo",
                         ],
                         rows,
+                        stage="resources", path=("presentation_outline",),
+                        fields=["slide", "title", "outcome_ids", "bullets", "visual_mode", "visual_title", "alt_text"],
                     )
                 ),
             }
@@ -330,6 +343,8 @@ def render_resource_detail_sections(
                     + _table(
                         ["Secção", "Título", "Resultados", "Conteúdo", "Atividade"],
                         rows,
+                        stage="resources", path=("lesson_worksheet", "sections"),
+                        fields=["section", "heading", "outcome_ids", "content", "activity"],
                     )
                 ),
             }
@@ -373,6 +388,8 @@ def render_resource_detail_sections(
                         "Chave de correção",
                     ],
                     rows,
+                    stage="resources", path=("test", "questions"),
+                    fields=["id", "outcome_id", "question_type", "options", "points", "prompt", "answer_key"],
                 )
             )
         sections.append(
@@ -420,9 +437,17 @@ def render_resource_detail_sections(
                     f"**Materiais:** {materials}\n\n"
                     f"**Entregáveis:** {deliverables}\n\n"
                     "### Etapas\n\n"
-                    + _table(["Ordem", "Resultados", "Instrução"], step_rows)
+                    + _table(
+                        ["Ordem", "Resultados", "Instrução"], step_rows,
+                        stage="resources", path=("practical_activity", "steps"),
+                        fields=["order", "outcome_ids", "instruction"],
+                    )
                     + "\n\n### Critérios\n\n"
-                    + _table(["Critério", "Descrição", "Peso"], criterion_rows)
+                    + _table(
+                        ["Critério", "Descrição", "Peso"], criterion_rows,
+                        stage="resources", path=("practical_activity", "criteria"),
+                        fields=["criterion", "description", "weight"],
+                    )
                 ),
             }
         )
@@ -494,6 +519,8 @@ def render_artifact(
             + _table(
                 ["ID", "Resultados", "Tema", "Descrição do tema"],
                 content_rows,
+                stage=stage, path=("contents",),
+                fields=["id", "outcome_ids", "title", "description"],
             )
             + source_section
         )
@@ -540,6 +567,9 @@ def render_artifact(
                 "Resultado de aprendizagem",
             ],
             rows,
+            stage=stage,
+            fields=["id", "outcome_type", "theme", "taxonomy_level", "action_verb", "ai_mode", "statement"],
+            taxonomy=state.get("course", {}).get("taxonomy_type", "SOLO"),
         )
 
     if stage == "assessment_activities":
@@ -568,6 +598,8 @@ def render_artifact(
                 "Critério",
             ],
             rows,
+            stage=stage,
+            fields=["id", "outcome_ids", "ai_mode", "work_type", "assessment_purpose", "activity", "evidence", "criterion"],
         )
 
     if stage == "pedagogical_design":
@@ -593,6 +625,8 @@ def render_artifact(
                     "Texto opcional",
                 ],
                 lesson_rows,
+                stage=stage, path=("lessons",),
+                fields=["lesson_number", "duration_minutes", "session_type", "component_ids", "notes"],
             )
         )
 
@@ -614,6 +648,8 @@ def render_artifact(
         return header + _table(
             ["ID", "Tarefas de avaliação", "Resultados derivados", "Modo de IA", "Contexto", "Atividade", "Prática", "Acompanhamento", "Feedback"],
             rows,
+            stage=stage,
+            fields=["id", "assessment_ids", "outcome_ids", "ai_mode", "learning_context", "activity", "practice", "support", "feedback_strategy"],
         )
 
     if stage == "resources":

@@ -19,6 +19,23 @@ determinística, não de uma decisão declarada pelo modelo.
 
 ## Fluxo
 
+### Ajuda teórica nos cabeçalhos
+
+As colunas com fundamentação pedagógica apresentam um ícone de ajuda
+(ponto de interrogação num círculo). Abre diretamente a fonte externa original
+numa nova aba, mantendo o formulário atual; não executa IA nem envia os
+conteúdos da sessão. O nome da fonte surge ao passar o rato e está disponível
+para leitores de ecrã. Algumas fontes estão em inglês ou têm acesso integral
+condicionado pelo editor.
+
+A seleção é editorial, por campo: tipos QNQ, nível/verbo SOLO ou Bloom,
+resultados, alinhamento, tarefas/evidências, critérios, finalidade da avaliação,
+prática/acompanhamento/feedback e modos de IA. IDs de linha, títulos genéricos,
+durações e configurações técnicas não recebem ícones automaticamente.
+O catálogo e as associações estão em `prism/theory_help.py`.
+
+### Percurso de autoria
+
 1. dados iniciais, fontes, caracterização da unidade curricular e objetivos
    gerais opcionais em texto livre;
 2. resultados de aprendizagem com nível SOLO ou Bloom, um único verbo de ação
@@ -569,9 +586,14 @@ consomem APIs. A interface NiceGUI organiza o trabalho em dados iniciais,
 autoria por etapa, validação final, histórico e rastreabilidade. O botão do
 cabeçalho termina apenas a sessão autenticada; não encerra o serviço alojado.
 
-A campanha manual da versão candidata encontra-se em
+A campanha manual da versão congelada v0.3.109 encontra-se em
 `docs/validation/A5_REGISTO_TESTES_MANUAIS.md`; a matriz da versão congelada é
 `docs/validation/MATRIZ_RASTREABILIDADE_V0.3.109.md`.
+
+O desenvolvimento foi reaberto na v0.3.110 para acrescentar ajuda teórica
+nos cabeçalhos. A campanha anterior permanece como evidência histórica, não
+como aprovação automática da nova versão. Ver
+`docs/validation/AJUDA_TEORICA_V0.3.110.md` para o âmbito e a verificação dirigida.
 
 ## Estrutura
 

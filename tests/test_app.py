@@ -152,7 +152,7 @@ async def test_nicegui_initial_page_exposes_the_guided_workflow(
     await user.should_see("IAedu")
     await user.should_see("SOLO")
     await user.should_see("Bloom")
-    await user.should_see("CoerIA v0.3.109 · SQLite")
+    await user.should_see(f"CoerIA v{app.APP_VERSION} · SQLite")
 
 
 def test_error_notification_replaces_the_previous_one_and_can_be_closed() -> None:
