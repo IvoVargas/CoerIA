@@ -11,7 +11,7 @@ from prism.manual_editing import editor_layout
 from prism.models import CourseInput
 from prism.presentation import _table
 from prism.theory_help import (
-    FIELD_TOPICS, TOPICS, theory_header_html, theory_headers, theory_topic_for,
+    FIELD_TOPICS, HELP, TOPICS, theory_header_html, theory_headers, theory_topic_for,
     theory_links_script,
 )
 from prism.workflow import create_session, create_test_agent
@@ -32,24 +32,27 @@ def test_catalog_only_links_to_fixed_external_sources():
     for topic in TOPICS.values():
         assert urlsplit(topic.url).scheme == "https"
         assert urlsplit(topic.url).netloc
-        link, = Anchors(theory_header_html("Campo", next(
-            key for key, value in TOPICS.items() if value == topic
-        ))).links
-        assert link["href"] == topic.url
-        assert link["target"] == "_blank"
-        assert set(link["rel"].split()) == {"noopener", "noreferrer"}
-        assert link["referrerpolicy"] == "no-referrer"
-        assert "nova aba" in link["aria-label"]
+    for key, help_text in HELP.items():
+        assert help_text.source in TOPICS
+        assert all((help_text.title, help_text.meaning, help_text.guidance, help_text.example))
+        link, = Anchors(theory_header_html("Campo", key)).links
+        assert link["href"] == f"#coeria-help-{key}"
+        assert link["role"] == "button"
+        assert link["aria-haspopup"] == "dialog"
+        assert "target" not in link
+        assert "explicação" in link["aria-label"]
         assert "help_outline" in theory_header_html("Campo", "solo")
-    assert set(FIELD_TOPICS.values()) <= set(TOPICS) | {"taxonomia"}
+    assert set(FIELD_TOPICS.values()) <= set(HELP) | {"taxonomia"}
 
 
 @pytest.mark.parametrize(("taxonomy", "topic"), [
     ("SOLO", "solo"), ("BLOOM", "bloom"), (" bloom ", "bloom"), ("unknown", None),
 ])
 def test_taxonomy_source_matches_the_session(taxonomy, topic):
-    for field in ("taxonomy_level", "action_verb"):
-        assert theory_topic_for("learning_outcomes", (), field, taxonomy) == topic
+    assert theory_topic_for("learning_outcomes", (), "taxonomy_level", taxonomy) == topic
+    assert theory_topic_for("learning_outcomes", (), "action_verb", taxonomy) == (
+        f"{topic}-verbo" if topic else None
+    )
 
 
 def test_no_links_for_operational_fields_or_homonymous_labels():
@@ -86,7 +89,7 @@ def test_markdown_table_preserves_cells_and_semantic_headers():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("taxonomy", ["SOLO", "BLOOM"])
-async def test_manual_headers_are_native_external_links_without_changing_state(user: User, taxonomy):
+async def test_manual_headers_are_local_help_triggers_without_changing_state(user: User, taxonomy):
     state = create_session(
         CourseInput.create("Teste", "Algoritmos, funções, estruturas de dados e testes de software."),
         agent=create_test_agent(),
@@ -107,20 +110,24 @@ async def test_manual_headers_are_native_external_links_without_changing_state(u
     await user.open("/_test_theory_manual")
     links = list(user.find(ui.link).elements)
     urls = [link.props.get("href") for link in links]
-    assert TOPICS[taxonomy.lower()].url in urls
-    assert TOPICS["tipos-qnq"].url in urls
+    assert f"#coeria-help-{taxonomy.lower()}" in urls
+    assert f"#coeria-help-{taxonomy.lower()}-verbo" in urls
+    assert "#coeria-help-tipos-qnq" in urls
     for link in links:
-        assert link.props.get("target") == "_blank"
-        assert link.props.get("rel") == "noopener noreferrer"
+        assert link.props.get("target") != "_blank"
+        assert link.props.get("aria-haspopup") == "dialog"
     assert state == original
 
 
-def test_markdown_link_repair_is_restricted_to_catalog_header_icons():
+def test_help_script_is_restricted_to_catalog_header_icons():
     script = theory_links_script()
     assert "th a.theory-help-link" in script
-    assert "!allowed.has(link.getAttribute('href'))" in script
-    assert "link.textContent.trim() !== 'help_outline'" in script
-    assert "childList: true, subtree: true" in script
+    assert "Object.prototype.hasOwnProperty.call(catalog, key)" in script
+    assert "dialog.showModal()" in script
+    assert "node.textContent = text" in script
+    assert "opener.focus" in script
+    assert "source.target = '_blank'" in script
+    assert "source.rel = 'noopener noreferrer'" in script
     assert "innerHTML =" not in script
     assert "window.open" not in script
 
@@ -147,8 +154,17 @@ async def test_proposal_headers_keep_the_same_sources_without_accepting_changes(
 
     await user.open("/_test_theory_proposal")
     links = list(user.find(ui.link).elements)
-    assert TOPICS["solo"].url in [link.props.get("href") for link in links]
-    assert TOPICS["tipos-qnq"].url in [link.props.get("href") for link in links]
-    assert all(link.props.get("target") == "_blank" for link in links)
+    assert "#coeria-help-solo" in [link.props.get("href") for link in links]
+    assert "#coeria-help-tipos-qnq" in [link.props.get("href") for link in links]
+    assert all(link.props.get("target") != "_blank" for link in links)
     assert state == original
     assert proposal["status"] == "pending"
+
+
+def test_distinct_fields_receive_actionable_guidance():
+    for first, second in [
+        ("solo", "solo-verbo"), ("bloom", "bloom-verbo"),
+        ("tarefas-e-evidencias", "evidencia"), ("pratica", "acompanhamento"),
+        ("ra-avaliados", "ra-derivados"),
+    ]:
+        assert HELP[first].guidance != HELP[second].guidance

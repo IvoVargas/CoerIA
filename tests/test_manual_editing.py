@@ -862,7 +862,7 @@ def test_assessment_presentation_shows_the_direct_results_column() -> None:
 
     assert "Atividades de ensino-aprendizagem" not in rendered
     from prism.theory_help import theory_header_html
-    assert "| " + theory_header_html("Resultados", "alinhamento") + " |" in rendered
+    assert "| " + theory_header_html("Resultados", "ra-avaliados") + " |" in rendered
 
 
 def test_lesson_planning_selects_existing_teaching_and_assessment_components() -> None:

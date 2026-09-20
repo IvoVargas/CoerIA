@@ -101,7 +101,7 @@ from prism.presentation import (
 from prism.resource_catalog import slide_outcome_ids
 from prism.providers import AI_PROVIDER_CHOICES, configured_ai_provider
 from prism.session_backup import configured_session_backup_max_bytes
-from prism.theory_help import TOPICS, theory_description, theory_links_script, theory_topic_for
+from prism.theory_help import HELP, theory_description, theory_links_script, theory_topic_for
 from prism.workflow import (
     STAGE_LABELS,
     STAGE_ORDER,
@@ -433,6 +433,15 @@ body { background: var(--agir-bg); color: var(--agir-ink); }
 .theory-help-link .material-icons { font-size: 18px; }
 .theory-help-link:focus-visible { outline: 2px solid #0b625d; outline-offset: 2px; border-radius: 4px; }
 .theory-table-heading { display: inline; }
+.coeria-theory-dialog { margin: auto; color: #203c43; background: white; border: 1px solid #d9e6e3; border-radius: 16px; padding: 24px; width: min(600px, calc(100vw - 32px)); max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px #102f3940; }
+.coeria-theory-dialog::backdrop { background: #102f3980; }
+.coeria-theory-dialog h2 { font-size: 1.3rem; line-height: 1.4; margin: 0 0 18px; font-weight: 600; }
+.coeria-theory-dialog h3 { font-size: .95rem; line-height: 1.4; margin: 16px 0 5px; font-weight: 700; }
+.coeria-theory-dialog p { font-size: .95rem; line-height: 1.6; margin: 0; }
+.coeria-theory-dialog a { color: #0b625d; text-decoration: underline; }
+.coeria-theory-dialog .theory-source-note { font-size: .8rem; color: #526970; margin-top: 8px; }
+.coeria-theory-dialog button { display: block; margin: 20px 0 0 auto; padding: 8px 20px; border-radius: 8px; background: #0b625d; color: white; cursor: pointer; }
+.coeria-theory-dialog :focus-visible { outline: 2px solid #0b625d; outline-offset: 3px; }
 .manual-table td { min-width: 110px; padding: 4px; vertical-align: top; border: 1px solid #d9e6e3; background: white; }
 .manual-table td.manual-row-action { min-width: 54px; width: 54px; text-align: center; }
 .manual-table td.manual-row-actions { min-width: 126px; width: 126px; text-align: center; }
@@ -5766,17 +5775,17 @@ def build_interface(
 
 
 def _render_theory_header(label: str, topic: str | None) -> None:
-    resource = TOPICS.get(topic)
+    resource = HELP.get(topic)
     if resource is None:
         ui.label(label)
         return
     with ui.element("span").classes("theory-table-heading"):
         ui.label(label).classes("inline")
-        with ui.link(target=resource.url, new_tab=True).classes("theory-help-link") as link:
+        with ui.link(target=f"#coeria-help-{topic}").classes("theory-help-link") as link:
             ui.icon("help_outline").props('aria-hidden="true"').classes("text-lg")
         link.props.update({
-            "rel": "noopener noreferrer",
-            "referrerpolicy": "no-referrer",
+            "role": "button",
+            "aria-haspopup": "dialog",
             "aria-label": theory_description(label, topic),
             "title": theory_description(label, topic),
         })

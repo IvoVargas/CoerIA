@@ -22,11 +22,13 @@ determinística, não de uma decisão declarada pelo modelo.
 ### Ajuda teórica nos cabeçalhos
 
 As colunas com fundamentação pedagógica apresentam um ícone de ajuda
-(ponto de interrogação num círculo). Abre diretamente a fonte externa original
-numa nova aba, mantendo o formulário atual; não executa IA nem envia os
-conteúdos da sessão. O nome da fonte surge ao passar o rato e está disponível
-para leitores de ecrã. Algumas fontes estão em inglês ou têm acesso integral
-condicionado pelo editor.
+(ponto de interrogação num círculo). Abre um pop-up em português de Portugal,
+com significado, orientação para preencher o campo e exemplo ilustrativo.
+No fim, «Fonte / Saber mais» permite abrir o recurso original numa nova aba.
+A ajuda não executa IA nem altera os dados em edição; pode ser fechada por
+«Fechar» ou Escape. Os resumos são editoriais e específicos do campo, incluindo
+explicações distintas para nível e verbo SOLO/Bloom. Algumas fontes externas
+estão em inglês ou têm acesso integral condicionado pelo editor.
 
 A seleção é editorial, por campo: tipos QNQ, nível/verbo SOLO ou Bloom,
 resultados, alinhamento, tarefas/evidências, critérios, finalidade da avaliação,
@@ -594,6 +596,9 @@ O desenvolvimento foi reaberto na v0.3.110 para acrescentar ajuda teórica
 nos cabeçalhos. A campanha anterior permanece como evidência histórica, não
 como aprovação automática da nova versão. Ver
 `docs/validation/AJUDA_TEORICA_V0.3.110.md` para o âmbito e a verificação dirigida.
+
+A v0.3.111 substitui a navegação direta dos ícones por resumos em português
+num pop-up, mantendo as referências como aprofundamento facultativo.
 
 ## Estrutura
 
