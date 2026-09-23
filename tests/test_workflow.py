@@ -1835,6 +1835,11 @@ class WorkflowTests(unittest.TestCase):
             lesson["duration_minutes"] for lesson in generated["lessons"]
         )
         self.assertNotEqual(received_minutes, 360)
+        corrected = deepcopy(generated)
+        corrected["lessons"] = [
+            {**deepcopy(generated["lessons"][0]), "duration_minutes": 120}
+            for _ in range(3)
+        ]
 
         class FakeResponses:
             def __init__(self) -> None:
@@ -1843,7 +1848,7 @@ class WorkflowTests(unittest.TestCase):
             def create(self, **kwargs):
                 self.calls.append(kwargs)
                 return SimpleNamespace(
-                    output_text=json.dumps({"artifact": generated}),
+                    output_text=json.dumps({"artifact": generated if len(self.calls) == 1 else corrected}),
                     id="lesson-response",
                     usage=SimpleNamespace(
                         input_tokens=10,
@@ -1909,10 +1914,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(
             all(not lesson["component_ids"] for lesson in proposal["after"]["lessons"])
         )
-        self.assertEqual(len(responses.calls), 1)
-        correction = proposal["metadata"]["guardrail_corrections"][0]
-        self.assertEqual(correction["received_total"], received_minutes)
-        self.assertEqual(correction["used_total"], 360)
+        self.assertEqual(len(responses.calls), 2)
+        self.assertEqual(proposal["after"], corrected)
+        self.assertEqual(proposal["metadata"]["guardrail_corrections"], [])
 
     def test_complete_ai_lesson_proposal_uses_contact_time_and_visible_notes(self) -> None:
         state = create_session(self.course, agent=self.agent)

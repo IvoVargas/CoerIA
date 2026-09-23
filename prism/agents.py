@@ -27,6 +27,7 @@ from .ai_modes import (
 )
 from .branding import config_value
 from .curriculum import (
+    ASSESSMENT_WORK_TYPES,
     ASSESSMENT_PURPOSES,
     BLOOM_LEVELS,
     has_single_action_verb,
@@ -338,7 +339,7 @@ def _schema_for(
                     "id": {"type": "string", "pattern": "^TA[1-9][0-9]*$"},
                     "outcome_ids": {"type": "array", "items": string},
                     "ai_mode": {"type": "string", "enum": list(AI_MODES)},
-                    "work_type": string,
+                    "work_type": {"type": "string", "enum": list(ASSESSMENT_WORK_TYPES)},
                     "assessment_purpose": {
                         "type": "string",
                         "enum": list(ASSESSMENT_PURPOSES),
@@ -1268,65 +1269,6 @@ def _canonicalize_teaching_activities(
                 }
             )
     return normalized, corrections
-
-
-def _canonicalize_lesson_planning(
-    artifact: Any,
-    state: dict[str, Any],
-) -> tuple[Any, list[dict[str, Any]]]:
-    """Ajusta deterministicamente as durações da proposta às horas de contacto."""
-
-    if not isinstance(artifact, dict) or not isinstance(artifact.get("lessons"), list):
-        return artifact, []
-    lessons = artifact["lessons"]
-    expected_minutes = round(
-        float(state.get("course", {}).get("contact_hours", 0) or 0) * 60
-    )
-    if not lessons or expected_minutes <= 0 or expected_minutes < len(lessons):
-        return artifact, []
-    durations = [
-        lesson.get("duration_minutes") if isinstance(lesson, dict) else None
-        for lesson in lessons
-    ]
-    if any(not isinstance(duration, int) or duration <= 0 for duration in durations):
-        return artifact, []
-    planned_minutes = sum(durations)
-    if planned_minutes == expected_minutes:
-        return artifact, []
-
-    # Reserva um minuto por aula e distribui o restante proporcionalmente. A
-    # aritmética inteira garante o total exato sem depender de uma nova chamada ao LLM.
-    distributable = expected_minutes - len(lessons)
-    quotients: list[int] = []
-    remainders: list[tuple[int, int]] = []
-    for index, duration in enumerate(durations):
-        quotient, remainder = divmod(duration * distributable, planned_minutes)
-        quotients.append(quotient)
-        remainders.append((remainder, index))
-    missing = distributable - sum(quotients)
-    recipients = {
-        index
-        for _remainder, index in sorted(
-            remainders,
-            key=lambda item: (-item[0], item[1]),
-        )[:missing]
-    }
-    normalized_durations = [
-        1 + quotient + (1 if index in recipients else 0)
-        for index, quotient in enumerate(quotients)
-    ]
-    normalized = deepcopy(artifact)
-    for lesson, duration in zip(normalized["lessons"], normalized_durations):
-        lesson["duration_minutes"] = duration
-    return normalized, [
-        {
-            "field": "lessons.duration_minutes",
-            "reason": "total ajustado deterministicamente às horas de contacto",
-            "received_total": planned_minutes,
-            "used_total": expected_minutes,
-            "used_durations": normalized_durations,
-        }
-    ]
 
 
 def _canonicalize_learning_outcomes(
@@ -2421,6 +2363,8 @@ def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None
                 problems.append("modo de IA diferente dos resultados associados")
             if item.get("assessment_purpose") not in ASSESSMENT_PURPOSES:
                 problems.append("finalidade diferente de Formativa ou Sumativa")
+            if item.get("work_type") not in ASSESSMENT_WORK_TYPES:
+                problems.append("modalidade deve ser Trabalho individual ou Trabalho de grupo")
             if problems:
                 invalid_assessments.append(
                     f"{item.get('id', '?')}: " + ", ".join(problems)
@@ -2944,6 +2888,8 @@ class OpenAIPedagogicalAgent:
             )
         if stage == "assessment_activities":
             instructions += (
+                " work_type indica a modalidade de realização: Trabalho individual ou "
+                "Trabalho de grupo. Não é o título da tarefa nem o regime presencial/distância. "
                 " Em cada avaliação, assessment_purpose tem exatamente um valor: "
                 "Formativa ou Sumativa, nunca Mista. outcome_ids nunca pode estar vazio e "
                 "liga diretamente cada tarefa aos resultados avaliados. O conjunto deve "
@@ -2968,6 +2914,11 @@ class OpenAIPedagogicalAgent:
             )
         if stage == "pedagogical_design":
             instructions += (
+                " Não alongues artificialmente poucas aulas para completar a carga horária. "
+                "Planeia um número adequado de aulas, normalmente até 240 minutos cada, "
+                "salvo indicação explícita do docente. Respeita o número e duração das aulas "
+                "quando indicados no contexto. Confirma a soma antes de responder: "
+                "a aplicação não reajusta automaticamente as durações. "
                 " Usa lesson_planning_brief como fonte de verdade e planeia aulas numa ordem "
                 "pedagogicamente útil. duration_minutes é um inteiro positivo, session_type "
                 "usa lesson_planning_rules e component_ids pode ficar vazio ou conter referências "
@@ -3172,10 +3123,6 @@ class OpenAIPedagogicalAgent:
                 elif stage == "teaching_activities":
                     artifact, guardrail_corrections = (
                         _canonicalize_teaching_activities(artifact, state)
-                    )
-                elif stage == "pedagogical_design":
-                    artifact, guardrail_corrections = (
-                        _canonicalize_lesson_planning(artifact, state)
                     )
                 elif stage == "resources":
                     artifact, test_corrections = _canonicalize_resource_test(

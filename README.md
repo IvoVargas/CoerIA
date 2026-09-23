@@ -600,6 +600,12 @@ como aprovação automática da nova versão. Ver
 A v0.3.111 substitui a navegação direta dos ícones por resumos em português
 num pop-up, mantendo as referências como aprofundamento facultativo.
 
+A v0.3.112 remove o reajuste automático das durações das aulas, controla a
+modalidade individual/de grupo das avaliações e acrescenta avisos de revisão
+para aulas longas e avaliações não agendadas. Ver
+`docs/validation/P01_CORRECOES_PRE_ESTUDO.md`. O reteste manual dirigido continua
+necessário antes do estudo com docentes; a simulação P01 não integra a amostra.
+
 ## Estrutura
 
 - `app.py`: interface NiceGUI e interações do utilizador;

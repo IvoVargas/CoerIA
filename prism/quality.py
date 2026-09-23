@@ -10,6 +10,7 @@ from typing import Any
 
 from .ai_modes import ai_mode_alignment_issues
 from .curriculum import (
+    ASSESSMENT_WORK_TYPES,
     ASSESSMENT_PURPOSES,
     MAX_OUTCOMES,
     MIN_OUTCOMES,
@@ -503,9 +504,14 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         target_stage = "learning_outcomes"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
-    elif check_id == "lesson_plan_freshness":
+    elif check_id in {"lesson_plan_freshness", "lesson_duration_review", "lesson_assessment_schedule"}:
         target_stage = "pedagogical_design"
-        target_key = "__stage__"
+        lesson = re.search(r"Aula (\d+)", detail)
+        target_key = f"LESSON:{lesson.group(1)}" if lesson else "__stage__"
+    elif check_id == "assessment_work_types":
+        target_stage = "assessment_activities"
+        references = re.findall(r"\bTA\d+\b", detail)
+        target_key = references[0] if references else "__stage__"
     elif check_id == "assessment_coverage":
         target_stage = "assessment_activities"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
@@ -923,6 +929,46 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             ),
         )
     )
+    assessments = state.get("assessment_activities", [])
+    invalid_work_types = [
+        str(item.get("id", "?")) for item in assessments
+        if item.get("work_type") not in ASSESSMENT_WORK_TYPES
+    ]
+    checks.append(_check(
+        "assessment_work_types", "Modalidade de realização das avaliações",
+        "error" if invalid_work_types else "pass" if assessments else "warning",
+        "Modalidade inválida em: " + ", ".join(invalid_work_types)
+        + ". Escolha Trabalho individual ou Trabalho de grupo."
+        if invalid_work_types else
+        "Cada tarefa identifica trabalho individual ou de grupo."
+        if assessments else "Não existem tarefas de avaliação.",
+    ))
+    lessons = state.get("pedagogical_design", {}).get("lessons", [])
+    long_lessons = [
+        f"Aula {index}: {lesson['duration_minutes']} minutos"
+        for index, lesson in enumerate(lessons, 1)
+        if isinstance(lesson.get("duration_minutes"), (int, float))
+        and lesson["duration_minutes"] > 240
+    ]
+    if long_lessons:
+        checks.append(_check(
+            "lesson_duration_review", "Revisão da duração das aulas", "warning",
+            "; ".join(long_lessons)
+            + ". Duração superior a 240 minutos: confirme a adequação ou divida a aula. "
+            "Este limiar é um alerta de revisão, não um limite pedagógico obrigatório.",
+        ))
+    scheduled = {
+        identifier for lesson in lessons for identifier in lesson.get("component_ids", [])
+    }
+    unscheduled = [str(item["id"]) for item in assessments
+                   if item.get("id") and item["id"] not in scheduled]
+    if lessons and unscheduled:
+        checks.append(_check(
+            "lesson_assessment_schedule", "Agendamento das tarefas de avaliação", "warning",
+            "Tarefas não referenciadas diretamente nas aulas: " + ", ".join(unscheduled)
+            + ". Confirme se decorrem fora das aulas ou associe-as ao planeamento. "
+            "As associações a atividades ou avaliações continuam opcionais.",
+        ))
     teaching_rows = state.get("teaching_activities", [])
     assessment_teaching_issues = assessment_teaching_alignment_issues(state)
     checks.append(

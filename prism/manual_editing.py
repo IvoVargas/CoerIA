@@ -13,6 +13,7 @@ from .ai_modes import (
     sync_inherited_ai_mode,
 )
 from .curriculum import (
+    ASSESSMENT_WORK_TYPES,
     LESSON_TYPES,
     OUTCOME_TYPES,
     TAXONOMY_VERBS,
@@ -896,6 +897,8 @@ def editor_reference_options(
         }
     if field.key == "session_type":
         return {value: value for value in LESSON_TYPES}
+    if field.key == "work_type":
+        return {value: value for value in ASSESSMENT_WORK_TYPES}
     if field.kind == "question_type":
         return {value: value for value in QUESTION_TYPES}
     if field.key == "component_ids":

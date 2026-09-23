@@ -2112,7 +2112,10 @@ def build_final_validation(state: CoerIAState) -> dict[str, Any]:
         "resource_quality_checks": resource_quality_checks,
         "message": (
             "Verificação global determinística. As observações de IA, quando "
-            "pedidas, são facultativas e não substituem estes controlos."
+            "pedidas, são facultativas e não substituem estes controlos. "
+            "Os controlos verificam estrutura e ligações; não certificam a adequação "
+            "pedagógica dos conteúdos, das durações ou das evidências de avaliação. "
+            "Reveja os avisos e o conteúdo antes de concluir."
         ),
     }
 

@@ -14,6 +14,7 @@ from typing import Any
 TAXONOMY_SOLO = "SOLO"
 TAXONOMY_BLOOM = "Bloom"
 TAXONOMY_CHOICES = (TAXONOMY_SOLO, TAXONOMY_BLOOM)
+ASSESSMENT_WORK_TYPES = ("Trabalho individual", "Trabalho de grupo")
 LEARNING_OUTCOME_ID_PATTERN = re.compile(r"^RA([1-9]\d*)$", re.IGNORECASE)
 TEACHING_ACTIVITY_ID_PATTERN = re.compile(r"^AE([1-9]\d*)$", re.IGNORECASE)
 ASSESSMENT_TASK_ID_PATTERN = re.compile(r"^TA([1-9]\d*)$", re.IGNORECASE)

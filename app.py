@@ -5311,7 +5311,8 @@ class AGIRSoloInterface:
             ui.icon("verified", size="4rem", color="positive")
             ui.label("Sessão pedagógica concluída").classes("text-3xl font-extrabold")
             ui.label(
-                "A estrutura foi validada. Pode agora exportar os recursos e a rastreabilidade."
+                "A estrutura e as ligações foram verificadas. A adequação pedagógica continua "
+                "a exigir revisão do docente. Pode exportar os recursos e a rastreabilidade."
             ).classes("muted text-base")
             ui.label("Formato dos documentos editáveis").classes(
                 "text-sm font-semibold mt-3"
