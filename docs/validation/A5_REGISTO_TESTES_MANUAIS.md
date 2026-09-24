@@ -1,5 +1,26 @@
 # A5 — Registo de testes manuais ponta a ponta
 
+## Atualização técnica pré-estudo — v0.3.112 — 24/09/2026
+
+**Código de referência:** `f6c93885cb8f56bfd6b813449a81e835ec22d266`, tag `v0.3.112`.
+Reteste dirigido P01 concluído na VPS, incluindo inspeção independente do ZIP
+fornecido pelo investigador. Suíte do deploy: 370 testes e 7 subtestes aprovados.
+
+Foram verificados o total de contacto (10 × 240 minutos), modalidades controladas
+das TA, recuperação de proposta após nova autenticação, seleção persistida de
+Plano de aulas/Grelha, validação estrutural e exportação Word/LaTeX/PDF.
+O pacote contém 3 DOCX, 3 TEX e 3 PDF; os PDFs totalizam dez páginas inspecionadas.
+
+**Resultado:** reteste técnico aprovado no âmbito afetado. P01 é uma simulação,
+não um docente; não integra a amostra nem demonstra qualidade pedagógica.
+As observações semânticas e de apresentação estão registadas em
+`P01_CORRECOES_PRE_ESTUDO.md`. Não se afirma que E2E-01–E2E-08 foram todos
+reexecutados nesta versão. Os encerramentos abaixo são históricos.
+
+Rastreabilidade incremental: `MATRIZ_RASTREABILIDADE_V0.3.112.md`.
+A preparação ética/operacional do estudo continua separada da aprovação técnica;
+não foi criado novo congelamento por este registo documental.
+
 ## Encerramento de manutenção da versão v0.3.109
 
 **Estado:** APROVADA PARA CONGELAMENTO EM `v0.3.109`
