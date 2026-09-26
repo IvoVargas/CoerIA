@@ -288,6 +288,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
+        # Downloads use a short-lived, single-use, unguessable capability token.
+        # Native download clients may not forward the browser session cookie.
+        # Let the endpoint reject expired/unknown tokens, never serve login HTML.
+        if path.startswith("/_coeria/download/"):
+            return await call_next(request)
         if (
             authentication_disabled()
             or app.storage.user.get("authenticated")
@@ -4725,6 +4730,10 @@ class AGIRSoloInterface:
         if not self.state:
             return
         target_stage = str(result.get("target_stage", ""))
+        if target_stage == "initial_data":
+            self.show_initial_session_editor()
+            await self._focus_initial_result(str(result.get("target_key", "duration_hours")))
+            return
         if target_stage not in STAGE_ORDER[:-1]:
             return
         target_key = str(result.get("target_key", STAGE_ROOT_TARGET))
@@ -5349,6 +5358,30 @@ class AGIRSoloInterface:
                                     self._focus_final_validation_result(selected)
                                 ),
                             )
+
+                if any(
+                    check.get("id") in {"lesson_plan_freshness", "assessment_grid_freshness"}
+                    and check.get("status") == "error"
+                    for check in resource_checks
+                ):
+                    ui.label(
+                        "O plano de aulas ou a grelha de avaliação ficaram desatualizados "
+                        "após alterações nas etapas anteriores. Atualize-os para voltar a validar. "
+                        "Esta ação não utiliza IA e mantém os restantes recursos."
+                    ).classes("mt-3")
+                    ui.button(
+                        "Atualizar recursos desatualizados", icon="refresh",
+                        on_click=self._refresh_derived_resources,
+                    ).props("unelevated no-caps")
+
+    async def _refresh_derived_resources(self) -> None:
+        try:
+            self.state, message = await run.io_bound(
+                self.service.refresh_derived_resources, self.state,
+            )
+            self.show_workspace(message)
+        except USER_ERRORS as error:
+            self._show_error(error)
 
     def _render_completed_view(self, state: dict[str, Any]) -> None:
         with ui.card().classes("surface complete-hero w-full items-center gap-3"):

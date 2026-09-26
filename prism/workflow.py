@@ -1979,7 +1979,11 @@ def build_final_validation(state: CoerIAState) -> dict[str, Any]:
                 resource_quality_checks = deepcopy(quality.get("checks", []))
                 if not quality.get("passed"):
                     raise ValueError(
-                        f"{quality.get('summary', {}).get('errors', 0)} erro(s) de qualidade."
+                        " ".join(
+                            str(check.get("detail", check.get("label", "")))
+                            for check in resource_quality_checks
+                            if check.get("status") == "error"
+                        ) or "Reveja os controlos de qualidade dos recursos abaixo."
                     )
             validate_artifact(stage, artifact, state)
             passed = True

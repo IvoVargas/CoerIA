@@ -507,6 +507,17 @@ class ApplicationService:
         updated = self._persist(verify_stage_with_ai(prepared, target_stage))
         return updated, "Verificação facultativa da IA guardada; pode continuar."
 
+    def refresh_derived_resources(self, state: dict[str, Any] | None) -> tuple[dict[str, Any], str]:
+        """Rebuild selected derived resources and revalidate, without an LLM."""
+        if not state or state.get("status") == "completed":
+            raise ValueError("Abra uma sessão em edição antes de atualizar os recursos.")
+        updated = navigate_to_stage(state, "resources")
+        updated = update_manual_resource_settings(
+            updated, updated.get("resource_types", []), updated.get("resource_scopes", {}),
+        )
+        updated = navigate_to_stage(updated, "final_validation")
+        return self._persist(updated), "Plano de aulas e grelha selecionados atualizados sem IA; validação repetida."
+
     def update_resource_settings(
         self,
         state: dict[str, Any] | None,

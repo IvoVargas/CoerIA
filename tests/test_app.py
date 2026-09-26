@@ -2468,6 +2468,52 @@ def test_registered_download_response_is_single_use() -> None:
     assert token not in app._PENDING_DOWNLOADS
 
 
+@pytest.mark.asyncio
+async def test_download_without_session_cookie_uses_capability_not_login():
+    from starlette.requests import Request
+    from fastapi import HTTPException
+    token = "download-without-cookie"
+    app._PENDING_DOWNLOADS[token] = (b"PK-test", "test.zip", "application/zip")
+    request = Request({"type": "http", "path": f"/_coeria/download/{token}", "headers": []})
+    handler = AsyncMock(side_effect=lambda _: app._serve_download_payload(token))
+    middleware_class = next(m.cls for m in app.app.user_middleware if m.cls.__name__ == "AuthMiddleware")
+    middleware = middleware_class(app=lambda *args: None)
+    response = await middleware.dispatch(request, handler)
+    assert response.body == b"PK-test"
+    assert "location" not in response.headers
+    with pytest.raises(HTTPException) as error:
+        await middleware.dispatch(request, handler)
+    assert error.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_ects_final_check_opens_initial_data():
+    from unittest.mock import Mock
+    interface = object.__new__(app.AGIRSoloInterface)
+    interface.state = {"current_stage": "final_validation"}
+    interface.show_initial_session_editor = Mock()
+    interface._focus_initial_result = AsyncMock()
+    await interface._focus_final_validation_result({"target_stage": "initial_data", "target_key": "duration_hours"})
+    interface.show_initial_session_editor.assert_called_once()
+    interface._focus_initial_result.assert_awaited_once_with("duration_hours")
+
+
+def test_refresh_derived_resources_revalidates_without_ai(tmp_path):
+    from prism.models import RESOURCE_ASSESSMENT_GRID
+    service = ApplicationService(SQLiteSessionStore(tmp_path / "refresh.db"))
+    state = create_session(CourseInput.create("UC", "Algoritmos, variáveis, estruturas de controlo, funções e testes."))
+    state["resource_types"] = [RESOURCE_LESSON_PLAN, RESOURCE_ASSESSMENT_GRID]
+    state = navigate_to_stage(state, "final_validation")
+    original = deepcopy(state)
+    refreshed, message = service.refresh_derived_resources(state)
+    assert state == original
+    assert refreshed["current_stage"] == "final_validation"
+    freshness = [c for c in refreshed["final_validation"]["resource_quality_checks"] if c["id"].endswith("_freshness")]
+    assert len(freshness) == 2
+    assert all(c["status"] == "pass" for c in freshness)
+    assert "sem IA" in message
+
+
 def test_application_service_cannot_load_another_owner_session(tmp_path: Path) -> None:
     store = SQLiteSessionStore(tmp_path / "coeria.db")
     session_id = store.save(

@@ -504,7 +504,9 @@ def _quality_navigation_target(check: dict[str, str]) -> dict[str, str]:
         target_stage = "learning_outcomes"
         references = re.findall(r"\bRA\d+\b", detail, flags=re.IGNORECASE)
         target_key = references[0].upper() if references else "__stage__"
-    elif check_id in {"lesson_plan_freshness", "lesson_duration_review", "lesson_assessment_schedule"}:
+    elif check_id in {"lesson_plan_freshness", "assessment_grid_freshness"}:
+        target_stage = "resources"
+    elif check_id in {"lesson_duration_review", "lesson_assessment_schedule"}:
         target_stage = "pedagogical_design"
         lesson = re.search(r"Aula (\d+)", detail)
         target_key = f"LESSON:{lesson.group(1)}" if lesson else "__stage__"
