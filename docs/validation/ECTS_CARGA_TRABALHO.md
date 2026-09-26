@@ -2,8 +2,10 @@
 
 Alteração de 26-09-2026, incluída na versão v0.3.113.
 
-- Horas por ECTS: 25 por defeito; alteração entre 25 e 28 mediante diálogo de
-  confirmação. O valor deve corresponder ao adotado pela instituição.
+- Horas por ECTS: 25 por defeito. Revisão da interface na v0.3.114:
+  dropdown entre 25 e 28 (incluindo meios valores), sem botão ou diálogo adicional.
+  Valores fracionários já gravados são preservados. O valor deve corresponder
+  ao adotado pela instituição. Total calculado internamente, sem campo visível.
 - ECTS positivos em múltiplos de 0,5; total = ECTS × horas por crédito.
 - Trabalho autónomo = total − contacto; contacto superior ao total é inválido.
 - ECTS = 0 identifica formação sem créditos: contacto e trabalho autónomo

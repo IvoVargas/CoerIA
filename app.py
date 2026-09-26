@@ -1038,11 +1038,11 @@ class AGIRSoloInterface:
             self.fields["ects_credits"] = ui.number(
                 "ECTS", value=0, min=0, precision=1
             ).props("step=0.5").classes("full-control")
-            ui.label("ECTS = 0: formação sem ECTS; horas preenchidas manualmente.").classes("text-sm")
-            self.fields["hours_per_ects"] = ui.number(
-                "Horas por ECTS", value=25, min=25, max=28, precision=2
-            ).props("readonly").classes("full-control")
-            ui.button("Alterar horas por ECTS", on_click=self._change_ects_factor).props("flat")
+            self.fields["hours_per_ects"] = ui.select(
+                {25: "25", 25.5: "25,5", 26: "26", 26.5: "26,5",
+                 27: "27", 27.5: "27,5", 28: "28"},
+                label="Horas por ECTS", value=25,
+            ).classes("full-control")
             with ui.element("div").classes(
                 "col-span-2 grid grid-cols-2 gap-4 max-sm:grid-cols-1"
             ) as self.initial_hours_group:
@@ -1053,9 +1053,6 @@ class AGIRSoloInterface:
                 self.fields["autonomous_hours"] = ui.number(
                     "Trabalho autónomo", value=0, min=0, precision=1
                 ).classes("full-control")
-                self.fields["duration_hours"] = ui.number(
-                    "Horas totais", value=0, precision=2
-                ).props("readonly").classes("full-control")
                 self.workload_error = ui.label().classes("text-negative col-span-2")
             for key in ("ects_credits", "contact_hours", "autonomous_hours", "hours_per_ects"):
                 self.fields[key].on_value_change(self._refresh_workload)
@@ -1146,32 +1143,13 @@ class AGIRSoloInterface:
                 credits, self.fields["contact_hours"].value,
                 self.fields["autonomous_hours"].value, self.fields["hours_per_ects"].value,
             )
-            self.fields["duration_hours"].set_value(total)
             if credits:
                 self.fields["autonomous_hours"].set_value(autonomous)
             self.workload_error.set_text("")
         except ValueError as error:
-            self.fields["duration_hours"].set_value(None)
             self.workload_error.set_text(str(error))
         finally:
             self._updating_workload = False
-
-    async def _change_ects_factor(self) -> None:
-        with ui.dialog() as dialog, ui.card():
-            ui.label("Alterar o valor institucional de horas por ECTS?")
-            ui.label("Confirme o valor adotado pela sua instituição, entre 25 e 28 horas.")
-            factor = ui.number("Horas por ECTS", value=self.fields["hours_per_ects"].value,
-                               min=25, max=28, precision=2)
-            ui.button("Cancelar", on_click=lambda: dialog.submit(None))
-            ui.button("Confirmar alteração", on_click=lambda: dialog.submit(factor.value))
-        value = await dialog
-        if value is not None:
-            try:
-                calculate_workload(hours_per_ects=value)
-            except ValueError as error:
-                ui.notify(str(error), type="negative")
-                return
-            self.fields["hours_per_ects"].set_value(value)
 
     def _form_data(self) -> dict[str, Any]:
         data = {name: element.value for name, element in self.fields.items()}
@@ -1195,6 +1173,11 @@ class AGIRSoloInterface:
         for name, element in self.fields.items():
             if name in data:
                 value = data[name]
+                if name == "hours_per_ects" and value not in element.options:
+                    # Preserve a valid fractional factor already saved in a session.
+                    calculate_workload(hours_per_ects=value)
+                    element.options[value] = str(value).replace(".", ",")
+                    element.update()
                 if name == "semester" and value not in SEMESTER_OPTIONS:
                     value = SEMESTER_OPTIONS[0]
                 if name == "cnaef_code" and str(value or "") not in CNAEF_CATALOG:

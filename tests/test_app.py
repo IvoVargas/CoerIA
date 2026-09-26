@@ -32,7 +32,7 @@ from prism.workflow import (
 
 
 @pytest.mark.asyncio
-async def test_ects_calculation_and_confirmation(user: User):
+async def test_ects_calculation_and_dropdown(user: User):
     interfaces = []
     @ui.page('/_test_ects')
     def page():
@@ -42,18 +42,20 @@ async def test_ects_calculation_and_confirmation(user: User):
     interface.show_new_session()
     interface._set_form_data({'ects_credits': 6, 'contact_hours': 40,
                              'autonomous_hours': 80, 'hours_per_ects': 25})
-    assert interface.fields['duration_hours'].value == 150
+    assert 'duration_hours' not in interface.fields
+    assert interface._form_data()['duration_hours'] == 150
     assert interface.fields['autonomous_hours'].value == 110
     assert interface.fields['autonomous_hours']._props.get('readonly') is True
-    user.find('Alterar horas por ECTS').click()
-    await user.should_see('Confirmar alteração')
-    user.find('Cancelar').click()
-    assert interface.fields['hours_per_ects'].value == 25
+    assert isinstance(interface.fields['hours_per_ects'], ui.select)
+    interface.fields['hours_per_ects'].set_value(27.5)
+    assert interface.fields['autonomous_hours'].value == 125
+    assert interface._form_data()['duration_hours'] == 165
+    interface.fields['hours_per_ects'].set_value(25)
     interface._set_form_data({'ects_credits': 0, 'contact_hours': 40, 'autonomous_hours': 80})
-    assert interface.fields['duration_hours'].value == 120
+    assert interface._form_data()['duration_hours'] == 120
     assert not interface.fields['autonomous_hours']._props.get('readonly')
     interface._set_form_data({'ects_credits': 6, 'contact_hours': 151})
-    assert interface.fields['duration_hours'].value is None
+    assert interface._form_data()['duration_hours'] == 0
     assert 'não podem exceder' in interface.workload_error.text
 
 
