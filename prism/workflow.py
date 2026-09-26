@@ -2062,7 +2062,13 @@ def build_final_validation(state: CoerIAState) -> dict[str, Any]:
         if first_ai_mode_problem.startswith("AE")
         else "learning_outcomes"
     )
+    from .workload import workload_issue
+    workload_problem = workload_issue(state.get("course", {}))
     checks = [
+        {"id": "ects_workload", "label": "Coerência entre ECTS e carga de trabalho",
+         "passed": not workload_problem,
+         "detail": workload_problem or "Carga de trabalho coerente; sem ECTS, aplicam-se as horas indicadas.",
+         "target_stage": "initial_data", "target_key": "duration_hours"},
         *structural_checks,
         {
             "id": "alignment",

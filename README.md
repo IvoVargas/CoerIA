@@ -19,6 +19,14 @@ determinística, não de uma decisão declarada pelo modelo.
 
 ## Fluxo
 
+### Carga de trabalho e ECTS — v0.3.113
+
+Com ECTS, as horas totais são calculadas pelos créditos × horas por crédito
+(25 por defeito, alteráveis entre 25 e 28 com confirmação). O trabalho autónomo
+é a diferença entre total e contacto. Os créditos são múltiplos de 0,5 e o
+contacto não pode exceder o total. Com ECTS = 0, contacto e trabalho autónomo
+continuam manuais. Ver `docs/validation/ECTS_CARGA_TRABALHO.md`.
+
 ### Ajuda teórica nos cabeçalhos
 
 As colunas com fundamentação pedagógica apresentam um ícone de ajuda

@@ -329,6 +329,7 @@ def _add_program_metadata(document: Document, course: dict[str, Any]) -> None:
             or "A confirmar pelo docente",
         ),
         ("ECTS", _display(course.get("ects_credits") or "")),
+        ("Horas por ECTS", _display(course.get("hours_per_ects", 25)) if course.get("ects_credits") else "Não aplicável"),
         ("Horas de contacto", _display(course.get("contact_hours") or "")),
         ("Trabalho autónomo", _display(course.get("autonomous_hours") or "")),
         ("Carga de trabalho total", f"{total_hours:g} horas" if total_hours else "A confirmar pelo docente"),
@@ -841,6 +842,7 @@ def export_program_latex(
             or "A confirmar pelo docente",
         ],
         ["ECTS", _display(course.get("ects_credits") or "")],
+        ["Horas por ECTS", _display(course.get("hours_per_ects", 25)) if course.get("ects_credits") else "Não aplicável"],
         ["Horas de contacto", _display(course.get("contact_hours") or "")],
         ["Trabalho autónomo", _display(course.get("autonomous_hours") or "")],
         [

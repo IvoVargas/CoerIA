@@ -15,6 +15,7 @@ from .isced import (
     canonicalize_isced_f,
 )
 from .models import SEMESTER_OPTIONS, validate_semester
+from .workload import calculate_workload
 from .providers import (
     AI_PROVIDER_IAEDU,
     AI_PROVIDER_OPENAI,
@@ -81,6 +82,11 @@ def _merge_initial_proposal(
     merged: dict[str, Any] = {}
     fields_not_completed: list[str] = []
     for field in PROPOSAL_FIELDS:
+        if field == "ects_credits" and original.get(field) == 0:
+            merged[field] = 0
+            continue
+        if field == "autonomous_hours" and float(merged.get("ects_credits", 0) or 0) > 0:
+            continue
         original_value = original.get(field)
         if not _field_is_empty(field, original_value):
             merged[field] = original_value
@@ -94,6 +100,14 @@ def _merge_initial_proposal(
                 else field
             )
 
+    merged["hours_per_ects"] = original.get("hours_per_ects", 25)
+    try:
+        merged["duration_hours"], merged["autonomous_hours"] = calculate_workload(
+            merged.get("ects_credits", 0), merged.get("contact_hours", 0),
+            merged.get("autonomous_hours", 0), merged["hours_per_ects"],
+        )
+    except ValueError as error:
+        raise AgentGenerationError(str(error)) from error
     if fields_not_completed:
         raise AgentGenerationError(
             "A IA não conseguiu completar todos os campos vazios: "
@@ -176,6 +190,11 @@ def validate_initial_fields(data: dict[str, Any]) -> dict[str, Any]:
             "Indique o tipo de formação para melhorar o enquadramento.",
             "program_type",
         )
+    try:
+        calculate_workload(data.get("ects_credits", 0), data.get("contact_hours", 0),
+                           data.get("autonomous_hours", 0), data.get("hours_per_ects", 25))
+    except ValueError as error:
+        add_issue(str(error), "duration_hours")
     try:
         duration = float(data.get("duration_hours", 0) or 0)
         if duration <= 0:

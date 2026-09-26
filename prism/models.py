@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from .cnaef import canonicalize_cnaef
 from .curriculum import TAXONOMY_SOLO, validate_taxonomy_choice
 from .isced import canonicalize_isced_f
+from .workload import calculate_workload
 
 
 RESOURCE_PRESENTATION = "Apresentação PowerPoint"
@@ -66,6 +67,7 @@ class CourseInput:
     isced_f_code: str = ""
     isced_f_name: str = ""
     ects_credits: float = 0.0
+    hours_per_ects: float = 25.0
     contact_hours: float = 0.0
     autonomous_hours: float = 0.0
     general_aims: str = ""
@@ -92,6 +94,7 @@ class CourseInput:
         autonomous_hours: int | float | str = 0,
         general_aims: str = "",
         bibliography: str = "",
+        hours_per_ects: int | float | str = 25,
     ) -> "CourseInput":
         title = (unit_name or "").strip()
         text = (source_text or "").strip()
@@ -105,6 +108,11 @@ class CourseInput:
                 "(40 caracteres)."
             )
 
+        calculated, autonomous_hours = calculate_workload(
+            ects_credits, contact_hours, autonomous_hours, hours_per_ects
+        )
+        if calculated > 0 or float(ects_credits or 0) > 0:
+            duration_hours = calculated
         try:
             hours = float(duration_hours)
         except (TypeError, ValueError) as error:
@@ -146,6 +154,7 @@ class CourseInput:
             isced_f_code=validated_isced_code,
             isced_f_name=validated_isced_name,
             ects_credits=non_negative_number(ects_credits, "Os créditos ECTS"),
+            hours_per_ects=float(hours_per_ects),
             contact_hours=non_negative_number(contact_hours, "As horas de contacto"),
             autonomous_hours=non_negative_number(
                 autonomous_hours, "As horas de trabalho autónomo"

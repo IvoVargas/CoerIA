@@ -31,6 +31,32 @@ from prism.workflow import (
 )
 
 
+@pytest.mark.asyncio
+async def test_ects_calculation_and_confirmation(user: User):
+    interfaces = []
+    @ui.page('/_test_ects')
+    def page():
+        interfaces.append(app.AGIRSoloInterface())
+    await user.open('/_test_ects')
+    interface = interfaces[0]
+    interface.show_new_session()
+    interface._set_form_data({'ects_credits': 6, 'contact_hours': 40,
+                             'autonomous_hours': 80, 'hours_per_ects': 25})
+    assert interface.fields['duration_hours'].value == 150
+    assert interface.fields['autonomous_hours'].value == 110
+    assert interface.fields['autonomous_hours']._props.get('readonly') is True
+    user.find('Alterar horas por ECTS').click()
+    await user.should_see('Confirmar alteração')
+    user.find('Cancelar').click()
+    assert interface.fields['hours_per_ects'].value == 25
+    interface._set_form_data({'ects_credits': 0, 'contact_hours': 40, 'autonomous_hours': 80})
+    assert interface.fields['duration_hours'].value == 120
+    assert not interface.fields['autonomous_hours']._props.get('readonly')
+    interface._set_form_data({'ects_credits': 6, 'contact_hours': 151})
+    assert interface.fields['duration_hours'].value is None
+    assert 'não podem exceder' in interface.workload_error.text
+
+
 @pytest.mark.parametrize(
     ("elapsed_seconds", "expected"),
     [

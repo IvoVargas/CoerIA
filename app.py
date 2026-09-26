@@ -88,6 +88,7 @@ from prism.models import (
     SEMESTER_OPTIONS,
 )
 from prism.persistence import SQLiteSessionStore
+from prism.workload import calculate_workload
 from prism.presentation import (
     active_stage_artifact,
     audit_rows,
@@ -1036,7 +1037,12 @@ class AGIRSoloInterface:
             ).props("readonly").classes("full-control")
             self.fields["ects_credits"] = ui.number(
                 "ECTS", value=0, min=0, precision=1
-            ).classes("full-control")
+            ).props("step=0.5").classes("full-control")
+            ui.label("ECTS = 0: formação sem ECTS; horas preenchidas manualmente.").classes("text-sm")
+            self.fields["hours_per_ects"] = ui.number(
+                "Horas por ECTS", value=25, min=25, max=28, precision=2
+            ).props("readonly").classes("full-control")
+            ui.button("Alterar horas por ECTS", on_click=self._change_ects_factor).props("flat")
             with ui.element("div").classes(
                 "col-span-2 grid grid-cols-2 gap-4 max-sm:grid-cols-1"
             ) as self.initial_hours_group:
@@ -1047,6 +1053,12 @@ class AGIRSoloInterface:
                 self.fields["autonomous_hours"] = ui.number(
                     "Trabalho autónomo", value=0, min=0, precision=1
                 ).classes("full-control")
+                self.fields["duration_hours"] = ui.number(
+                    "Horas totais", value=0, precision=2
+                ).props("readonly").classes("full-control")
+                self.workload_error = ui.label().classes("text-negative col-span-2")
+            for key in ("ects_credits", "contact_hours", "autonomous_hours", "hours_per_ects"):
+                self.fields[key].on_value_change(self._refresh_workload)
         self.fields["bibliography"] = ui.textarea(
             "Bibliografia fornecida ou validada pelo docente",
             placeholder=(
@@ -1121,19 +1133,65 @@ class AGIRSoloInterface:
         self.removed_source_files.discard(filename)
         self.render_upload_list()
 
+    def _refresh_workload(self, _event=None) -> None:
+        if getattr(self, "_updating_workload", False):
+            return
+        self._updating_workload = True
+        try:
+            credits = self.fields["ects_credits"].value or 0
+            self.fields["autonomous_hours"].props(
+                "readonly" if credits else "", remove="readonly" if not credits else ""
+            )
+            total, autonomous = calculate_workload(
+                credits, self.fields["contact_hours"].value,
+                self.fields["autonomous_hours"].value, self.fields["hours_per_ects"].value,
+            )
+            self.fields["duration_hours"].set_value(total)
+            if credits:
+                self.fields["autonomous_hours"].set_value(autonomous)
+            self.workload_error.set_text("")
+        except ValueError as error:
+            self.fields["duration_hours"].set_value(None)
+            self.workload_error.set_text(str(error))
+        finally:
+            self._updating_workload = False
+
+    async def _change_ects_factor(self) -> None:
+        with ui.dialog() as dialog, ui.card():
+            ui.label("Alterar o valor institucional de horas por ECTS?")
+            ui.label("Confirme o valor adotado pela sua instituição, entre 25 e 28 horas.")
+            factor = ui.number("Horas por ECTS", value=self.fields["hours_per_ects"].value,
+                               min=25, max=28, precision=2)
+            ui.button("Cancelar", on_click=lambda: dialog.submit(None))
+            ui.button("Confirmar alteração", on_click=lambda: dialog.submit(factor.value))
+        value = await dialog
+        if value is not None:
+            try:
+                calculate_workload(hours_per_ects=value)
+            except ValueError as error:
+                ui.notify(str(error), type="negative")
+                return
+            self.fields["hours_per_ects"].set_value(value)
+
     def _form_data(self) -> dict[str, Any]:
         data = {name: element.value for name, element in self.fields.items()}
         data["audience"] = str(data.get("program_type", "") or "Ensino superior")
         for key in ("ects_credits", "contact_hours", "autonomous_hours"):
             data[key] = float(data.get(key, 0) or 0)
-        data["duration_hours"] = (
-            data["contact_hours"] + data["autonomous_hours"]
-        )
+        # Keep invalid drafts available to the validation UI; persistence validates too.
+        try:
+            data["duration_hours"], data["autonomous_hours"] = calculate_workload(
+                data["ects_credits"], data["contact_hours"], data["autonomous_hours"],
+                data.get("hours_per_ects", 25),
+            )
+        except ValueError:
+            data["duration_hours"] = 0
         data["resource_types"] = [RESOURCE_PRESENTATION]
         data["ai_image_generation_enabled"] = True
         return data
 
     def _set_form_data(self, data: dict[str, Any]) -> None:
+        self._updating_workload = True
         for name, element in self.fields.items():
             if name in data:
                 value = data[name]
@@ -1154,6 +1212,8 @@ class AGIRSoloInterface:
                         "",
                     )
                 element.set_value(value)
+        self._updating_workload = False
+        self._refresh_workload()
 
     async def _scroll_and_highlight(
         self,
@@ -1482,6 +1542,7 @@ class AGIRSoloInterface:
                 "isced_f_code": "",
                 "isced_f_name": "",
                 "ects_credits": 0,
+                "hours_per_ects": 25,
                 "contact_hours": 0,
                 "autonomous_hours": 0,
                 "bibliography": "",

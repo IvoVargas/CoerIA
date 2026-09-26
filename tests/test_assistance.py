@@ -249,7 +249,8 @@ class InitialAssistanceTests(unittest.TestCase):
         self.assertEqual(result["unit_name"], original["unit_name"])
         self.assertEqual(result["general_aims"], original["general_aims"])
         self.assertNotIn("audience", result)
-        self.assertNotIn("duration_hours", result)
+        self.assertEqual(result["duration_hours"], 150)
+        self.assertEqual(result["autonomous_hours"], 105)
         self.assertEqual(result["source_text"], proposal["source_text"])
 
     def test_short_generated_source_text_is_repaired_automatically(self) -> None:
