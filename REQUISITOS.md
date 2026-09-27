@@ -544,15 +544,18 @@ apresentação, com processamento local e sem envio dessa imagem ao LLM.
   bytes para a resposta de download.
 - Incluir uma versão editável, exclusivamente em português, do programa da UC,
   construída a partir dos artefactos aprovados e sem nova geração por IA.
-- Incluir no programa identificação — incluindo CNAEF e CITE-F/2013 —, carga de
-  trabalho e ECTS, objetivos gerais, conteúdos, resultados de aprendizagem e
-  classificação taxonómica, política de utilização da IA, atividades de
-  ensino-aprendizagem, avaliação,
-  síntese automática do alinhamento e bibliografia fornecida ou validada pelo
-  docente.
+- Incluir no programa identificação compacta — incluindo CNAEF e CITE-F quando
+  preenchidos —, carga de trabalho e ECTS, objetivos gerais, resultados de
+  aprendizagem em lista, conteúdos por temas, metodologias de ensino,
+  avaliação e critérios, política de IA e bibliografia. Usar texto legível em
+  vez de tabelas extensas. Não inventar ponderações nem referências.
+- Incluir separadamente um relatório de alinhamento e planeamento com a
+  classificação taxonómica, ligações RA–TA–AE, detalhe da prática, acompanhamento
+  e feedback, estados estruturais e aulas. A separação não elimina informação
+  da sessão e não executa IA. Plano de aulas e grelha continuam recursos opcionais.
 - Antes de preparar o ZIP, permitir ao docente escolher Word (`.docx`), LaTeX
   (`.tex`) ou ambos para todos os documentos textuais exportáveis: programa da
-  UC, plano de aulas, grelha de avaliação, ficha de aula, testes com chave de
+  UC, relatório de alinhamento e planeamento, plano de aulas, grelha de avaliação, ficha de aula, testes com chave de
   correção e atividade prática.
 - Manter a apresentação geral e as apresentações das aulas no formato PowerPoint
   (`.pptx`), independentemente da escolha dos formatos documentais.

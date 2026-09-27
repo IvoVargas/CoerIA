@@ -236,10 +236,10 @@ usar a Image API. Também é possível carregar uma imagem do computador; essa
 imagem é processada localmente e não é enviada ao LLM. Depois da aprovação final,
 a aplicação exporta um ZIP com
 o programa da UC — incluindo a política de utilização da IA —, os ficheiros
-selecionados, síntese automática do alinhamento,
+selecionados, relatório de alinhamento e planeamento, síntese automática do alinhamento,
 auditoria,
 manifesto e estado completo da sessão. Antes de preparar o pacote, o docente
-escolhe se os documentos editáveis — programa da UC, plano de aulas, grelha de
+escolhe se os documentos editáveis — programa da UC, relatório de alinhamento, plano de aulas, grelha de
 avaliação, ficha de aula, testes e atividade prática — são incluídos em Word
 (`.docx`), LaTeX (`.tex`) ou em ambos os formatos. A apresentação geral e as
 apresentações das aulas mantêm sempre o formato PowerPoint (`.pptx`). Os
@@ -248,6 +248,12 @@ introduzido pelo docente para preservar uma estrutura compilável. Na instalaç�
 da VPS, a compilação PDF pode ser ativada; nesse caso, cada `.tex` é acompanhado
 pelo respetivo `.pdf`, produzido por `pdflatex` sem `shell-escape` e com limite
 de tempo.
+
+O programa da UC apresenta resultados em lista, conteúdos por temas e texto
+para metodologias e avaliação, sem grelhas técnicas extensas. A classificação
+taxonómica, ligações RA–TA–AE, detalhe das atividades e planeamento das aulas
+ficam no relatório de apoio separado. Os dois documentos reutilizam os dados
+aprovados, sem os resumir por IA nem inventar ponderações ou bibliografia.
 
 As versões, decisões, propostas de IA e respetivas decisões são guardadas em
 SQLite, por predefinição em `data/prism.db`. Na instalação pública, cada sessão

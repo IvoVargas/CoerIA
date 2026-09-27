@@ -631,167 +631,173 @@ def compile_latex_pdf(source_path: Path | str) -> str | None:
     return str(destination)
 
 
-def export_program_document(
-    state: dict[str, Any], output_path: Path | str | None = None
+def _program_metadata_rows(course: dict[str, Any]) -> list[list[str]]:
+    """Compact identification, shared by Word and LaTeX; no inferred data."""
+    def number(key: str) -> str:
+        value = course.get(key)
+        if value is None or value == "":
+            return "Não indicado"
+        try:
+            return f"{float(value):g}".replace(".", ",")
+        except (TypeError, ValueError):
+            return str(value)
+
+    rows = [
+        ["Curso", _display(course.get("program_name"))],
+        ["Tipo de formação", _display(course.get("program_type"))],
+        ["Ano curricular / semestre", f"{_display(course.get('academic_year'))} / {_display(course.get('semester'))}"],
+        ["ECTS / horas por ECTS", f"{number('ects_credits')} / {number('hours_per_ects')}" if course.get("ects_credits") else "Sem ECTS"],
+        ["Carga de trabalho", f"Contacto: {number('contact_hours')} h; autónomo: {number('autonomous_hours')} h; total: {float(course.get('contact_hours') or 0) + float(course.get('autonomous_hours') or 0):g} h".replace(".", ",")],
+    ]
+    for label, code_key, name_key in (
+        ("CNAEF", "cnaef_code", "cnaef_name"),
+        ("CITE-F", "isced_f_code", "isced_f_name"),
+    ):
+        value = " — ".join(str(course.get(key) or "").strip() for key in (code_key, name_key) if str(course.get(key) or "").strip())
+        if value:
+            rows.append([label, value])
+    return rows
+
+
+def _program_blocks(state: dict[str, Any]) -> list[tuple[str, str]]:
+    """Readable programme. Reformat approved text without summarising with AI."""
+    blocks: list[tuple[str, str]] = [
+        ("heading", "Objetivos gerais"),
+        ("paragraph", str(state.get("course", {}).get("general_aims") or "").strip() or "Não indicado pelo docente."),
+        ("heading", "Resultados de aprendizagem"),
+    ]
+    for outcome in state.get("learning_outcomes", []):
+        blocks.append(("bullet", f"{outcome.get('id', '')} — {outcome.get('statement', '')}"))
+    blocks.append(("heading", "Conteúdos programáticos"))
+    for index, item in enumerate(state.get("curriculum_analysis", {}).get("contents", []), 1):
+        blocks.extend([
+            ("subheading", f"{index} {item.get('title', '')}"),
+            ("paragraph", str(item.get("description", ""))),
+        ])
+    blocks.append(("heading", "Metodologias de ensino e aprendizagem"))
+    for index, activity in enumerate(state.get("teaching_activities", []), 1):
+        blocks.append(("subheading", f"Atividade {index}"))
+        blocks.append(("paragraph", str(activity.get("activity", ""))))
+        if activity.get("learning_context"):
+            blocks.append(("paragraph", f"Contexto: {activity['learning_context']}"))
+    blocks.append(("heading", "Tarefas e critérios de avaliação"))
+    for index, assessment in enumerate(state.get("assessment_activities", []), 1):
+        blocks.append(("subheading", f"Tarefa {index}"))
+        blocks.append(("paragraph", " · ".join(str(assessment.get(key) or "") for key in ("assessment_purpose", "work_type") if assessment.get(key))))
+        for label, key in (("Tarefa", "activity"), ("Evidência", "evidence"), ("Critérios", "criterion")):
+            blocks.append(("paragraph", f"{label}: {assessment.get(key, '')}"))
+    blocks.extend([
+        ("paragraph", "As ponderações e as regras de classificação não estão registadas nestes dados. Devem ser definidas pelo docente antes da utilização institucional."),
+        ("heading", "Política de utilização da IA"),
+    ])
+    blocks.extend(("bullet", entry) for entry in _ai_policy_entries(state))
+    blocks.append(("heading", "Bibliografia"))
+    bibliography = _bibliography_entries(state.get("course", {}).get("bibliography"))
+    blocks.extend(("bullet", entry) for entry in bibliography)
+    if not bibliography:
+        blocks.append(("paragraph", "Bibliografia a fornecer ou validar pelo docente antes da utilização institucional."))
+    return blocks
+
+
+def _alignment_report_blocks(state: dict[str, Any]) -> list[tuple[str, str]]:
+    """Technical evidence and lesson planning, separate from the programme."""
+    blocks: list[tuple[str, str]] = [
+        ("paragraph", "Documento de apoio ao docente. As ligações e os estados automáticos verificam a estrutura; não certificam a adequação pedagógica."),
+        ("heading", "Classificação dos resultados de aprendizagem"),
+    ]
+    taxonomy = state.get("course", {}).get("taxonomy_type", "")
+    for outcome in state.get("learning_outcomes", []):
+        blocks.extend([
+            ("subheading", str(outcome.get("id", ""))),
+            ("paragraph", str(outcome.get("statement", ""))),
+            ("paragraph", f"Taxonomia: {taxonomy}; nível: {outcome.get('taxonomy_level', '')}; verbo: {outcome.get('action_verb', '')}; modo de IA: {outcome.get('ai_mode', 'AI-off')}."),
+        ])
+    blocks.append(("heading", "Síntese automática do alinhamento"))
+    blocks.append(("paragraph", "Referência dos conteúdos: " + "; ".join(
+        f"{item.get('id', '')} — {item.get('title', '')}"
+        for item in state.get("curriculum_analysis", {}).get("contents", [])
+    )))
+    for row in derive_alignment_rows(state):
+        blocks.append(("subheading", str(row.get("outcome_id", ""))))
+        for label, key in (("Conteúdos", "content_ids"), ("Tarefas de avaliação", "assessment_ids"), ("Atividades de ensino-aprendizagem", "teaching_activity_ids")):
+            blocks.append(("paragraph", f"{label}: {', '.join(row.get(key, []))}"))
+        blocks.append(("paragraph", f"Estado estrutural: {row.get('status', '')}. {row.get('rationale', '')}"))
+        blocks.append(("paragraph", f"Modo de IA: {row.get('ai_mode', 'AI-off')}"))
+    for heading, collection, links in (
+        ("Referência das tarefas de avaliação", "assessment_activities", (("Resultados", "outcome_ids"),)),
+        ("Referência das atividades de ensino-aprendizagem", "teaching_activities", (("Tarefas", "assessment_ids"), ("Resultados derivados", "outcome_ids"))),
+    ):
+        blocks.append(("heading", heading))
+        for item in state.get(collection, []):
+            blocks.append(("subheading", str(item.get("id", ""))))
+            blocks.append(("paragraph", str(item.get("activity", ""))))
+            if collection == "teaching_activities":
+                for label, value in (
+                    ("Contexto", item.get("learning_context")),
+                    ("Prática", item.get("practice") or item.get("method")),
+                    ("Acompanhamento", item.get("support")),
+                    ("Feedback", item.get("feedback_strategy")),
+                ):
+                    if value:
+                        blocks.append(("paragraph", f"{label}: {value}"))
+            for label, key in links:
+                blocks.append(("paragraph", f"{label}: {', '.join(item.get(key, []))}"))
+            blocks.append(("paragraph", f"Modo de IA: {item.get('ai_mode', 'AI-off')}"))
+    blocks.append(("heading", "Planeamento das aulas"))
+    for index, lesson in enumerate(state.get("pedagogical_design", {}).get("lessons", []), 1):
+        blocks.extend([
+            ("subheading", f"Aula {index}"),
+            ("paragraph", f"Duração: {lesson.get('duration_minutes', '')} minutos; tipo: {lesson.get('session_type', '')}."),
+            ("paragraph", f"Atividades ou avaliação: {', '.join(lesson.get('component_ids', [])) or 'Não associadas'}"),
+            ("paragraph", str(lesson.get("notes", ""))),
+        ])
+    return blocks
+
+
+def _export_curricular_word(
+    state: dict[str, Any], output_path: Path | str | None, *, report: bool = False,
 ) -> str:
-    """Constrói o programa editável da UC a partir de artefactos já aprovados."""
-
     _validate_program_export_state(state)
-    alignment_rows = derive_alignment_rows(state)
-
-    course = state.get("course", {})
-    analysis = state.get("curriculum_analysis", {})
     document = Document()
     _configure_program_document(document)
-    title = document.add_paragraph(style="Title")
-    title.add_run("Programa da Unidade Curricular")
-    subtitle = document.add_paragraph(style="Subtitle")
-    subtitle.add_run(_display(course.get("unit_name")))
-
-    document.add_heading("1. Identificação e carga de trabalho", level=1)
-    _add_program_metadata(document, course)
-
-    document.add_heading("2. Objetivos gerais", level=1)
-    general_aims = str(course.get("general_aims", "")).strip()
-    document.add_paragraph(general_aims or "Não indicado pelo docente.")
-
-    document.add_heading("3. Conteúdos programáticos", level=1)
-    contents = analysis.get("contents", [])
-    table = document.add_table(rows=1, cols=3)
-    for item in contents:
-        cells = table.add_row().cells
-        cells[0].text = str(item.get("id", ""))
-        cells[1].text = str(item.get("title", ""))
-        cells[2].text = str(item.get("description", ""))
-    _format_table(
-        table,
-        ["ID", "Tema", "Descrição do tema"],
-        [800, 2700, 6460],
-    )
-
-    document.add_heading("4. Resultados de aprendizagem", level=1)
-    table = document.add_table(rows=1, cols=6)
-    for outcome in state.get("learning_outcomes", []):
-        cells = table.add_row().cells
-        cells[0].text = str(outcome.get("id", ""))
-        cells[1].text = str(outcome.get("statement", ""))
-        cells[2].text = str(course.get("taxonomy_type", ""))
-        cells[3].text = str(outcome.get("taxonomy_level", ""))
-        cells[4].text = str(outcome.get("action_verb", ""))
-        cells[5].text = str(outcome.get("ai_mode", "AI-off"))
-    _format_table(
-        table,
-        ["ID", "Resultado de aprendizagem", "Taxonomia", "Nível", "Verbo", "Modo de IA"],
-        [600, 4260, 1000, 1800, 900, 1400],
-    )
-
-    document.add_heading("5. Política de utilização da IA", level=1)
-    for entry in _ai_policy_entries(state):
-        document.add_paragraph(entry, style="List Bullet")
-
-    document.add_heading("6. Tarefas e critérios de avaliação", level=1)
-    table = document.add_table(rows=1, cols=8)
-    for assessment in state.get("assessment_activities", []):
-        cells = table.add_row().cells
-        cells[0].text = str(assessment.get("id", ""))
-        cells[1].text = str(assessment.get("assessment_purpose", ""))
-        cells[2].text = str(assessment.get("work_type", ""))
-        cells[3].text = ", ".join(assessment.get("outcome_ids", []))
-        cells[4].text = str(assessment.get("activity", ""))
-        cells[5].text = str(assessment.get("evidence", ""))
-        cells[6].text = str(assessment.get("criterion", ""))
-        cells[7].text = str(assessment.get("ai_mode", "AI-off"))
-    _format_table(
-        table,
-        [
-            "ID",
-            "Finalidade",
-            "Modalidade",
-            "Resultados",
-            "Tarefa de avaliação",
-            "Evidência",
-            "Critério",
-            "Modo de IA",
-        ],
-        [450, 750, 750, 850, 1900, 1800, 1900, 1560],
-    )
-
-    document.add_heading("7. Atividades de ensino-aprendizagem", level=1)
-    table = document.add_table(rows=1, cols=9)
-    for activity in state.get("teaching_activities", []):
-        cells = table.add_row().cells
-        cells[0].text = str(activity.get("id", ""))
-        cells[1].text = ", ".join(activity.get("assessment_ids", []))
-        cells[2].text = ", ".join(activity.get("outcome_ids", []))
-        cells[3].text = str(activity.get("learning_context", ""))
-        cells[4].text = str(activity.get("activity", ""))
-        cells[5].text = str(activity.get("practice") or activity.get("method", ""))
-        cells[6].text = str(activity.get("support", ""))
-        cells[7].text = str(activity.get("feedback_strategy", ""))
-        cells[8].text = str(activity.get("ai_mode", "AI-off"))
-    _format_table(
-        table,
-        [
-            "ID",
-            "Tarefas",
-            "Resultados derivados",
-            "Contexto",
-            "Atividade",
-            "Prática",
-            "Acompanhamento",
-            "Feedback",
-            "Modo de IA",
-        ],
-        [400, 850, 800, 800, 1500, 1200, 1300, 1300, 1810],
-    )
-
-    document.add_heading("8. Planeamento das aulas", level=1)
-    pedagogical_design = state.get("pedagogical_design", {})
-    table = document.add_table(rows=1, cols=5)
-    for index, item in enumerate(pedagogical_design.get("lessons", []), start=1):
-        cells = table.add_row().cells
-        cells[0].text = str(index)
-        cells[1].text = str(item.get("duration_minutes", ""))
-        cells[2].text = str(item.get("session_type", ""))
-        cells[3].text = ", ".join(item.get("component_ids", []))
-        cells[4].text = str(item.get("notes", ""))
-    _format_table(
-        table,
-        ["Aula", "Duração (minutos)", "Tipo de sessão", "Atividades ou avaliação", "Texto opcional"],
-        [500, 1200, 1800, 2600, 3860],
-    )
-
-    document.add_heading("9. Síntese automática do alinhamento", level=1)
-    table = document.add_table(rows=1, cols=7)
-    for row in alignment_rows:
-        cells = table.add_row().cells
-        cells[0].text = str(row.get("outcome_id", ""))
-        cells[1].text = ", ".join(row.get("content_ids", []))
-        cells[2].text = ", ".join(row.get("teaching_activity_ids", []))
-        cells[3].text = ", ".join(row.get("assessment_ids", []))
-        cells[4].text = str(row.get("status", ""))
-        cells[5].text = str(row.get("rationale", ""))
-        cells[6].text = str(row.get("ai_mode", "AI-off"))
-    _format_table(
-        table,
-        ["RA", "Conteúdos", "Ensino-aprendizagem", "Avaliação", "Estado", "Fundamentação", "Modo de IA"],
-        [550, 1050, 1500, 1150, 900, 3200, 1610],
-    )
-
-    document.add_heading("10. Bibliografia", level=1)
-    bibliography = _bibliography_entries(course.get("bibliography"))
-    if bibliography:
-        for entry in bibliography:
-            document.add_paragraph(entry, style="List Bullet")
-    else:
-        paragraph = document.add_paragraph(
-            "Bibliografia a fornecer ou validar pelo docente antes da utilização institucional."
-        )
-        paragraph.runs[0].italic = True
-        paragraph.runs[0].font.color.rgb = RGBColor.from_string("7A5A00")
-
+    # Institutional A4 layout, with ordinary paragraphs instead of wide grids.
+    for name, size in (("Title", 20), ("Subtitle", 13), ("Heading 1", 13), ("Heading 2", 11)):
+        style = document.styles[name]
+        style.font.size = DocxPt(size)
+        style.font.color.rgb = RGBColor(0, 0, 0)
+    document.styles["Normal"].font.size = DocxPt(11)
+    document.styles["Normal"].paragraph_format.line_spacing = 1.1
+    document.styles["Heading 2"].paragraph_format.space_before = DocxPt(8)
+    document.styles["Heading 2"].paragraph_format.space_after = DocxPt(4)
+    for section in document.sections:
+        section.header.paragraphs[0].clear()
+        footer = section.footer.paragraphs[0]
+        footer.clear()
+        footer.add_run("CoerIA · ")
+        field = OxmlElement("w:fldSimple")
+        field.set(qn("w:instr"), "PAGE")
+        footer._p.append(field)
+    title = "Relatório de alinhamento e planeamento" if report else "Programa da Unidade Curricular"
+    document.add_paragraph(title, style="Title")
+    document.add_paragraph(_display(state.get("course", {}).get("unit_name")), style="Subtitle")
+    if not report:
+        table = document.add_table(rows=1, cols=2)
+        for values in _program_metadata_rows(state.get("course", {})):
+            cells = table.add_row().cells
+            cells[0].text, cells[1].text = values
+        _format_table(table, ["Identificação", "Dados da unidade curricular"], [2600, 7360])
+    blocks = _alignment_report_blocks(state) if report else _program_blocks(state)
+    for index, (kind, value) in enumerate(blocks):
+        if not value.strip():
+            continue
+        if kind in {"heading", "subheading"}:
+            document.add_heading(value, level=1 if kind == "heading" else 2)
+        else:
+            paragraph = document.add_paragraph(value, style="List Bullet" if kind == "bullet" else "Normal")
+            if kind == "paragraph" and index + 1 < len(blocks) and blocks[index + 1][0] == "paragraph":
+                paragraph.paragraph_format.keep_with_next = True
     if output_path is None:
-        with NamedTemporaryFile(prefix="coeria_programa_", suffix=".docx", delete=False) as temp_file:
+        with NamedTemporaryFile(prefix="coeria_alinhamento_" if report else "coeria_programa_", suffix=".docx", delete=False) as temp_file:
             destination = Path(temp_file.name)
     else:
         destination = Path(output_path)
@@ -799,241 +805,53 @@ def export_program_document(
     return str(destination)
 
 
-def export_program_latex(
-    state: dict[str, Any], output_path: Path | str | None = None
+def _export_curricular_latex(
+    state: dict[str, Any], output_path: Path | str | None, *, report: bool = False,
 ) -> str:
-    """Constrói em LaTeX o mesmo programa da UC disponibilizado em Word."""
-
     _validate_program_export_state(state)
-    alignment_rows = derive_alignment_rows(state)
-    course = state.get("course", {})
-    analysis = state.get("curriculum_analysis", {})
-    total_hours = float(course.get("contact_hours", 0) or 0) + float(
-        course.get("autonomous_hours", 0) or 0
-    )
-    metadata_rows = [
-        ["Unidade curricular", _display(course.get("unit_name"))],
-        ["Curso ou programa", _display(course.get("program_name"))],
-        ["Tipo de formação", _display(course.get("program_type"))],
-        ["Ano curricular", _display(course.get("academic_year"))],
-        ["Semestre", _display(course.get("semester"))],
-        [
-            "CNAEF",
-            " --- ".join(
-                item
-                for item in (
-                    str(course.get("cnaef_code", "")).strip(),
-                    str(course.get("cnaef_name", "")).strip(),
-                )
-                if item
-            )
-            or "A confirmar pelo docente",
-        ],
-        [
-            "CITE-F/2013",
-            " --- ".join(
-                item
-                for item in (
-                    str(course.get("isced_f_code", "")).strip(),
-                    str(course.get("isced_f_name", "")).strip(),
-                )
-                if item
-            )
-            or "A confirmar pelo docente",
-        ],
-        ["ECTS", _display(course.get("ects_credits") or "")],
-        ["Horas por ECTS", _display(course.get("hours_per_ects", 25)) if course.get("ects_credits") else "Não aplicável"],
-        ["Horas de contacto", _display(course.get("contact_hours") or "")],
-        ["Trabalho autónomo", _display(course.get("autonomous_hours") or "")],
-        [
-            "Carga de trabalho total",
-            f"{total_hours:g} horas" if total_hours else "A confirmar pelo docente",
-        ],
-        ["Taxonomia selecionada", _display(course.get("taxonomy_type"))],
-    ]
-    body = [
-        r"\section{Identificação e carga de trabalho}",
-        _latex_table(["Campo", "Valor"], metadata_rows, [0.24, 0.66]),
-        r"\section{Objetivos gerais}",
-    ]
-    general_aims = str(course.get("general_aims", "")).strip()
-    body.append(_latex_escape(general_aims or "Não indicado pelo docente."))
-    body.extend(
-        [
-            r"\section{Conteúdos programáticos}",
-            _latex_table(
-                ["ID", "Tema", "Descrição do tema"],
-                [
-                    [item.get("id", ""), item.get("title", ""), item.get("description", "")]
-                    for item in analysis.get("contents", [])
-                ],
-                [0.07, 0.22, 0.59],
-            ),
-            r"\section{Resultados de aprendizagem}",
-            _latex_table(
-                ["ID", "Resultado de aprendizagem", "Nível taxonómico", "Verbo", "Modo de IA"],
-                [
-                    [
-                        outcome.get("id", ""),
-                        outcome.get("statement", ""),
-                        " — ".join(
-                            value
-                            for value in (
-                                str(course.get("taxonomy_type", "")).strip(),
-                                str(outcome.get("taxonomy_level", "")).strip(),
-                            )
-                            if value
-                        ),
-                        outcome.get("action_verb", ""),
-                        outcome.get("ai_mode", "AI-off"),
-                    ]
-                    for outcome in state.get("learning_outcomes", [])
-                ],
-                [0.05, 0.36, 0.18, 0.12, 0.11],
-            ),
-            r"\section{Política de utilização da IA}",
-            _latex_itemize(_ai_policy_entries(state)),
-            r"\begin{landscape}",
-            r"\section{Tarefas e critérios de avaliação}",
-            _latex_table(
-                [
-                    "ID",
-                    "Enquadramento",
-                    "Resultados",
-                    "Tarefa e evidência",
-                    "Critério",
-                ],
-                [
-                    [
-                        assessment.get("id", ""),
-                        "\n".join(
-                            (
-                                "Finalidade: "
-                                + str(assessment.get("assessment_purpose", "")),
-                                "Modalidade: "
-                                + str(assessment.get("work_type", "")),
-                                "Modo de IA: "
-                                + str(assessment.get("ai_mode", "AI-off")),
-                            )
-                        ),
-                        ", ".join(assessment.get("outcome_ids", [])),
-                        "\n".join(
-                            (
-                                "Tarefa: " + str(assessment.get("activity", "")),
-                                "Evidência: " + str(assessment.get("evidence", "")),
-                            )
-                        ),
-                        assessment.get("criterion", ""),
-                    ]
-                    for assessment in state.get("assessment_activities", [])
-                ],
-                [0.04, 0.18, 0.10, 0.31, 0.20],
-            ),
-            r"\end{landscape}",
-            r"\begin{landscape}",
-            r"\section{Atividades de ensino-aprendizagem}",
-            _latex_table(
-                [
-                    "ID",
-                    "Contexto / ligações",
-                    "Atividade",
-                    "Prática / acompanhamento",
-                    "Feedback / IA",
-                ],
-                [
-                    [
-                        activity.get("id", ""),
-                        "\n".join(
-                            (
-                                f"Contexto: {activity.get('learning_context', '')}",
-                                "Tarefas: "
-                                + ", ".join(activity.get("assessment_ids", [])),
-                                "Resultados derivados: "
-                                + ", ".join(activity.get("outcome_ids", [])),
-                            )
-                        ),
-                        activity.get("activity", ""),
-                        "\n".join(
-                            (
-                                "Prática: "
-                                + str(
-                                    activity.get("practice")
-                                    or activity.get("method", "")
-                                ),
-                                "Acompanhamento: "
-                                + str(activity.get("support", "")),
-                            )
-                        ),
-                        "\n".join(
-                            (
-                                "Feedback: "
-                                + str(activity.get("feedback_strategy", "")),
-                                "Modo de IA: "
-                                + str(activity.get("ai_mode", "AI-off")),
-                            )
-                        ),
-                    ]
-                    for activity in state.get("teaching_activities", [])
-                ],
-                [0.04, 0.19, 0.20, 0.23, 0.17],
-            ),
-            r"\end{landscape}",
-            r"\section{Planeamento das aulas}",
-            _latex_table(
-                ["Aula", "Duração (minutos)", "Tipo de sessão", "Atividades ou avaliação", "Texto opcional"],
-                [
-                    [
-                        index,
-                        item.get("duration_minutes", ""),
-                        item.get("session_type", ""),
-                        ", ".join(item.get("component_ids", [])),
-                        item.get("notes", ""),
-                    ]
-                    for index, item in enumerate(
-                        state.get("pedagogical_design", {}).get("lessons", []),
-                        start=1,
-                    )
-                ],
-                [0.04, 0.10, 0.15, 0.20, 0.25],
-            ),
-            r"\clearpage",
-            r"\section{Síntese automática do alinhamento}",
-            _latex_table(
-                ["RA", "Conteúdos", "Ensino-aprendizagem", "Avaliação", "Estado", "Fundamentação", "Modo de IA"],
-                [
-                    [
-                        row.get("outcome_id", ""),
-                        ", ".join(row.get("content_ids", [])),
-                        ", ".join(row.get("teaching_activity_ids", [])),
-                        ", ".join(row.get("assessment_ids", [])),
-                        row.get("status", ""),
-                        row.get("rationale", ""),
-                        row.get("ai_mode", "AI-off"),
-                    ]
-                    for row in alignment_rows
-                ],
-                [0.04, 0.10, 0.14, 0.10, 0.08, 0.24, 0.09],
-            ),
-            r"\section{Bibliografia}",
-        ]
-    )
-    bibliography = _bibliography_entries(course.get("bibliography"))
-    if bibliography:
-        body.append(_latex_itemize(bibliography))
-    else:
-        body.append(
-            r"\emph{Bibliografia a fornecer ou validar pelo docente antes da utilização institucional.}"
-        )
-    content = _latex_document(
-        "Programa da Unidade Curricular",
-        _display(course.get("unit_name")),
-        body,
-    )
+    body: list[str] = []
+    if not report:
+        body.append(_latex_table(["Identificação", "Dados da unidade curricular"], _program_metadata_rows(state.get("course", {})), [0.26, 0.68]))
+    blocks = _alignment_report_blocks(state) if report else _program_blocks(state)
+    bullets: list[str] = []
+    for kind, value in [*blocks, ("paragraph", "")]:
+        if kind == "bullet":
+            bullets.append(value)
+            continue
+        if bullets:
+            body.append(_latex_itemize(bullets))
+            bullets = []
+        if not value.strip():
+            continue
+        if kind in {"heading", "subheading"}:
+            command = "section" if kind == "heading" else "subsection"
+            body.append("\\" + command + "{" + _latex_escape(value) + "}")
+        else:
+            body.append(_latex_escape(value) + "\n")
+    title = "Relatório de alinhamento e planeamento" if report else "Programa da Unidade Curricular"
     return _write_latex_document(
-        content,
-        output_path,
-        prefix="coeria_programa_",
+        _latex_document(title, _display(state.get("course", {}).get("unit_name")), body).replace(
+            r"\begin{document}",
+            "\\setcounter{secnumdepth}{0}\n\\raggedbottom\n" + r"\begin{document}",
+        ),
+        output_path, prefix="coeria_alinhamento_" if report else "coeria_programa_",
     )
+
+
+def export_program_document(state: dict[str, Any], output_path: Path | str | None = None) -> str:
+    return _export_curricular_word(state, output_path)
+
+
+def export_program_latex(state: dict[str, Any], output_path: Path | str | None = None) -> str:
+    return _export_curricular_latex(state, output_path)
+
+
+def export_alignment_document(state: dict[str, Any], output_path: Path | str | None = None) -> str:
+    return _export_curricular_word(state, output_path, report=True)
+
+
+def export_alignment_latex(state: dict[str, Any], output_path: Path | str | None = None) -> str:
+    return _export_curricular_latex(state, output_path, report=True)
 
 
 PPT_NAVY = PptxRGBColor(11, 37, 69)
@@ -1948,6 +1766,9 @@ def export_resource_package(
             export_program_document(state, program_path)
             generated.append((program_path, program_path.name))
             primary_products.append(program_path.name)
+            report_path = temporary_path / f"{course_stem}_relatorio_alinhamento.docx"
+            export_alignment_document(state, report_path)
+            generated.append((report_path, report_path.name))
         if DOCUMENT_FORMAT_LATEX in formats:
             program_latex_path = temporary_path / f"{course_stem}_programa_uc.tex"
             export_program_latex(state, program_latex_path)
@@ -1957,6 +1778,9 @@ def export_resource_package(
                 compiled_pdfs,
             )
             primary_products.append(program_latex_path.name)
+            report_path = temporary_path / f"{course_stem}_relatorio_alinhamento.tex"
+            export_alignment_latex(state, report_path)
+            _register_latex_document(generated, report_path, compiled_pdfs)
 
         if RESOURCE_PRESENTATION in selected:
             path = temporary_path / f"{course_stem}_apresentacao.pptx"

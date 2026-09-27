@@ -33,6 +33,8 @@ from prism.exporter import (
     export_presentation,
     export_program_document,
     export_program_latex,
+    export_alignment_document,
+    export_alignment_latex,
     export_resource_package,
 )
 from prism.models import (
@@ -1402,12 +1404,16 @@ class ResourceGenerationTests(unittest.TestCase):
                     + [cell.text for table in program.tables for row in table.rows for cell in row.cells]
                 )
                 self.assertIn("Programa da Unidade Curricular", program_text)
-                self.assertIn("Taxonomia selecionada", program_text)
-                self.assertIn("Síntese automática do alinhamento", program_text)
+                self.assertNotIn("Taxonomia selecionada", program_text)
+                self.assertNotIn("Síntese automática do alinhamento", program_text)
+                report_name = next(name for name in names if name.endswith("_relatorio_alinhamento.docx"))
+                report = Document(BytesIO(package.read(report_name)))
+                report_text = "\n".join(p.text for p in report.paragraphs)
+                self.assertIn("Síntese automática do alinhamento", report_text)
                 self.assertIn("Tarefas e critérios de avaliação", program_text)
                 self.assertIn(
                     state["teaching_activities"][0]["assessment_ids"][0],
-                    program_text,
+                    report_text,
                 )
                 self.assertIn("Teaching for Quality Learning", program_text)
                 self.assertNotIn("Learning outcomes", program_text)
@@ -1444,109 +1450,57 @@ class ResourceGenerationTests(unittest.TestCase):
         finally:
             package_path.unlink(missing_ok=True)
 
-    def test_program_exports_manual_teaching_fields_and_lesson_planning(self) -> None:
+    def test_program_and_report_preserve_manual_fields_without_wide_tables(self) -> None:
         state = self._resource_state()
         activity = state["teaching_activities"][0]
         activity.pop("method", None)
         activity["learning_context"] = "Presencial"
         activity["practice"] = "Aplicação manual orientada."
         activity["support"] = "Acompanhamento manual do docente."
-        lesson = state["pedagogical_design"]["lessons"][0]
-
+        original = deepcopy(state)
         with TemporaryDirectory() as temporary_directory:
-            word_path = Path(temporary_directory) / "programa.docx"
-            latex_path = Path(temporary_directory) / "programa.tex"
-            export_program_document(state, word_path)
-            export_program_latex(state, latex_path)
-
-            program = Document(word_path)
-            word_text = "\n".join(
-                [paragraph.text for paragraph in program.paragraphs]
-                + [
-                    cell.text
-                    for table in program.tables
-                    for row in table.rows
-                    for cell in row.cells
-                ]
-            )
-            self.assertIn("Contexto", word_text)
-            self.assertIn("Prática", word_text)
-            self.assertIn("Acompanhamento", word_text)
-            self.assertIn("Aplicação manual orientada.", word_text)
-            self.assertIn("Acompanhamento manual do docente.", word_text)
-            self.assertIn("Tema", word_text)
-            self.assertIn("Descrição do tema", word_text)
-            self.assertIn(self.course.general_aims, word_text)
-            self.assertIn("CITE-F/2013", word_text)
-            self.assertIn("0613", word_text)
-            self.assertIn(
-                "Desenvolvimento e análise de software e aplicações",
-                word_text,
-            )
-            self.assertIn("5. Política de utilização da IA", word_text)
-            self.assertIn("AI-off", word_text)
-            self.assertIn("8. Planeamento das aulas", word_text)
-            self.assertIn(str(lesson["duration_minutes"]), word_text)
-            self.assertIn(lesson["session_type"], word_text)
-            self.assertIn(lesson["notes"], word_text)
-            self.assertIn(lesson["component_ids"][0], word_text)
-            self.assertIn(
-                state["teaching_activities"][0]["assessment_ids"][0],
-                word_text,
-            )
-            table_headers = [
-                [cell.text for cell in table.rows[0].cells]
-                for table in program.tables
-            ]
-            assessment_headers = next(
-                headers for headers in table_headers if "Tarefa de avaliação" in headers
-            )
-            self.assertIn("Resultados", assessment_headers)
-            self.assertIn("Modo de IA", assessment_headers)
-            teaching_headers = next(
-                headers for headers in table_headers if "Tarefas" in headers
-            )
-            self.assertIn("Resultados derivados", teaching_headers)
-
-            latex_text = latex_path.read_text(encoding="utf-8")
-            self.assertIn(r"\section{Política de utilização da IA}", latex_text)
-            self.assertIn("AI-off", latex_text)
-
-            for table in program.tables[1:]:
-                for row in table.rows[1:]:
-                    row_properties = row._tr.get_or_add_trPr()
-                    self.assertIsNotNone(
-                        row_properties.find(
-                            "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}cantSplit"
-                        )
-                    )
-
-            latex = latex_path.read_text(encoding="utf-8")
-            self.assertIn("Contexto:", latex)
-            self.assertIn("Prática:", latex)
-            self.assertIn("Acompanhamento:", latex)
-            self.assertIn("Aplicação manual orientada.", latex)
-            self.assertIn("Acompanhamento manual do docente.", latex)
-            self.assertIn("Tema", latex)
-            self.assertIn("Descrição do tema", latex)
-            self.assertIn(self.course.general_aims, latex)
-            self.assertIn("CITE-F/2013", latex)
-            self.assertIn("0613", latex)
-            self.assertIn(
-                "Desenvolvimento e análise de software e aplicações",
-                latex,
-            )
-            self.assertIn(r"\section{Planeamento das aulas}", latex)
-            self.assertIn(r"\usepackage{pdflscape}", latex)
-            self.assertEqual(latex.count(r"\begin{landscape}"), 2)
-            self.assertIn(str(lesson["duration_minutes"]), latex)
-            self.assertIn(lesson["session_type"], latex)
-            self.assertIn(lesson["notes"], latex)
-            self.assertIn(lesson["component_ids"][0], latex)
-            self.assertIn(
-                state["teaching_activities"][0]["assessment_ids"][0],
-                latex,
-            )
+            root = Path(temporary_directory)
+            export_program_document(state, root / "programa.docx")
+            export_program_latex(state, root / "programa.tex")
+            export_alignment_document(state, root / "relatorio.docx")
+            export_alignment_latex(state, root / "relatorio.tex")
+            program = Document(root / "programa.docx")
+            word_text = "\n".join([p.text for p in program.paragraphs] + [c.text for t in program.tables for r in t.rows for c in r.cells])
+            latex = (root / "programa.tex").read_text(encoding="utf-8")
+            report = Document(root / "relatorio.docx")
+            report_text = "\n".join(p.text for p in report.paragraphs)
+            report_latex = (root / "relatorio.tex").read_text(encoding="utf-8")
+            for text in (word_text, latex):
+                for expected in ("Presencial", self.course.general_aims, "CITE-F", "0613", "AI-off"):
+                    self.assertIn(expected, text)
+                self.assertNotIn("Síntese automática do alinhamento", text)
+                self.assertNotIn("Planeamento das aulas", text)
+                self.assertNotIn("Taxonomia selecionada", text)
+                self.assertNotIn("Nível taxonómico", text)
+                for outcome in state["learning_outcomes"]:
+                    self.assertIn(outcome["statement"], text)
+                for content in state["curriculum_analysis"]["contents"]:
+                    self.assertIn(content["description"], text)
+                for assessment in state["assessment_activities"]:
+                    for key in ("activity", "evidence", "criterion"):
+                        self.assertIn(assessment[key], text)
+            self.assertEqual(len(program.tables), 1)
+            self.assertEqual(len(program.tables[0].columns), 2)
+            self.assertNotIn(r"\begin{landscape}", latex)
+            for text in (report_text, report_latex):
+                self.assertIn("Aplicação manual orientada.", text)
+                self.assertIn("Acompanhamento manual do docente.", text)
+                self.assertIn("Síntese automática do alinhamento", text)
+                self.assertIn("Planeamento das aulas", text)
+                for lesson in state["pedagogical_design"]["lessons"]:
+                    self.assertIn(lesson["notes"], text)
+                    self.assertIn(str(lesson["duration_minutes"]), text)
+                for outcome in state["learning_outcomes"]:
+                    self.assertIn(outcome["taxonomy_level"], text)
+                    self.assertIn(outcome["action_verb"], text)
+            for row in program.tables[0].rows[1:]:
+                self.assertIsNotNone(row._tr.get_or_add_trPr().find("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}cantSplit"))
+        self.assertEqual(state, original)
 
     def test_program_does_not_recover_objectives_from_the_curriculum_stage(self) -> None:
         state = self._resource_state()
@@ -1593,9 +1547,9 @@ class ResourceGenerationTests(unittest.TestCase):
                         self.assertEqual(bool(word_names), expects_word)
                         self.assertEqual(bool(latex_names), expects_latex)
                         if expects_word:
-                            self.assertEqual(len(word_names), 9)
+                            self.assertEqual(len(word_names), 10)
                         if expects_latex:
-                            self.assertEqual(len(latex_names), 9)
+                            self.assertEqual(len(latex_names), 10)
                             program_name = next(
                                 name
                                 for name in latex_names
@@ -1608,16 +1562,9 @@ class ResourceGenerationTests(unittest.TestCase):
                                 r"\section{Tarefas e critérios de avaliação}",
                                 program,
                             )
-                            self.assertIn(
-                                r"\section{Síntese automática do alinhamento}",
-                                program,
-                            )
-                            self.assertIn(
-                                r"\clearpage"
-                                "\n"
-                                r"\section{Síntese automática do alinhamento}",
-                                normalized_program,
-                            )
+                            self.assertNotIn(r"\section{Síntese automática do alinhamento}", program)
+                            report_name = next(name for name in latex_names if name.endswith("_relatorio_alinhamento.tex"))
+                            self.assertIn(r"\section{Síntese automática do alinhamento}", package.read(report_name).decode("utf-8"))
                             self.assertIn(r"Biggs, J., \& Tang", program)
                             self.assertIn(r"\end{document}", program)
                             test_name = next(
@@ -1814,7 +1761,7 @@ class ResourceGenerationTests(unittest.TestCase):
             with zipfile.ZipFile(package_path) as package:
                 names = set(package.namelist())
                 pdf_names = {name for name in names if name.endswith(".pdf")}
-                self.assertEqual(len(pdf_names), 9)
+                self.assertEqual(len(pdf_names), 10)
                 manifest = json.loads(package.read("manifesto.json"))
                 self.assertTrue(manifest["latex_pdf_compilation"]["enabled"])
                 self.assertEqual(
