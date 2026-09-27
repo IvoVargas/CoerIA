@@ -347,7 +347,9 @@ página; o ponto atual conserva o fundo verde em gradiente já usado na seleçã
 barra de ferramentas e
 pede uma proposta para toda a etapa, considerando o rascunho atual; o conteúdo
 só se torna uma nova versão depois da revisão do docente. Em **Recursos
-educativos**, esta ação apresenta primeiro uma confirmação explícita, porque
+educativos**, a ação chama-se **Preparar recursos selecionados**: o plano de aulas
+e a grelha de avaliação são derivados dos dados existentes, sem IA; os restantes
+recursos usam IA. Apresenta primeiro uma confirmação explícita, porque
 pode executar uma chamada por tipo de recurso e chamadas adicionais para gerar
 imagens da apresentação. A proposta resultante reutiliza os mesmos separadores e
 o mesmo editor da edição manual, mostra apenas os recursos selecionados e permite

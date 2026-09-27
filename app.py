@@ -4118,9 +4118,11 @@ class AGIRSoloInterface:
                     ),
                     (
                         "auto_fix_high",
-                        "Criar etapa completa com IA",
+                        "Criar etapa completa com IA / Preparar recursos selecionados",
                         "Pede uma proposta para todo o artefacto. Nada é aplicado sem revisão "
-                        "e aceitação explícitas.",
+                        "e aceitação explícitas. Na etapa de recursos, o plano de aulas e a "
+                        "grelha de avaliação são preparados a partir dos dados existentes, "
+                        "sem IA; os restantes recursos usam IA.",
                     ),
                     (
                         "auto_awesome",
@@ -4503,11 +4505,11 @@ class AGIRSoloInterface:
             with ui.row().classes(
                 "stage-toolbar-actions items-center gap-2 flex-wrap"
             ):
-                ui.label("ASSISTÊNCIA COM IA").classes(
+                ui.label("RECURSOS E ASSISTÊNCIA COM IA" if stage == "resources" else "ASSISTÊNCIA COM IA").classes(
                     "eyebrow stage-toolbar-ai-label"
                 ).mark("ai-assistance-heading")
                 create_button = ui.button(
-                    "Criar etapa completa com IA",
+                    "Preparar recursos selecionados" if stage == "resources" else "Criar etapa completa com IA",
                     icon="auto_fix_high",
                     on_click=lambda: self._create_complete_stage_with_ai(stage),
                 ).props("outline no-caps").classes("secondary-action").mark(
@@ -5146,8 +5148,8 @@ class AGIRSoloInterface:
             for resource_type in selected
         )
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6 gap-4"):
-            ui.label("GERAR RECURSOS COM IA").classes("eyebrow")
-            ui.label("Confirmar geração dos recursos selecionados").classes(
+            ui.label("PREPARAR RECURSOS").classes("eyebrow")
+            ui.label("Confirmar preparação dos recursos selecionados").classes(
                 "section-title"
             )
             ui.label(
@@ -5155,6 +5157,9 @@ class AGIRSoloInterface:
                 "chamadas: uma por recurso global e uma por cada aula ou tarefa "
                 "selecionada. As apresentações também podem "
                 "originar chamadas de geração de imagens."
+                if generative_count else
+                "Os recursos selecionados serão preparados a partir dos dados existentes, "
+                "sem contactar o fornecedor de IA."
             ).classes("text-sm")
             ui.label(f"Recursos: {selected_text}.").classes(
                 "soft-surface p-3 text-sm font-medium"
@@ -5181,7 +5186,7 @@ class AGIRSoloInterface:
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button("Cancelar", on_click=dialog.close).props("flat no-caps")
                 ui.button(
-                    "Confirmar geração",
+                    "Confirmar preparação",
                     icon="auto_fix_high",
                     on_click=confirm,
                 ).props("unelevated no-caps").classes("primary-action").mark(

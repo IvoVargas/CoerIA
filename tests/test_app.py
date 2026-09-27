@@ -12,6 +12,7 @@ from prism.application_service import ApplicationService
 from prism.models import (
     CourseInput,
     RESOURCE_LESSON_PLAN,
+    RESOURCE_ASSESSMENT_GRID,
     RESOURCE_LESSON_PRESENTATIONS,
     RESOURCE_PRACTICAL,
     RESOURCE_PRESENTATION,
@@ -1422,8 +1423,9 @@ async def test_localized_ai_action_uses_the_toolbar_dialog(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("derived_only", [False, True])
 async def test_first_resource_generation_requires_explicit_confirmation(
-    user: User,
+    user: User, derived_only: bool,
 ) -> None:
     state = create_session(
         CourseInput.create(
@@ -1436,6 +1438,8 @@ async def test_first_resource_generation_requires_explicit_confirmation(
 
     @ui.page("/_test_first_resource_generation_confirmation")
     def first_resource_generation_confirmation_page():
+        if derived_only:
+            state["resource_types"] = [RESOURCE_LESSON_PLAN, RESOURCE_ASSESSMENT_GRID]
         interface = app.AGIRSoloInterface()
 
         async def record_request(*_args, **_kwargs) -> None:
@@ -1449,9 +1453,13 @@ async def test_first_resource_generation_requires_explicit_confirmation(
 
     await user.open("/_test_first_resource_generation_confirmation")
 
-    user.find("Criar etapa completa com IA").click()
-    await user.should_see("Confirmar geração dos recursos selecionados")
-    await user.should_see("pode originar várias chamadas")
+    user.find("Preparar recursos selecionados").click()
+    await user.should_see("Confirmar preparação dos recursos selecionados")
+    if derived_only:
+        await user.should_see("sem contactar o fornecedor de IA")
+        await user.should_see("0 gerações de texto com IA")
+    else:
+        await user.should_see("pode originar várias chamadas")
     handlers[-1].assert_not_awaited()
     user.find(marker="confirm-resource-generation").click()
     await user.should_see("Geração de recursos registada.")
