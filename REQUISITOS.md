@@ -271,9 +271,14 @@ que permitam ligar temas, resultados, atividades, avaliação e recursos.
   revisão e aplicação explícitas pelo docente.
 - No planeamento das aulas, fornecer à IA um contexto explícito com conteúdos,
   cadeias `RA → TA → AE`, descrições dos componentes, horas de contacto e
-  rascunho atual. Exigir que a proposta completa distribua todos os componentes,
-  totalize as horas de contacto e explicite em cada aula o foco curricular; o
-  texto permanece opcional na edição manual.
+  rascunho atual. Calcular a distribuição temporal na aplicação e normalizar as
+  durações para totalizar as horas de contacto. Pedir foco curricular em cada
+  aula, sem tornar a qualidade semântica uma barreira à apresentação da proposta.
+  As associações AE/TA e as notas continuam opcionais na edição manual.
+- Preservar propostas de planeamento editáveis com problemas corrigíveis,
+  apresentando avisos ao docente; assinalar as aulas que a IA não desenvolveu.
+  Não executar um crítico pedagógico obrigatório durante a geração. Manter os
+  controlos determinísticos existentes na validação final, antes da conclusão.
 - Apresentar **Pedir propostas à IA** na mesma barra e abrir num diálogo os
   campos **Âmbito da assistência** e **O que pretende que a IA proponha?**,
   evitando ocupar permanentemente espaço no artefacto.

@@ -508,7 +508,15 @@ por cliente, `user_info` e `message`, e recompõe os eventos de streaming do tip
 `token`. Consulte `.env.example` para conhecer todas as opções; esse ficheiro
 não é carregado automaticamente.
 
-As respostas que cumprem o esquema JSON mas falham uma regra pedagógica ou
+No planeamento das aulas (v0.3.118), a aplicação calcula a distribuição das horas
+de contacto e atribui as durações à proposta. Se a IA devolver menos aulas,
+preserva o conteúdo e reserva as linhas em falta com um aviso para revisão.
+Problemas corrigíveis numa proposta editável são apresentados ao docente, sem
+exigir aprovação de um crítico automático. O docente pode editar, aceitar ou
+rejeitar; a validação final mantém os controlos existentes. Isto não constitui
+uma garantia de qualidade pedagógica do texto.
+
+Nas restantes etapas, as respostas que cumprem o esquema JSON mas falham uma regra pedagógica ou
 aritmética são reformuladas automaticamente até ao limite definido por
 `COERIA_OPENAI_VALIDATION_RETRIES` (duas repetições por predefinição). Todas as
 tentativas são contabilizadas nas métricas de duração e tokens.

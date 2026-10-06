@@ -122,6 +122,14 @@ flowchart LR
 
 ## Estado e navegação
 
+Na v0.3.118, a geração do planeamento recebe uma distribuição temporal calculada
+pela aplicação. As durações são normalizadas sem descartar o texto recebido.
+Propostas editáveis com problemas corrigíveis são preservadas com avisos em
+`generation_warnings`, visíveis na revisão; linhas em falta podem ser reservadas
+para preenchimento. Não há crítico semântico obrigatório neste percurso.
+A verificação com IA permanece facultativa e a conclusão continua sujeita aos
+controlos determinísticos existentes. Esta recuperação é específica do planeamento.
+
 As novas sessões usam `orchestration.mode = "manual-first"` e guardam desde o
 início um artefacto estrutural para cada etapa de autoria. `current_stage` é um
 ponteiro de navegação, não uma autorização para gerar conteúdo. Abrir uma etapa

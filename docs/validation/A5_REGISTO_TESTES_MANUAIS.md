@@ -1,5 +1,19 @@
 # A5 — Registo de testes manuais ponta a ponta
 
+## Atualização técnica — v0.3.118 — 06/10/2026
+
+Código `6705def`, tag `v0.3.118`, instalado na VPS com backup prévio.
+Suíte integral no servidor: **399 testes e 7 subtestes aprovados**.
+Serviços ativos; aplicação local e HTTPS com HTTP 200.
+
+Reteste real isolado com dados sintéticos: 25 aulas de 180 minutos (4500 minutos),
+numa tentativa, sem crítico automático. Assistência localizada também confirmada
+num planeamento incompleto. Nenhuma sessão de docente alterada.
+O investigador indicou após o deploy que o comportamento aparentava estar correto.
+Não se trata de nova campanha E2E integral nem de comprovação da qualidade
+pedagógica ou dos resultados do estudo com docentes. Mantêm-se os históricos.
+Detalhes: `V0.3.118_PLANEAMENTO.md`.
+
 ## Atualização técnica pré-estudo — v0.3.112 — 24/09/2026
 
 **Código de referência:** `f6c93885cb8f56bfd6b813449a81e835ec22d266`, tag `v0.3.112`.
