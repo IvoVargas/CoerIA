@@ -1914,9 +1914,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(
             all(not lesson["component_ids"] for lesson in proposal["after"]["lessons"])
         )
-        self.assertEqual(len(responses.calls), 2)
-        self.assertEqual(proposal["after"], corrected)
-        self.assertEqual(proposal["metadata"]["guardrail_corrections"], [])
+        self.assertEqual(len(responses.calls), 1)
+        self.assertEqual([item["notes"] for item in proposal["after"]["lessons"]],
+                         [item["notes"] for item in generated["lessons"]])
+        self.assertTrue(proposal["metadata"]["guardrail_corrections"])
 
     def test_complete_ai_lesson_proposal_uses_contact_time_and_visible_notes(self) -> None:
         state = create_session(self.course, agent=self.agent)

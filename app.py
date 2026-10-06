@@ -3807,6 +3807,10 @@ class AGIRSoloInterface:
             "inline-ai-proposal"
         ):
             ui.label("REVISÃO DA PROPOSTA DA IA").classes("eyebrow")
+            for warning in proposal.get("metadata", {}).get("generation_warnings", []):
+                ui.label("Rever antes de concluir: " + str(warning)).classes(
+                    "soft-surface p-3 text-sm whitespace-pre-wrap"
+                )
             ui.label(str(proposal.get("scope_label", "Âmbito selecionado"))).classes(
                 "section-title"
             )

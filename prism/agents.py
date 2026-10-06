@@ -2105,6 +2105,49 @@ def _flattened_ids(artifact: list[dict[str, Any]], plural_key: str) -> list[str]
     ]
 
 
+def _lesson_duration_plan(state: dict[str, Any]) -> list[int]:
+    """Prepare a proposed timetable, never resize generated lesson content."""
+    total = round(float(state.get("course", {}).get("contact_hours", 0) or 0) * 60)
+    if total <= 0:
+        return []
+    request = state.get("_ai_assistance_request", {})
+    instruction = str(request.get("instruction", ""))
+    source = str(state.get("course", {}).get("source_text", ""))
+    # Explicit common notation takes precedence over the existing timetable.
+    for text in (instruction, source):
+        match = re.search(r"(\d+)\s*(?:aulas?\s*(?:de|com)?|[x×])\s*(\d+(?:[.,]\d+)?)\s*(minutos?|min|horas?|h)\b", text, re.I)
+        if match:
+            count = int(match[1])
+            minutes = round(float(match[2].replace(",", ".")) * (60 if match[3].lower().startswith("h") else 1))
+            if count * minutes != total or minutes <= 0:
+                raise AgentGenerationError("A distribuição de aulas indicada não corresponde às horas de contacto. Reveja o número e a duração das aulas ou as horas de contacto antes de gerar.")
+            return [minutes] * count
+    existing = state.get("pedagogical_design", {}).get("lessons", [])
+    durations = [item.get("duration_minutes") for item in existing if isinstance(item, dict)]
+    if durations and all(type(value) is int and 0 < value <= 240 for value in durations) and sum(durations) == total:
+        return durations
+    # Three-hour sessions are an editable proposal, not a pedagogical requirement.
+    count = max(1, (total + 179) // 180)
+    base, remainder = divmod(total, count)
+    return [base + (index < remainder) for index in range(count)]
+
+
+def _editable_lesson_plan(artifact: Any) -> bool:
+    return (
+        isinstance(artifact, dict)
+        and isinstance(artifact.get("lessons"), list)
+        and bool(artifact["lessons"])
+        and all(
+            isinstance(item, dict)
+            and isinstance(item.get("session_type"), str)
+            and isinstance(item.get("notes", ""), str)
+            and isinstance(item.get("component_ids"), list)
+            and all(isinstance(identifier, str) for identifier in item["component_ids"])
+            for item in artifact["lessons"]
+        )
+    )
+
+
 def _validate_artifact(stage: str, artifact: Any, state: dict[str, Any]) -> None:
     if stage == "curriculum_analysis":
         contents = artifact.get("contents", []) if isinstance(artifact, dict) else []
@@ -3041,12 +3084,73 @@ class OpenAIPedagogicalAgent:
             ) from error
 
         base_context = _upstream_context(state, stage)
+        duration_plan = _lesson_duration_plan(state) if stage == "pedagogical_design" else []
+        generation_schema = _schema_for(stage, state)
+        if duration_plan:
+            lesson_schema = generation_schema["properties"]["artifact"]["properties"]["lessons"]
+            lesson_schema["minItems"] = len(duration_plan)
+            lesson_schema["maxItems"] = len(duration_plan)
+            lesson_schema["items"]["properties"]["duration_minutes"] = {
+                "type": "integer", "enum": sorted(set(duration_plan)),
+            }
+            normal_lesson = deepcopy(lesson_schema["items"])
+            normal_lesson["properties"]["session_type"]["enum"] = [
+                value for value in LESSON_TYPES if value != "Avaliação"
+            ]
+            tasks = [str(item["id"]) for item in state.get("assessment_activities", []) if item.get("id")]
+            if tasks:
+                assessment_lesson = deepcopy(lesson_schema["items"])
+                assessment_lesson["properties"]["session_type"] = {"type": "string", "enum": ["Avaliação"]}
+                assessment_lesson["properties"]["component_ids"] = {
+                    "type": "array", "minItems": 1,
+                    "items": {"type": "string", "enum": tasks},
+                }
+                lesson_schema["items"] = {"anyOf": [normal_lesson, assessment_lesson]}
+            else:
+                lesson_schema["items"] = normal_lesson
+            base_context["proposed_lesson_durations_minutes"] = duration_plan
+            contents = base_context.get("lesson_planning_brief", {}).get("contents", [])
+            if contents:
+                base_context["suggested_curricular_progression"] = [
+                    {
+                        "lesson_number": index + 1,
+                        "content": contents[min(len(contents) - 1, index * len(contents) // len(duration_plan))],
+                    }
+                    for index in range(len(duration_plan))
+                ]
+            instructions += (
+                " A distribuição temporal já foi calculada pela aplicação: cria exatamente "
+                f"{len(duration_plan)} aulas, pela ordem de proposed_lesson_durations_minutes. "
+                "Desenvolve conteúdo distinto e progressivo para cada aula, usando as etapas "
+                "anteriores. Não fundas aulas nem resumas o curso em menos sessões. "
+                "Esta distribuição é uma proposta editável sujeita à aprovação do docente."
+                " Distribui o trabalho curricular por TODAS as aulas, incluindo as últimas. "
+                "suggested_curricular_progression sugere blocos de conteúdos; podes ajustar "
+                "a ordem pedagogicamente, mas não esgotes o programa nas primeiras aulas "
+                "para preencher o resto com revisões genéricas. Em cada notes nomeia o "
+                "conceito curricular concreto e uma ação ou exercício específico, diferenciando "
+                "introdução, prática orientada, aplicação e consolidação. Não inventes tópicos "
+                "avançados, novas tecnologias, projetos ou exames ausentes dos dados anteriores. "
+                "Se agendares uma avaliação, associa em component_ids a TA existente que "
+                "a suporta; não cries avaliações novas em texto livre. Uma sessão de avaliação "
+                "tem obrigatoriamente pelo menos uma TA. As outras aulas podem não ter "
+                "componentes associados. Não declares conclusão do curso a meio do plano."
+                " Não copies automaticamente todas as AE e TA do tema para cada aula: "
+                "uma TA só aparece nas aulas em que realmente é realizada ou explicitamente "
+                "trabalhada, não como etiqueta de cobertura. Usa Teórico-prática ou Prática "
+                "ou laboratorial quando a aula inclui exercícios ou programação pelos alunos; "
+                "Teórica só quando se trata de exposição. Escreve duas frases concretas por "
+                "aula: o conceito tratado e o que os alunos vão fazer, com exemplo de tarefa "
+                "ligada a esse conceito. A última aula também deve ter trabalho curricular "
+                "concreto, não apenas fecho e considerações finais."
+            )
         repair_feedback: dict[str, Any] | None = None
         total_input_tokens = 0
         total_output_tokens = 0
         total_tokens = 0
         attempts = self.validation_retries + 1
         guardrail_corrections: list[dict[str, Any]] = []
+        generation_warnings: list[str] = []
         request_model = self.resource_model if stage == "resources" else self.model
 
         for attempt in range(1, attempts + 1):
@@ -3082,7 +3186,7 @@ class OpenAIPedagogicalAgent:
                                 else f"coeria_{stage}"
                             ),
                             "strict": True,
-                            "schema": _schema_for(stage, state),
+                            "schema": generation_schema,
                         }
                     },
                 }
@@ -3154,7 +3258,41 @@ class OpenAIPedagogicalAgent:
                         *presentation_outcome_corrections,
                         *visual_corrections,
                     ]
+                if duration_plan and _editable_lesson_plan(artifact):
+                    lessons = artifact["lessons"]
+                    if len(lessons) < len(duration_plan):
+                        missing = len(duration_plan) - len(lessons)
+                        lessons.extend({"duration_minutes": 0, "session_type": "Outra",
+                                        "component_ids": [], "notes": ""} for _ in range(missing))
+                        generation_warnings.append(f"A IA não desenvolveu {missing} aula(s). As linhas em falta foram reservadas; preencha-as antes de concluir.")
+                    assigned = duration_plan
+                    if len(lessons) > len(duration_plan):
+                        base, remainder = divmod(sum(duration_plan), len(lessons))
+                        if base <= 0:
+                            raise AgentGenerationError("O número de aulas excede os minutos de contacto disponíveis.")
+                        assigned = [base + (index < remainder) for index in range(len(lessons))]
+                        generation_warnings.append("A IA propôs mais aulas do que a distribuição inicial. O conteúdo foi preservado e o tempo redistribuído; confirme a organização.")
+                    for index, (lesson, duration) in enumerate(zip(lessons, assigned)):
+                        if lesson.get("duration_minutes") != duration:
+                            guardrail_corrections.append({"field": f"lessons.{index}.duration_minutes",
+                                "before": lesson.get("duration_minutes"), "after": duration,
+                                "reason": "Distribuição das horas de contacto calculada pela aplicação"})
+                            lesson["duration_minutes"] = duration
                 _validate_artifact(stage, artifact, state)
+                if stage == "pedagogical_design":
+                    assessment_ids = {str(item.get("id")) for item in state.get("assessment_activities", [])}
+                    unsupported_assessments = [
+                        str(index + 1) for index, lesson in enumerate(artifact["lessons"])
+                        if lesson.get("session_type") == "Avaliação"
+                        and not assessment_ids.intersection(lesson.get("component_ids", []))
+                    ]
+                    if unsupported_assessments:
+                        raise AgentGenerationError(
+                            "Aulas de avaliação sem tarefa TA associada: "
+                            + ", ".join(unsupported_assessments)
+                            + ". Associe uma tarefa existente adequada ou substitua a avaliação "
+                            "inventada por trabalho sobre os conteúdos curriculares existentes."
+                        )
             except (AgentGenerationError, json.JSONDecodeError, KeyError, TypeError) as error:
                 validation_message = (
                     str(error)
@@ -3162,6 +3300,9 @@ class OpenAIPedagogicalAgent:
                     else "A resposta estruturada está incompleta ou contém tipos inválidos."
                 )
                 fallback_accepted = False
+                if stage == "pedagogical_design" and _editable_lesson_plan(artifact):
+                    generation_warnings.append(validation_message)
+                    fallback_accepted = True
                 if attempt == attempts:
                     if (
                         stage == "learning_outcomes"
@@ -3219,6 +3360,7 @@ class OpenAIPedagogicalAgent:
                 "total_tokens": total_tokens,
                 "validation_attempts": attempt,
                 "guardrail_corrections": guardrail_corrections,
+                "generation_warnings": generation_warnings,
             }
             if scoped_resource_type:
                 metadata["resource_generation_scope"] = scoped_resource_type
