@@ -27,7 +27,7 @@ from .providers import (
 DEFAULT_REDUCTION_CHUNK_CHARS = 80_000
 DEFAULT_REDUCTION_MAX_OUTPUT_TOKENS = 2_200
 DEFAULT_REDUCTION_MAX_PASSES = 3
-DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 
 ProgressCallback = Callable[[str], None]
 
@@ -218,6 +218,7 @@ def _reduce_chunk(
     try:
         response = client.responses.create(
             model=model,
+            **({"reasoning": {"effort": "low"}} if model.startswith("gpt-5") else {}),
             instructions=instructions,
             input=json.dumps(input_payload, ensure_ascii=False),
             max_output_tokens=max_output_tokens,

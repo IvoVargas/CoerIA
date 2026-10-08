@@ -1540,13 +1540,13 @@ class WorkflowTests(unittest.TestCase):
             generator = OpenAIPedagogicalAgent()
             critic = OpenAIPedagogicalCritic()
 
-        self.assertEqual(DEFAULT_MODEL, "gpt-4o-mini")
-        self.assertEqual(DEFAULT_RESOURCE_MODEL, "gpt-4o-mini")
-        self.assertEqual(generator.model, "gpt-4o-mini")
-        self.assertEqual(generator.resource_model, "gpt-4o-mini")
-        self.assertEqual(generator.reasoning_effort, "minimal")
-        self.assertEqual(critic.model, "gpt-4o-mini")
-        self.assertEqual(critic.reasoning_effort, "minimal")
+        self.assertEqual(DEFAULT_MODEL, "gpt-5.4-mini")
+        self.assertEqual(DEFAULT_RESOURCE_MODEL, "gpt-5.4-mini")
+        self.assertEqual(generator.model, "gpt-5.4-mini")
+        self.assertEqual(generator.resource_model, "gpt-5.4-mini")
+        self.assertEqual(generator.reasoning_effort, "low")
+        self.assertEqual(critic.model, "gpt-5.4-mini")
+        self.assertEqual(critic.reasoning_effort, "low")
         self.assertNotIn(
             "resources", AgenticPedagogicalTeam.DEFAULT_CRITIC_STAGES
         )

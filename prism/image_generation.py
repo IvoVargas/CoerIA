@@ -25,7 +25,7 @@ DEFAULT_IMAGE_QUALITY = "low"
 DEFAULT_MAX_IMAGES_PER_PRESENTATION = 2
 DEFAULT_MAX_ADDITIONAL_EDITOR_IMAGES = 2
 DEFAULT_PRESENTATION_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024
-DEFAULT_PROMPT_MODEL = "gpt-4o-mini"
+DEFAULT_PROMPT_MODEL = "gpt-5.4-mini"
 
 
 class ImageGenerationError(RuntimeError):
@@ -185,12 +185,14 @@ def suggest_image_prompt(
     )
     try:
         client = client_factory()
+        prompt_model = (
+            config_value("IAEDU_AGENT_NAME", "Agente IAedu")
+            if provider == AI_PROVIDER_IAEDU
+            else config_value("OPENAI_MODEL", DEFAULT_PROMPT_MODEL)
+        )
         response = client.responses.create(
-            model=(
-                config_value("IAEDU_AGENT_NAME", "Agente IAedu")
-                if provider == AI_PROVIDER_IAEDU
-                else config_value("OPENAI_MODEL", DEFAULT_PROMPT_MODEL)
-            ),
+            model=prompt_model,
+            **({"reasoning": {"effort": "low"}} if provider != AI_PROVIDER_IAEDU and prompt_model.startswith("gpt-5") else {}),
             instructions=instructions,
             input=json.dumps(request_context, ensure_ascii=False),
             max_output_tokens=700,

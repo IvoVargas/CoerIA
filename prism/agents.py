@@ -81,7 +81,7 @@ from .relationships import outcome_ids_for_assessments
 from .validation_targets import available_validation_targets
 
 
-DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_MODEL = "gpt-5.4-mini"
 DEFAULT_RESOURCE_MODEL = DEFAULT_MODEL
 
 
@@ -2809,7 +2809,7 @@ class OpenAIPedagogicalAgent:
         self.timeout_seconds = float(config_value("OPENAI_TIMEOUT_SECONDS", "120"))
         self.max_retries = int(config_value("OPENAI_MAX_RETRIES", "2"))
         self.max_output_tokens = int(config_value("OPENAI_MAX_OUTPUT_TOKENS", "12000"))
-        self.reasoning_effort = config_value("OPENAI_REASONING_EFFORT", "minimal")
+        self.reasoning_effort = config_value("OPENAI_REASONING_EFFORT", "low")
         self.validation_retries = max(
             0, int(config_value("OPENAI_VALIDATION_RETRIES", "2"))
         )
@@ -3389,7 +3389,7 @@ class OpenAILocalizedAssistanceAgent:
         self.max_output_tokens = int(
             config_value("OPENAI_ASSISTANCE_MAX_OUTPUT_TOKENS", "4000")
         )
-        self.reasoning_effort = config_value("OPENAI_REASONING_EFFORT", "minimal")
+        self.reasoning_effort = config_value("OPENAI_REASONING_EFFORT", "low")
         self.client_factory = client_factory
         self.provider_name = provider_name
         self.api_key_env = api_key_env
@@ -3546,7 +3546,7 @@ class OpenAIPedagogicalCritic:
             config_value("OPENAI_CRITIC_MAX_OUTPUT_TOKENS", "2500")
         )
         self.reasoning_effort = config_value(
-            "OPENAI_REASONING_EFFORT", "minimal"
+            "OPENAI_REASONING_EFFORT", "low"
         )
         self.client_factory = client_factory
         self.provider_name = provider_name

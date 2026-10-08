@@ -489,13 +489,12 @@ ficheiro partilhado:
 
 Feche e reabra o terminal depois da configuração. Basta existir a chave do
 fornecedor que será usado. O BAT também lê diretamente as variáveis guardadas no
-perfil do utilizador. O perfil OpenAI predefinido usa `gpt-4o-mini` em todas as
-chamadas textuais da aplicação — proposta inicial, gerador pedagógico, crítico e
-recursos. Esta variante já era usada nos recursos pela maior robustez no
-seguimento de instruções estruturadas e passa agora a substituir `gpt-5-nano`
-nas restantes etapas, privilegiando consistência com um custo ainda reduzido.
-Como `gpt-4o-mini` não usa `reasoning.effort`, esse parâmetro só é enviado quando
-um modelo compatível for configurado. O modelo pode ser alterado globalmente
+perfil do utilizador. Desde a v0.3.119, o perfil OpenAI predefinido usa
+`gpt-5.4-mini` com raciocínio `low` na proposta inicial, geração pedagógica,
+assistência localizada, revisão facultativa e recursos. A mudança antecede a
+recolha com docentes, segundo confirmação do investigador. O modelo de imagens
+mantém-se inalterado. Consulte `docs/validation/V0.3.119_MODELO_ESTUDO.md`.
+O modelo pode ser alterado globalmente
 através de `COERIA_OPENAI_MODEL`; `COERIA_OPENAI_RESOURCE_MODEL` e
 `COERIA_OPENAI_CRITIC_MODEL` permanecem disponíveis apenas para substituições
 específicas.
