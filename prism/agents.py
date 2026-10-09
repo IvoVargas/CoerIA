@@ -2991,6 +2991,8 @@ class OpenAIPedagogicalAgent:
                     "componentes e resultados desse âmbito. Inclui uma agenda da aula, "
                     "conteúdo para lecionação, atividades previstas e uma síntese. "
                     "Não introduzas resultados ou avaliações de outras aulas. "
+                    "Se esta aula não tiver tarefas de avaliação associadas, não é "
+                    "necessário incluir uma secção de avaliação; não inventes tarefas. "
                     f"Identifica de forma visível a aula ou sessão {lesson_number} no primeiro "
                     "slide e apresenta o tema específico indicado nas notas. Inclui um slide "
                     "de agenda que apresente a progressão concreta desta "

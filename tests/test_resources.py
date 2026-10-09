@@ -477,6 +477,21 @@ class ResourceGenerationTests(unittest.TestCase):
             self.assertIn("Agenda da aula", [slide["title"] for slide in slides])
             self.assertIn("Síntese da aula", [slide["title"] for slide in slides])
 
+    def test_final_quality_passes_explicit_lesson_scope_to_assessment_check(self) -> None:
+        from prism.quality import presentation_assessment_overview_issues
+
+        state = self._resource_state()
+        with patch(
+            "prism.quality.presentation_assessment_overview_issues",
+            wraps=presentation_assessment_overview_issues,
+        ) as check:
+            evaluate_quality(state, state["resources"])
+        lesson_calls = [
+            call.args[0] for call in check.call_args_list
+            if call.args[0].get("resource_item_scope", {}).get("kind") == "lesson"
+        ]
+        self.assertEqual(len(lesson_calls), len(state["resources"]["lesson_presentations"]))
+
     def test_lesson_presentation_quality_rejects_global_and_repeated_decks(self) -> None:
         state = self._resource_state()
         first = deepcopy(state["resources"]["lesson_presentations"][0])

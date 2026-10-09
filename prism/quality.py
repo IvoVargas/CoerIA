@@ -404,6 +404,9 @@ def presentation_assessment_overview_issues(
         if isinstance(item, dict) and str(item.get("id", "")).strip()
     }
     if not expected_ids:
+        if state.get("resource_item_scope", {}).get("kind") == "lesson":
+            # A lesson may legitimately contain no assessment task.
+            return []
         return [
             "não existem tarefas de avaliação aprovadas para apresentar"
         ]
@@ -1298,7 +1301,9 @@ def evaluate_quality(state: dict[str, Any], resources: dict[str, Any] | None = N
             ]
             try:
                 current_scope = lesson_scope(state, lesson_number)
-                scoped_state = {**state, **current_scope}
+                scoped_state = {
+                    **state, **current_scope, "resource_item_scope": current_scope
+                }
             except ValueError as error:
                 collection_issues.append(str(error))
                 continue
