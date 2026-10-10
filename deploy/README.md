@@ -204,10 +204,17 @@ sudo apt install --no-install-recommends -y \
   texlive-latex-base \
   texlive-latex-recommended \
   texlive-lang-portuguese \
+  texlive-xetex \
+  fonts-dejavu-core \
   poppler-utils
-command -v pdflatex
-pdflatex --version | head -n 1
+command -v xelatex
+xelatex --version | head -n 1
 ```
+
+Definir `COERIA_LATEX_COMPILER=/usr/bin/xelatex` em `/etc/coeria/coeria.env`.
+O template usa DejaVu Serif para português, grego e cirílico; não corrige
+palavras que misturem alfabetos nem interpreta texto livre como fórmulas.
+Em Windows, se DejaVu Serif não existir, usa Times New Roman.
 
 Confirmar em `/etc/coeria/coeria.env`, sem imprimir o restante conteúdo:
 

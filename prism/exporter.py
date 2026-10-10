@@ -66,7 +66,7 @@ def latex_pdf_compilation_enabled() -> bool:
 
 
 def _latex_compiler_path() -> str:
-    configured = str(os.getenv("COERIA_LATEX_COMPILER", "pdflatex")).strip()
+    configured = str(os.getenv("COERIA_LATEX_COMPILER", "xelatex")).strip()
     compiler = shutil.which(configured) if configured else None
     if not compiler:
         raise ValueError(
@@ -482,8 +482,14 @@ def _latex_document(title: str, subtitle: str, body: list[str]) -> str:
     return "\n".join(
         [
             r"\documentclass[11pt,a4paper]{article}",
+            r"\usepackage{iftex}",
+            r"\ifPDFTeX",
             r"\usepackage[T1]{fontenc}",
             r"\usepackage[utf8]{inputenc}",
+            r"\else",
+            r"\usepackage{fontspec}",
+            r"\IfFontExistsTF{DejaVu Serif}{\setmainfont{DejaVu Serif}}{\setmainfont{Times New Roman}}",
+            r"\fi",
             r"\usepackage[portuguese]{babel}",
             r"\usepackage[a4paper,margin=2cm]{geometry}",
             r"\usepackage{array}",

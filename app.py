@@ -911,6 +911,7 @@ class AGIRSoloInterface:
                 "Não formule aqui os resultados de aprendizagem."
             ),
         ).props("outlined autogrow").classes("full-control")
+        self.fields["general_aims"].props('rows=6 input-style="min-height: 160px"')
         self.fields["general_aims"].mark("initial-general-aims")
 
     def _build_sources_step(self) -> None:

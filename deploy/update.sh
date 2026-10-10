@@ -79,7 +79,7 @@ if [[ "$LATEX_PDF_SETTING" =~ ^(1|true|yes|on)$ ]]; then
   LATEX_COMPILER_SETTING="$(
     sudo sed -n 's/^COERIA_LATEX_COMPILER=//p' "$ENV_FILE" | tail -n 1
   )"
-  LATEX_COMPILER_SETTING="${LATEX_COMPILER_SETTING:-pdflatex}"
+  LATEX_COMPILER_SETTING="${LATEX_COMPILER_SETTING:-xelatex}"
   command -v "$LATEX_COMPILER_SETTING" >/dev/null 2>&1 \
     || fail "A compilação LaTeX/PDF está ativa, mas '$LATEX_COMPILER_SETTING' não existe."
   printf 'Compilador LaTeX: %s\n' "$(command -v "$LATEX_COMPILER_SETTING")"

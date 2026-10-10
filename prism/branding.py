@@ -6,7 +6,7 @@ import os
 
 
 APP_NAME = "CoerIA"
-APP_VERSION = (os.getenv("COERIA_APP_VERSION", "0.3.120").strip() or "0.3.120")
+APP_VERSION = (os.getenv("COERIA_APP_VERSION", "0.3.121").strip() or "0.3.121")
 APP_FULL_NAME = (
     "Sistema de IA com agentes para elaboração de programas de unidades "
     "curriculares e recursos educativos pedagogicamente alinhados"
