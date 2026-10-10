@@ -205,6 +205,7 @@ sudo apt install --no-install-recommends -y \
   texlive-latex-recommended \
   texlive-lang-portuguese \
   texlive-xetex \
+  texlive-fonts-recommended \
   fonts-dejavu-core \
   poppler-utils
 command -v xelatex
