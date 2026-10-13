@@ -5986,6 +5986,8 @@ if __name__ == "__main__":
         language="pt",
         show=False,
         reload=False,
+        # Preserve the page during brief network interruptions.
+        reconnect_timeout=120.0,
         dark=False,
         storage_secret=configured_storage_secret(),
         session_middleware_kwargs={
